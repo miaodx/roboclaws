@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console runtime inventory now rejects corrupt
+  successful Docker mount metadata before deciding whether a running container
+  is repo-relevant. Missing Docker and nonzero `docker inspect` stay optional
+  host-probe paths, valid repo-mounted containers still appear as running
+  Docker tasks, and malformed, non-array, or non-object successful mount JSON
+  now becomes a blocking `source_error` task instead of disappearing as "no
+  repo-relevant mount." Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud inventory source validation for
+  task-container discovery evidence. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused operator-console runtime-inventory tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if corrupt present Docker mount metadata
+  can again remove a running container from operator-console inventory or
+  blockers.
+
 - 2026-06-21: Operator-console stop handling now rejects corrupt successful
   Docker mount metadata before deciding whether a task container is attached
   to the run workspace. Missing Docker and nonzero `docker inspect` remain

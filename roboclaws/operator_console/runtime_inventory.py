@@ -502,7 +502,18 @@ def _docker_tasks(root: Path) -> list[dict[str, Any]]:
         container_id, name, image, status = _split_docker_ps(line)
         if not container_id:
             continue
-        mounts = _docker_mount_sources(container_id)
+        mounts, source_error = _docker_mount_sources(container_id)
+        if source_error:
+            tasks.append(
+                _docker_mount_source_error_task(
+                    container_id=container_id,
+                    name=name,
+                    image=image,
+                    status=status,
+                    source_error=source_error,
+                )
+            )
+            continue
         if not any(_path_is_repo_relevant(root, mount) for mount in mounts):
             continue
         resources = [
@@ -1129,22 +1140,60 @@ def _split_docker_ps(line: str) -> tuple[str, str, str, str]:
     return parts[0], parts[1], parts[2], parts[3]
 
 
-def _docker_mount_sources(container_id: str) -> list[Path]:
+def _docker_mount_sources(container_id: str) -> tuple[list[Path], str]:
     result = _run_command(["docker", "inspect", "--format", "{{json .Mounts}}", container_id])
     if result is None or result.returncode != 0:
-        return []
+        return [], ""
     try:
         mounts = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return []
+    except json.JSONDecodeError as exc:
+        return [], f"invalid_json:{exc.msg}"
     output: list[Path] = []
     if not isinstance(mounts, list):
-        return output
+        return [], "invalid_json_array"
     for mount in mounts:
-        if not isinstance(mount, dict) or not mount.get("Source"):
+        if not isinstance(mount, dict):
+            return [], f"invalid_json_object:{type(mount).__name__}"
+        if not mount.get("Source"):
             continue
         output.append(Path(str(mount["Source"])).resolve())
-    return output
+    return output, ""
+
+
+def _docker_mount_source_error_task(
+    *,
+    container_id: str,
+    name: str,
+    image: str,
+    status: str,
+    source_error: str,
+) -> dict[str, Any]:
+    label = f"Docker container {name or container_id} mount metadata source error"
+    message = f"docker inspect mounts for {container_id} are unreadable: {source_error}"
+    return _task(
+        task_id=f"source-error:docker:{container_id}:mounts",
+        status="source_error",
+        owner="docker",
+        label=label,
+        resource=message,
+        resources=[
+            _resource(
+                "source_error",
+                message,
+                active=False,
+                error_reason="invalid_docker_mounts",
+                container_id=container_id,
+            )
+        ],
+        container_id=container_id,
+        actions=[_command_action("Inspect", f"docker inspect {container_id}")],
+        extra={
+            "image": image,
+            "docker_status": status,
+            "error_reason": "invalid_docker_mounts",
+            "message": message,
+        },
+    )
 
 
 def _path_is_repo_relevant(root: Path, path: Path) -> bool:

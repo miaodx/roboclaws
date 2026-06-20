@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-console Docker inventory
+  mount source slice: runtime inventory now surfaces successful Docker
+  mount-inspect output with malformed or wrong-shaped JSON as a blocking
+  `source_error` task instead of omitting the running container as if no
+  repo-relevant mount existed.
 - Current shared-checkout note after the operator-console Docker mount source
   slice: stop handling now treats successful Docker mount-inspect output with
   malformed or wrong-shaped JSON as an operator stop source error instead of

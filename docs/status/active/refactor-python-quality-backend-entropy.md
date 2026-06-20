@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-console stop handling now treats successful Docker
+2026-06-21: Operator-console runtime inventory now surfaces successful Docker
+mount-inspect output with malformed or wrong-shaped JSON as a blocking
+`source_error` task instead of omitting the running container as if no
+repo-relevant mount existed. Normal repo-mounted Docker containers still appear
+as running inventory tasks, while Docker absence and nonzero inspect results
+remain optional host-probe paths. Focused runtime-inventory tests, touched-file
+ruff, touched-file format checks, diff check, changed-code cleanup review, and
+the ratchet summary passed. Current ratchet: 0 Ruff complexity violations, 80
+oversized modules in the shared checkout.
+
+Previous slice: Operator-console stop handling now treats successful Docker
 mount-inspect output with malformed or wrong-shaped JSON as an operator stop
 source error instead of silently deciding that no task container is mounted.
 Docker absence and nonzero inspect results remain optional cleanup paths, but
@@ -27,7 +37,7 @@ format checks, diff check, changed-code cleanup review, and the ratchet
 summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
 modules in the shared checkout.
 
-Previous slice: MolmoSpaces visual backend slot capacity config now fails invalid
+Previous slice before that: MolmoSpaces visual backend slot capacity config now fails invalid
 `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots` values aloud
 instead of falling back to a plausible one-slot backend. Live household launch
 reports invalid slot config separately from normal slot contention, and
@@ -81,9 +91,10 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console Docker mount source slice. Avoid reopening
-closed visual-slot config, slot-file source readers, or Docker mount stop
-source handling without fresh false-green evidence.
+committing the operator-console Docker inventory mount source slice. Avoid
+reopening closed visual-slot config, slot-file source readers, Docker mount
+stop source handling, or Docker inventory mount source handling without fresh
+false-green evidence.
 
 ## Touched Areas
 
