@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import copy
-import json
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
@@ -278,7 +278,7 @@ def _navigation_rooms(source_bundle_dir: str | Path | None) -> list[dict[str, An
     semantics_path = Path(source_bundle_dir) / "semantics.json"
     if not semantics_path.is_file():
         return []
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = read_json_object(semantics_path, label="room semantics")
     return [dict(item) for item in semantics.get("rooms") or [] if isinstance(item, dict)]
 
 
@@ -344,21 +344,22 @@ def _attach_scene_map_correspondence(
         item["navigation_area_id"] = navigation_area_id
         polygon = match.get("map_polygon")
         if polygon is None:
-            polygon = nav_room.get("polygon") or []
-        item["polygon"] = copy.deepcopy(polygon)
-        if "map_center" not in item:
-            item["map_center"] = _polygon_center(item.get("polygon") or [])
-        item["polygon_role"] = POLYGON_ROLE_NAVIGATION_AREA
-        item["geometry_source"] = str(
-            match.get("geometry_source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
-        )
+            polygon = nav_room.get("polygon") if nav_room else None
         item["alignment_status"] = str(match.get("alignment_status") or ALIGNMENT_STATUS_CANDIDATE)
-        item["source_map_frame_id"] = str(nav_room.get("source_map_frame_id") or "map")
-        item["polygon_usage"] = {
-            "navigation": True,
-            "semantic_labeling": item["alignment_status"],
-            "review": True,
-        }
+        if polygon is not None:
+            item["polygon"] = copy.deepcopy(polygon)
+            if "map_center" not in item:
+                item["map_center"] = _polygon_center(item.get("polygon") or [])
+            item["polygon_role"] = POLYGON_ROLE_NAVIGATION_AREA
+            item["geometry_source"] = str(
+                match.get("geometry_source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
+            )
+            item["source_map_frame_id"] = str(nav_room.get("source_map_frame_id") or "map")
+            item["polygon_usage"] = {
+                "navigation": True,
+                "semantic_labeling": item["alignment_status"],
+                "review": True,
+            }
         item["scene_map_correspondence"] = {
             "schema": SCENE_MAP_CORRESPONDENCE_SCHEMA,
             "asset_partition_id": str(match.get("asset_partition_id") or ""),

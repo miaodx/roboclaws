@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Runtime-map-prior file loading now uses a shared
-`roboclaws.maps.runtime_prior_snapshot.read_runtime_map_prior_artifact` source
-reader for direct cleanup, household agent server, and MCP smoke inputs.
-Missing, malformed, or parseable non-object explicit prior artifacts use the
-canonical path-labelled JSON-source wording before raw runtime maps or
-Runtime Map Prior Snapshot wrappers are normalized. Focused runtime-prior
-contract/source tests, core JSON-source tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: Scene room semantic overlays no longer fabricate map geometry for
+scene-map correspondence rows when a source bundle has no `semantics.json`;
+the overlay keeps the reviewed navigation-area binding but omits polygon,
+map-center, geometry-source, and polygon-usage claims until real geometry is
+present. Present malformed or non-object source-bundle `semantics.json`
+artifacts now use the shared path-labelled JSON-source wording. Focused room
+semantic overlay and core JSON-source tests, touched-file Ruff/format, `git
+diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -65,6 +65,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
 - `roboclaws/launch/goals.py`
+- `roboclaws/maps/room_semantics.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -96,6 +97,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
 - `tests/contract/maps/test_runtime_map_prior_snapshot.py`
 - `tests/contract/maps/test_runtime_map_prior_source_loading.py`
+- `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`

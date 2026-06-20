@@ -17,9 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_ROOT = (
     REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / ("2rd_floor_seperated")
 )
-MAP12_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
-    "robot_map_12"
-) / "agibot"
+MAP12_BUNDLE = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
+)
 REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
 GENERATOR_PATH = (
     REPO_ROOT
@@ -117,6 +117,104 @@ def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_livi
     assert rooms["reception_area_a"]["category"] == "living_room"
 
 
+def test_scene_room_overlay_does_not_fabricate_geometry_without_source_semantics(
+    tmp_path: Path,
+) -> None:
+    scene_root = _minimal_scene_root(tmp_path)
+    source_bundle = tmp_path / "bundle"
+    source_bundle.mkdir()
+
+    overlay = build_scene_room_semantic_overlay(
+        scene_root,
+        source_bundle_dir=source_bundle,
+        overrides={
+            "scene_map_correspondence": [
+                {
+                    "asset_partition_id": "meeting_room_a",
+                    "navigation_area_id": "nav_room_a",
+                }
+            ]
+        },
+    )
+
+    room = overlay["rooms"][0]
+    assert room["navigation_area_id"] == "nav_room_a"
+    assert "polygon" not in room
+    assert "map_center" not in room
+    assert "geometry_source" not in room
+    assert "polygon_usage" not in room
+    assert room["scene_map_correspondence"]["map_polygon_provided"] is False
+
+
+@pytest.mark.parametrize(
+    ("source_text", "message"),
+    [
+        ("{not-json\n", r"room semantics source must contain valid JSON object: .*semantics\.json"),
+        ("[]\n", r"room semantics source must contain a JSON object: .*semantics\.json"),
+    ],
+)
+def test_scene_room_overlay_rejects_bad_source_bundle_semantics(
+    tmp_path: Path,
+    source_text: str,
+    message: str,
+) -> None:
+    scene_root = _minimal_scene_root(tmp_path)
+    source_bundle = tmp_path / "bundle"
+    source_bundle.mkdir()
+    (source_bundle / "semantics.json").write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        build_scene_room_semantic_overlay(scene_root, source_bundle_dir=source_bundle)
+
+
+def test_scene_room_overlay_uses_source_bundle_room_geometry(tmp_path: Path) -> None:
+    scene_root = _minimal_scene_root(tmp_path)
+    source_bundle = tmp_path / "bundle"
+    source_bundle.mkdir()
+    (source_bundle / "semantics.json").write_text(
+        json.dumps(
+            {
+                "rooms": [
+                    {
+                        "room_id": "nav_room_a",
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 2, "y": 0},
+                            {"x": 2, "y": 2},
+                            {"x": 0, "y": 2},
+                        ],
+                        "source_map_frame_id": "map",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    overlay = build_scene_room_semantic_overlay(
+        scene_root,
+        source_bundle_dir=source_bundle,
+        overrides={
+            "scene_map_correspondence": [
+                {
+                    "asset_partition_id": "meeting_room_a",
+                    "navigation_area_id": "nav_room_a",
+                }
+            ]
+        },
+    )
+
+    room = overlay["rooms"][0]
+    assert room["navigation_area_id"] == "nav_room_a"
+    assert room["polygon"] == [
+        {"x": 0, "y": 0},
+        {"x": 2, "y": 0},
+        {"x": 2, "y": 2},
+        {"x": 0, "y": 2},
+    ]
+    assert room["map_center"] == {"x": 1.0, "y": 1.0}
+
+
 def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
     tmp_path: Path,
 ) -> None:
@@ -191,6 +289,13 @@ def test_checked_in_b1_review_manifest_is_runtime_source_of_truth() -> None:
 def _require_scene_root() -> None:
     if not SCENE_ROOT.is_dir():
         pytest.skip("robot-data-lab scene-engine data is unavailable in this checkout")
+
+
+def _minimal_scene_root(tmp_path: Path) -> Path:
+    partition = tmp_path / "scene" / "meeting_room_a"
+    partition.mkdir(parents=True)
+    (partition / "scene.usd").write_text("#usda 1.0\n", encoding="utf-8")
+    return tmp_path / "scene"
 
 
 def _load_module(path: Path, name: str):

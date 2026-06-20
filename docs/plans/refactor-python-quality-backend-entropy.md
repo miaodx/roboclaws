@@ -93,6 +93,10 @@ Latest quality snapshot from 2026-06-20:
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
   maps or snapshot wrappers are normalized.
+  Scene room semantic overlays now reject present malformed or non-object
+  source-bundle `semantics.json` packets through the shared JSON-source helper
+  and no longer fabricate navigation polygon, map-center, geometry-source, or
+  polygon-usage claims when no source-room geometry exists.
   Robot-camera visual parity summary now routes its comparison, visual-sample,
   RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
   Isaac state artifacts through the shared JSON-source helper instead of a

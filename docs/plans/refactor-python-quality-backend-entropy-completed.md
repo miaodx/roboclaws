@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene room semantic overlays now route present source-bundle
+  `semantics.json` artifacts through the shared
+  `roboclaws.core.json_sources.read_json_object` reader and stop fabricating
+  map geometry for correspondence rows that have only a reviewed navigation
+  area id. Missing `semantics.json` remains allowed for heuristic overlays, but
+  malformed or parseable non-object source packets fail with path-labelled
+  source errors, and geometry claims are emitted only when an override supplies
+  `map_polygon` or source-room geometry exists. Owner layer: Artifacts,
+  reports, and eval suites, with Backend Runtime / Environment Primitive source
+  evidence. Behavior-change class: fail-aloud source-reader consolidation plus
+  false-confidence geometry removal. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused room semantic
+  overlay tests, core JSON-source tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if scene room overlays regain local
+  raw JSON source readers or start emitting polygon/map-center/geometry-source
+  claims without explicit map geometry again.
+
 - 2026-06-20: Runtime-map-prior file loading now uses shared
   `roboclaws.maps.runtime_prior_snapshot.read_runtime_map_prior_artifact`
   source loading for direct cleanup, household agent server, and MCP smoke
