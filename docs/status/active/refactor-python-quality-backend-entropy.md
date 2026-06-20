@@ -17,15 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Report-server index summary loading now routes present
-`run_result.json` sidecars through the shared JSON-object source helper while
-preserving missing sidecars as empty summary badges. Malformed or non-object
-sidecars fail with canonical path-labelled source wording instead of being
-hidden as missing metadata. Focused report-server source tests, touched-file
-Ruff/format, changed-code review, and `git diff --check` passed. Current
-shared-checkout ratchet summary is blocked by unrelated dirty
-`scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
-79 oversized modules.
+2026-06-20: Live eval artifact sidecar loading now routes present JSON
+sidecars through the shared JSON-object source helper while preserving missing
+optional sidecars as empty evidence. Malformed or non-object live eval
+artifacts fail with canonical path-labelled source wording before runner
+grading. Focused live-artifact source tests, the existing malformed
+run-result live-eval regression test, touched-file Ruff/format, changed-code
+review, and `git diff --check` passed. Current shared-checkout ratchet summary
+is blocked by unrelated dirty `scripts/maps/compile_b1_map12_runtime_bundle.py`
+work: 1 Ruff complexity row, 79 oversized modules.
 
 ## Next Action
 
@@ -66,6 +66,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/reports/write_pages_index.py`
 - `scripts/reports/compare_live_report_metrics.py`
 - `scripts/reports/serve_reports.py`
+- `roboclaws/evals/live_artifacts.py`
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
@@ -142,6 +143,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/reports/test_write_pages_index_sources.py`
 - `tests/unit/reports/test_compare_live_report_metrics_sources.py`
 - `tests/unit/reports/test_serve_reports_sources.py`
+- `tests/unit/evals/test_live_artifacts_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

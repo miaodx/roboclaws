@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Live eval artifact sidecar loading now uses
+  `roboclaws.core.json_sources.read_json_object` for present JSON sidecars
+  while preserving missing optional sidecars as empty evidence. Malformed or
+  parseable non-object live eval artifacts now use canonical path-labelled
+  source wording before runner grading, while the existing runner error
+  substring remains intact for live-eval result reporting. Owner layer: Eval
+  suites and live-run artifact evidence. Behavior-change class: source-reader
+  consolidation / fail-aloud source validation. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized
+  modules; this slice did not add new complexity in touched files. Proof:
+  focused live-artifact source tests, existing malformed run-result live-eval
+  regression test, touched-file ruff/format checks, changed-code review,
+  `git diff --check`, and ratchet. Reopen only if live eval artifact sidecar
+  loading regains a local raw JSON reader or corrupt present sidecars can again
+  reach runner grading as parser tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Report-server index summary loading now uses
   `roboclaws.core.json_sources.read_json_object` for present
   `run_result.json` sidecars while preserving missing sidecars as empty

@@ -126,6 +126,10 @@ Latest quality snapshot from 2026-06-20:
   sidecars through the shared JSON-object helper, so malformed or non-object
   sidecars fail with path-labelled source errors instead of being hidden as
   missing summary metadata.
+  Live eval artifact sidecar loading now routes present JSON sidecars through
+  the shared JSON-object helper while preserving missing optional sidecars as
+  empty evidence, so malformed or non-object live eval artifacts use canonical
+  source errors before runner grading.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization
