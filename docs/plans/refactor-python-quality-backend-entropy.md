@@ -20,15 +20,15 @@ their full execution notes back here.
 
 Latest quality snapshot from 2026-06-20:
 
-- Ruff complexity rows: 0.
+- Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the cleanup report artifact source-reader
+- Current shared-checkout note after the provider timing proxy ready-source
   slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
-  reports 1 Ruff complexity row in unrelated dirty
+  reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
-  the new oversized entry is unrelated no-touch dirty
-  `tests/contract/maps/test_b1_map12_label_tool.py`.
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+  unrelated no-touch debt.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -159,6 +159,11 @@ Latest quality snapshot from 2026-06-20:
   Live-agent artifact JSON loading now routes object reads through the shared
   JSON-object helper while preserving existing live-runtime artifact error
   wording for malformed or non-object status/result sources.
+  Provider timing proxy readiness now routes present
+  `provider_timing_proxy.ready.json` reads through the shared JSON-object
+  helper and writes the ready artifact atomically, so missing readiness still
+  polls but malformed or non-object readiness fails startup with source-specific
+  evidence instead of returning a fabricated proxy handle.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

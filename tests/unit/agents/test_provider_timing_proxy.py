@@ -9,6 +9,7 @@ from aiohttp import ClientSession, web
 
 from roboclaws.agents.provider_timing_proxy import (
     ProviderTimingProxyConfig,
+    _read_ready_payload,
     free_local_port,
     main,
     replace_base_url_origin,
@@ -105,6 +106,94 @@ def test_provider_timing_proxy_cli_rejects_out_of_range_bind_port(tmp_path: Path
     assert not (tmp_path / "metrics.jsonl").exists()
 
 
+def test_provider_timing_proxy_ready_source_missing_is_not_ready(tmp_path: Path) -> None:
+    assert _read_ready_payload(tmp_path / "missing.ready.json") == {}
+
+
+def test_provider_timing_proxy_ready_source_rejects_malformed_json(tmp_path: Path) -> None:
+    ready_path = tmp_path / "provider_timing_proxy.ready.json"
+    ready_path.write_text("{not-json", encoding="utf-8")
+
+    try:
+        _read_ready_payload(ready_path)
+    except ValueError as exc:
+        assert str(exc) == (
+            f"provider timing proxy ready source must contain valid JSON object: {ready_path}"
+        )
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected malformed provider timing proxy ready source to fail")
+
+
+def test_provider_timing_proxy_ready_source_rejects_non_object_json(tmp_path: Path) -> None:
+    ready_path = tmp_path / "provider_timing_proxy.ready.json"
+    ready_path.write_text('["ready"]', encoding="utf-8")
+
+    try:
+        _read_ready_payload(ready_path)
+    except ValueError as exc:
+        assert str(exc) == (
+            f"provider timing proxy ready source must contain a JSON object: {ready_path}"
+        )
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected non-object provider timing proxy ready source to fail")
+
+
+def test_start_provider_timing_proxy_fails_on_invalid_ready_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class FakeProcess:
+        stderr = None
+
+        def __init__(self) -> None:
+            self.terminated = False
+
+        def poll(self) -> None:
+            return None
+
+        def terminate(self) -> None:
+            self.terminated = True
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+        def kill(self) -> None:
+            raise AssertionError("unexpected process kill")
+
+    fake_process = FakeProcess()
+    ready_path = tmp_path / "provider_timing_proxy.ready.json"
+
+    def fake_popen(*_args: object, **_kwargs: object) -> FakeProcess:
+        ready_path.write_text("[1]", encoding="utf-8")
+        return fake_process
+
+    monkeypatch.setattr(
+        "roboclaws.agents.provider_timing_proxy.subprocess.Popen",
+        fake_popen,
+    )
+
+    try:
+        asyncio.run(
+            start_provider_timing_proxy(
+                repo_root=Path(__file__).resolve().parents[3],
+                run_dir=tmp_path,
+                upstream_base_url="https://provider.example.test/v1",
+                agent_engine="codex-cli",
+                provider_profile="codex-router-responses",
+                startup_timeout_s=1,
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == (
+            "provider timing proxy ready source is invalid: "
+            f"provider timing proxy ready source must contain a JSON object: {ready_path}"
+        )
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected invalid provider timing proxy ready source to fail")
+
+    assert fake_process.terminated is True
+
+
 async def _proxy_streaming_case(tmp_path: Path) -> None:
     proxy_stop = asyncio.Event()
     upstream_port = free_local_port()
@@ -112,6 +201,7 @@ async def _proxy_streaming_case(tmp_path: Path) -> None:
     received: dict[str, object] = {}
 
     upstream_runner = await _start_streaming_upstream(upstream_port, received)
+    ready_path = tmp_path / "run" / "provider_timing_proxy.ready.json"
     proxy_task = asyncio.create_task(
         serve_provider_timing_proxy(
             _proxy_config(
@@ -119,10 +209,12 @@ async def _proxy_streaming_case(tmp_path: Path) -> None:
                 upstream_port=upstream_port,
                 proxy_port=proxy_port,
             ),
+            ready_path=ready_path,
             stop_event=proxy_stop,
         )
     )
     await _wait_for_port(proxy_port)
+    assert _read_ready_payload(ready_path)["bind_url"] == f"http://127.0.0.1:{proxy_port}"
 
     response_body, first_chunk_seen = await _read_streamed_proxy_response(proxy_port)
 

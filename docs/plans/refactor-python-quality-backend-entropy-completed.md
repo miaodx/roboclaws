@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Provider timing proxy readiness now uses
+  `roboclaws.core.json_sources.read_json_object` for present
+  `provider_timing_proxy.ready.json` object parsing and writes the child ready
+  artifact atomically. Missing ready files remain the polling/not-ready state;
+  malformed or non-object ready files now fail startup with a source-specific
+  runtime error instead of returning a fabricated proxy handle or drifting into
+  a timeout. Owner layer: Agent Engines and Provider Profiles / provider
+  timing runtime adapter. Behavior-change class: source-reader consolidation
+  and fail-aloud readiness validation. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+  unrelated no-touch debt, and this slice did not add new complexity in touched
+  files. Proof: focused provider timing proxy tests, touched-file ruff/format
+  checks, changed-code review, `git diff --check`, and ratchet. Reopen only if
+  provider timing proxy readiness regains a local raw JSON-object reader or
+  corrupt present ready artifacts can again be treated as ready, missing, or
+  timeout-only evidence.
+
 - 2026-06-20: Live-agent artifact JSON loading now uses
   `roboclaws.core.json_sources.read_json_object` for object parsing while
   preserving existing live-runtime artifact error wording for missing,
