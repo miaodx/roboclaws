@@ -17,23 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 Map 12 manual alignment overlay scene-topdown and alignment
+2026-06-20: B1 Map 12 label-tool semantics and source-metadata reads now route
+through the shared JSON-object helper inside a small translation wrapper while
+preserving current CLI/test wording. Focused B1 Map 12 label-tool contract
+tests and touched-file Ruff/format passed, as did `git diff --check` and
+ratchet. Current shared-checkout ratchet summary still reports 1 unrelated
+Ruff complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and
+80 oversized modules.
+
+Previous slice: B1 Map 12 manual alignment overlay scene-topdown and alignment
 artifact reads now route through the shared JSON-object helper inside the
 existing `load_json` wrapper while preserving current CLI wording. Focused B1
 Map 12 manual alignment overlay contract tests and touched-file Ruff/format
-passed, as did `git diff --check` and ratchet. Current shared-checkout ratchet
-summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-
-Previous slice: B1 scene Gaussian topdown capture-result loading now routes child
-`capture_result.json` artifacts through the shared JSON-object helper before
-attaching `result_path`. Focused B1 scene Gaussian topdown contract tests and
-touched-file Ruff/format passed.
+passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the manual alignment overlay source-reader slice.
+committing the label-tool source-reader slice.
 
 ## Touched Areas
 

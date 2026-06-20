@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 label-tool semantics and source-metadata reads now
+  route through `roboclaws.core.json_sources.read_json_object` inside a small
+  label-tool translation wrapper. The existing CLI/test wording for missing,
+  malformed, and non-object semantics/source metadata stays stable while raw
+  file parsing and JSON-object validation are shared. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation with stable CLI diagnostics. Metric: current shared-checkout
+  ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused B1 Map 12 label-tool contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/maps/render_b1_map12_label_tool.py` regains local raw JSON parsing
+  for semantics or source metadata inputs, or if the tested label-tool
+  source-error wording drifts.
+
 - 2026-06-20: B1 Map 12 manual alignment overlay scene-topdown and alignment
   artifact reads now route through
   `roboclaws.core.json_sources.read_json_object` inside the existing

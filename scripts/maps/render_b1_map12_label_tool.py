@@ -20,6 +20,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle_validation import parse_map_yaml
 from roboclaws.maps.navigation_memory import (
     navigation_memory_item,
@@ -236,25 +237,12 @@ def load_semantics_or_empty(
 ) -> dict[str, Any]:
     path = Path(semantics_path)
     if path.is_file():
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"semantics must contain valid JSON object: {path}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"semantics must contain a JSON object: {path}")
-        return payload
+        return _read_label_tool_json_object(path, "semantics")
     if not allow_missing:
         raise ValueError(f"semantics missing: {path}")
     if not source_json_path.is_file():
         raise ValueError(f"map source metadata missing: {source_json_path}")
-    try:
-        source = json.loads(source_json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"map source metadata must contain valid JSON object: {source_json_path}"
-        ) from exc
-    if not isinstance(source, dict):
-        raise ValueError(f"map source metadata must contain a JSON object: {source_json_path}")
+    source = _read_label_tool_json_object(source_json_path, "map source metadata")
     return {
         "schema": "robot_map12_empty_label_tool_semantics_v1",
         "environment_id": str(source.get("alias") or "robot_map_12"),
@@ -270,6 +258,18 @@ def load_semantics_or_empty(
             "contains_runtime_observations": False,
         },
     }
+
+
+def _read_label_tool_json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        return read_json_object(path, label=label)
+    except ValueError as exc:
+        message = str(exc)
+        if "source must contain valid JSON object" in message:
+            raise ValueError(f"{label} must contain valid JSON object: {path}") from exc
+        if "source must contain a JSON object" in message:
+            raise ValueError(f"{label} must contain a JSON object: {path}") from exc
+        raise
 
 
 def materialize_scene_evidence_artifacts(packet: dict[str, Any], *, output_dir: Path) -> None:
