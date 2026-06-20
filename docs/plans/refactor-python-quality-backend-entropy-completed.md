@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Agent SDK performance-matrix manifest loading now routes
+  explicit manifest JSON-object sources through
+  `roboclaws.core.json_sources.read_json_object` while preserving existing CLI
+  failure behavior. Missing, malformed, or non-object manifests now fail before
+  schema or row validation with status 1 and stderr evidence. Owner layer:
+  Agent Engines And Provider Profiles / eval-support tooling.
+  Behavior-change class: source-reader consolidation with stable CLI
+  diagnostics. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched matrix script is 991 lines and its focused test file is 1052
+  lines. Proof: focused Agent SDK performance matrix tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` regains local raw JSON
+  parsing for matrix manifests or malformed/non-object manifest sources can
+  reach schema/row validation as loaded payloads.
+
 - 2026-06-20: MolmoSpaces Agibot contract rehearsal strict JSON-object
   artifact reads now route through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or

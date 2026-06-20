@@ -22,13 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the Agibot contract rehearsal artifact
+- Current shared-checkout note after the Agent SDK performance-matrix manifest
   source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched Agibot contract rehearsal module is 1949 lines and its focused
-  test file is 96 lines.
+  The touched Agent SDK matrix script is 991 lines and its focused test file
+  is 1052 lines.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -304,6 +304,10 @@ Latest quality snapshot from 2026-06-20:
   route through the shared JSON-object helper, so missing, malformed, or
   non-object context/reference artifacts fail with path-labelled source errors
   before rehearsal reference evidence is assembled.
+  Agent SDK performance-matrix manifest loading now routes explicit manifest
+  JSON-object sources through the shared JSON-object helper while preserving
+  existing CLI failure behavior for missing, malformed, non-object, unsupported
+  schema, and wrong-shaped row inputs.
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.

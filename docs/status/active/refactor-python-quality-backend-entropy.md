@@ -17,21 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces Agibot contract rehearsal strict JSON-object artifact
-reads now route through the shared JSON-object source helper. Malformed,
-missing, or non-object context/reference artifacts fail with path-labelled
-source errors before rehearsal reference evidence is assembled. Focused Agibot
-contract rehearsal source tests passed. Current shared-checkout ratchet summary
-still reports 1 unrelated Ruff complexity row in
+2026-06-20: Agent SDK performance-matrix manifest loading now routes its
+explicit manifest JSON-object source through the shared source helper while
+preserving existing CLI failure behavior. Missing, malformed, or non-object
+manifests fail before row/schema validation, with the matrix command returning
+status 1 and stderr evidence. Focused Agent SDK performance matrix tests
+passed. Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Agibot SDK runner strict JSON-object artifact reads now route
-through the shared JSON-object source helper.
+Previous slice: MolmoSpaces Agibot contract rehearsal strict JSON-object
+artifact reads now route through the shared JSON-object source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Agibot contract rehearsal artifact source-reader slice.
+committing the Agent SDK performance-matrix manifest source-reader slice.
 
 ## Touched Areas
 
