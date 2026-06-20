@@ -10,6 +10,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle_validation import (
     parse_map_yaml as parse_map_yaml,
 )
@@ -290,7 +291,7 @@ def _existing_bundle_snapshot(
     run_dir: Path,
     source_bundle_dir: Path | None = None,
 ) -> dict[str, Any]:
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = _read_bundle_semantics(bundle_dir)
     environment_id = str(semantics.get("environment_id") or bundle_dir.name)
     map_id = str(semantics.get("map_id") or f"{environment_id}_base_navigation_map")
     map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
@@ -583,7 +584,7 @@ def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | N
 
     bundle_dir = Path(bundle_dir)
     output_path = output_path or bundle_dir / "preview.png"
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = _read_bundle_semantics(bundle_dir)
     map_yaml = parse_map_yaml((bundle_dir / "map.yaml").read_text(encoding="utf-8"))
     resolution = float(map_yaml.get("resolution") or 0.05)
     origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
@@ -780,6 +781,10 @@ def _yaml_scalar(value: Any) -> str:
     if not text or any(ch in text for ch in ":#[]{}&,"):
         return json.dumps(text)
     return text
+
+
+def _read_bundle_semantics(bundle_dir: Path) -> dict[str, Any]:
+    return read_json_object(bundle_dir / "semantics.json", label="Nav2 semantics")
 
 
 def _stable_hash(value: Any) -> str:

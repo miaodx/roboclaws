@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Nav2 map-bundle semantics loading now routes validation,
+  projection, existing-bundle snapshot, and source-frame preview reads through
+  `roboclaws.core.json_sources.read_json_object` instead of local
+  `json.loads(Path(...).read_text())` readers. Missing, malformed, and
+  parseable non-object `semantics.json` packets now use canonical
+  path-labelled source wording, and bundle validation stops at unreadable
+  semantics source evidence instead of layering secondary shape errors from an
+  empty substitute object. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud validation
+  tightening. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Nav2 map-bundle contract tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if Nav2 map-bundle semantics reads regain local
+  JSON-object source readers or validation stops surfacing unreadable
+  `semantics.json` as source evidence.
+
 - 2026-06-20: Scene room semantic overlays now route present source-bundle
   `semantics.json` artifacts through the shared
   `roboclaws.core.json_sources.read_json_object` reader and stop fabricating

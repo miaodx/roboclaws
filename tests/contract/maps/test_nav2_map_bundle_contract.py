@@ -125,9 +125,37 @@ def test_nav2_projection_rejects_non_object_semantics(tmp_path: Path) -> None:
     validation = validate_nav2_map_bundle(bundle_dir)
 
     assert validation.ok is False
-    assert "semantics.json must contain a JSON object" in validation.errors
-    with pytest.raises(AssertionError, match="semantics.json must contain a JSON object"):
+    assert len(validation.errors) == 1
+    assert "Nav2 semantics source must contain a JSON object" in validation.errors[0]
+    assert str(bundle_dir / "semantics.json") in validation.errors[0]
+    with pytest.raises(
+        AssertionError,
+        match=r"Nav2 semantics source must contain a JSON object: .*semantics\.json",
+    ):
         metric_map_from_bundle(bundle_dir)
+
+
+def test_nav2_projection_rejects_malformed_semantics(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    (bundle_dir / "semantics.json").write_text("{", encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert len(validation.errors) == 1
+    assert "Nav2 semantics source must contain valid JSON object" in validation.errors[0]
+    assert str(bundle_dir / "semantics.json") in validation.errors[0]
+    with pytest.raises(
+        AssertionError,
+        match=r"Nav2 semantics source must contain valid JSON object: .*semantics\.json",
+    ):
+        static_landmarks_from_bundle(bundle_dir)
 
 
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:

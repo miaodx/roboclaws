@@ -17,11 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 scene topdown diagnostic overlay loading now routes explicit
-`--scene-topdown-render` packets through the shared JSON-source helper.
-Missing, malformed, or parseable non-object Gaussian topdown packets use the
-canonical path-labelled source wording before schema validation or overlay
-writes. Focused B1 scene topdown diagnostic and core JSON-source tests,
+2026-06-20: Nav2 map-bundle semantics loading now routes validation,
+projection, snapshot, and source-frame preview reads through the shared
+JSON-source helper. Missing, malformed, or parseable non-object
+`semantics.json` packets use the canonical path-labelled source wording, and
+validation stops at unreadable source evidence instead of piling on secondary
+shape errors. Focused Nav2 map-bundle contract and core JSON-source tests,
 touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
@@ -62,6 +63,9 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
+- `roboclaws/maps/bundle.py`
+- `roboclaws/maps/bundle_validation.py`
+- `roboclaws/maps/project.py`
 - `roboclaws/cli/household_agent_server.py`
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`

@@ -92,6 +92,10 @@ Latest quality snapshot from 2026-06-20:
   through the shared JSON-source helper too, so missing, malformed, or
   non-object file-backed launch contracts fail with path-labelled source
   errors before household launch/runtime consumers normalize the payload.
+  Nav2 map-bundle semantics loading now routes validation, projection,
+  snapshot, and source-frame preview reads through the shared JSON-source
+  helper, so malformed or non-object `semantics.json` sources fail with
+  canonical path-labelled source errors before projection or preview use.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
