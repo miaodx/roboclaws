@@ -17,11 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Nav2 map-bundle export now treats missing explicit `--agent-view`
-and `--run-result` sources as source-path errors before bundle writes. Focused
-Nav2 map-bundle contract tests, touched-file Ruff/format, `git diff --check`,
-and ratchet passed. Quality signal: 0 Ruff complexity rows, 79 oversized
-modules.
+2026-06-20: Visual-grounding benchmark result checks now treat
+`visual_grounding_benchmark_result.json` and
+`visual_grounding_predictions.jsonl` as object-typed source truth. Malformed or
+non-object declared artifacts fail with concise checker errors instead of raw
+JSON/type tracebacks. Focused visual-grounding benchmark checker tests,
+touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
+signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -43,6 +45,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `scripts/maps/export_bundle.py`
+- `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -56,6 +59,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
 - `tests/contract/maps/test_nav2_map_bundle_contract.py`
+- `tests/contract/visual_grounding/test_visual_grounding_benchmark_checker_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

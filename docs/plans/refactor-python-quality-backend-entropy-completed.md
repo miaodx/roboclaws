@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding benchmark result checks now treat
+  `visual_grounding_benchmark_result.json` and
+  `visual_grounding_predictions.jsonl` as object-typed source truth.
+  Malformed or parseable non-object result JSON and prediction JSONL rows now
+  return concise checker source errors instead of surfacing raw parser/type
+  tracebacks. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-grounding benchmark artifact source
+  truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; coverage landed in a small dedicated checker-source
+  contract test file instead of expanding the existing visual-grounding
+  benchmark contract test toward the oversized threshold. Proof: focused
+  visual-grounding benchmark checker/contract tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only with fresh
+  visual-grounding checker evidence that malformed or non-object declared
+  result/prediction artifacts again produce tracebacks or pass into deeper
+  validation as plausible benchmark evidence.
+
 - 2026-06-20: Nav2 map-bundle export now treats missing explicit
   `--agent-view` and `--run-result` sources as source-path errors before
   bundle writes. This extends the existing malformed/non-object exporter

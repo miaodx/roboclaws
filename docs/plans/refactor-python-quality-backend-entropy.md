@@ -132,6 +132,9 @@ Latest quality snapshot from 2026-06-20:
   parity test reflects the current accepted B1 alignment-anchor manifest.
   Nav2 map-bundle export now treats missing explicit `--agent-view` and
   `--run-result` sources as source-path errors before bundle writes.
+  Visual-grounding benchmark checks now treat declared result JSON and
+  prediction JSONL artifacts as object-typed source truth before benchmark
+  validation.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.
