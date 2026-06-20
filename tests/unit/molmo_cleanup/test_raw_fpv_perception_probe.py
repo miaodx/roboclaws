@@ -726,7 +726,7 @@ def test_raw_fpv_probe_rejects_malformed_codex_event_source(tmp_path: Path) -> N
             max_frames_per_source=4,
         )
     except ValueError as exc:
-        assert "RAW-FPV Codex event source contains invalid JSON" in str(exc)
+        assert "RAW-FPV Codex event source row must contain valid JSON object" in str(exc)
         assert "codex-events.jsonl:2" in str(exc)
     else:  # pragma: no cover - corrupt source evidence should fail before scoring
         raise AssertionError("expected malformed Codex event source to fail aloud")
@@ -745,7 +745,7 @@ def test_raw_fpv_probe_rejects_non_object_codex_event_source(tmp_path: Path) -> 
             max_frames_per_source=4,
         )
     except ValueError as exc:
-        assert "RAW-FPV Codex event source row must be an object" in str(exc)
+        assert "RAW-FPV Codex event source row must contain a JSON object" in str(exc)
         assert "codex-events.jsonl:1" in str(exc)
     else:  # pragma: no cover - corrupt source evidence should fail before scoring
         raise AssertionError("expected non-object Codex event source to fail aloud")

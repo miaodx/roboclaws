@@ -17,8 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-console trace/event/control/history JSONL row reads now
-share one console-owned JSONL row collector instead of three local
+2026-06-21: RAW-FPV perception probe Codex event artifact reads now use the
+shared JSONL source owner instead of a local row parser. The shared helper can
+also return source line numbers for callers that need row-local secondary
+parsing, so malformed or non-object present `codex-events*.jsonl` rows use
+canonical `RAW-FPV Codex event` row-source wording before observation frames
+can be collected from partial event evidence, while embedded MCP observe-result
+errors still point at the original event line. Focused proof passed: core JSON
+source tests, RAW-FPV perception probe tests, touched-file ruff,
+touched-file format check, diff check, changed-code cleanup review, and
+ratchet summary. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
+Previous slice: Operator-console trace/event/control/history JSONL row reads
+now share one console-owned JSONL row collector instead of three local
 `read_text`/`splitlines`/`json.loads` loops. State and history display paths
 still keep valid partial rows visible while surfacing malformed or non-object
 present rows as source errors, and operator control remains fail-fast before
@@ -287,9 +299,16 @@ Avoid reopening operator-console JSONL row collection unless fresh console
 state/history/control evidence shows corrupt present JSONL rows can again feed
 operator-visible status or append new operator-control rows without source
 diagnostics.
+Avoid reopening RAW-FPV Codex event artifact source consolidation unless fresh
+perception-probe evidence shows corrupt present `codex-events*.jsonl` rows can
+again feed observation-frame collection without canonical row-source
+diagnostics.
 
 ## Touched Areas
 
+- `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`
+- `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
+- `tests/unit/core/test_json_sources.py`
 - `roboclaws/operator_console/jsonl_sources.py`
 - `roboclaws/operator_console/control.py`
 - `tests/unit/operator_console/test_history.py`

@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: RAW-FPV perception probe Codex event JSONL reads now delegate to
+  the shared JSONL source owner, including a new line-numbered row helper for
+  consumers that need row-local secondary parsing. Present malformed or
+  non-object `codex-events*.jsonl` rows now use canonical `RAW-FPV Codex event`
+  row-source diagnostics before observation frames can be collected from
+  partial event evidence, while embedded MCP observe-result parse errors still
+  point at the original event line. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: internal source-reader consolidation with
+  canonical row-source diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused core JSON-source and RAW-FPV perception probe
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py` regains a local
+  Codex-event JSONL row parser or corrupt present `codex-events*.jsonl` rows
+  can again feed RAW-FPV observation-frame collection without canonical
+  row-source diagnostics.
+
 - 2026-06-21: Operator-console JSONL row reading now has one console-owned
   source collector for trace/event state display, run-history attachment, and
   operator-control append preflight. State and history paths preserve their

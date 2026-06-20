@@ -41,6 +41,10 @@ def json_source_type_name(path: Path) -> str:
 
 
 def read_jsonl_objects(path: Path, *, label: str) -> list[dict[str, Any]]:
+    return [row for _, row in read_jsonl_object_rows(path, label=label)]
+
+
+def read_jsonl_object_rows(path: Path, *, label: str) -> list[tuple[int, dict[str, Any]]]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} source is missing: {path}")
     try:
@@ -61,7 +65,7 @@ def read_jsonl_objects(path: Path, *, label: str) -> list[dict[str, Any]]:
             ) from exc
         if not isinstance(row, dict):
             raise ValueError(f"{label} source row must contain a JSON object: {path}:{line_number}")
-        rows.append(row)
+        rows.append((line_number, row))
     return rows
 
 

@@ -29,7 +29,7 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
-from roboclaws.core.json_sources import read_json_object  # noqa: E402
+from roboclaws.core.json_sources import read_json_object, read_jsonl_object_rows  # noqa: E402
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -1226,34 +1226,24 @@ def _raw_observations_from_json_artifacts(run_dir: Path) -> list[dict[str, Any]]
 def _raw_observations_from_codex_events(run_dir: Path) -> list[dict[str, Any]]:
     observations = []
     for path in sorted(run_dir.glob("codex-events*.jsonl")):
-        with path.open(encoding="utf-8") as handle:
-            for line_number, line in enumerate(handle, start=1):
-                if not line.strip():
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        "RAW-FPV Codex event source contains invalid JSON "
-                        f"at {path}:{line_number}: {exc.msg}"
-                    ) from exc
-                if not isinstance(event, dict):
-                    raise ValueError(
-                        f"RAW-FPV Codex event source row must be an object at {path}:{line_number}"
-                    )
-                item = event.get("item") or {}
-                if item.get("type") != "mcp_tool_call" or item.get("tool") != "observe":
-                    continue
-                if event.get("type") != "item.completed":
-                    continue
-                payload = _mcp_text_result_json(
-                    item.get("result") or {},
-                    source=f"{path}:{line_number}",
-                )
-                raw = (payload.get("raw_fpv_observation") or {}) if payload else {}
-                if raw.get("observation_id"):
-                    observations.append(raw)
+        for line_number, event in _load_codex_event_rows(path):
+            item = event.get("item") or {}
+            if item.get("type") != "mcp_tool_call" or item.get("tool") != "observe":
+                continue
+            if event.get("type") != "item.completed":
+                continue
+            payload = _mcp_text_result_json(
+                item.get("result") or {},
+                source=f"{path}:{line_number}",
+            )
+            raw = (payload.get("raw_fpv_observation") or {}) if payload else {}
+            if raw.get("observation_id"):
+                observations.append(raw)
     return observations
+
+
+def _load_codex_event_rows(path: Path) -> list[tuple[int, dict[str, Any]]]:
+    return read_jsonl_object_rows(path, label="RAW-FPV Codex event")
 
 
 def _raw_observations_from_robot_view_files(run_dir: Path) -> list[dict[str, Any]]:

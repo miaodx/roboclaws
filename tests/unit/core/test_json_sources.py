@@ -11,6 +11,7 @@ from roboclaws.core.json_sources import (
     read_gzip_json_object,
     read_json_object,
     read_json_value,
+    read_jsonl_object_rows,
     read_jsonl_objects,
 )
 
@@ -147,6 +148,16 @@ def test_read_jsonl_objects_returns_object_rows_and_skips_blank_lines(tmp_path: 
     assert read_jsonl_objects(path, label="sample events") == [
         {"event": "start"},
         {"event": "done"},
+    ]
+
+
+def test_read_jsonl_object_rows_returns_source_line_numbers(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text('{"event": "start"}\n\n{"event": "done"}\n', encoding="utf-8")
+
+    assert read_jsonl_object_rows(path, label="sample events") == [
+        (1, {"event": "start"}),
+        (3, {"event": "done"}),
     ]
 
 

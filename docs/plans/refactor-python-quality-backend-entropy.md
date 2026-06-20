@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the RAW-FPV Codex event artifact source
+  consolidation slice: the perception probe now routes present
+  `codex-events*.jsonl` rows through the shared JSONL source owner, including
+  line-numbered rows for embedded observe-result parsing. Malformed or
+  non-object present event rows now use canonical `RAW-FPV Codex event`
+  row-source diagnostics before observation frames can be collected from
+  partial event evidence.
 - Current shared-checkout note after the operator-console JSONL row source
   consolidation slice: console state, history, and operator-control JSONL row
   reads now share one console-owned collector. State and history still keep
