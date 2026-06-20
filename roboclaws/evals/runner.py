@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import collect_jsonl_object_rows, read_json_object
 from roboclaws.evals.agent_identity import (
     agent_engine_spec,
     blocked_result_from_live_agent_request,
@@ -1310,23 +1310,16 @@ def _artifact_paths(run_dir: Path) -> dict[str, Any]:
 
 
 def _read_trace_events_with_errors(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
-    if not path.exists():
-        return [], []
-    events: list[dict[str, Any]] = []
+    rows, issues = collect_jsonl_object_rows(path, label="eval trace")
     errors: list[str] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            errors.append(f"line {line_number}: invalid_json:{exc.msg}")
-            continue
-        if isinstance(payload, dict):
-            events.append(payload)
-            continue
-        errors.append(f"line {line_number}: invalid_json_object")
-    return events, errors
+    for issue in issues:
+        if issue.kind == "invalid_json":
+            errors.append(f"line {issue.line_number}: invalid_json:{issue.message}")
+        elif issue.kind == "non_object":
+            errors.append(f"line {issue.line_number}: invalid_json_object")
+        else:
+            errors.append(f"read_error:{issue.message}")
+    return [row for _, row in rows], errors
 
 
 def _load_optional_json_mapping(path: Path) -> tuple[dict[str, Any], str]:

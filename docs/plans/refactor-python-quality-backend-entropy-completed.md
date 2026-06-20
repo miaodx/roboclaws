@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Eval-runner tolerant `trace.jsonl` reading now delegates to a
+  core JSONL row collector instead of keeping a local
+  `read_text` / `splitlines` / `json.loads` loop in
+  `roboclaws/evals/runner.py`. The shared collector returns valid partial rows
+  plus row-level issues for consumers that intentionally grade from partial
+  trace evidence, while eval trajectory graders preserve the existing
+  `trace_json_invalid` violation and `line N: invalid_json...` /
+  `invalid_json_object` parse-error wording. Owner layer: Eval Suites plus
+  Artifacts, reports, and eval suites. Behavior-change class: internal
+  source-reader consolidation with stable partial-trace grading diagnostics.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused core JSON source
+  tests, eval-runner trace-source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `roboclaws/evals/runner.py` regains a local `trace.jsonl` parser or corrupt
+  present eval trace rows can again affect trajectory/open-ended grading
+  outside the core JSONL row-source owner.
+
 - 2026-06-21: Operator-message inbox JSONL reading now delegates to the
   console-owned row collector used by other operator-console JSONL sources.
   `interactions.py` no longer has a separate `read_text` / `splitlines` /

@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the eval-runner trace JSONL source
+  consolidation slice: tolerant `trace.jsonl` row reads now route through a
+  core JSONL row collector instead of a local parser in
+  `roboclaws/evals/runner.py`. Eval trajectory graders keep valid partial
+  trace rows visible while malformed or non-object present rows preserve the
+  existing `trace_json_invalid` violation and row-level parse-error wording.
 - Current shared-checkout note after the operator-message inbox JSONL source
   consolidation slice: `operator_messages.jsonl` reads now route through the
   console-owned JSONL row collector instead of a local parser in

@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-message inbox JSONL reads now use the console-owned JSONL
+2026-06-21: Eval-runner tolerant `trace.jsonl` reads now use a core JSONL row
+collector instead of a local parser in `roboclaws/evals/runner.py`. The new
+core collector keeps partial valid rows plus row-level issues for consumers
+that intentionally grade from partial trace evidence, while eval trajectory
+graders keep their existing `trace_json_invalid` violation and
+`line N: invalid_json...` / `invalid_json_object` wording. Focused proof
+passed: core JSON source tests, eval-runner trace-source tests, touched-file
+ruff, touched-file format check, diff check, changed-code cleanup review, and
+ratchet summary. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
+Previous slice: Operator-message inbox JSONL reads now use the console-owned JSONL
 row collector instead of a local parser in `interactions.py`. Valid partial
 message rows remain visible in list/state views while malformed or non-object
 present rows still surface the existing operator-message source-error payload,
