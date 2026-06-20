@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Camera-control request normalization and backend camera-view spec
+2026-06-21: Generated-mess placement seeding now reuses the canonical
+generated-mess manifest relation/index validators in both MolmoSpaces and
+Isaac scenario-state helpers. Persisted or hand-built worker state with bad
+manifest `relation` or `placement_index` values now fails before placement
+diagnostics can default to backend-derived `inside`/loop-index values, while
+non-manifest seeding keeps its backend fallback behavior. Focused
+generated-mess scenario-state, existing generated-mess manifest, MolmoSpaces
+worker, and Isaac worker tests, touched-file ruff, touched-file format checks,
+diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Camera-control request normalization and backend camera-view spec
 builders now reject malformed explicit render-pose vectors instead of
 defaulting `target`/`lookat` to origin or deriving a plausible `eye` from bad
 input. Canonical eye/target requests require finite 3-number `eye`,
@@ -106,10 +117,11 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console Docker inventory mount source slice. Avoid
-reopening closed visual-slot config, slot-file source readers, Docker mount
-stop source handling, or Docker inventory mount source handling without fresh
-false-green evidence.
+committing the generated-mess placement-field source slice. Avoid reopening
+closed visual-slot config, slot-file source readers, Docker mount stop/source
+handling, Docker inventory mount source handling, camera-control vectors, or
+generated-mess relation/index placement fields without fresh false-green
+evidence.
 
 ## Touched Areas
 
@@ -210,6 +222,9 @@ false-green evidence.
 - `roboclaws/launch/goals.py`
 - `roboclaws/evals/models.py`
 - `roboclaws/maps/room_semantics.py`
+- `roboclaws/household/generated_mess.py`
+- `scripts/molmo_cleanup/molmospaces_scenario_state.py`
+- `scripts/isaac_lab_cleanup/isaac_scenario_state.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -258,6 +273,7 @@ false-green evidence.
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
+- `tests/unit/molmo_cleanup/test_generated_mess_scenario_state.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
 - `tests/contract/reports/test_molmo_cleanup_artifact_report.py`
 - `tests/contract/reports/test_molmo_cleanup_report_timing_sources.py`

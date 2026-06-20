@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Generated-mess placement seeding now treats manifest
+  `relation` and `placement_index` as canonical source truth in both
+  MolmoSpaces and Isaac scenario-state helpers. The generated-mess contract
+  owner exposes shared validators used by initial manifest materialization and
+  later worker-state placement seeding, so persisted or hand-built worker
+  state with malformed placement fields fails before backend fallbacks can
+  emit plausible `inside`/loop-index placement diagnostics. Non-manifest
+  generated-mess seeding keeps its backend fallback behavior. Owner layer:
+  Backend Runtime / Environment Primitive plus the Generated Mess Set
+  manifest contract. Behavior-change class: fail-aloud runtime manifest field
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  generated-mess scenario-state tests, existing generated-mess manifest and
+  MolmoSpaces/Isaac worker tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if manifest-backed
+  generated-mess placement can again default invalid `relation` or
+  `placement_index` values during backend seeding.
+
 - 2026-06-21: Camera-control request normalization now rejects malformed or
   missing explicit render-pose vectors and non-object view rows before
   renderers can emit valid-looking camera artifacts from fallback origin/default

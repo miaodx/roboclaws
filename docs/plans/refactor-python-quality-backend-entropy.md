@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the generated-mess placement-field source
+  slice: MolmoSpaces and Isaac scenario-state placement seeding now reuse the
+  canonical generated-mess manifest validators for `relation` and
+  `placement_index`, so persisted or hand-built worker state with bad manifest
+  placement fields fails before backend defaults can produce valid-looking
+  placement diagnostics. Non-manifest seeding keeps its existing backend
+  fallback behavior.
 - Current shared-checkout note after the camera-control vector source slice:
   public camera-control request normalization now rejects malformed or missing
   explicit render-pose vectors and non-object view rows before MuJoCo or Isaac

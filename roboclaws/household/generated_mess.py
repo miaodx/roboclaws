@@ -270,8 +270,8 @@ def _materialize_manifest_target(
         object_id=object_id,
         receptacle_by_id=receptacle_by_id,
     )
-    selected_obj["relation"] = _valid_manifest_relation(raw_target, object_id=object_id)
-    selected_obj["placement_index"] = _valid_manifest_placement_index(
+    selected_obj["relation"] = valid_generated_mess_relation(raw_target, object_id=object_id)
+    selected_obj["placement_index"] = valid_generated_mess_placement_index(
         raw_target,
         object_id=object_id,
     )
@@ -317,7 +317,7 @@ def _valid_manifest_start_receptacle_id(
     return start_receptacle_id
 
 
-def _valid_manifest_relation(raw_target: dict[str, Any], *, object_id: str) -> str:
+def valid_generated_mess_relation(raw_target: dict[str, Any], *, object_id: str) -> str:
     relation = str(raw_target.get("relation") or "")
     if relation not in {"on", "inside"}:
         raise ValueError(
@@ -327,7 +327,7 @@ def _valid_manifest_relation(raw_target: dict[str, Any], *, object_id: str) -> s
     return relation
 
 
-def _valid_manifest_placement_index(raw_target: dict[str, Any], *, object_id: str) -> int:
+def valid_generated_mess_placement_index(raw_target: dict[str, Any], *, object_id: str) -> int:
     placement_index = raw_target.get("placement_index")
     if isinstance(placement_index, bool) or not isinstance(placement_index, int):
         raise ValueError(
