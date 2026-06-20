@@ -22,11 +22,11 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80.
-- Current shared-checkout note after the scene-sampler prefilter optional JSON
-  sidecar reader slice:
+- Current shared-checkout note after the B1 base-navigation label validation
+  helper split:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 0 Ruff complexity rows and 80 oversized modules. The touched
-  scene-sampler prefilter owner and focused launch tests remain under the
+  B1 base-navigation map builder and focused contract tests remain under the
   current ratchet ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
@@ -319,6 +319,10 @@ Latest quality snapshot from 2026-06-20:
   Scene-sampler prefilter optional JSON sidecar loading now routes through the
   shared JSON-source helper while preserving missing, unreadable, malformed,
   and non-object sources as empty optional metadata.
+  B1 base-navigation label validation now splits source, label-row,
+  navigation-area, usage, identity, and geometry checks into focused helpers,
+  preserving existing validation errors while clearing the two C901 rows
+  introduced by the concurrent base-navigation map builder commit.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

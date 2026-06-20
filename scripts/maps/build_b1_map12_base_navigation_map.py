@@ -166,6 +166,32 @@ def validate_base_navigation_labels(
     labels_path: Path,
     map_bundle: Path,
 ) -> list[str]:
+    errors = _base_navigation_source_errors(
+        payload,
+        labels_path=labels_path,
+        map_bundle=map_bundle,
+    )
+    room_reference_by_partition = _accepted_room_reference_by_partition(room_semantics, errors)
+    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
+    if not labels:
+        errors.append("labels must not be empty")
+        return errors
+    errors.extend(
+        _navigation_label_rows_errors(
+            labels,
+            room_reference_by_partition=room_reference_by_partition,
+            grid=grid,
+        )
+    )
+    return errors
+
+
+def _base_navigation_source_errors(
+    payload: dict[str, Any],
+    *,
+    labels_path: Path,
+    map_bundle: Path,
+) -> list[str]:
     errors: list[str] = []
     if payload.get("schema") != B1_BASE_NAVIGATION_LABELS_SCHEMA:
         errors.append(f"schema must be {B1_BASE_NAVIGATION_LABELS_SCHEMA}")
@@ -177,22 +203,24 @@ def validate_base_navigation_labels(
         errors.append("map_bundle must match --map-bundle")
     if not Path(labels_path).is_file():
         errors.append(f"labels missing: {labels_path}")
-    room_reference_by_partition = _accepted_room_reference_by_partition(room_semantics, errors)
-    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
-    if not labels:
-        errors.append("labels must not be empty")
-        return errors
+    return errors
+
+
+def _navigation_label_rows_errors(
+    labels: list[Any],
+    *,
+    room_reference_by_partition: dict[str, dict[str, Any]],
+    grid: OccupancyGrid,
+) -> list[str]:
+    errors: list[str] = []
     seen_area_ids: set[str] = set()
     navigation_area_count = 0
     for index, raw_label in enumerate(labels, start=1):
         label = raw_label if isinstance(raw_label, dict) else {}
         label_id = str(label.get("label_id") or f"labels[{index}]")
-        area_id = str(label.get("navigation_area_id") or "")
-        if not area_id:
-            errors.append(f"label {label_id} missing navigation_area_id")
-        elif area_id in seen_area_ids:
-            errors.append(f"duplicate navigation_area_id: {area_id}")
-        seen_area_ids.add(area_id)
+        errors.extend(
+            _navigation_area_id_errors(label, label_id=label_id, seen_area_ids=seen_area_ids)
+        )
         errors.extend(_label_contract_errors(label, label_id=label_id))
         errors.extend(
             _dt_reference_binding_errors(
@@ -213,7 +241,32 @@ def validate_base_navigation_labels(
     return errors
 
 
+def _navigation_area_id_errors(
+    label: dict[str, Any],
+    *,
+    label_id: str,
+    seen_area_ids: set[str],
+) -> list[str]:
+    area_id = str(label.get("navigation_area_id") or "")
+    if not area_id:
+        seen_area_ids.add(area_id)
+        return [f"label {label_id} missing navigation_area_id"]
+    if area_id in seen_area_ids:
+        seen_area_ids.add(area_id)
+        return [f"duplicate navigation_area_id: {area_id}"]
+    seen_area_ids.add(area_id)
+    return []
+
+
 def _label_contract_errors(label: dict[str, Any], *, label_id: str) -> list[str]:
+    return [
+        *_label_identity_errors(label, label_id=label_id),
+        *_label_usage_errors(label, label_id=label_id),
+        *_label_geometry_errors(label, label_id=label_id),
+    ]
+
+
+def _label_identity_errors(label: dict[str, Any], *, label_id: str) -> list[str]:
     errors: list[str] = []
     if label.get("review_status") != "accepted":
         errors.append(f"label {label_id} review_status must be accepted")
@@ -227,6 +280,11 @@ def _label_contract_errors(label: dict[str, Any], *, label_id: str) -> list[str]
         errors.append(
             f"label {label_id} geometry_source must be {GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE}"
         )
+    return errors
+
+
+def _label_usage_errors(label: dict[str, Any], *, label_id: str) -> list[str]:
+    errors: list[str] = []
     usage = label.get("polygon_usage") if isinstance(label.get("polygon_usage"), dict) else {}
     if not isinstance(usage.get("navigation"), bool):
         errors.append(f"label {label_id} polygon_usage.navigation must be boolean")
@@ -234,6 +292,11 @@ def _label_contract_errors(label: dict[str, Any], *, label_id: str) -> list[str]
         errors.append(f"label {label_id} polygon_usage.semantic_labeling must be accepted")
     if usage.get("review") is not True:
         errors.append(f"label {label_id} polygon_usage.review must be true")
+    return errors
+
+
+def _label_geometry_errors(label: dict[str, Any], *, label_id: str) -> list[str]:
+    errors: list[str] = []
     geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
     polygon = geometry.get("polygon") if isinstance(geometry.get("polygon"), list) else []
     if geometry.get("kind") != "polygon" or len(polygon) < 3:

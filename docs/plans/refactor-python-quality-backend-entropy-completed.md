@@ -6094,6 +6094,17 @@ logs before choosing the next slice.
   and ratchet. Reopen only if `scene_sampler_prefilter.py` regains direct
   `json.loads(read_text(...))` parsing for optional JSON sidecars or stops
   preserving empty metadata for missing/corrupt optional sources.
+- B1 base-navigation label validation now splits source, label-row,
+  navigation-area, usage, identity, and geometry checks into focused helpers,
+  preserving existing validation errors while clearing the two C901 rows
+  introduced by the concurrent base-navigation map builder commit. Owner
+  layer: Artifacts, reports, and eval suites / map artifact contract.
+  Behavior-change class: internal validation helper split. Metric: ratchet
+  returns to 0 Ruff complexity rows and 80 oversized modules. Proof: focused
+  B1 base-navigation contract tests, ruff, format check, diff check, and
+  ratchet. Reopen only if `validate_base_navigation_labels` or
+  `_label_contract_errors` regains C901 complexity or base-navigation label
+  validation drifts from the checked-in contract tests.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
