@@ -17,11 +17,11 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console backend resource-lock reads now route lock
-JSON-object sources through the shared JSON-object source helper. Missing lock
-files remain unheld; malformed, non-object, or unreadable lock files remain
-held-but-stale so a later acquire can recover them. Focused lock tests,
-touched-file Ruff/format, changed-code review, `git diff --check`, and
+2026-06-20: Operator-console launcher strict JSON-object source reads now
+route through the shared JSON-object source helper while preserving existing
+`_JsonSourceError` wording for stop/readiness diagnostics. The permissive
+optional launcher reader stays local by design. Focused launcher source-error
+tests, touched-file Ruff/format, changed-code review, `git diff --check`, and
 ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
@@ -32,7 +32,7 @@ unrelated no-touch debt.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console resource-lock source-reader slice.
+committing the operator-console launcher source-reader slice.
 
 ## Touched Areas
 
