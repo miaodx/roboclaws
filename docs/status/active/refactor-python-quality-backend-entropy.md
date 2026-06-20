@@ -17,7 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: OpenAI Agents model-input compaction threshold parsing now fails
+2026-06-21: RAW-FPV perception probe runtime-prior loading now fails explicit
+`--runtime-map-prior` paths aloud when missing, including split and equals CLI
+spellings, while preserving the default missing prior as intentional no-prior
+context. Focused RAW-FPV perception probe tests, touched-file ruff,
+touched-file format checks, diff check, changed-code cleanup review, and the
+ratchet summary passed. Current ratchet: 0 Ruff complexity violations, 80
+oversized modules in the shared checkout.
+
+Previous slice: OpenAI Agents model-input compaction threshold parsing now fails
 booleans and non-positive values aloud across the env-backed live runtime path,
 direct `model_input_compaction.min_chars` metadata, and the perf-profile
 `model_input_compaction_min_chars` producer path instead of clamping invalid
@@ -26,7 +34,7 @@ tests, touched-file ruff, touched-file format checks, diff check, changed-code
 cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
 complexity violations, 80 oversized modules in the shared checkout.
 
-Previous slice: MolmoSpaces rigid grasp-cache generation preflight now blocks
+Previous slice before that: MolmoSpaces rigid grasp-cache generation preflight now blocks
 malformed, non-object, or path-less successful runtime-probe stdout instead of
 reporting `python_ready=True` with blank MolmoSpaces root/assets evidence.
 Focused planner task feasibility tests, touched-file ruff, touched-file format
@@ -34,7 +42,7 @@ checks, diff check, changed-code cleanup review, and the ratchet summary
 passed. Current ratchet: 0 Ruff complexity violations, 80 oversized modules in
 the shared checkout.
 
-Previous slice before that: Scene-camera comparison MolmoSpaces source provenance now reports
+Previous committed slice before that: Scene-camera comparison MolmoSpaces source provenance now reports
 installed-package `direct_url.json` metadata problems as `metadata_unavailable`
 or `metadata_unreadable` instead of false `not_installed` provenance. Focused
 scene-camera source tests, a nearby manifest serialization contract test,
@@ -53,9 +61,8 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the OpenAI Agents model-input compaction threshold slice. Avoid
-reopening closed OpenAI Agents performance-profile/default owners without fresh
-route/source-truth evidence.
+committing the RAW-FPV explicit runtime-prior source slice. Avoid reopening
+closed RAW-FPV source readers without fresh false-green evidence.
 
 ## Touched Areas
 
@@ -212,6 +219,7 @@ route/source-truth evidence.
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
 - `tests/unit/molmo_cleanup/test_skill_scratchpad_sources.py`
 - `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
+- `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe_sources.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_prior_probe_sources.py`
 - `tests/unit/molmo_cleanup/test_molmo_grasp_initial_contact_diagnostics.py`
 - `tests/unit/molmo_cleanup/test_scene_camera_source_artifacts.py`

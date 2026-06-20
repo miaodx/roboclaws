@@ -22,6 +22,10 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the RAW-FPV runtime-prior source slice:
+  explicit `--runtime-map-prior` paths now fail aloud when missing, including
+  both split and equals CLI spellings, while the default missing prior path
+  remains the deliberate no-prior convenience.
 - Current shared-checkout note after the OpenAI Agents model-input compaction
   threshold slice: `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS`,
   direct `model_input_compaction.min_chars`, and perf-profile

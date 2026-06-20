@@ -184,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description=(
             "Run a perception-only RAW-FPV probe over fixed cleanup frames. The probe "
@@ -234,7 +235,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-candidates", type=_candidate_limit_arg, default=3)
     parser.add_argument("--timeout-s", type=_positive_float_arg, default=120.0)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
+    args.runtime_map_prior_explicit = _runtime_map_prior_arg_is_explicit(raw_argv)
+    return args
 
 
 def run_probe(args: argparse.Namespace) -> dict[str, Any]:
@@ -248,9 +251,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         contrast_run_dirs=contrast_run_dirs,
         max_frames_per_source=int(args.max_frames_per_source),
     )
-    runtime_map_prior = _load_json_if_exists(
+    runtime_map_prior = _load_runtime_map_prior(
         args.runtime_map_prior,
-        label="RAW-FPV runtime map prior",
+        explicit=bool(args.runtime_map_prior_explicit),
     )
     public_inputs = build_public_inputs(
         frames,
@@ -1905,8 +1908,20 @@ def _safe_filename(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_") or "item"
 
 
+def _runtime_map_prior_arg_is_explicit(argv: list[str]) -> bool:
+    return any(
+        arg == "--runtime-map-prior" or arg.startswith("--runtime-map-prior=") for arg in argv
+    )
+
+
 def _load_json(path: Path, *, label: str) -> dict[str, Any]:
     return read_json_object(path, label=label)
+
+
+def _load_runtime_map_prior(path: Path, *, explicit: bool) -> dict[str, Any]:
+    if explicit and not path.is_file():
+        raise FileNotFoundError(f"RAW-FPV runtime map prior does not exist: {path}")
+    return _load_json_if_exists(path, label="RAW-FPV runtime map prior")
 
 
 def _load_json_if_exists(path: Path, *, label: str) -> dict[str, Any]:

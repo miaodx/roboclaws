@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: RAW-FPV perception probe runtime-prior loading now distinguishes
+  explicit operator input from the default optional prior. User-supplied
+  `--runtime-map-prior` paths, including both split and equals CLI spellings,
+  fail aloud when missing instead of silently producing prior-free prompt
+  inputs; the missing default prior remains the deliberate no-prior
+  convenience. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud explicit artifact source validation.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout; the extra regression lives in a
+  focused RAW-FPV source test file instead of growing the oversized main
+  RAW-FPV test module. Proof: focused RAW-FPV perception probe tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if explicit runtime-prior CLI input can
+  again disappear into empty prior context without a source error.
+
 - 2026-06-21: OpenAI Agents model-input compaction threshold parsing now
   rejects boolean and non-positive values before live runtime or performance
   profile metadata can report plausible compaction thresholds. The live
