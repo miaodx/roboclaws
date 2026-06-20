@@ -133,6 +133,54 @@ def test_agent_sdk_comparison_manifest_rejects_smoke_full_lane(
     assert "smoke reference cannot satisfy full-lane baseline" in capsys.readouterr().err
 
 
+def test_agent_sdk_comparison_manifest_rejects_missing_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+
+    status = summarize.main(["--comparison-manifest", str(tmp_path / "manifest.json")])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live-run summary comparison manifest source is missing" in captured.err
+    assert "manifest.json" in captured.err
+
+
+def test_agent_sdk_comparison_manifest_rejects_malformed_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    status = summarize.main(["--comparison-manifest", str(manifest)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert (
+        "live-run summary comparison manifest source must contain valid JSON object" in captured.err
+    )
+    assert "manifest.json" in captured.err
+
+
+def test_agent_sdk_comparison_manifest_rejects_non_object_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    status = summarize.main(["--comparison-manifest", str(manifest)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live-run summary comparison manifest source must contain a JSON object" in captured.err
+    assert "manifest.json" in captured.err
+
+
 def test_agent_sdk_comparison_manifest_prints_explicit_run_pairs(
     tmp_path: Path,
     capsys,

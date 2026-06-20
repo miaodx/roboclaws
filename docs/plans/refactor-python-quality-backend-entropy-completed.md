@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Detached live-run summary comparison manifests now use
+  `roboclaws.core.json_sources.read_json_object` before comparison-list
+  validation. Missing, malformed, or parseable non-object explicit
+  `--comparison-manifest` sources now use canonical path-labelled source
+  wording before report-performance comparison output. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud source validation. Metric: current shared-checkout
+  ratchet summary reports 1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules;
+  this slice did not add new complexity in touched files. Proof: focused
+  summarize-live-run tests, touched-file ruff/format checks, and `git diff
+  --check`; global ratchet is blocked by unrelated dirty runtime bundle work.
+  Reopen only if detached live-run comparison manifest loading regains a local
+  raw JSON file reader or corrupt manifests can again reach comparison-list
+  validation as parser tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Robot-camera RGB gain profile fitting now uses
   `roboclaws.core.json_sources.read_json_object` for declared comparison
   manifests before selecting image pairs. Missing, malformed, or parseable

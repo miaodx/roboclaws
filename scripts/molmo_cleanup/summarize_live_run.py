@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.reports.live_performance import (
     compare_report_performance_metrics,
@@ -336,11 +337,11 @@ def _timing_summary(
 
 def _print_comparison_manifest(path: Path) -> int:
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"error: could not read comparison manifest {path}: {exc}", file=sys.stderr)
+        manifest = read_json_object(path, label="live-run summary comparison manifest")
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
-    entries = manifest.get("comparisons") if isinstance(manifest, dict) else None
+    entries = manifest.get("comparisons")
     if not isinstance(entries, list) or not entries:
         print(
             "error: comparison manifest must contain a non-empty comparisons list",
