@@ -17,24 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 Map 12 label-tool semantics and source-metadata reads now route
-through the shared JSON-object helper inside a small translation wrapper while
-preserving current CLI/test wording. Focused B1 Map 12 label-tool contract
-tests and touched-file Ruff/format passed, as did `git diff --check` and
-ratchet. Current shared-checkout ratchet summary still reports 1 unrelated
+2026-06-20: Scene-camera comparison metadata loading now routes present
+`scene_metadata.json` files through the shared JSON-object helper inside the
+existing RuntimeError translation layer. Focused scene-camera comparison
+contract tests and touched-file Ruff/format passed, as did `git diff --check`
+and ratchet. Current shared-checkout ratchet summary still reports 1 unrelated
 Ruff complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and
 80 oversized modules.
 
-Previous slice: B1 Map 12 manual alignment overlay scene-topdown and alignment
-artifact reads now route through the shared JSON-object helper inside the
-existing `load_json` wrapper while preserving current CLI wording. Focused B1
-Map 12 manual alignment overlay contract tests and touched-file Ruff/format
-passed.
+Previous slice: B1 Map 12 label-tool semantics and source-metadata reads now route
+through the shared JSON-object helper inside a small translation wrapper while
+preserving current CLI/test wording. Focused B1 Map 12 label-tool contract
+tests and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the label-tool source-reader slice.
+committing the scene-camera metadata source-reader slice.
 
 ## Touched Areas
 

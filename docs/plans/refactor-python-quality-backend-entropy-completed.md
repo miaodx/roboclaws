@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-camera comparison metadata loading now routes present
+  `scene_metadata.json` files through
+  `roboclaws.core.json_sources.read_json_object` inside the existing
+  RuntimeError translation layer. Missing metadata remains an optional empty
+  source, malformed or non-object metadata keeps the tested scene-camera error
+  wording, and the permissive local Isaac scene-index cache reader remains
+  local by design. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation with stable strict-source
+  diagnostics. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused scene-camera comparison contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/scene_camera_source_artifacts.py` regains local raw JSON
+  parsing for present `scene_metadata.json` sources or scene-camera metadata
+  error wording drifts from the tested contract.
+
 - 2026-06-20: B1 Map 12 label-tool semantics and source-metadata reads now
   route through `roboclaws.core.json_sources.read_json_object` inside a small
   label-tool translation wrapper. The existing CLI/test wording for missing,
