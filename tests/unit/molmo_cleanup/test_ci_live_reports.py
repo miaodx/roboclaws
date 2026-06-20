@@ -803,6 +803,22 @@ def test_live_codex_timing_fails_aloud_on_malformed_run_result_source(
     assert "run_result.json" in timing["mcp_trace_timing"]["source_error"]
 
 
+def test_live_codex_terminal_phase_fails_aloud_on_malformed_status_source(
+    tmp_path: Path,
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    status_path = tmp_path / "live_status.json"
+    status_path.write_text("[1]", encoding="utf-8")
+
+    try:
+        run_codex._wait_for_terminal_phase_from_status(status_path, timeout_s=0.0)
+    except ValueError as exc:
+        assert "Codex live status source must contain a JSON object" in str(exc)
+        assert str(status_path) in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected malformed live_status source to fail aloud")
+
+
 def test_live_codex_event_summary_fails_aloud_on_malformed_event_source(
     tmp_path: Path,
 ) -> None:

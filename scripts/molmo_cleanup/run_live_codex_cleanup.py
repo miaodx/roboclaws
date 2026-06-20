@@ -1020,11 +1020,10 @@ def _wait_for_terminal_phase_from_status(status_path: Path, *, timeout_s: float 
 
 
 def _phase_from_status(status_path: Path) -> str:
-    try:
-        payload = json.loads(status_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    if not status_path.is_file():
         return ""
-    return str(payload.get("phase") or "").strip().lower() if isinstance(payload, dict) else ""
+    payload = read_json_object(status_path, label="Codex live status")
+    return str(payload.get("phase") or "").strip().lower()
 
 
 def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:

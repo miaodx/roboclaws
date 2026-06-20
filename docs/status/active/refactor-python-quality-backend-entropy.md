@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Codex live timing now treats present `run_result.json` as
-JSON-object source truth through `roboclaws.core.json_sources.read_json_object`
-before deriving MCP timing. Malformed or non-object run-result timing sources
-now fail the final live timing packet with `live_timing_source_error` instead
-of silently falling back to trace-derived timing evidence. Focused Codex live
-report tests, touched-file Ruff/format, `git diff --check`, changed-code
-review, and ratchet passed.
+2026-06-20: Codex operator-handoff terminal-phase polling now treats present
+`live_status.json` as JSON-object source truth through
+`roboclaws.core.json_sources.read_json_object`. Malformed or non-object status
+sources fail aloud instead of collapsing to an empty phase and allowing generic
+operator-handoff failure handling to overwrite the corrupt source context.
+Focused Codex live report tests, touched-file Ruff/format, `git diff --check`,
+changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

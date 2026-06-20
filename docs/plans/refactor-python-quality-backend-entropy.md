@@ -230,6 +230,11 @@ Latest quality snapshot from 2026-06-20:
   timing evidence fails the final `live_timing.json` packet with
   `live_timing_source_error` instead of falling back to trace-derived timing
   evidence.
+  Codex operator-handoff terminal-phase polling now treats present
+  `live_status.json` as JSON-object source truth, failing malformed or
+  non-object status sources aloud instead of collapsing them to an empty phase
+  and allowing generic operator-handoff failure handling to overwrite corrupt
+  source context.
   Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing

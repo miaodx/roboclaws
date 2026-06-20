@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Codex operator-handoff terminal-phase polling now treats present
+  `live_status.json` as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object status sources now fail aloud instead of collapsing to an empty
+  phase and allowing generic operator-handoff failure handling to overwrite or
+  hide corrupt live-status context. Owner layer: Agent Engines And Provider
+  Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud Codex live-status source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused Codex live report
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh operator-handoff
+  evidence that malformed present `live_status.json` again becomes an empty
+  phase or a generic missing-run-result failure.
+
 - 2026-06-20: Codex live timing now treats present `run_result.json` as
   JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object` before deriving MCP timing.
