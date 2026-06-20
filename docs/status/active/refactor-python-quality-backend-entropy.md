@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Visual result showcase rendering now routes required
+2026-06-21: Eval-harness required JSON artifact reads now reuse the shared
+JSON-object source owner instead of carrying a local duplicate parser and a
+stale optional JSON loader in `run_eval_harness.py`. Malformed, non-object, or
+missing `eval_results.json` and detached `live_status.json` sources now use
+canonical source diagnostics before eval aggregate classification or detached
+live-row polling can derive confidence from corrupt artifacts. Focused proof
+passed: eval-harness manifest tests, touched-file ruff, touched-file format
+check, diff check, and ratchet summary. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Visual result showcase rendering now routes required
 `run_result.json` and present `trace.jsonl` evidence through the shared
 JSON-object/JSONL source owners instead of raw local JSON parsing. Malformed or
 non-object run artifacts now fail with concise showcase source diagnostics

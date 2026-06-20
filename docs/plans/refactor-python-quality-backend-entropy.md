@@ -58,6 +58,12 @@ Latest quality snapshot from 2026-06-21:
   malformed or non-object completed-run artifacts fail with concise showcase
   diagnostics before GIF/contact-sheet output can derive visible proof from
   corrupt result or trace evidence.
+- Current shared-checkout note after the eval-harness required JSON source
+  slice: eval-harness `eval_results.json` and detached `live_status.json`
+  artifact reads now reuse the shared JSON-object source owner instead of a
+  local duplicate parser and dead optional JSON loader, so malformed, missing,
+  or non-object row artifacts surface canonical source diagnostics before
+  aggregate classification or live-row polling derives confidence from them.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev

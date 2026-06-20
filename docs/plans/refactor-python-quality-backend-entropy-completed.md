@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Eval-harness required JSON artifact reads now reuse the shared
+  JSON-object source owner instead of carrying a local duplicate parser and a
+  stale optional JSON loader in `run_eval_harness.py`. Malformed,
+  non-object, or missing `eval_results.json` and detached `live_status.json`
+  sources now use canonical source diagnostics before eval aggregate
+  classification or detached live-row polling can derive confidence from
+  corrupt artifacts. Owner layer: Eval harness. Behavior-change class:
+  internal harness source-reader consolidation with fail-aloud diagnostics for
+  required row artifacts. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused eval-harness manifest tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if
+  `skills/eval-harness/scripts/run_eval_harness.py` regains duplicate
+  required JSON-object artifact parsing or malformed eval/live-status sources
+  can again produce non-canonical source diagnostics.
+
 - 2026-06-21: Visual result showcase rendering now routes required
   `run_result.json` and present `trace.jsonl` evidence through the shared
   JSON-object/JSONL source owners instead of raw local JSON parsing. Malformed
