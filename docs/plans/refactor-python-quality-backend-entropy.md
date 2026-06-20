@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MolmoSpaces runtime probe preflight
+  slice: grasp-cache generation readiness now parses successful runtime-probe
+  stdout through the shared JSON-object text helper and blocks malformed,
+  non-object, or path-less probe output instead of reporting
+  `python_ready=True` with blank MolmoSpaces root/assets evidence.
 - Current shared-checkout note after the scene-camera MolmoSpaces source
   provenance slice: installed-package `direct_url.json` metadata in
   scene-camera comparison now reports explicit `metadata_unavailable` or

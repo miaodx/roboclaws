@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: MolmoSpaces rigid grasp-cache generation preflight now treats
+  successful runtime probes with malformed, non-object, or path-less stdout as
+  blocked readiness evidence. The runtime probe parses stdout through the
+  shared JSON-object text helper, preserves normal subprocess-failure blocking,
+  and no longer reports `python_ready=True` with blank MolmoSpaces root/assets
+  evidence. Owner layer: Backend Runtime / Environment Primitive plus
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  runtime readiness source validation. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused planner task feasibility tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if grasp-cache generation preflight again treats
+  malformed/non-object runtime-probe stdout or missing runtime paths as ready
+  MolmoSpaces evidence.
+
 - 2026-06-21: Scene-camera comparison MolmoSpaces source provenance now
   separates missing packages from installed packages with absent, malformed,
   or non-object `direct_url.json` metadata. Valid installed metadata still

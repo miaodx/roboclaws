@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from roboclaws.household import planner_task_feasibility
 from roboclaws.household.planner_task_feasibility import (
     grasp_cache_availability_preflight,
     grasp_cache_generation_preflight,
@@ -367,4 +368,106 @@ def test_grasp_cache_generation_preflight_reports_missing_prerequisites(
     assert preflight["objects_list_path"].endswith("grasp_generation/rigid_objects_list.json")
     assert any(
         blocker["code"] == "molmospaces_python_not_configured" for blocker in preflight["blockers"]
+    )
+
+
+def test_grasp_cache_generation_preflight_blocks_malformed_runtime_probe_stdout(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    python_path = tmp_path / "python"
+    python_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    availability = {
+        "assets_dir": str(tmp_path / "assets"),
+        "assets": [{"asset_uid": "Bread_1", "status": "missing_cache"}],
+    }
+
+    monkeypatch.setattr(
+        planner_task_feasibility,
+        "_run_preflight_command",
+        lambda _command, *, timeout_s: {"status": "ready", "stdout": "{not-json\n", "stderr": ""},
+    )
+
+    preflight = grasp_cache_generation_preflight(
+        availability,
+        output_dir=tmp_path / "runner",
+        molmospaces_python=python_path,
+    )
+
+    runtime_check = preflight["checks"][0]
+    assert preflight["status"] == "blocked"
+    assert runtime_check["status"] == "blocked"
+    assert runtime_check["code"] == "molmo_spaces_runtime_probe_invalid_stdout"
+    assert (
+        "MolmoSpaces runtime probe stdout source must contain valid JSON object"
+        in (runtime_check["message"])
+    )
+
+
+def test_grasp_cache_generation_preflight_blocks_non_object_runtime_probe_stdout(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    python_path = tmp_path / "python"
+    python_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    availability = {
+        "assets_dir": str(tmp_path / "assets"),
+        "assets": [{"asset_uid": "Bread_1", "status": "missing_cache"}],
+    }
+
+    monkeypatch.setattr(
+        planner_task_feasibility,
+        "_run_preflight_command",
+        lambda _command, *, timeout_s: {"status": "ready", "stdout": "[]\n", "stderr": ""},
+    )
+
+    preflight = grasp_cache_generation_preflight(
+        availability,
+        output_dir=tmp_path / "runner",
+        molmospaces_python=python_path,
+    )
+
+    runtime_check = preflight["checks"][0]
+    assert preflight["status"] == "blocked"
+    assert runtime_check["status"] == "blocked"
+    assert runtime_check["code"] == "molmo_spaces_runtime_probe_invalid_stdout"
+    assert (
+        "MolmoSpaces runtime probe stdout source must contain a JSON object"
+        in (runtime_check["message"])
+    )
+
+
+def test_grasp_cache_generation_preflight_blocks_missing_runtime_probe_paths(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    python_path = tmp_path / "python"
+    python_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    availability = {
+        "assets_dir": str(tmp_path / "assets"),
+        "assets": [{"asset_uid": "Bread_1", "status": "missing_cache"}],
+    }
+
+    monkeypatch.setattr(
+        planner_task_feasibility,
+        "_run_preflight_command",
+        lambda _command, *, timeout_s: {
+            "status": "ready",
+            "stdout": '{"molmospaces_root": "", "assets_dir": "/tmp/assets"}\n',
+            "stderr": "",
+        },
+    )
+
+    preflight = grasp_cache_generation_preflight(
+        availability,
+        output_dir=tmp_path / "runner",
+        molmospaces_python=python_path,
+    )
+
+    runtime_check = preflight["checks"][0]
+    assert preflight["status"] == "blocked"
+    assert runtime_check["status"] == "blocked"
+    assert runtime_check["code"] == "molmo_spaces_runtime_probe_missing_paths"
+    assert runtime_check["message"] == (
+        "MolmoSpaces runtime probe stdout must include molmospaces_root and assets_dir."
     )

@@ -17,7 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Scene-camera comparison MolmoSpaces source provenance now reports
+2026-06-21: MolmoSpaces rigid grasp-cache generation preflight now blocks
+malformed, non-object, or path-less successful runtime-probe stdout instead of
+reporting `python_ready=True` with blank MolmoSpaces root/assets evidence.
+Focused planner task feasibility tests, touched-file ruff, touched-file format
+checks, diff check, changed-code cleanup review, and the ratchet summary
+passed. Current ratchet: 0 Ruff complexity violations, 80 oversized modules in
+the shared checkout.
+
+Previous slice: Scene-camera comparison MolmoSpaces source provenance now reports
 installed-package `direct_url.json` metadata problems as `metadata_unavailable`
 or `metadata_unreadable` instead of false `not_installed` provenance. Focused
 scene-camera source tests, a nearby manifest serialization contract test,
@@ -25,7 +33,7 @@ touched-file ruff, touched-file format checks, diff check, changed-code cleanup
 review, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
 violations, 80 oversized modules in the shared checkout.
 
-Previous slice: Environment setup private/report metadata env parsing now fails
+Previous committed slice before that: Environment setup private/report metadata env parsing now fails
 present malformed or non-object `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` values aloud
 through the shared JSON-object text helper while preserving missing/blank env as
 the no-metadata default. Focused core JSON-source and environment setup boundary
@@ -33,18 +41,11 @@ tests, touched-file ruff, touched-file format checks, diff check, changed-code
 cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
 complexity violations, 80 oversized modules in the shared checkout.
 
-Previous committed slice before that: Base Navigation Map v1 area semantic validation now splits
-geometry, label, category, source, and review checks into focused helpers while
-preserving strict validator diagnostics. Focused map bundle contract tests,
-touched-file ruff, touched-file format checks, diff check, and the ratchet
-summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
-modules in the shared checkout.
-
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the scene-camera MolmoSpaces source provenance slice. Avoid
-reopening closed JSON-source helper splits without fresh source-truth evidence.
+committing the MolmoSpaces runtime-probe preflight slice. Avoid reopening
+closed JSON-source helper splits without fresh source-truth evidence.
 
 ## Touched Areas
 

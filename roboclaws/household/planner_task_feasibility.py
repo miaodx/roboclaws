@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import read_json_value
+from roboclaws.core.json_sources import parse_json_object_text, read_json_value
 
 GRASP_FEASIBILITY_SIGNATURE_SCHEMA = "planner_grasp_feasibility_signature_v1"
 GRASP_FEASIBILITY_MITIGATION_DECISION_SCHEMA = "planner_grasp_feasibility_mitigation_decision_v1"
@@ -548,7 +548,7 @@ def _molmospaces_runtime_probe(
                 or "MolmoSpaces runtime probe failed.",
             }
         )
-        check.update(blocker)
+        check.update({"status": "blocked", **blocker})
         return {
             "python_ready": False,
             "molmospaces_root": "",
@@ -557,11 +557,48 @@ def _molmospaces_runtime_probe(
             "blockers": [blocker],
         }
     try:
-        payload = json.loads(str(completed.get("stdout") or "{}"))
-    except json.JSONDecodeError:
-        payload = {}
+        payload = parse_json_object_text(
+            str(completed.get("stdout") or ""),
+            label="MolmoSpaces runtime probe stdout",
+        )
+    except ValueError as exc:
+        blocker = _blocker_from_check(
+            {
+                **check,
+                "status": "blocked",
+                "code": "molmo_spaces_runtime_probe_invalid_stdout",
+                "message": str(exc),
+            }
+        )
+        check.update({"status": "blocked", **blocker})
+        return {
+            "python_ready": False,
+            "molmospaces_root": "",
+            "assets_dir": "",
+            "checks": [check],
+            "blockers": [blocker],
+        }
     root = str(payload.get("molmospaces_root") or "")
     assets_dir = str(payload.get("assets_dir") or "")
+    if not root or not assets_dir:
+        blocker = _blocker_from_check(
+            {
+                **check,
+                "status": "blocked",
+                "code": "molmo_spaces_runtime_probe_missing_paths",
+                "message": (
+                    "MolmoSpaces runtime probe stdout must include molmospaces_root and assets_dir."
+                ),
+            }
+        )
+        check.update({"status": "blocked", **blocker})
+        return {
+            "python_ready": False,
+            "molmospaces_root": "",
+            "assets_dir": "",
+            "checks": [check],
+            "blockers": [blocker],
+        }
     check.update({"molmospaces_root": root, "assets_dir": assets_dir})
     return {
         "python_ready": True,
