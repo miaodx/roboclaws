@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 REQUIRED_POSITIVE_COUNTS = (
     "matched_entry_count",
@@ -25,25 +26,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        summary = _read_json_object(args.path, label="prepared semantic USD summary")
+        summary = read_json_object(args.path, label="prepared semantic USD summary")
         assert_prepared_semantic_usd_summary_ready(summary, path=args.path)
     except (FileNotFoundError, ValueError, AssertionError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     print(f"prepared semantic USD ready: {summary.get('output_usd_path')}")
     return 0
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def assert_prepared_semantic_usd_summary_ready(

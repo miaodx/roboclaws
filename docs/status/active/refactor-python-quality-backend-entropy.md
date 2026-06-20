@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces apple-to-apple grid execution now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for existing
-`apple2apple_test_grid.json` manifests and detached live `live_status.json`
-polling. Malformed or parseable non-object artifacts keep path-labelled source
-errors, transient live-status partial writes still retry, and the runner no
-longer carries a duplicate local JSON-object reader. Focused apple-to-apple
-grid tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: Prepared semantic USD summary validation now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for the explicit
+summary artifact. Malformed, missing, or parseable non-object artifacts keep
+path-labelled source errors under the canonical helper wording while the
+checker no longer carries a duplicate local JSON-object reader. Focused
+prepared-summary and core JSON-source tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

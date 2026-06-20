@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Prepared semantic USD summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for the
+  explicit summary artifact. This removes the checker's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for malformed, missing, or parseable non-object summary artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the checker dropped from 68 to 55 lines. Proof: focused
+  prepared-summary tests, core JSON-source tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if the checker regains
+  a local JSON-object source reader or stops routing the explicit summary
+  artifact through the shared source helper.
+
 - 2026-06-20: MolmoSpaces apple-to-apple grid source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for existing
   `apple2apple_test_grid.json` manifests and detached live `live_status.json`
