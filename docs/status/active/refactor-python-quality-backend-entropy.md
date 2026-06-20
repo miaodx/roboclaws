@@ -17,12 +17,11 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 digital-twin readiness now treats explicit
-`--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
-source truth before writing readiness artifacts. Focused readiness CLI source
-tests, existing digital-twin readiness contract tests, touched-file
-Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
-complexity rows, 79 oversized modules.
+2026-06-20: Isaac segmentation AOV matrix summaries now treat explicit
+`--entry LABEL=PATH` artifacts as JSON-object source truth before writing
+matrix outputs. Focused AOV matrix CLI source tests, existing AOV comparison
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -33,6 +32,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
+- `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `scripts/maps/render_b1_map12_correspondence_review.py`
@@ -41,6 +41,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
+- `tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary_sources.py`
 - `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`

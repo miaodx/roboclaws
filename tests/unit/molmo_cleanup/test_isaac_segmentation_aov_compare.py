@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from scripts.isaac_lab_cleanup.compare_isaac_segmentation_aov import compare_states
 from scripts.isaac_lab_cleanup.summarize_isaac_aov_matrix import summarize_entries
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+MATRIX_SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "summarize_isaac_aov_matrix.py"
 
 
 def test_compare_states_identifies_candidate_tensor_collapse(tmp_path: Path) -> None:
@@ -106,6 +113,61 @@ def test_aov_matrix_identifies_official_control_vs_molmospaces_collapse(
         "molmospaces_scene_usd_semantic_aov_projection"
     )
     assert result["decision"]["runtime_preflight_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "artifact must contain valid JSON object"),
+        ("[]\n", "artifact must contain a JSON object"),
+    ),
+)
+def test_aov_matrix_cli_rejects_bad_entry_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    entry_path = tmp_path / "candidate_state.json"
+    output_path = tmp_path / "aov_matrix.json"
+    entry_path.write_text(source, encoding="utf-8")
+
+    completed = _run_matrix(entry_path=entry_path, output_path=output_path)
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(entry_path) in completed.stderr
+    assert not output_path.exists()
+
+
+def test_aov_matrix_cli_rejects_missing_entry_source(tmp_path: Path) -> None:
+    entry_path = tmp_path / "missing_candidate_state.json"
+    output_path = tmp_path / "aov_matrix.json"
+
+    completed = _run_matrix(entry_path=entry_path, output_path=output_path)
+
+    assert completed.returncode == 2
+    assert "artifact is missing" in completed.stderr
+    assert str(entry_path) in completed.stderr
+    assert not output_path.exists()
+
+
+def _run_matrix(
+    *,
+    entry_path: Path,
+    output_path: Path,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(MATRIX_SCRIPT),
+            "--entry",
+            f"A={entry_path}",
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
 
 
 def _state(

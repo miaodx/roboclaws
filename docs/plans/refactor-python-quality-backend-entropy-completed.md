@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac segmentation AOV matrix summaries now treat explicit
+  `--entry LABEL=PATH` artifacts as JSON-object source truth. Missing,
+  malformed, or parseable non-object entry artifacts now return concise CLI
+  source-path errors before writing matrix outputs, instead of surfacing raw
+  parser/type failures or producing plausible decision packets from corrupt
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Isaac AOV matrix source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused AOV matrix CLI source tests, existing AOV comparison
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only with fresh AOV matrix evidence that explicit entry artifacts
+  again load through raw parser/type paths, accept plausible non-object
+  packets, or write matrix outputs after source-load failure.
+
 - 2026-06-20: B1 digital-twin readiness now treats explicit
   `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
   source truth. Missing, malformed, or parseable non-object optional proof
