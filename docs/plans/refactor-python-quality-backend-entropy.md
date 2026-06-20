@@ -235,6 +235,10 @@ Latest quality snapshot from 2026-06-20:
   `b1_robot_consumption_manifest.json` as JSON-object source truth, failing
   missing, malformed, or non-object manifests with path-labelled source errors
   before readiness validation.
+  Cleanup checker B1 robot-consumption semantics loading now treats declared
+  `semantics_json` evidence as JSON-object source truth, failing missing,
+  malformed, or non-object B1 Nav2 semantics artifacts with path-labelled
+  source errors before robot-consumption proof validation.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as

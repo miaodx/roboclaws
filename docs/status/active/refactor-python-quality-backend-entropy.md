@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker B1 robot-consumption manifest loading now treats
-`b1_robot_consumption_manifest.json` as JSON-object source truth through
+2026-06-20: Cleanup checker B1 robot-consumption semantics loading now treats
+declared `semantics_json` evidence as JSON-object source truth through
 `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
-non-object robot-consumption manifests fail with path-labelled source errors
-instead of file-read/parser tracebacks or wrong-shaped packets entering
-readiness validation. Focused B1 manifest source tests, affected B1 checker
-tests, touched-file Ruff/format, `git diff --check`, changed-code review, and
-ratchet passed.
+non-object B1 Nav2 semantics artifacts fail with path-labelled source errors
+instead of assertion/parser tracebacks or wrong-shaped packets entering
+robot-consumption proof validation. Focused B1 source tests, affected B1
+checker tests, touched-file Ruff/format, `git diff --check`, changed-code
+review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

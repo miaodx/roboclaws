@@ -1811,9 +1811,8 @@ def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     artifact_hashes = nav2_bundle.get("artifact_hashes") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
-    assert semantics_path.is_file(), nav2_bundle
     assert len(str(artifact_hashes.get("semantics_json") or "")) == 64, artifact_hashes
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = read_json_object(semantics_path, label="B1 Nav2 semantics")
     assert semantics.get("schema") == "nav2_cleanup_semantics_v1", semantics
     assert semantics.get("environment_id") == "agibot-robot-map-12", semantics
     assert (semantics.get("spatial_contract") or {}).get("alignment_status") == "verified", (

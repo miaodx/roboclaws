@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker B1 robot-consumption semantics loading now
+  treats declared `semantics_json` evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object B1 Nav2 semantics artifacts now fail with path-labelled
+  source errors before robot-consumption proof validation, instead of
+  surfacing raw assertion/parser/type failures or wrong-shaped semantics
+  packets. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud cleanup-checker B1 semantics source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules; the checker
+  dropped by another line while focused B1 source coverage stayed in the small
+  source-test file. Proof: focused B1 source tests, affected B1 checker tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh cleanup-checker evidence that missing,
+  malformed, or non-object B1 Nav2 semantics artifacts again produce raw
+  assertion/parser/type failures or reach robot-consumption proof validation
+  as plausible semantics evidence.
+
 - 2026-06-20: Cleanup checker B1 robot-consumption manifest loading now treats
   `b1_robot_consumption_manifest.json` as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
