@@ -6478,6 +6478,19 @@ logs before choosing the next slice.
   ratchet. Reopen only if `realworld_mcp_server.py` or
   `agibot_map_build_mcp_server.py` regains local permissive/self-trace parsing
   or accepts malformed/non-object `trace.jsonl` rows before done evidence.
+- Isaac runtime checker no longer carries the unused `_trace_events_from_path`
+  helper. Current cleanup trace and Isaac semantic-pose trace source
+  validation live in the cleanup-result and semantic-pose checker owners, so
+  the stale raw JSONL reader is deleted instead of hardened. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: no-caller stale
+  raw-reader deletion. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: exact no-reference search for
+  `scripts/molmo_cleanup/isaac_runtime_checker.py`
+  `_trace_events_from_path`, focused cleanup-result checker import/contract
+  tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if a real caller needs Isaac-runtime-specific trace
+  parsing instead of the existing cleanup or semantic-pose checker trace
+  owners.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

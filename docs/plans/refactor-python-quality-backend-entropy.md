@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Isaac runtime checker stale-helper
+  slice: the unused `_trace_events_from_path` helper is removed from
+  `scripts/molmo_cleanup/isaac_runtime_checker.py`. Current cleanup trace and
+  Isaac semantic-pose trace source validation live in their dedicated checker
+  owners, so the stale raw JSONL reader is deleted instead of hardened.
 - Current shared-checkout note after the MCP self-trace source slice:
   household cleanup and Agibot map-build MCP server self-trace reads now route
   through the shared JSONL source helper, so malformed or non-object

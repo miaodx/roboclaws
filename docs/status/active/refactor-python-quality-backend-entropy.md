@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Household cleanup and Agibot map-build MCP server self-trace
+2026-06-21: Isaac runtime checker no longer carries the unreachable
+`_trace_events_from_path` helper. Current cleanup trace and Isaac
+semantic-pose trace source validation live in their dedicated checker owners,
+so the stale raw JSONL reader is removed instead of hardened. Focused proof
+passed: exact no-reference search, cleanup-result checker contract test, fake
+Isaac backend cleanup test, touched-file ruff, touched-file format check, diff
+check, changed-code cleanup review, and ratchet summary. Current ratchet: 0
+Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Household cleanup and Agibot map-build MCP server self-trace
 readers now route `trace.jsonl` through the shared JSONL source helper.
 Malformed or non-object rows now surface as server-labelled source errors at
 the `done` boundary before readiness, policy trace, raw-FPV observation, or
@@ -191,7 +200,7 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MCP self-trace source slice. Avoid reopening
+committing the Isaac runtime checker stale trace-helper deletion. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
@@ -203,6 +212,9 @@ checker/generator/report/probe evidence shows false confidence again.
 Avoid reopening household cleanup or Agibot map-build MCP self-trace parsing
 unless fresh live-server evidence shows corrupt present `trace.jsonl` rows can
 again feed readiness/done/run-result evidence.
+Avoid reopening the deleted Isaac runtime checker trace helper unless a real
+caller appears; current cleanup trace and semantic-pose trace readers are
+owned elsewhere.
 
 ## Touched Areas
 
@@ -218,6 +230,7 @@ again feed readiness/done/run-result evidence.
 - `roboclaws/household/agibot_map_build_mcp_server.py`
 - `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
 - `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`
+- `scripts/molmo_cleanup/isaac_runtime_checker.py`
 - `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
 - `tests/contract/checkers/test_agibot_map_build_checker_trace_sources.py`
 - `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`
