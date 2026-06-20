@@ -210,6 +210,9 @@ Latest quality snapshot from 2026-06-20:
   `_capture-one` requests fail before worker import/capture and malformed
   child results become explicit `child_failures` source-error evidence instead
   of parser crashes during aggregation.
+  B1 / Map 12 waypoint-pose request builder `--points` JSON-array reads now
+  route through the shared JSON-value helper before existing array validation,
+  preserving current CLI diagnostic categories while removing its local parser.
   MolmoSpaces subprocess worker state loading now routes required state-file
   reads through the shared helper, so missing, malformed, or non-object worker
   state files fail with path-labelled source errors while valid state payloads

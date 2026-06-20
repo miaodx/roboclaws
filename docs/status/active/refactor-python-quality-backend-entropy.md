@@ -17,13 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac B1 / Map 12 navigation-smoke child capture request and
-result reads now route through the shared JSON-object helper. Malformed or
-non-object `_capture-one` request files fail with path-labelled source errors
-before worker import/capture, and malformed child result files become explicit
-`child_failures` source-error evidence instead of raw parser crashes during
-aggregation. Focused navigation-smoke CLI tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: B1 / Map 12 waypoint-pose request builder `--points` JSON-array
+reads now route through the shared JSON-value helper before the existing array
+shape validation. Missing, malformed, and non-array point sources keep their
+current CLI diagnostic categories while sharing the canonical parser. Focused
+waypoint-pose request CLI tests, touched-file Ruff/format, `git diff --check`,
+and ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
@@ -35,7 +34,7 @@ not part of this source-reader slice.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac navigation-smoke child artifact source-reader slice.
+committing the B1 waypoint-pose points source-reader slice.
 
 ## Touched Areas
 
@@ -44,6 +43,7 @@ committing the Isaac navigation-smoke child artifact source-reader slice.
 - `scripts/agibot/verify_waypoints_with_pnc.py`
 - `scripts/agibot/generate_metric_map_from_context.py`
 - `scripts/isaac_lab_cleanup/isaac_worker_protocol.py`
+- `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py`
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`

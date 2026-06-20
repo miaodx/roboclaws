@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 / Map 12 waypoint-pose request builder `--points`
+  JSON-array reads now route through
+  `roboclaws.core.json_sources.read_json_value` before existing array shape
+  validation. Missing, malformed, and non-array point sources keep their
+  existing CLI diagnostic categories while sharing the canonical parser.
+  Owner layer: Backend Runtime / Environment Primitive at the B1 Map 12
+  navigation request artifact boundary. Behavior-change class: JSON-value
+  source-reader consolidation with stable CLI diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused waypoint-pose request CLI source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py` regains
+  a local raw JSON parser for explicit `--points` files.
+
 - 2026-06-20: Isaac B1 / Map 12 navigation-smoke child capture request and
   result artifact reads now route through
   `roboclaws.core.json_sources.read_json_object`. Malformed or non-object
