@@ -17,22 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner grasp-cache JSON loader validation now routes present
+2026-06-20: Scene-sampler prefilter optional JSON sidecar loading now routes
+through the shared source helper while preserving missing, unreadable,
+malformed, and non-object sources as empty optional metadata. Focused scene
+sampler tests, touched-file ruff, touched-file format checks, diff check, and
+the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
+80 oversized modules.
+
+Previous slice: Planner grasp-cache JSON loader validation now routes present
 `*_grasps_filtered.json` sources through the shared source helper while
 preserving missing, non-object-as-empty, valid transform-count, and
-malformed-as-error preflight behavior. Focused planner task feasibility tests,
-touched-file ruff, touched-file format checks, diff check, and the ratchet
-summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
-modules.
-
-Previous slice: Planner proof result summarization now routes proof
-`run_result.json` reads through the shared source helper while preserving the
-existing missing/malformed/non-object unreadable-result payload shape.
+malformed-as-error preflight behavior.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the planner grasp-cache JSON loader validation slice.
+committing the scene-sampler prefilter optional JSON sidecar reader slice.
 
 ## Touched Areas
 
@@ -83,6 +83,7 @@ committing the planner grasp-cache JSON loader validation slice.
 - `scripts/operator_console/scene_sampler_worklist_alignment.py`
 - `scripts/operator_console/run_scene_sampler_source_prep.py`
 - `scripts/operator_console/run_scene_sampler_scanner_plan.py`
+- `roboclaws/launch/scene_sampler_prefilter.py`
 - `scripts/reports/write_pages_index.py`
 - `scripts/reports/compare_live_report_metrics.py`
 - `scripts/reports/serve_reports.py`
@@ -228,6 +229,11 @@ committing the planner grasp-cache JSON loader validation slice.
 - Do not touch unrelated B1 label/source-of-truth dirty files:
   `tests/contract/maps/test_b1_map12_label_tool.py` and
   `scripts/maps/render_b1_map12_base_label_review.py`.
+- Do not touch unrelated untracked B1 map label artifact
+  `assets/maps/b1-map12-base-navigation-labels.json`.
+- Do not touch unrelated untracked B1 base-navigation implementation files:
+  `scripts/maps/build_b1_map12_base_navigation_map.py` and
+  `tests/contract/maps/test_b1_map12_base_navigation_map.py`.
 - Do not touch unrelated `docs/status/active/2026-06-18-sdk-storage-targets.md`.
 - Do not touch unrelated
   `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.

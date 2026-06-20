@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.launch import scene_sampler_prefilter
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.launch.scene_sampler import (
     EVAL_STRESS_LANE,
@@ -1067,6 +1068,28 @@ def test_scene_sampler_candidate_profile_does_not_reoffer_failed_preview_candida
         candidate["next_action"] == "do_not_scan_without_gate_change_or_new_curation"
         for candidate in failed.values()
     )
+
+
+def test_scene_sampler_prefilter_optional_json_loads_object(tmp_path: Path) -> None:
+    source = tmp_path / "prefilter.json"
+    source.write_text(json.dumps({"status": "ready"}), encoding="utf-8")
+
+    assert scene_sampler_prefilter._read_json_if_exists(source) == {"status": "ready"}
+
+
+@pytest.mark.parametrize("source_text", ["{bad json\n", "[]\n"])
+def test_scene_sampler_prefilter_optional_json_ignores_bad_source(
+    tmp_path: Path,
+    source_text: str,
+) -> None:
+    source = tmp_path / "prefilter.json"
+    source.write_text(source_text, encoding="utf-8")
+
+    assert scene_sampler_prefilter._read_json_if_exists(source) == {}
+
+
+def test_scene_sampler_prefilter_optional_json_ignores_missing_source(tmp_path: Path) -> None:
+    assert scene_sampler_prefilter._read_json_if_exists(tmp_path / "missing.json") == {}
 
 
 def test_scene_sampler_scene_only_prefilter_stops_when_descriptors_are_missing(

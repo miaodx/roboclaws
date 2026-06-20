@@ -6083,6 +6083,17 @@ logs before choosing the next slice.
   format check, diff check, and ratchet. Reopen only if
   `planner_task_feasibility.py` regains direct `json.loads(read_text(...))`
   grasp-cache parsing or changes JSON cache validation status semantics.
+- Scene-sampler prefilter optional JSON sidecar loading now routes through the
+  shared JSON-source helper while preserving the permissive optional metadata
+  contract: missing, unreadable, malformed, and non-object sources return
+  empty metadata. Owner layer: Runnable Surfaces And Presets / launch scene
+  sampler. Behavior-change class: permissive optional source-reader
+  consolidation with stable empty-metadata semantics. Metric: ratchet remains
+  at 0 Ruff complexity rows and 80 oversized modules. Proof: focused
+  scene-sampler prefilter optional JSON tests, ruff, format check, diff check,
+  and ratchet. Reopen only if `scene_sampler_prefilter.py` regains direct
+  `json.loads(read_text(...))` parsing for optional JSON sidecars or stops
+  preserving empty metadata for missing/corrupt optional sources.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

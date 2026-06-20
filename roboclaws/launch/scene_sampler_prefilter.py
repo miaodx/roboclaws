@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.launch.scene_sampler_sources import (
     SCENE_SAMPLER_SELECTION_SEED,
     source_selection_metadata,
@@ -514,7 +514,6 @@ def _selection_action_counts(worklist: list[dict[str, Any]]) -> dict[str, int]:
 
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return read_json_object(path, label="scene sampler optional JSON")
+    except (FileNotFoundError, OSError, ValueError):
         return {}
-    return payload if isinstance(payload, dict) else {}
