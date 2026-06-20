@@ -123,6 +123,9 @@ Latest quality snapshot from 2026-06-20:
   prepared USD summaries, paired comparison manifests, report visual sample
   manifests, and nested RGB-gain source manifests as JSON-object source truth
   before writing `visual_parity_summary.json` or `report.html`.
+  B1 correspondence review rendering now treats explicit correspondences and
+  scene-topdown render packets as JSON-object source truth before writing
+  `correspondence_review_packet.json` or `correspondence_review.html`.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

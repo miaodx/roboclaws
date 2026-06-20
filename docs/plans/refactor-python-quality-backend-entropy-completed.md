@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 correspondence review rendering now treats explicit
+  `--correspondences` and `--scene-topdown-render` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object correspondence
+  manifests and scene top-down render packets now return concise CLI
+  source-path errors before writing `correspondence_review_packet.json` or
+  `correspondence_review.html`, instead of surfacing raw parser/type failures
+  or publishing plausible review packets from corrupt evidence. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud B1
+  correspondence review source truth. Metric: staged/add-N ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated correspondence-review CLI contract test file instead of expanding
+  the 2000-line B1 alignment hard-ceiling test. Proof: focused
+  correspondence-review CLI source tests, selected existing B1
+  correspondence-review tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh B1
+  correspondence-review evidence that explicit correspondences or topdown
+  render packets are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write artifacts after source-load
+  failure.
+
 - 2026-06-20: Robot-camera visual parity summary CLI loading now treats
   explicit baseline/probe manifests, RAW-FPV run results, calibration
   manifests, prepared USD summaries, paired comparison manifests, report

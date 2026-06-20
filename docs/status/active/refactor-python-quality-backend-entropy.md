@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Robot-camera visual parity summary loading now treats explicit
-baseline/probe, RAW-FPV run result, calibration manifest, prepared USD summary,
-paired comparison, visual sample, and nested RGB-gain source manifests as
-JSON-object source truth before writing `visual_parity_summary.json` or
-`report.html`. Focused visual-parity source tests, selected existing
-visual-parity regression tests, touched-file Ruff/format, `git diff --check`,
-changed-code review, and ratchet passed. Quality signal: 0 Ruff complexity
-rows, 79 oversized modules.
+2026-06-20: B1 correspondence review rendering now treats explicit
+`--correspondences` and `--scene-topdown-render` inputs as JSON-object source
+truth before writing `correspondence_review_packet.json` or
+`correspondence_review.html`. Focused correspondence-review CLI source tests,
+selected existing B1 correspondence-review tests, touched-file Ruff/format,
+`git diff --check`, changed-code review, and ratchet passed. Quality signal:
+0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -36,10 +35,12 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
+- `scripts/maps/render_b1_map12_correspondence_review.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary_sources.py`
+- `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 
