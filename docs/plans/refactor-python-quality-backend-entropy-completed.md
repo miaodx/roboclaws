@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces visual backend slot reads now route present slot
+  lease JSON through `roboclaws.core.json_sources.read_json_object` while
+  preserving the lock manager's fail-closed behavior for malformed,
+  unreadable, or non-object slot files. Corrupt slot files still appear held
+  and block acquisition instead of silently freeing a backend slot. Owner
+  layer: Thin Runtime / Server Adapters. Behavior-change class:
+  source-reader consolidation with tested corrupt-lock semantics. Metric:
+  current shared-checkout ratchet summary reports 1 unrelated Ruff complexity
+  row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized
+  modules. Proof: focused visual backend slot unit tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/visual_backend_slots.py` regains local raw JSON parsing
+  for slot lease files or corrupt slot files become fail-open.
+
 - 2026-06-20: Scene-camera comparison metadata loading now routes present
   `scene_metadata.json` files through
   `roboclaws.core.json_sources.read_json_object` inside the existing

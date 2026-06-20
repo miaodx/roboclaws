@@ -123,3 +123,34 @@ def test_stale_visual_backend_slot_is_released_only_when_pid_is_gone(
     assert states[0].run_id == "fresh-run"
     assert replacement.state.slot_id == stale.state.slot_id
     replacement.release()
+
+
+@pytest.mark.parametrize("source", ["{", "[]"])
+def test_corrupt_visual_backend_slot_source_is_held(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", "1")
+    slot_path = tmp_path / "output" / "molmo" / "visual-backend-slots" / "slot-1.json"
+    slot_path.parent.mkdir(parents=True)
+    slot_path.write_text(source, encoding="utf-8")
+
+    states = list_visual_backend_slots(repo_root=tmp_path)
+    assert states[0].held is True
+    assert states[0].stale is False
+    assert states[0].run_id == ""
+
+    with pytest.raises(VisualBackendSlotError) as exc_info:
+        acquire_visual_backend_slot(
+            repo_root=tmp_path,
+            run_id="fresh-run",
+            pid=os.getpid(),
+            backend="molmospaces_subprocess",
+            port=18790,
+            output_dir=tmp_path / "fresh-run",
+            status_path=tmp_path / "fresh-run" / "live_status.json",
+            owner="test",
+        )
+
+    assert "all 1 MolmoSpaces visual backend slot(s) are held" in str(exc_info.value)

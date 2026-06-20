@@ -22,8 +22,8 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the scene-camera metadata source-reader
-  source-reader slice:
+- Current shared-checkout note after the visual-backend slot source-reader
+  slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
@@ -256,6 +256,9 @@ Latest quality snapshot from 2026-06-20:
   `scene_metadata.json` files through the shared JSON-object helper while
   preserving tested RuntimeError diagnostics for malformed or non-object
   metadata.
+  MolmoSpaces visual backend slot reads now route present slot lease files
+  through the shared JSON-object helper while preserving the fail-closed
+  corrupt-lock behavior for malformed or non-object slot JSON.
   Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled
