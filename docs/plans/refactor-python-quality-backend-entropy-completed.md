@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding cleanup-run corpus source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for declared
+  cleanup `run_result.json` artifacts. This removes the corpus builder's
+  duplicate local JSON-object reader while preserving fail-aloud no-traceback
+  CLI behavior for malformed or parseable non-object run-result artifacts
+  under the canonical helper wording. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; the builder dropped from 367 to
+  359 lines. Proof: focused visual-grounding corpus-builder tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the builder regains a local JSON-object source
+  reader or stops routing declared cleanup run-result artifacts through the
+  shared source helper.
+
 - 2026-06-20: Prepared semantic USD summary source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for the
   explicit summary artifact. This removes the checker's duplicate local

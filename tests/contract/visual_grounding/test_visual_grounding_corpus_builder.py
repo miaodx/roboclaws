@@ -218,7 +218,7 @@ def test_builder_rejects_malformed_run_result_source(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 1
-    assert "cleanup run result must contain valid JSON object" in result.stderr
+    assert "cleanup run result source must contain valid JSON object" in result.stderr
     assert str(run_result_path) in result.stderr
     assert not output.exists()
     assert "Traceback" not in result.stderr
@@ -239,7 +239,7 @@ def test_builder_rejects_non_object_run_result_source(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 1
-    assert "cleanup run result must contain a JSON object" in result.stderr
+    assert "cleanup run result source must contain a JSON object" in result.stderr
     assert str(run_result_path) in result.stderr
     assert not output.exists()
     assert "Traceback" not in result.stderr

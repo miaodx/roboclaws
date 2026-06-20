@@ -142,7 +142,8 @@ Latest quality snapshot from 2026-06-20:
   as source truth before writing benchmark outputs.
   Visual-grounding cleanup-run corpus building now treats declared
   `run_result.json` inputs as object-typed source truth before writing corpus
-  outputs.
+  outputs and routes that JSON-object source through the shared helper instead
+  of a duplicate local reader.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.

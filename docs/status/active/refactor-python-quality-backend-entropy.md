@@ -17,13 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Prepared semantic USD summary validation now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for the explicit
-summary artifact. Malformed, missing, or parseable non-object artifacts keep
-path-labelled source errors under the canonical helper wording while the
-checker no longer carries a duplicate local JSON-object reader. Focused
-prepared-summary and core JSON-source tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: Visual-grounding cleanup-run corpus building now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for declared
+cleanup `run_result.json` artifacts. Malformed or parseable non-object
+artifacts still fail without tracebacks at the CLI boundary under the canonical
+helper wording, and the builder no longer carries a duplicate local
+JSON-object reader. Focused visual-grounding corpus-builder and core
+JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
