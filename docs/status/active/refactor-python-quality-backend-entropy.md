@@ -17,21 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Live Codex Agibot map-build result loading now routes the required
-`run_result.json` object source through the shared source helper. Missing,
-malformed, or non-object live map-build result artifacts now fail with
-path-labelled source errors before route identity checks or report links derive
-confidence from wrong-shaped evidence. Focused Agibot map-build runner unit
-tests, touched-file ruff, touched-file format checks, diff check, and the
-ratchet summary passed.
+2026-06-20: Claude live timing now routes present `run_result.json` object
+sources through the shared source helper before using runtime timing evidence.
+Malformed or non-object Claude run-result artifacts now fail live timing aloud
+instead of silently falling back to trace-derived timing and preserving a green
+finished status. Focused live-timing tests, touched-file ruff, touched-file
+format checks, diff check, and the ratchet summary passed.
 
-Previous slice: Realworld MCP smoke runner result loading now routes the
+Previous slice: Live Codex Agibot map-build result loading now routes the
 required `run_result.json` object source through the shared source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the live Codex Agibot map-build result source-reader slice.
+committing the Claude live timing run-result source-reader slice.
 
 ## Touched Areas
 
@@ -95,6 +94,7 @@ committing the live Codex Agibot map-build result source-reader slice.
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `scripts/molmo_cleanup/run_live_claude_cleanup.py`
 - `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/summarize_live_run.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`

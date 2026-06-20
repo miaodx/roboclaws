@@ -22,13 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the live Codex Agibot map-build
-  run-result source-reader consolidation slice:
+- Current shared-checkout note after the Claude live timing run-result
+  source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched live Agibot map-build runner and new focused unit test file
-  remain under the current ratchet ceiling.
+  The touched Claude live runner remains under the current ratchet ceiling; the
+  focused live-report test file remains below the hard ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -285,6 +285,10 @@ Latest quality snapshot from 2026-06-20:
   missing, malformed, or non-object live map-build result artifacts fail with
   path-labelled source errors before route identity checks or report links
   derive confidence from wrong-shaped evidence.
+  Claude live timing now routes present `run_result.json` object sources
+  through the shared JSON-source helper, so malformed or non-object Claude
+  run-result artifacts fail live timing aloud instead of silently falling back
+  to trace-derived timing and preserving a green finished status.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

@@ -5997,6 +5997,16 @@ logs before choosing the next slice.
   ratchet. Reopen only if `run_live_codex_agibot_map_build.py` regains direct
   `json.loads(read_text(...))` result artifact parsing or accepts non-object
   result evidence.
+- Claude live timing now routes present `run_result.json` object sources
+  through the shared JSON-source helper, so malformed or non-object Claude
+  run-result artifacts fail live timing aloud instead of silently falling back
+  to trace-derived timing and preserving a green finished status. Owner layer:
+  Agent Engines and Provider Profiles plus Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source validation. Metric: ratchet remains
+  at 1 Ruff complexity row and 80 oversized modules. Proof: focused live
+  timing tests, ruff, format check, diff check, and ratchet. Reopen only if
+  `run_live_claude_cleanup.py` regains permissive malformed/non-object
+  `run_result.json` timing fallback.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

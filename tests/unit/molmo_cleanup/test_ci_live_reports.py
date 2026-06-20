@@ -506,6 +506,41 @@ def test_live_claude_timing_fails_aloud_on_malformed_trace_source(tmp_path: Path
     assert "trace.jsonl:2" in timing["mcp_trace_timing"]["source_error"]
 
 
+def test_live_claude_timing_fails_aloud_on_malformed_run_result_source(
+    tmp_path: Path,
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        claude_provider_summary="mimo-tp-anthropic",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        profile="world-public-labels",
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    (run_dir / "run_result.json").write_text("[1]", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "request", "tool": "done", "ts": 12.0}) + "\n",
+        encoding="utf-8",
+    )
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: Claude live run_result")
+    assert "run_result.json" in source_error
+    assert "must contain a JSON object" in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert "run_result.json" in timing["mcp_trace_timing"]["source_error"]
+
+
 def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
     tmp_path: Path,
     monkeypatch,
