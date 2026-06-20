@@ -1,8 +1,8 @@
 ---
 plan_scope: cloudml-juicefs-eval
-status: Phase 1 dry-run implemented and locally verified; formal CloudML submit still requires explicit approval
+status: Phase 1 dry-run and minimal real cleanup proof implemented locally; formal CloudML submit and bulk JuiceFS asset upload still require explicit approval
 created: 2026-06-18
-last_reviewed: 2026-06-19
+last_reviewed: 2026-06-20
 implementation_allowed: false
 source:
   - user request to make formal eval runs less local-only
@@ -558,6 +558,75 @@ script before calling the CloudML target.
 ## CloudML Submit Template
 See **Now-Verifiable Track** for the current dry-run command shape. After
 reviewing the generated YAML, submit the same command without `--dry_run true`.
+
+## 2026-06-20 Focused Cleanup Update
+
+The original CloudML dry-run used `smoke_regression/smoke`, which only proves
+the synthetic eval harness path. The minimal real cleanup proof now uses one of
+two command shapes:
+
+```bash
+# Product route: works with the existing public launch catalog and mi/main code.
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco \
+  preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels \
+  seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5 \
+  map_bundle=assets/maps/molmospaces/procthor-10k-val/0 \
+  output_dir=/mnt/cloudml/output/roboclaws-cleanup-runs/<stamp>
+
+# Eval route: one real cleanup sample when the submitted code commit includes
+# the focused-eval map-bundle wiring.
+just agent::eval suite=smoke_regression budget=focused \
+  output_dir=/mnt/cloudml/output/roboclaws-evals stamp=<stamp>
+```
+
+Local evidence:
+
+- Product cleanup passed at
+  `/tmp/roboclaws-cleanup-product-local/0620_0903/seed-7/report.html` with
+  backend `molmospaces_subprocess`, `restored_count=4`, `total_targets=5`,
+  `mess_restoration_rate=0.8`, `sweep_coverage_rate=1.0`, and
+  `disturbance_count=0`.
+- Focused eval cleanup passed at
+  `/tmp/roboclaws-eval-cleanup-focused-local/household_world_smoke_regression/cleanup-focused-local-20260620-092357/eval_results.json`
+  with aggregate `passed=1`, `failed=0`, `blocked=0`, `pass_at_1=1.0`.
+- `scripts/dev/cloudml_eval_dry_run.sh` now defaults to
+  `ROBOCLAWS_CLOUDML_RUN_MODE=product-cleanup`, which runs the public
+  `just run::surface ... preset=cleanup` product route instead of a synthetic
+  smoke eval. The generated CloudML entrypoint fails loudly if the mounted
+  MolmoSpaces scene XML/JSON, THOR objects, RBY1M robot assets, repo map bundle
+  files, or image-baked `/opt/roboclaws/.venv` are missing. It symlinks that
+  venv into the CloudML checkout before the public product route runs.
+- `ROBOCLAWS_CLOUDML_RUN_MODE=eval-focused` remains available for
+  `just agent::eval suite=smoke_regression budget=focused`, but only when the
+  submitted code commit includes the focused-eval map-bundle fix.
+- `scripts/dev/stage_cloudml_cleanup_assets.sh` writes a manifest-first local
+  staging directory and runs executor `storage juicefs upload --dry_run --json`.
+  The default dry-run stages only small repo map assets and the manifest; set
+  `ROBOCLAWS_STAGE_MATERIALIZE_ASSETS=true` only after accepting the large
+  MolmoSpaces asset upload size and JuiceFS target prefix.
+
+Asset findings for the minimal MolmoSpaces cleanup route:
+
+- Repo map assets: `assets/maps/molmospaces`, about 3.5 MB.
+- Current MolmoSpaces symlink asset root:
+  `~/.cache/molmospaces/assets/<install-hash>`, about 519 MB without following
+  symlinks.
+- Actual MolmoSpaces resource cache: `~/.cache/molmo-spaces-resources`, about
+  24 GB on this host.
+- The focused CloudML entrypoint expects staged assets under
+  `/mnt/cloudml/input/roboclaws-assets/cleanup-focused/molmospaces/assets`.
+  The required first-slice checks are:
+  `scenes/procthor-10k-val/val_0.xml`,
+  `scenes/procthor-10k-val/val_0.json`, `objects/thor`, and `robots/rby1m`.
+  The map bundle is checked from the CloudML checkout at
+  `assets/maps/molmospaces/procthor-10k-val/0`.
+
+Important code-commit note: the focused eval route needs the eval runner to pass
+the canonical MolmoSpaces Nav2 map bundle into direct product runs. If CloudML
+must use the older internal `mi/main` commit
+`dfb0a395d1cf56121a00ed3f1477e3f7cf8130b3`, use the public product cleanup
+command above instead of `just agent::eval ... budget=focused`, or update the
+submitted code commit to include the focused-eval map-bundle fix.
 
 Example JuiceFS config shape:
 

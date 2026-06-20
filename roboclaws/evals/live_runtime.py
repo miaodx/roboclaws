@@ -30,6 +30,7 @@ from roboclaws.launch.backends import BACKEND_SPECS
 from roboclaws.launch.catalog import SURFACE_SPECS
 from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ProductRun = Callable[..., dict[str, Any]]
@@ -527,6 +528,14 @@ def product_run_kwargs(
             "eval_suite_runner": "roboclaws.evals.runner",
         },
     }
+    if budget != "smoke" and kwargs["backend"] == "molmospaces_subprocess":
+        kwargs["map_bundle_dir"] = str(
+            molmospaces_nav2_map_bundle_path(
+                scene_source=kwargs["scene_source"],
+                scene_index=kwargs["scene_index"],
+            )
+        )
+        kwargs["require_map_bundle"] = True
     goal_contract = _goal_contract_json(sample)
     if goal_contract:
         kwargs["goal_contract_json"] = goal_contract
