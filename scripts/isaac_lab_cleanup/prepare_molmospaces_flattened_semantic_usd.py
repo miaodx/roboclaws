@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from roboclaws.core.json_sources import read_json_object
+
 SCHEMA = "roboclaws_molmospaces_flattened_semantic_usd_v1"
 DEFAULT_RENDERING_PARITY_PRESET = "combined-material-light"
 COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG = 25.0
@@ -819,7 +821,7 @@ def _load_molmospaces_scene_metadata(scene_usd_path: Path) -> dict[str, dict[str
     metadata_path = scene_usd_path.parent / "scene_metadata.json"
     if not metadata_path.is_file():
         return {}
-    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    payload = read_json_object(metadata_path, label="MolmoSpaces scene metadata")
     objects = payload.get("objects") if isinstance(payload, dict) else None
     if not isinstance(objects, dict):
         return {}

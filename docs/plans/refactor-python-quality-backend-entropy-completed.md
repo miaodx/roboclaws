@@ -6038,6 +6038,18 @@ logs before choosing the next slice.
   and ratchet. Reopen only if `isaac_scene_index_metadata.py` regains direct
   `json.loads(read_text(...))` parsing for scene metadata sidecars or starts
   failing missing/corrupt optional metadata that should stay ignorable.
+- MolmoSpaces flattened semantic USD scene metadata loading now routes present
+  `scene_metadata.json` object sources through the shared JSON-source helper,
+  so malformed or non-object metadata fails before semantic label authoring
+  while missing metadata still yields the existing blocked summary. Owner
+  layer: Backend Runtime / Environment Primitive plus Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud source-reader consolidation.
+  Metric: ratchet remains at 0 Ruff complexity rows and 80 oversized modules.
+  Proof: focused source-reader tests, ruff, format check, diff check, and
+  ratchet. Reopen only if `prepare_molmospaces_flattened_semantic_usd.py`
+  regains direct `json.loads(read_text(...))` parsing for scene metadata
+  sidecars or accepts malformed/non-object metadata before semantic label
+  authoring.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

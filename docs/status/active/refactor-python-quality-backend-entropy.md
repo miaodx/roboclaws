@@ -17,21 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces scene metadata optional sidecar loading now routes
+2026-06-20: MolmoSpaces flattened semantic USD scene metadata loading now
+routes present `scene_metadata.json` object sources through the shared source
+helper, so malformed or non-object metadata fails before semantic label
+authoring while missing metadata still yields the existing blocked summary.
+Focused source-reader tests, touched-file ruff, touched-file format checks,
+diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules.
+
+Previous slice: MolmoSpaces scene metadata optional sidecar loading now routes
 present `scene_metadata.json` object sources through the shared source helper
 while preserving the missing/corrupt/non-object-as-empty optional metadata
-contract. Focused Isaac backend metadata tests, touched-file ruff, touched-file
-format checks, diff check, and the ratchet summary passed. Current ratchet:
-0 Ruff complexity violations, 80 oversized modules.
-
-Previous slice: MolmoSpaces USD reference installer state-artifact loading now
-routes required `--state-path` JSON-object sources through the shared source
-helper while preserving the CLI-facing `SystemExit` wrapper.
+contract.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces scene metadata optional sidecar source-reader slice.
+committing the MolmoSpaces flattened semantic USD scene metadata source-reader
+slice.
 
 ## Touched Areas
 
@@ -54,6 +57,7 @@ committing the MolmoSpaces scene metadata optional sidecar source-reader slice.
 - `scripts/isaac_lab_cleanup/isaac_scenario_builders.py`
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
 - `scripts/isaac_lab_cleanup/isaac_scene_index_metadata.py`
+- `scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`
@@ -165,6 +169,7 @@ committing the MolmoSpaces scene metadata optional sidecar source-reader slice.
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/contract/agibot/test_agibot_map_context_scripts.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/molmo_cleanup/test_prepare_molmospaces_flattened_semantic_usd_sources.py`
 - `tests/unit/molmo_cleanup/test_isaac_robot_import_sources.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_worker_state.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
