@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 scene Gaussian topdown capture-result loading now routes the
+  child `capture_result.json` artifact through
+  `roboclaws.core.json_sources.read_json_object` before attaching the
+  `result_path` field. Malformed or non-object child capture results now fail
+  with path-labelled source errors instead of parser/type failures during
+  topdown packet assembly. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud child
+  artifact validation. Metric: current shared-checkout ratchet summary reports
+  1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused B1 scene Gaussian topdown contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/maps/render_b1_scene_gaussian_topdown.py` regains local raw JSON
+  parsing for child capture-result artifacts or malformed child results can
+  again reach topdown render packet assembly as parser tracebacks or
+  wrong-shaped payloads.
+
 - 2026-06-20: MolmoSpaces subprocess worker camera view-spec loading now routes
   file-backed view-list or `{views: [...]}` payloads through
   `roboclaws.core.json_sources.read_json_value` before the existing

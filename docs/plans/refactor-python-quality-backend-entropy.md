@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the MolmoSpaces camera view-spec
+- Current shared-checkout note after the Gaussian topdown capture-result
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -242,6 +242,10 @@ Latest quality snapshot from 2026-06-20:
   shared JSON-value helper before list/object-with-views validation, preserving
   accepted view-spec payloads while giving missing or malformed inputs
   canonical source errors before camera-request normalization.
+  B1 scene Gaussian topdown capture-result loading now routes child
+  `capture_result.json` artifacts through the shared JSON-object helper, so
+  malformed or non-object child results fail with path-labelled source errors
+  before topdown packet assembly.
   Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled

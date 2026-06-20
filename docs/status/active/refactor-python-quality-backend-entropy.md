@@ -17,23 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces subprocess worker camera view-spec loading now routes
+2026-06-20: B1 scene Gaussian topdown capture-result loading now routes child
+`capture_result.json` artifacts through the shared JSON-object helper before
+attaching `result_path`. Focused B1 scene Gaussian topdown contract tests and
+touched-file Ruff/format passed, as did `git diff --check` and ratchet.
+Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+oversized modules.
+
+Previous slice: MolmoSpaces subprocess worker camera view-spec loading now routes
 file-backed view-list or `{views: [...]}` payloads through the shared
 JSON-value helper before existing list/object-with-views validation. Focused
-MolmoSpaces subprocess backend tests and touched-file Ruff/format passed, as
-did `git diff --check` and ratchet. Current shared-checkout ratchet summary
-still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-
-Previous slice: Isaac scene camera view-spec loading now routes file-backed
-view-list or `{views: [...]}` payloads through the shared JSON-value helper
-before existing list/object-with-views validation. Focused Isaac backend tests
-and touched-file Ruff/format passed.
+MolmoSpaces subprocess backend tests and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces camera view-spec source-reader slice.
+committing the Gaussian topdown capture-result source-reader slice.
 
 ## Touched Areas
 
