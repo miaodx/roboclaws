@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 waypoint pose request building now treats required
+  `--alignment-artifact` input and explicit `--points` input as source truth.
+  Missing, malformed, or parseable wrong-shaped alignment artifacts and points
+  files return concise source-path errors before `waypoint_pose_requests.json`
+  writes, instead of surfacing raw parser/type failures or writing plausible
+  blocked pose-request artifacts from absent/corrupt source evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 waypoint pose request source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated CLI contract test file instead of adding to the 2000-line B1
+  alignment hard-ceiling test. Proof: focused waypoint pose request CLI tests,
+  existing B1 verified-alignment contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh waypoint pose request evidence that explicit alignment or points
+  sources are again loaded through raw parser/type paths, accepted as plausible
+  wrong-shaped packets, or allowed to write artifacts after source-load
+  failure.
+
 - 2026-06-20: B1 Gaussian scene topdown capture now treats the hidden explicit
   `--camera-request` input as JSON-object source truth. Malformed or parseable
   non-object camera-request packets return concise source-path errors before

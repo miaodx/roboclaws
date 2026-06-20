@@ -106,7 +106,10 @@ Latest quality snapshot from 2026-06-20:
   `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
-  writes.
+  writes. B1 waypoint pose request building now treats required
+  `--alignment-artifact` input and explicit `--points` input as source truth,
+  failing missing, malformed, or wrong-shaped sources before pose-request
+  artifact writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
