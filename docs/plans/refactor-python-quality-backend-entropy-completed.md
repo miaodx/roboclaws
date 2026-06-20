@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Robot-camera apple-to-apple prior-probe manifest readers now
+  route light/shadow, material-response, and tone/color comparison-history
+  manifests through `roboclaws.core.json_sources.read_json_object` while
+  preserving the optional report contract: missing prior probes stay
+  `missing_manifest`, present malformed or non-object probes become
+  `read_failed`, and valid probes keep existing summary/history behavior.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation with stable optional report evidence semantics.
+  Metric: current shared-checkout ratchet summary reports 1 unrelated Ruff
+  complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+  oversized modules; the apple-to-apple runner remains at 1826 lines and the
+  new focused prior-probe source test file is 106 lines. Proof: focused
+  prior-probe source tests, nearby apple-to-apple light/shadow,
+  material-response, and tone/color history tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` or
+  `scripts/molmo_cleanup/robot_camera_apple2apple_materials.py` regains local
+  raw JSON parsing for prior-probe manifests or malformed/non-object prior
+  probes can reach history comparison as loaded evidence.
+
 - 2026-06-20: RAW-FPV perception probe JSON-object source reads now route
   runtime-map prior, private-label manifests, prediction manifests,
   run artifacts, and contrast artifacts through

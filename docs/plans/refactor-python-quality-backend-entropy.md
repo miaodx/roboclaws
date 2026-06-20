@@ -22,13 +22,14 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the RAW-FPV perception probe
+- Current shared-checkout note after the robot-camera prior-probe
   source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
-  file remains below the 2000-line hard ceiling at 1997 lines.
+  The touched apple-to-apple comparison runner remains at 1826 lines, and the
+  new focused prior-probe source test file is 106 lines instead of growing the
+  already oversized apple-to-apple comparison test module.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -276,6 +277,12 @@ Latest quality snapshot from 2026-06-20:
   present JSON-object sources through the shared helper while preserving
   optional missing runtime-map prior behavior; malformed or non-object sources
   fail with path-labelled source errors before report/scoring assembly.
+  Robot-camera apple-to-apple prior-probe manifest readers now route
+  light/shadow, material-response, and tone/color comparison-history manifests
+  through the shared JSON-object helper while preserving the optional report
+  contract: missing prior probes stay `missing_manifest`, present malformed or
+  non-object probes become `read_failed`, and valid probes keep existing
+  summary/history behavior.
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.
