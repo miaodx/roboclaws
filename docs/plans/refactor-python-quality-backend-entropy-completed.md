@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Agibot nav artifact helper reads now fail saved raw-map gzip
+  JSON and candidate JSON sources through source-labelled vendor CLI
+  diagnostics instead of raw `json.load` / `json.loads` tracebacks. Offline
+  target preparation, candidate navigation submission, and robot-direction
+  overlays now share the same standalone vendor source boundary for malformed,
+  non-object, missing, or non-gzip saved artifacts before deriving map
+  validation or live heading evidence. Owner layer: Backend Runtime /
+  Environment Primitive plus Artifacts, reports, and eval suites.
+  Behavior-change class: internal vendor artifact source-reader hardening with
+  fail-aloud diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused Agibot map-context source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `vendors/agibot_sdk/tools/agibot_nav_artifacts.py` regains raw local JSON
+  parsing for saved raw-map or candidate artifacts, or corrupt Agibot nav
+  artifacts can again produce Python tracebacks or valid-looking map evidence.
+
 - 2026-06-21: Eval-harness required JSON artifact reads now reuse the shared
   JSON-object source owner instead of carrying a local duplicate parser and a
   stale optional JSON loader in `run_eval_harness.py`. Malformed,

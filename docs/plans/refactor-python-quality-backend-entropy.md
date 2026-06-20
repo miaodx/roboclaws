@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Agibot nav artifact source slice:
+  vendor navigation artifact readers now fail saved raw-map gzip JSON and
+  candidate JSON sources with source-labelled `SystemExit` diagnostics instead
+  of raw JSON/gzip tracebacks. Offline target preparation, candidate
+  navigation submission, and robot-direction overlays now share the same
+  standalone Agibot artifact boundary before deriving map validation or heading
+  evidence from saved artifacts.
 - Current shared-checkout note after the persistent MolmoSpaces worker packet
   source slice: persistent-worker ready and command-response stdout packets
   now route through the shared worker JSON-object source helper instead of

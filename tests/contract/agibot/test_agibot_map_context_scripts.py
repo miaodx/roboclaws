@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import importlib.util
 import json
 import subprocess
@@ -15,6 +16,7 @@ GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_co
 VERIFY_PATH = REPO_ROOT / "scripts" / "agibot" / "verify_waypoints_with_pnc.py"
 SDK_RUNNER_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 RAW_FPV_CHECK_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "check_raw_fpv_status.py"
+NAV_ARTIFACTS_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "agibot_nav_artifacts.py"
 SIX_CAMERA_CAPTURE_PATH = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "capture_six_camera_views.py"
 )
@@ -874,6 +876,66 @@ def test_sdk_runner_execute_blocks_missing_localization_before_normal_navi(
     assert "Relocalize on the G02 Pad" in response["backend_error_summary"]
     assert fake_gdk.pnc.normal_navi_calls == 0
     assert fake_gdk.gdk_release_calls == 1
+
+
+def test_agibot_nav_raw_map_source_rejects_malformed_gzip_json(tmp_path: Path) -> None:
+    nav_artifacts = _load_module(NAV_ARTIFACTS_PATH, "agibot_nav_artifacts_source_errors")
+    raw_map_path = tmp_path / "raw_map.json.gz"
+    with gzip.open(raw_map_path, "wt", encoding="utf-8") as handle:
+        handle.write("{bad json\n")
+
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot raw map source must contain valid JSON object: .*raw_map\.json\.gz",
+    ):
+        nav_artifacts.read_gzip_json(raw_map_path)
+
+
+def test_agibot_nav_raw_map_source_rejects_non_object_gzip_json(tmp_path: Path) -> None:
+    nav_artifacts = _load_module(NAV_ARTIFACTS_PATH, "agibot_nav_artifacts_non_object")
+    raw_map_path = tmp_path / "raw_map.json.gz"
+    with gzip.open(raw_map_path, "wt", encoding="utf-8") as handle:
+        json.dump([], handle)
+
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot raw map source must contain a JSON object: .*raw_map\.json\.gz",
+    ):
+        nav_artifacts.read_gzip_json(raw_map_path)
+
+
+def test_agibot_nav_raw_map_source_rejects_plain_json_file(tmp_path: Path) -> None:
+    nav_artifacts = _load_module(NAV_ARTIFACTS_PATH, "agibot_nav_artifacts_plain_json")
+    raw_map_path = tmp_path / "raw_map.json.gz"
+    raw_map_path.write_text(json.dumps({"ok": True}), encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot raw map source cannot be read as gzip JSON: .*raw_map\.json\.gz",
+    ):
+        nav_artifacts.read_gzip_json(raw_map_path)
+
+
+def test_agibot_nav_json_artifact_source_rejects_invalid_payloads(tmp_path: Path) -> None:
+    nav_artifacts = _load_module(NAV_ARTIFACTS_PATH, "agibot_nav_artifacts_json_source")
+    malformed = tmp_path / "candidate.malformed.json"
+    non_object = tmp_path / "candidate.array.json"
+    malformed.write_text("{bad json\n", encoding="utf-8")
+    non_object.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit,
+        match=(
+            r"Agibot JSON artifact source must contain valid JSON object: "
+            r".*candidate\.malformed\.json"
+        ),
+    ):
+        nav_artifacts.read_json(malformed)
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot JSON artifact source must contain a JSON object: .*candidate\.array\.json",
+    ):
+        nav_artifacts.read_json(non_object)
 
 
 def _completed_context() -> dict:

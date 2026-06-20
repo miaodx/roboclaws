@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Eval-harness required JSON artifact reads now reuse the shared
+2026-06-21: Agibot nav artifact helper reads now fail raw-map gzip JSON and
+candidate JSON sources through source-labelled vendor CLI diagnostics instead
+of raw `json.load` / `json.loads` tracebacks. `prepare_navigation_target.py`,
+`navigate_to_target.py`, and robot-direction overlays now share the same
+standalone vendor source boundary for missing, malformed, non-object, or
+non-gzip artifacts before deriving offline target validation or live heading
+evidence from corrupt saved map artifacts. Focused proof passed: Agibot
+map-context source tests, touched-file ruff, touched-file format check, diff
+check, and ratchet summary. Current ratchet: 0 Ruff complexity violations,
+80 oversized modules in the shared checkout.
+
+Previous slice: Eval-harness required JSON artifact reads now reuse the shared
 JSON-object source owner instead of carrying a local duplicate parser and a
 stale optional JSON loader in `run_eval_harness.py`. Malformed, non-object, or
 missing `eval_results.json` and detached `live_status.json` sources now use
