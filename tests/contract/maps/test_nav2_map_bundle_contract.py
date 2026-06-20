@@ -190,9 +190,37 @@ def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: P
     )
 
     assert result.returncode == 1
-    assert "agent view source is unreadable" in result.stderr
+    assert "agent view source must contain valid JSON object" in result.stderr
     assert str(agent_view_path) in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
+    tmp_path: Path,
+) -> None:
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text('["not", "an", "agent_view"]', encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "agent view source must contain a JSON object" in result.stderr
+    assert str(agent_view_path) in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "exported").exists()
 
 
 def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Path) -> None:
@@ -240,8 +268,7 @@ def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: 
     )
 
     assert result.returncode == 1
-    assert "run result payload must be a JSON object" in result.stderr
-    assert "got list" in result.stderr
+    assert "run result source must contain a JSON object" in result.stderr
     assert str(run_result_path) in result.stderr
     assert "Traceback" not in result.stderr
 

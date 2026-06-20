@@ -711,6 +711,21 @@ logs before choosing the next slice.
   run-result sources again read through raw file paths or write bundle outputs
   after source-load failure.
 
+- 2026-06-20: Nav2 map-bundle export now routes explicit `--agent-view` and
+  `--run-result` JSON-object source files through
+  `roboclaws.core.json_sources.read_json_object`, with a small CLI wrapper that
+  preserves no-traceback exits. This removes the exporter's duplicate local
+  JSON reader and brings missing, malformed, and parseable non-object exporter
+  source diagnostics under the canonical path-labelled wording before bundle
+  writes or agent-view extraction. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  behavior preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules. Proof: focused Nav2 map-bundle contract tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the exporter regains a local JSON-object source
+  reader or stops routing declared agent-view/run-result file sources through
+  the shared source helper.
+
 - 2026-06-20: Semantic map spatial-contract normalization now treats bundle
   `semantics.json` as JSON-object source truth before in-place writes. Missing,
   malformed, or parseable non-object semantics sources now return concise CLI

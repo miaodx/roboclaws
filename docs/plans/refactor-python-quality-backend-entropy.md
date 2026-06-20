@@ -54,7 +54,10 @@ Latest quality snapshot from 2026-06-20:
   crashing or deriving proof-summary fields from wrong-shaped JSON. The Nav2
   map-bundle exporter now reports malformed agent-view JSON and non-object
   run-result JSON as concise CLI source errors instead of surfacing tracebacks
-  or raw type failures. Runtime Map Prior Snapshot conversion now reports
+  or raw type failures, and routes explicit exporter JSON-object sources
+  through the shared JSON-source helper so missing, malformed, and parseable
+  non-object `--agent-view` / `--run-result` files use the canonical
+  path-labelled wording. Runtime Map Prior Snapshot conversion now reports
   malformed or non-object Agibot `navigation_memory.json`, missing, empty, or
   wrong-shaped Agibot navigation-memory item sources, Agibot `source.json`,
   Nav2 `semantics.json`, missing, empty, or wrong-shaped Nav2 waypoint sources,
@@ -177,7 +180,8 @@ Latest quality snapshot from 2026-06-20:
   duplicate local reader. The parity test reflects the current accepted B1
   alignment-anchor manifest.
   Nav2 map-bundle export now treats missing explicit `--agent-view` and
-  `--run-result` sources as source-path errors before bundle writes.
+  `--run-result` sources as source-path errors before bundle writes and routes
+  explicit exporter JSON-object sources through the shared source helper.
   Visual-grounding benchmark checks now treat declared result JSON and
   prediction JSONL artifacts as object-typed source truth before benchmark
   validation.

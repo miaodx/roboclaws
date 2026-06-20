@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene room semantic overlays no longer fabricate map geometry for
-scene-map correspondence rows when a source bundle has no `semantics.json`;
-the overlay keeps the reviewed navigation-area binding but omits polygon,
-map-center, geometry-source, and polygon-usage claims until real geometry is
-present. Present malformed or non-object source-bundle `semantics.json`
-artifacts now use the shared path-labelled JSON-source wording. Focused room
-semantic overlay and core JSON-source tests, touched-file Ruff/format, `git
-diff --check`, and ratchet passed.
+2026-06-20: Nav2 map-bundle export now routes explicit `--agent-view` and
+`--run-result` JSON-object sources through the shared JSON-source helper
+before extracting exporter payloads. Malformed, missing, or parseable
+non-object source files now use the canonical path-labelled wording while the
+CLI still exits without a traceback. Focused Nav2 map-bundle and core
+JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
