@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Isaac runtime smoke sidecar-source
+  slice: the checker keeps stdout-last-JSON tolerance only for `--init-result`,
+  while explicit `--state-path` and `--robot-views-result` artifacts now route
+  through the shared JSON-object source helper. Prefixed log text, malformed
+  JSON, or non-object sidecars fail with path-labelled source errors before
+  state consistency or robot-view checks can produce valid-looking confidence.
 - Current shared-checkout note after the MolmoSpaces grasp initial-contact
   candidate-source slice: initial-contact diagnostics now validate explicit
   candidate grasp JSON in the parent before launching the child probe, so

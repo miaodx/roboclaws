@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: MolmoSpaces grasp initial-contact diagnostics now validate
+2026-06-21: Isaac Lab runtime smoke checker sidecar reads now reserve
+stdout-last-JSON tolerance for `--init-result` only. Explicit `--state-path`
+and `--robot-views-result` artifacts route through the shared JSON-object
+source helper, so prefixed log text, malformed JSON, or non-object sidecars
+fail with path-labelled source errors before the checker can assemble
+valid-looking state/robot-view confidence. Focused runtime-smoke checker
+tests, touched-file ruff, touched-file format checks, diff check,
+changed-code cleanup review, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: MolmoSpaces grasp initial-contact diagnostics now validate
 explicit candidate grasp JSON in the parent before launching the child probe.
 Present malformed or non-object candidate grasp files fail with path-labelled
 `candidate grasp JSON` source errors, while missing candidate files keep the
@@ -126,14 +136,17 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the initial-contact candidate-grasp source slice. Avoid reopening
-closed visual-slot config, slot-file source readers, Docker mount stop/source
+committing the Isaac runtime smoke sidecar-source slice. Avoid reopening closed
+visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
-generated-mess relation/index placement fields, or initial-contact candidate
-grasp source validation without fresh false-green evidence.
+generated-mess relation/index placement fields, initial-contact candidate
+grasp source validation, or Isaac runtime smoke sidecar-source validation
+without fresh false-green evidence.
 
 ## Touched Areas
 
+- `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`
+- `tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
 - `scripts/molmo_cleanup/molmospaces_worker_protocol.py`
 - `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`
 - `scripts/agibot/capture_map_context_views.py`

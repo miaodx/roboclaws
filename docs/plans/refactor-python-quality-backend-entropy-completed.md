@@ -6398,6 +6398,19 @@ logs before choosing the next slice.
   B1 readiness contract tests, ruff, format check, diff check, and ratchet.
   Reopen only if `check_b1_map12_readiness.py` regains direct
   `json.loads(read_text(...))` parsing for navigation-memory artifacts.
+- Isaac Lab runtime smoke checker sidecar loading now reserves stdout-last-JSON
+  tolerance for the child-process `--init-result` source only. Explicit
+  `--state-path` and `--robot-views-result` artifacts route through the shared
+  JSON-object source helper, so prefixed log text, malformed JSON, or
+  non-object sidecars fail with path-labelled source errors before state
+  consistency or robot-view evidence can produce valid-looking confidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source validation. Metric: ratchet remains at 0 Ruff complexity
+  rows and 80 oversized modules. Proof: focused runtime-smoke checker tests,
+  ruff, format check, diff check, changed-code cleanup review, and ratchet.
+  Reopen only if `check_isaac_lab_runtime_smoke_result.py` applies
+  stdout-last-JSON tolerance to explicit sidecar artifacts again or accepts
+  non-object sidecar evidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
