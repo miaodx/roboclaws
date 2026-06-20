@@ -17,22 +17,21 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Agibot SDK runner strict JSON-object artifact reads now route
-through the shared JSON-object source helper. Malformed or non-object context,
-agent-view, and subphase result artifacts fail with path-labelled source errors
-before adapter consumers derive metric-map, fixture projection, or stage
-metadata. Focused Agibot SDK runner source tests passed. Current
-shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row
-in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: MolmoSpaces Agibot contract rehearsal strict JSON-object artifact
+reads now route through the shared JSON-object source helper. Malformed,
+missing, or non-object context/reference artifacts fail with path-labelled
+source errors before rehearsal reference evidence is assembled. Focused Agibot
+contract rehearsal source tests passed. Current shared-checkout ratchet summary
+still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Scene-camera source artifacts now route optional nearby
-`isaac_scene_index.json` probes through the shared JSON-object source helper
-while preserving the permissive optional-index contract.
+Previous slice: Agibot SDK runner strict JSON-object artifact reads now route
+through the shared JSON-object source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Agibot SDK runner artifact source-reader slice.
+committing the Agibot contract rehearsal artifact source-reader slice.
 
 ## Touched Areas
 
@@ -88,6 +87,7 @@ committing the Agibot SDK runner artifact source-reader slice.
 - `scripts/molmo_cleanup/robot_camera_apple2apple_materials.py`
 - `roboclaws/household/grasp_initial_contact_diagnostics.py`
 - `roboclaws/household/scene_camera_source_artifacts.py`
+- `roboclaws/household/agibot_contract_rehearsal.py`
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
@@ -173,6 +173,7 @@ committing the Agibot SDK runner artifact source-reader slice.
 - `tests/unit/molmo_cleanup/test_molmo_grasp_initial_contact_diagnostics.py`
 - `tests/unit/molmo_cleanup/test_scene_camera_source_artifacts.py`
 - `tests/unit/molmo_cleanup/test_agibot_sdk_runner_sources.py`
+- `tests/unit/molmo_cleanup/test_agibot_contract_rehearsal_sources.py`
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`

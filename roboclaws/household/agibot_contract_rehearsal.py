@@ -11,6 +11,7 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 import roboclaws.household.task_intent as intent_helpers
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.agibot_contract_rehearsal_evidence import (
     blocked_manipulation_evidence as _blocked_manipulation_evidence,
 )
@@ -1945,7 +1946,4 @@ def _relpath(path: Path | str, root: Path) -> str:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"JSON object expected: {path}")
-    return data
+    return read_json_object(path, label="MolmoSpaces Agibot contract rehearsal artifact")

@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces Agibot contract rehearsal strict JSON-object
+  artifact reads now route through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  non-object context/reference artifacts now fail with path-labelled source
+  errors before rehearsal reference evidence is assembled. Owner layer:
+  Backend Runtime / Environment Primitive. Behavior-change class:
+  source-reader consolidation for strict MolmoSpaces Agibot contract rehearsal
+  artifacts. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched rehearsal module is 1949 lines and its focused test file is 96
+  lines. Proof: focused Agibot contract rehearsal source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/agibot_contract_rehearsal.py` regains local raw JSON
+  parsing for strict context/reference artifacts or malformed/non-object
+  rehearsal artifacts can reach reference-evidence assembly.
+
 - 2026-06-20: Agibot SDK runner strict JSON-object artifact reads now route
   through `roboclaws.core.json_sources.read_json_object`. Malformed or
   non-object context, agent-view, and subphase result artifacts now fail with
