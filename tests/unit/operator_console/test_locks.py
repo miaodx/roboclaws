@@ -26,3 +26,17 @@ def test_lock_recovers_stale_owner(tmp_path: Path) -> None:
     lock.acquire(run_id="stale", pid=999999999)
     owner = lock.acquire(run_id="run-2", pid=os.getpid())
     assert owner.owner_run_id == "run-2"
+
+
+@pytest.mark.parametrize("payload", ["{", "[]"])
+def test_lock_recovers_invalid_source_as_stale(tmp_path: Path, payload: str) -> None:
+    lock = ResourceLock(tmp_path, "molmospaces_mujoco")
+    lock.path.parent.mkdir(parents=True)
+    lock.path.write_text(payload, encoding="utf-8")
+
+    stale = lock.read()
+    assert stale.held is True
+    assert stale.stale is True
+
+    owner = lock.acquire(run_id="run-2", pid=os.getpid())
+    assert owner.owner_run_id == "run-2"

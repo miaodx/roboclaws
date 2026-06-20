@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the operator-console runtime-inventory
+- Current shared-checkout note after the operator-console resource-lock
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -186,6 +186,9 @@ Latest quality snapshot from 2026-06-20:
   Operator-console runtime inventory optional JSON-object source reads now
   route through the shared helper while preserving existing `JsonSourceError`
   reason codes and source-error task messages.
+  Operator-console backend resource-lock reads now route lock JSON-object
+  sources through the shared helper while preserving missing-lock and stale
+  corrupt-lock recovery semantics.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization
