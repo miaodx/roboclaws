@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Molmo cleanup target-query recovery helper now routes explicit
+  `runtime_metric_map.json` artifact reads through the shared JSON-object
+  source owner instead of raw `json.loads(path.read_text(...))`. Malformed,
+  missing, or non-object Runtime Metric Map sources now fail with concise CLI
+  source diagnostics before offline target recovery can derive confidence from
+  corrupt public map evidence. Owner layer: Agent Skill plus Runtime Metric Map
+  artifact contract. Behavior-change class: internal skill CLI source-reader
+  hardening with fail-aloud diagnostics for public map artifacts. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused Molmo cleanup target-query
+  skill-script contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/target_query_recovery.py` regains raw
+  Runtime Metric Map file parsing or malformed target-query sources can again
+  produce tracebacks or valid-looking recovery output.
+
 - 2026-06-21: Molmo cleanup skill scratchpad CLI now routes present
   `cleanup_scratch.json` files and inline `--result-json` payloads through one
   script-local JSON-object source parser instead of raw `json.loads` calls.

@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Molmo cleanup skill scratchpad CLI now routes present
+2026-06-21: Molmo cleanup target-query recovery helper now routes explicit
+`runtime_metric_map.json` artifact reads through the shared JSON-object source
+owner instead of raw `json.loads(path.read_text(...))`. Malformed, missing, or
+non-object Runtime Metric Map sources now fail with concise CLI source
+diagnostics before offline target recovery can derive confidence from corrupt
+public map evidence. Focused proof passed: Molmo cleanup target-query
+skill-script contract tests, touched-file ruff, touched-file format check,
+diff check, and ratchet summary. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Molmo cleanup skill scratchpad CLI now routes present
 `cleanup_scratch.json` files and inline `--result-json` payloads through one
 script-local JSON-object source parser instead of raw `json.loads` calls.
 Malformed or non-object scratchpad/result sources now fail with concise CLI

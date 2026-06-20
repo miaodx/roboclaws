@@ -46,6 +46,12 @@ Latest quality snapshot from 2026-06-21:
   `cleanup_scratch.json` files and inline `--result-json` payloads through one
   script-local JSON-object source parser, so malformed or non-object agent
   memory sources fail with concise CLI diagnostics before validation or update.
+- Current shared-checkout note after the Molmo cleanup target-query runtime-map
+  source slice: the offline target-query helper now routes explicit
+  `runtime_metric_map.json` artifact reads through the shared JSON-object
+  source owner, so malformed, missing, or non-object public map artifacts fail
+  with concise CLI source diagnostics before target recovery can produce
+  valid-looking matches from corrupt map evidence.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev
