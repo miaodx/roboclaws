@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the scene-camera MolmoSpaces source
+  provenance slice: installed-package `direct_url.json` metadata in
+  scene-camera comparison now reports explicit `metadata_unavailable` or
+  `metadata_unreadable` statuses when the package exists but its provenance
+  metadata is absent, malformed, or non-object, instead of relabeling that
+  state as `not_installed`.
 - Current shared-checkout note after the environment setup metadata env-source
   slice: present `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` values now parse through
   the shared JSON-object text helper, so malformed or non-object private setup

@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Scene-camera comparison MolmoSpaces source provenance now
+  separates missing packages from installed packages with absent, malformed,
+  or non-object `direct_url.json` metadata. Valid installed metadata still
+  reports git URL/commit fields, package absence stays `not_installed`, and
+  installed-package metadata problems now surface as `metadata_unavailable` or
+  `metadata_unreadable` instead of false `not_installed` provenance. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class: report
+  provenance status correction with stable render/report flow. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout; the new focused source test file avoids growing the
+  oversized scene-camera contract test. Proof: focused scene-camera source
+  tests, one nearby manifest serialization contract test, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if scene-camera comparison again catches corrupt
+  installed-package provenance as package absence or accepts wrong-shaped
+  `direct_url.json` metadata as installed source evidence.
+
 - 2026-06-21: Environment setup private/report metadata env parsing now routes
   present `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` payloads through the shared
   JSON-object text helper. Missing or blank env stays the documented
