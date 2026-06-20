@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the RAW-FPV private-label saved-state
+- Current shared-checkout note after the RAW-FPV public sweep saved-state
   source-reader consolidation
   slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
@@ -401,6 +401,9 @@ Latest quality snapshot from 2026-06-20:
   RAW-FPV private-label generation now treats required saved
   `molmospaces_backend_state.json` sources as JSON-object source truth before
   replay setup or scorer-private generated-mess reconstruction.
+  RAW-FPV public sweep corpus generation now treats required saved
+  `molmospaces_backend_state.json` sources as JSON-object source truth before
+  sweep replay setup or public frame capture.
   B1 asset visual comparisons now treat explicit baseline/candidate navigation
   artifacts as JSON-object source truth through the shared source helper before
   writing comparison outputs.

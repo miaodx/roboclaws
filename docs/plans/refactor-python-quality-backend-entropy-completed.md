@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: RAW-FPV public sweep corpus generation now routes required saved
+  `molmospaces_backend_state.json` sources through
+  `roboclaws.core.json_sources.read_json_object` before sweep replay setup,
+  public frame capture, or scorer-private label generation. Missing,
+  malformed, and non-object saved backend state now fail with path-labelled
+  source errors instead of raw parser/type failures. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  source-reader consolidation for public sweep replay input. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused RAW-FPV perception/sweep corpus tests, exact stale
+  `_load_json`/raw-parser search in the sweep generator and tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/molmo_cleanup/generate_raw_fpv_sweep_corpus.py` regains
+  local raw JSON parsing for saved backend-state sources or malformed saved
+  state can reach public sweep replay.
+
 - 2026-06-20: RAW-FPV private-label generation now routes required saved
   `molmospaces_backend_state.json` sources through
   `roboclaws.core.json_sources.read_json_object` before replay setup or

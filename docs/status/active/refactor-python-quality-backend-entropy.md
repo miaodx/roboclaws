@@ -17,23 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: RAW-FPV private-label generation now routes required saved
+2026-06-20: RAW-FPV public sweep corpus generation now routes required saved
 `molmospaces_backend_state.json` sources through the shared JSON-object helper
-before replay setup or scorer-private generated-mess reconstruction. Malformed
-and non-object saved backend state now fail with path-labelled source errors.
-Focused RAW-FPV private-label tests, exact stale-reader search, and
-touched-file Ruff/format passed, as did `git diff --check` and ratchet. Current
+before sweep replay setup or public frame capture. Malformed and non-object
+saved backend state now fail with path-labelled source errors. Focused RAW-FPV
+sweep corpus tests, exact stale-reader search, and touched-file Ruff/format
+passed, as did `git diff --check` and ratchet. Current
 shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Isaac segmentation AOV comparison and matrix summary now share
-the same CLI-facing JSON artifact source adapter. Focused AOV
-comparison/matrix tests and touched-file Ruff/format passed.
+Previous slice: RAW-FPV private-label generation now routes required saved
+`molmospaces_backend_state.json` sources through the shared JSON-object helper
+before replay setup or scorer-private generated-mess reconstruction. Focused
+RAW-FPV private-label tests and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the RAW-FPV private-label saved-state source-reader slice.
+committing the RAW-FPV public sweep saved-state source-reader slice.
 
 ## Touched Areas
 
