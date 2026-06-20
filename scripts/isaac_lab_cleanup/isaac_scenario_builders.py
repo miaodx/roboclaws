@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -523,7 +522,7 @@ def scenario_from_map_bundle(
     seed: int,
     generated_mess_count: int,
 ) -> CleanupScenario:
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = read_json_object(bundle_dir / "semantics.json", label="Isaac map bundle semantics")
     raw_fixtures = [dict(item) for item in semantics.get("static_landmarks") or []]
     if not raw_fixtures:
         return build_cleanup_scenario(seed=seed)

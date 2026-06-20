@@ -17,16 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac scenario-builder generated-mess manifest loading now routes
-strict manifest JSON-object sources through the shared source helper while
-preserving schema-mismatch validation. Missing, malformed, or non-object
-manifests fail before Isaac worker init scenario assembly. Focused Isaac
-scenario-builder source tests passed. Current shared-checkout ratchet summary
-still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: Isaac scenario-builder map-bundle semantics loading now routes
+strict `semantics.json` object sources through the shared source helper while
+preserving valid empty-fixture fallback and map-aligned scenario construction.
+Missing, malformed, or non-object map-bundle semantics fail before Isaac
+map-aligned scenario assembly. Focused Isaac scenario-builder source tests,
+touched-file ruff, and touched-file format checks passed.
 
-Previous slice: Agent SDK performance-matrix manifest loading now routes its
-explicit manifest JSON-object source through the shared source helper.
+Previous slice: Isaac scenario-builder generated-mess manifest loading now
+routes strict manifest JSON-object sources through the shared source helper.
 
 ## Next Action
 

@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac scenario-builder map-bundle semantics loading now routes
+  strict `semantics.json` JSON-object sources through
+  `roboclaws.core.json_sources.read_json_object` while preserving valid
+  empty-fixture fallback and valid map-aligned scenario construction. Missing,
+  malformed, or non-object map-bundle semantics now fail before Isaac
+  map-aligned scenario assembly. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: source-reader consolidation for strict
+  Isaac map-bundle semantics artifacts. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched Isaac scenario-builder script is 670 lines and its focused test
+  file is 131 lines. Proof: focused Isaac scenario-builder source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/isaac_lab_cleanup/isaac_scenario_builders.py` regains local
+  raw JSON parsing for map-bundle `semantics.json` sources or
+  malformed/non-object map-bundle semantics can reach map-aligned scenario
+  assembly.
+
 - 2026-06-20: Isaac scenario-builder generated-mess manifest loading now
   routes strict manifest JSON-object sources through
   `roboclaws.core.json_sources.read_json_object` while preserving

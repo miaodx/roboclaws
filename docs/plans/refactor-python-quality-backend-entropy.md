@@ -22,13 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the Isaac scenario-builder generated-mess
-  manifest source-reader consolidation slice:
+- Current shared-checkout note after the Isaac scenario-builder map-bundle
+  semantics source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched Isaac scenario-builder script is 671 lines and its focused test
-  file is 64 lines.
+  The touched Isaac scenario-builder script is 670 lines and its focused test
+  file is 131 lines.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -258,6 +258,12 @@ Latest quality snapshot from 2026-06-20:
   MolmoSpaces visual backend slot reads now route present slot lease files
   through the shared JSON-object helper while preserving the fail-closed
   corrupt-lock behavior for malformed or non-object slot JSON.
+  Isaac scenario-builder map-bundle semantics loading now routes strict
+  `semantics.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object map-bundle semantics fail with
+  path-labelled source errors before Isaac map-aligned scenario assembly while
+  valid empty-fixture fallback and valid map-aligned scenarios remain
+  unchanged.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.
