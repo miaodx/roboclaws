@@ -130,6 +130,11 @@ Latest quality snapshot from 2026-06-20:
   artifacts through the shared JSON-object helper, so missing, malformed, or
   non-object status sources fail with path-labelled source errors before CI
   status schema validation or live index assembly.
+  Grasp generation setup now routes proof-bundle run manifest input through
+  the shared JSON-object helper before extracting
+  `grasp_cache_availability_preflight`, so missing, malformed, or non-object
+  manifests fail with path-labelled source errors before preflight shape
+  validation.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime

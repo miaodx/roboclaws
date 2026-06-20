@@ -17,12 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Molmo live CI report status loading now routes published
-`status.json` artifacts through the shared JSON-object source helper. Missing,
-malformed, or non-object status files fail with canonical path-labelled source
-wording before CI status schema validation or live index assembly. Focused CI
-live report tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed. Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Grasp generation setup now routes proof-bundle run manifests
+through the shared JSON-object source helper before extracting
+`grasp_cache_availability_preflight`. Missing, malformed, or non-object
+manifests fail with canonical path-labelled source wording before preflight
+shape validation. Focused grasp-generation setup tests, touched-file
+Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
+complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -79,6 +80,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/core/json_sources.py`
 - `roboclaws/household/camera_control.py`
 - `roboclaws/household/ci_live_reports.py`
+- `roboclaws/household/grasp_generation_setup.py`
 - `roboclaws/launch/goals.py`
 - `roboclaws/maps/room_semantics.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
@@ -120,6 +122,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
