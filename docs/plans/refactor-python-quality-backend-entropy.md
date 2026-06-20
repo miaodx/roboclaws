@@ -21,13 +21,20 @@ their full execution notes back here.
 Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
-- Oversized modules: 80.
+- Oversized modules: 79 in the current shared checkout. The count change from
+  the prior 80-module checkpoint is affected by unrelated no-touch worktree
+  state and is not claimed by the backend runtime state-reader slice.
 - Current shared-checkout note after the B1 readiness navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 0 Ruff complexity rows and 80 oversized modules. The touched
   B1 readiness checker and focused contract tests remain under the current
   ratchet ceiling.
+- Current shared-checkout note after the backend runtime state-reader slice:
+  MolmoSpaces and Isaac Lab backend wrapper state-file reads now use the
+  shared JSON-source helper, preserving valid state accessor behavior while
+  failing missing, malformed, or non-object backend state with path-labelled
+  source errors.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -331,6 +338,11 @@ Latest quality snapshot from 2026-06-20:
   `molmospaces_backend_state.json` reads through the shared JSON-source helper,
   so missing, malformed, or non-object backend state fails before scene
   alignment or top-down camera request construction.
+  MolmoSpaces and Isaac Lab backend wrapper state accessors now route saved
+  backend state JSON-object reads through the shared JSON-source helper, so
+  missing, malformed, or non-object state files fail with source-labelled
+  errors before adapter properties derive runtime metadata from wrong-shaped
+  evidence.
   B1 / Map 12 readiness inspection now routes `navigation_memory.json` through
   the shared navigation-memory source reader, preserving accepted
   `items`/`catalog.navigation_memory` shapes while failing malformed or

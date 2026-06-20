@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
+  route through `roboclaws.core.json_sources.read_json_object`. Valid state
+  accessors remain unchanged, while missing, malformed, or non-object backend
+  state files now fail with path-labelled source errors before wrapper
+  properties derive runtime metadata from wrong-shaped evidence. Owner layer:
+  Backend Runtime / Environment Primitive. Behavior-change class:
+  source-reader consolidation for strict backend runtime state artifacts.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current shared checkout; the module-count drop from 80 is
+  affected by unrelated no-touch worktree state, while the new focused
+  backend-state source test file is 94 lines instead of growing the oversized
+  backend test modules. Proof: focused backend-state source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `MolmoSpacesSubprocessBackend._read_state` or
+  `IsaacLabSubprocessBackend._read_state` regains direct
+  `json.loads(read_text(...))` parsing for saved backend state.
+
 - 2026-06-20: Scene-sampler required Procthor preview metadata loading now
   routes `molmospaces-val_<N>-preview.json` JSON-object sources through
   `roboclaws.core.json_sources.read_json_object` while preserving

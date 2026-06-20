@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.camera_control import load_camera_control_request
 from roboclaws.household.planner_observed_binding import (
     backend_planner_task_binding_from_state,
@@ -315,7 +316,7 @@ class MolmoSpacesSubprocessBackend:
             pass
 
     def _read_state(self) -> dict[str, Any]:
-        return json.loads(self.state_path.read_text(encoding="utf-8"))
+        return read_json_object(self.state_path, label="MolmoSpaces backend state")
 
     def _run_worker(self, command: str, *args: str) -> dict[str, Any]:
         if getattr(self, "_persistent_enabled", False) and command != "init":

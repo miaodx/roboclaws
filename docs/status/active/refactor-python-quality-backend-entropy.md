@@ -17,23 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 / Map 12 readiness inspection now routes
+2026-06-20: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
+route through the shared JSON-source helper, preserving valid state accessor
+behavior while failing missing, malformed, or non-object backend state with
+path-labelled source errors. Focused backend-state source tests, touched-file
+ruff, touched-file format checks, diff check, and the ratchet summary passed.
+Current ratchet: 0 Ruff complexity violations, 79 oversized modules in the
+shared checkout. The module-count drop from 80 is affected by unrelated
+no-touch worktree state and is not claimed by this slice.
+
+Previous slice: B1 / Map 12 readiness inspection now routes
 `navigation_memory.json` through the shared navigation-memory source reader,
 preserving accepted `items`/`catalog.navigation_memory` shapes while failing
 malformed or non-object memory sources with canonical path-labelled diagnostics.
-Focused B1 readiness contract tests, touched-file ruff, touched-file format
-checks, diff check, and the ratchet summary passed. Current ratchet: 0 Ruff
-complexity violations, 80 oversized modules.
-
-Previous slice: Operator-console MolmoSpaces scene preview rendering now routes
-required `molmospaces_backend_state.json` reads through the shared JSON-source
-helper, so missing, malformed, or non-object backend state fails before scene
-alignment or top-down camera request construction.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the B1 readiness navigation-memory source-reader slice.
+committing the backend runtime state-reader slice.
 
 ## Touched Areas
 
@@ -114,6 +115,8 @@ committing the B1 readiness navigation-memory source-reader slice.
 - `roboclaws/household/planner_proof_attachment.py`
 - `roboclaws/cli/household_agent_server.py`
 - `roboclaws/household/realworld_cleanup.py`
+- `roboclaws/household/subprocess_backend.py`
+- `roboclaws/household/isaac_lab_backend.py`
 - `roboclaws/core/json_sources.py`
 - `roboclaws/household/camera_control.py`
 - `roboclaws/household/ci_live_reports.py`
@@ -171,6 +174,7 @@ committing the B1 readiness navigation-memory source-reader slice.
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/contract/agibot/test_agibot_map_context_scripts.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/molmo_cleanup/test_backend_state_source_readers.py`
 - `tests/unit/molmo_cleanup/test_prepare_molmospaces_flattened_semantic_usd_sources.py`
 - `tests/unit/molmo_cleanup/test_isaac_robot_import_sources.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_worker_state.py`
@@ -220,18 +224,29 @@ committing the B1 readiness navigation-memory source-reader slice.
 
 ## No-Touch Scope
 
-- Do not touch unrelated CloudML/eval dirty files:
-  `docs/plans/2026-06-18-cloudml-juicefs-eval.md`,
-  `docs/status/active/2026-06-18-cloudml-juicefs-eval.md`,
-  `roboclaws/evals/live_runtime.py`,
-  `scripts/dev/cloudml_eval_dry_run.sh`,
-  `scripts/dev/stage_cloudml_cleanup_assets.sh`, and
-  `tests/unit/evals/test_eval_runner.py`.
-- Do not touch unrelated B1 label/source-of-truth dirty files:
-  `tests/contract/maps/test_b1_map12_label_tool.py` and
-  `scripts/maps/render_b1_map12_base_label_review.py`.
+- Do not touch unrelated dirty `just` files: `just/agent.just` and
+  `just/molmo.just`.
+- Do not touch unrelated operator-console dirty files:
+  `roboclaws/operator_console/launcher.py`,
+  `roboclaws/operator_console/server.py`,
+  `roboclaws/operator_console/static/app.js`, and
+  `roboclaws/operator_console/static/index.html`.
+- Do not touch unrelated dirty tests:
+  `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`,
+  `tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  `tests/contract/maps/test_b1_map12_base_navigation_map.py`,
+  `tests/contract/maps/test_b1_map12_runtime_bundle.py`,
+  `tests/contract/maps/test_scene_room_semantic_overlay.py`,
+  `tests/unit/launch/test_environment_setup_catalog.py`, and
+  `tests/contract/maps/test_b1_map12_base_navigation_sidecar.py`.
+- Do not touch unrelated dirty repo-status/plan/runtime files:
+  `STATUS.md`, `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`,
+  `roboclaws/launch/catalog.py`, and
+  `scripts/maps/compile_b1_map12_runtime_bundle.py`.
 - Do not touch unrelated `docs/status/active/2026-06-18-sdk-storage-targets.md`.
 - Do not touch unrelated
   `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
+- Do not touch unrelated
+  `scripts/maps/augment_b1_map12_base_navigation_map.py`.
 - Avoid adding to `tests/contract/maps/test_b1_map12_verified_alignment.py`
   unless also compacting local debt; it is at the 2000-line hard ceiling.
