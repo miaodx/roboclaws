@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 semantic-anchor review packet and semantic projection CLI
+  source loading now use the shared
+  `roboclaws.core.json_sources.read_json_object` reader for review-manifest,
+  alignment-artifact, and correspondence-manifest inputs. This removes both
+  CLIs' duplicate local JSON-object readers while preserving concise CLI source
+  errors for missing, malformed, or parseable non-object artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the CLIs dropped to 220 and 235 lines, and the
+  verified-alignment test stayed at its 2000-line ceiling without growth.
+  Proof: focused B1 verified-alignment source CLI tests, core JSON-source
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only if either B1 semantic CLI regains a local JSON-object source
+  reader or stops routing explicit source artifacts through the shared source
+  helper.
+
 - 2026-06-20: Robot-camera visual parity summary source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for comparison,
   visual-sample, RAW-FPV run-result, prepared-USD, calibration, paired

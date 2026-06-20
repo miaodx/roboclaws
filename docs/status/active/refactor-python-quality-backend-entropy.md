@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Robot-camera visual parity summary now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for comparison,
-visual-sample, RAW-FPV run-result, prepared-USD, calibration, paired baseline /
-probe, and Isaac state artifacts. Missing, malformed, or parseable non-object
-artifacts use the canonical path-labelled helper wording, and the summarizer no
-longer carries a duplicate local JSON-object reader. Focused robot-camera
-visual parity source and core JSON-source tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: B1 semantic-anchor review packet and semantic projection CLIs now
+use the shared `roboclaws.core.json_sources.read_json_object` source reader for
+explicit review-manifest, alignment-artifact, and correspondence-manifest
+inputs. Missing, malformed, or parseable non-object artifacts use the canonical
+path-labelled helper wording, and both CLIs no longer carry duplicate local
+JSON-object readers. Focused B1 verified-alignment source CLI and core
+JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -42,6 +42,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
+- `scripts/maps/build_b1_map12_semantic_anchor_review_packet.py`
+- `scripts/maps/build_b1_map12_semantic_projection.py`
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `scripts/maps/render_b1_map12_correspondence_review.py`
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
@@ -67,6 +69,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
 - `tests/contract/maps/test_b1_scene_gaussian_topdown.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
+- `tests/contract/maps/test_b1_map12_verified_alignment.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary_sources.py`
 - `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`
 - `tests/contract/maps/test_b1_map12_alignment_fit_cli.py`

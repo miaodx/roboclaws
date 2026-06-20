@@ -81,6 +81,10 @@ Latest quality snapshot from 2026-06-20:
   cleanup `semantics.json` object artifacts through the shared JSON-source
   helper instead of a duplicate local reader, preserving the canonical
   path-labelled helper wording for missing, malformed, or non-object sources.
+  B1 semantic-anchor review packet and semantic projection CLIs now route their
+  review-manifest, alignment-artifact, and correspondence-manifest inputs
+  through the shared JSON-source helper instead of duplicate local readers,
+  preserving concise CLI errors for missing, malformed, or non-object sources.
   Robot-camera visual parity summary now routes its comparison, visual-sample,
   RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
   Isaac state artifacts through the shared JSON-source helper instead of a
