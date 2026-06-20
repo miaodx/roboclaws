@@ -22,8 +22,8 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the operator-console state dead raw-reader
-  removal
+- Current shared-checkout note after the Isaac segmentation AOV source-adapter
+  consolidation
   slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -443,6 +443,9 @@ Latest quality snapshot from 2026-06-20:
   explicit `--entry LABEL=PATH` artifacts as JSON-object source truth before
   writing matrix outputs, with both tools routing those reads through the
   shared JSON-object helper while preserving current CLI source diagnostics.
+  Isaac segmentation AOV comparison and matrix summary now share the same
+  CLI-facing JSON artifact source adapter instead of carrying parallel
+  wrappers around `read_json_object`.
   Prepared semantic USD summary validation now treats the explicit summary path
   as JSON-object source truth before reporting readiness.
   The Nav2 map-bundle

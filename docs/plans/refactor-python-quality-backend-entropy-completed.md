@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac segmentation AOV comparison and matrix summary now share
+  the same CLI-facing JSON artifact source adapter. The matrix script no
+  longer carries a duplicate `_read_json` wrapper around
+  `read_json_object`; it reuses the comparison diagnostic helper while
+  preserving missing, malformed, and non-object wording for both
+  `state artifact` and `artifact` labels. Owner layer: Backend Runtime /
+  Environment Primitive diagnostics. Behavior-change class: source-reader
+  adapter consolidation with stable CLI diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused Isaac segmentation AOV comparison/matrix tests, exact stale
+  `_read_json(` search in the two AOV scripts, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py` regains a
+  duplicate local JSON-object source adapter instead of reusing the comparison
+  artifact reader.
+
 - 2026-06-20: Operator-console state normalization no longer carries the
   unused `_read_json` wrapper that collapsed `JsonSourceError` state into `{}`.
   Active state reads already flow through `_read_json_source` and preserve

@@ -62,8 +62,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def compare_states(*, control_state_path: Path, candidate_state_path: Path) -> dict[str, Any]:
-    control_state = _read_json(control_state_path)
-    candidate_state = _read_json(candidate_state_path)
+    control_state = read_json_artifact(control_state_path, label="state artifact")
+    candidate_state = read_json_artifact(candidate_state_path, label="state artifact")
     control = _summarize_state(control_state_path, control_state)
     candidate = _summarize_state(candidate_state_path, candidate_state)
     decision = _decision(control, candidate)
@@ -76,17 +76,17 @@ def compare_states(*, control_state_path: Path, candidate_state_path: Path) -> d
     }
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def read_json_artifact(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        return read_json_object(path, label="state artifact")
+        return read_json_object(path, label=label)
     except FileNotFoundError as exc:
-        raise FileNotFoundError(f"state artifact is missing: {path}") from exc
+        raise FileNotFoundError(f"{label} is missing: {path}") from exc
     except ValueError as exc:
         message = str(exc)
         if "must contain valid JSON object" in message:
-            raise ValueError(f"state artifact must contain valid JSON object: {path}") from exc
+            raise ValueError(f"{label} must contain valid JSON object: {path}") from exc
         if "must contain a JSON object" in message:
-            raise ValueError(f"state artifact must contain a JSON object: {path}") from exc
+            raise ValueError(f"{label} must contain a JSON object: {path}") from exc
         raise
 
 

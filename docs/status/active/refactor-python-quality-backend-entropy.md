@@ -17,25 +17,25 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console state normalization no longer carries the unused
-`_read_json` wrapper that collapsed `JsonSourceError` state into `{}`. Active
-state reads use `_read_json_source` and preserve source-error evidence for
-malformed live state artifacts. Exact no-reference search, focused state unit
-tests, and touched-file Ruff/format passed, as did `git diff --check` and
-ratchet. Current
+2026-06-20: Isaac segmentation AOV comparison and matrix summary now share the
+same CLI-facing JSON artifact source adapter. The matrix script no longer
+carries a duplicate `_read_json` wrapper around `read_json_object`, while
+missing/malformed/non-object CLI wording stays stable for both labels. Focused
+AOV comparison/matrix tests, exact stale-reader search, and touched-file
+Ruff/format passed, as did `git diff --check` and ratchet. Current
 shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Operator-console launcher no longer carries the unused
-permissive `_read_json` helper that duplicated raw JSON parsing. Remaining
-launcher JSON-object reads use the existing strict/optional
-`read_json_object`-backed path. Focused launcher unit tests and touched-file
+Previous slice: Operator-console state normalization no longer carries the
+unused `_read_json` wrapper that collapsed `JsonSourceError` state into `{}`.
+Active state reads use `_read_json_source` and preserve source-error evidence
+for malformed live state artifacts. Focused state unit tests and touched-file
 Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console state dead raw-reader removal slice.
+committing the Isaac segmentation AOV source-adapter consolidation slice.
 
 ## Touched Areas
 
