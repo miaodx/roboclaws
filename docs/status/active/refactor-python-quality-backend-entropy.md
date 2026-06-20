@@ -17,13 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Runtime Map Prior Snapshot conversion now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for Agibot
-`source.json` and Nav2 cleanup `semantics.json` artifacts. Missing, malformed,
-or parseable non-object artifacts use the canonical path-labelled helper
-wording, and the runtime prior owner no longer carries a duplicate local
-JSON-object reader. Focused Runtime Map Prior contract and core JSON-source
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: Robot-camera visual parity summary now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for comparison,
+visual-sample, RAW-FPV run-result, prepared-USD, calibration, paired baseline /
+probe, and Isaac state artifacts. Missing, malformed, or parseable non-object
+artifacts use the canonical path-labelled helper wording, and the summarizer no
+longer carries a duplicate local JSON-object reader. Focused robot-camera
+visual parity source and core JSON-source tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

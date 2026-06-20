@@ -81,6 +81,11 @@ Latest quality snapshot from 2026-06-20:
   cleanup `semantics.json` object artifacts through the shared JSON-source
   helper instead of a duplicate local reader, preserving the canonical
   path-labelled helper wording for missing, malformed, or non-object sources.
+  Robot-camera visual parity summary now routes its comparison, visual-sample,
+  RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
+  Isaac state artifacts through the shared JSON-source helper instead of a
+  duplicate local reader, preserving concise CLI errors for missing, malformed,
+  or non-object sources.
   B1 Map 12
   label-tool draft export now rejects missing or invalid `polygon_role` source
   values instead of defaulting malformed draft labels to `navigation_area`,

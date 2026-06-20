@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Robot-camera visual parity summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for comparison,
+  visual-sample, RAW-FPV run-result, prepared-USD, calibration, paired
+  baseline/probe, and Isaac state artifacts. This removes the summarizer's
+  duplicate local JSON-object reader while preserving concise CLI source
+  errors for missing, malformed, or parseable non-object artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; `summarize_robot_camera_visual_parity.py` dropped to 1977
+  lines. Proof: focused robot-camera visual parity source tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the summarizer regains a local JSON-object source
+  reader or stops routing parity summary artifacts through the shared source
+  helper.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for Agibot
   `source.json` and Nav2 cleanup `semantics.json` artifacts. This removes the
