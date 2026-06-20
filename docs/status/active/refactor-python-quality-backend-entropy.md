@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console interaction command strict session and run-state
-readers now route object reads through the shared JSON-object source helper
-while preserving existing `InteractionError` wording for invalid JSON,
-unreadable sources, non-object JSON, unknown runs, and session id mismatch.
-Passive message-listing state reads intentionally remain permissive. Full
-operator-console interaction unit tests, touched-file Ruff/format, changed-code
-review, `git diff --check`, and ratchet passed. Current shared-checkout ratchet
-summary still reports 1 unrelated Ruff complexity row in
+2026-06-20: Operator-console latest-run history sidecar reads now route
+operator-state and live-status object sources through the shared JSON-object
+source helper while preserving existing `HistorySourceError` payloads and
+invalid/non-object reason text. History JSONL row parsing stays local because
+it is row-oriented. Focused operator-console history tests, touched-file
+Ruff/format, changed-code review, `git diff --check`, and ratchet passed.
+Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
 unrelated no-touch debt.
@@ -164,6 +164,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/operator_console/readiness.py`
 - `roboclaws/operator_console/state.py`
 - `roboclaws/operator_console/interactions.py`
+- `roboclaws/operator_console/history.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

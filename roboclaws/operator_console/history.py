@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
@@ -257,20 +258,20 @@ def _read_json_source(
     if not path.exists():
         return {}, None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return {}, HistorySourceError(
-            path=path.resolve(),
-            label=label,
-            reason=f"invalid JSON at line {exc.lineno} column {exc.colno}",
-        )
-    except OSError as exc:
-        return {}, HistorySourceError(path=path.resolve(), label=label, reason=str(exc))
-    if not isinstance(payload, dict):
+        return read_json_object(path, label=label), None
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            return {}, HistorySourceError(
+                path=path.resolve(),
+                label=label,
+                reason=f"invalid JSON at line {cause.lineno} column {cause.colno}",
+            )
         return {}, HistorySourceError(
             path=path.resolve(), label=label, reason="expected JSON object"
         )
-    return payload, None
+    except OSError as exc:
+        return {}, HistorySourceError(path=path.resolve(), label=label, reason=str(exc))
 
 
 def _candidate_source_error_payload(

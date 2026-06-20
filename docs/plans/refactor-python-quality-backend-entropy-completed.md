@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console latest-run history sidecar reads now use
+  `roboclaws.core.json_sources.read_json_object` for operator-state and
+  live-status object sources while preserving existing `HistorySourceError`
+  payloads and invalid/non-object reason text. History JSONL row parsing remains
+  local because it is row-oriented. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: source-reader consolidation with stable
+  latest-run history diagnostics. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+  unrelated no-touch debt, and this slice did not add new complexity in touched
+  files. Proof: focused operator-console history tests, touched-file
+  ruff/format checks, changed-code review, `git diff --check`, and ratchet.
+  Reopen only if latest-run history sidecar loading regains local raw
+  JSON-object readers or corrupt present sidecars stop surfacing stable
+  `HistorySourceError` evidence.
+
 - 2026-06-20: Operator-console interaction command strict session and
   run-state readers now use `roboclaws.core.json_sources.read_json_object`
   while preserving existing `InteractionError` wording for invalid JSON,
