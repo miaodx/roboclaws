@@ -13,7 +13,11 @@ from roboclaws.agents.provider_timing_contract import (
     PROVIDER_REQUEST_METRIC_SCHEMA,
     PROVIDER_REQUEST_METRICS_FILENAME,
 )
-from roboclaws.core.json_sources import json_source_type_name, read_json_object
+from roboclaws.core.json_sources import (
+    json_source_type_name,
+    read_json_object,
+    read_jsonl_objects,
+)
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 
 REPORT_PERFORMANCE_SCHEMA = "roboclaws_report_performance_metrics_v1"
@@ -353,30 +357,12 @@ def read_json(path: Path) -> dict[str, Any]:
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    rows: list[dict[str, Any]] = []
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return read_jsonl_objects(path, label="report performance JSONL")
     except OSError as exc:
         raise ReportPerformanceSourceError(f"failed to read JSONL source {path}: {exc}") from exc
-    for line_number, line in enumerate(
-        lines,
-        start=1,
-    ):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ReportPerformanceSourceError(
-                f"malformed JSONL source {path}: line {line_number}: {exc.msg}"
-            ) from exc
-        if not isinstance(payload, dict):
-            raise ReportPerformanceSourceError(
-                f"malformed JSONL source {path}: line {line_number}: "
-                f"expected object, got {type(payload).__name__}"
-            )
-        rows.append(payload)
-    return rows
+    except ValueError as exc:
+        raise ReportPerformanceSourceError(str(exc)) from exc
 
 
 def read_model_latency_calibration(path: Path) -> dict[str, Any]:

@@ -6504,6 +6504,21 @@ logs before choosing the next slice.
   `run_live_codex_cleanup.py` or `run_live_claude_cleanup.py` regains local
   raw JSONL row parsing or accepts malformed/non-object present live trace
   rows before route timing/status confidence.
+- Report-performance JSONL reads now route through the shared JSONL source
+  helper instead of a local row parser, while preserving the
+  `ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
+  Codex/Claude event, and provider-request metrics consumers. Malformed and
+  non-object present rows now use canonical `path:row` source wording before
+  metrics or comparison rows can derive confidence from partial JSONL
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused report-performance trace/span/provider JSONL source tests,
+  provider-request happy-path test, ruff, format check, diff check,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `live_performance.py` regains local raw JSONL row parsing or accepts
+  malformed/non-object present report-performance JSONL rows before metrics
+  confidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

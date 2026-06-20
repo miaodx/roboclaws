@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Codex and Claude live cleanup timing trace readers now route
+2026-06-21: Report-performance JSONL reads now route through the shared JSONL
+source helper instead of a local row parser, while preserving the
+`ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
+Codex/Claude event, and provider-request metrics consumers. Malformed and
+non-object present rows now use canonical `path:row` source wording before
+report-performance metrics or comparison rows can derive confidence from
+partial JSONL evidence. Focused proof passed: report-performance
+trace/span/provider JSONL source tests, provider-request happy-path test,
+touched-file ruff, touched-file format check, diff check, changed-code cleanup
+review, and ratchet summary. Current ratchet: 0 Ruff complexity violations,
+80 oversized modules in the shared checkout.
+
+Previous slice: Codex and Claude live cleanup timing trace readers now route
 present `trace.jsonl` and Codex event JSONL rows through the shared JSONL
 source helper instead of duplicate local row parsers. Missing trace sidecars
 remain optional, while malformed or non-object present rows keep route-labelled
@@ -210,7 +222,7 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Codex/Claude live trace-source consolidation. Avoid reopening
+committing the report-performance JSONL source consolidation. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
@@ -228,6 +240,9 @@ owned elsewhere.
 Avoid reopening Codex/Claude live trace timing JSONL readers unless fresh
 live-timing or event-summary evidence shows corrupt present JSONL rows can
 again feed route timing/status confidence.
+Avoid reopening report-performance JSONL source handling unless fresh
+report/comparison evidence shows corrupt present trace, span, event, or
+provider-request rows can again feed metrics confidence.
 
 ## Touched Areas
 
@@ -294,6 +309,8 @@ again feed route timing/status confidence.
 - `scripts/molmo_cleanup/run_live_codex_cleanup.py`
 - `scripts/molmo_cleanup/run_live_claude_cleanup.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `roboclaws/reports/live_performance.py`
+- `tests/unit/reports/test_live_performance.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
 - `scripts/operator_console/scene_sampler_worklist_alignment.py`
 - `scripts/operator_console/run_scene_sampler_source_prep.py`

@@ -22,6 +22,14 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the report-performance JSONL source slice:
+  report-performance JSONL reads now route through the shared JSONL source
+  helper instead of a local row parser, while preserving the
+  `ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
+  Codex/Claude event, and provider-request metrics consumers. Malformed and
+  non-object present rows now use canonical `path:row` source wording before
+  metrics or comparison rows can derive confidence from partial JSONL
+  evidence.
 - Current shared-checkout note after the Codex/Claude live trace-source slice:
   live cleanup timing trace readers now route present `trace.jsonl` and Codex
   event JSONL rows through the shared JSONL source helper instead of duplicate

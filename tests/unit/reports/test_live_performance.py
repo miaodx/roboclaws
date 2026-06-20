@@ -579,7 +579,7 @@ def test_report_performance_metrics_fail_aloud_on_malformed_jsonl_source(
         encoding="utf-8",
     )
 
-    with pytest.raises(ReportPerformanceSourceError, match=r"trace\.jsonl.*line 2"):
+    with pytest.raises(ReportPerformanceSourceError, match=r"trace\.jsonl:2"):
         extract_report_performance_metrics(run_dir)
 
 
@@ -594,7 +594,7 @@ def test_report_performance_metrics_fail_aloud_on_non_object_jsonl_source(
 
     with pytest.raises(
         ReportPerformanceSourceError,
-        match=r"openai-agents-spans\.jsonl.*line 1.*expected object",
+        match=r"openai-agents-spans\.jsonl:1",
     ):
         extract_model_call_metrics(run_dir)
 
@@ -627,7 +627,7 @@ def test_provider_request_metrics_fail_aloud_on_malformed_jsonl_source(
 
     with pytest.raises(
         ReportPerformanceSourceError,
-        match=r"provider_request_metrics\.jsonl.*line 2",
+        match=r"provider_request_metrics\.jsonl:2",
     ):
         extract_provider_request_metrics(run_dir)
 
