@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding benchmark runs now treat declared `--corpus`
+  and `--matrix` inputs as source truth. Missing, malformed, or parseable
+  non-object corpus/matrix JSON and wrong-shaped matrix row sources now return
+  concise runner source errors before benchmark artifact writes, instead of
+  surfacing raw file/parser/type tracebacks. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud visual-grounding
+  benchmark input source truth. Metric: staged/add-N ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated runner-source contract test file instead of expanding the existing
+  visual-grounding benchmark contract file. Proof: focused visual-grounding
+  benchmark runner/contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only with fresh benchmark-runner evidence that
+  malformed or wrong-shaped declared corpus/matrix inputs again produce
+  tracebacks or write benchmark outputs after source-load failure.
+
 - 2026-06-20: Visual-grounding benchmark result checks now treat
   `visual_grounding_benchmark_result.json` and
   `visual_grounding_predictions.jsonl` as object-typed source truth.

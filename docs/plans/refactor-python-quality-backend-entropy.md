@@ -135,6 +135,8 @@ Latest quality snapshot from 2026-06-20:
   Visual-grounding benchmark checks now treat declared result JSON and
   prediction JSONL artifacts as object-typed source truth before benchmark
   validation.
+  Visual-grounding benchmark runs now treat declared corpus and matrix inputs
+  as source truth before writing benchmark outputs.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.
