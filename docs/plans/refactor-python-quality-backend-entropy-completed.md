@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 map-scene alignment fitter CLI loading now treats explicit
+  `--correspondences` input as JSON-object source truth. Missing, malformed,
+  or parseable non-object correspondence manifests now return concise CLI
+  source-path errors before writing `alignment_residuals.json` or preview
+  artifacts, instead of surfacing raw parser/type failures or producing
+  plausible alignment packets from corrupt evidence. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 alignment
+  fitter source truth. Metric: staged/add-N ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated alignment-fit CLI contract test file instead of expanding the
+  2000-line B1 alignment hard-ceiling test. Proof: focused alignment-fit CLI
+  source tests, selected existing B1 alignment fitter tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh B1 alignment-fit evidence that explicit
+  correspondences are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write artifacts after source-load
+  failure.
+
 - 2026-06-20: B1 correspondence review rendering now treats explicit
   `--correspondences` and `--scene-topdown-render` inputs as JSON-object
   source truth. Missing, malformed, or parseable non-object correspondence

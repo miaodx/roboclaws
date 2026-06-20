@@ -126,6 +126,9 @@ Latest quality snapshot from 2026-06-20:
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.
+  B1 map-scene alignment fitting now treats explicit correspondences as
+  JSON-object source truth before writing `alignment_residuals.json` or preview
+  artifacts.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
