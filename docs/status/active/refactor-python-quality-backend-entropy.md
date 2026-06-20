@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker Isaac scene-index map-context semantics loading now
-treats declared `semantics_json` evidence as JSON-object source truth through
-`roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
-non-object scene-index Nav2 semantics artifacts fail with path-labelled source
-errors instead of assertion/parser tracebacks or wrong-shaped packets entering
-map-context validation. Focused scene-index source tests, existing map-context
-tests, touched-file Ruff/format, `git diff --check`, changed-code review, and
-ratchet passed.
+2026-06-20: Cleanup checker trace JSONL loading now treats `trace.jsonl` rows
+as object-typed source truth through
+`roboclaws.core.json_sources.read_jsonl_objects`. Malformed or parseable
+non-object trace rows fail with path-and-line-labelled source errors before
+public-trace privacy checks or duplicate post-place navigation checks can use
+partial evidence. Focused core JSON-source tests, focused checker trace-source
+tests, existing duplicate-navigation trace tests, touched-file Ruff/format,
+`git diff --check`, changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -78,6 +78,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_b1_manifest_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_scene_index_sources.py`
+- `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
 - `tests/unit/core/test_json_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`

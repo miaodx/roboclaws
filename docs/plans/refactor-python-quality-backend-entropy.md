@@ -243,6 +243,10 @@ Latest quality snapshot from 2026-06-20:
   declared `semantics_json` evidence as JSON-object source truth too, failing
   missing, malformed, or non-object scene-index Nav2 semantics artifacts with
   path-labelled source errors before map-context validation.
+  Cleanup checker trace JSONL loading now treats `trace.jsonl` rows as
+  object-typed source truth, failing malformed or non-object rows with
+  path-and-line-labelled source errors before public-trace privacy checks or
+  duplicate post-place navigation checks use partial evidence.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as

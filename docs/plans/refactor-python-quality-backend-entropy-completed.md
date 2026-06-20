@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker trace JSONL loading now treats `trace.jsonl`
+  rows as object-typed source truth through
+  `roboclaws.core.json_sources.read_jsonl_objects`. Malformed or parseable
+  non-object trace rows now fail with path-and-line-labelled source errors
+  before public-trace privacy checks or duplicate post-place navigation checks
+  can use partial trace evidence. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud cleanup-checker trace source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the checker dropped from 2005 to 2000 lines while focused
+  trace-source coverage landed in a small source-test file. Proof: focused
+  core JSON-source tests, focused checker trace-source tests, existing
+  duplicate-navigation trace tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  cleanup-checker evidence that malformed or non-object `trace.jsonl` rows
+  again surface raw parser/type failures or allow partial trace evidence into
+  privacy or duplicate-navigation validation.
+
 - 2026-06-20: Cleanup checker Isaac scene-index map-context semantics loading
   now treats declared `semantics_json` evidence as JSON-object source truth
   through `roboclaws.core.json_sources.read_json_object`. Missing, malformed,

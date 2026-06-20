@@ -8,7 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -1038,12 +1038,7 @@ def _assert_no_duplicate_post_place_navigation(trace_path: Path) -> None:
 
 
 def _trace_events_from_path(trace_path: Path) -> list[dict[str, Any]]:
-    events = []
-    for line in trace_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        events.append(json.loads(line))
-    return events
+    return read_jsonl_objects(trace_path, label="cleanup trace")
 
 
 def _without_internal_proof_evidence(payload: Any) -> Any:
