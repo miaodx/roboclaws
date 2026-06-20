@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime-map-prior file loading now uses shared
+  `roboclaws.maps.runtime_prior_snapshot.read_runtime_map_prior_artifact`
+  source loading for direct cleanup, household agent server, and MCP smoke
+  inputs. This moves explicit prior artifact file parsing into the Runtime Map
+  Prior Snapshot owner, removes three local raw
+  `json.loads(Path(...).read_text())` readers, and preserves missing,
+  malformed, or parseable non-object prior files as path-labelled source
+  errors before raw runtime maps or prior snapshots are normalized. Owner
+  layer: Artifacts, reports, and eval suites, feeding Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud source-reader consolidation.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the existing runtime-prior contract test stayed below the oversized-module
+  threshold by moving new source-error cases into a focused source-loading
+  test file. Proof: focused runtime-prior contract/source tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if runtime-prior file consumers regain local raw JSON
+  file readers or if runtime-prior source diagnostics stop routing through
+  the Runtime Map Prior Snapshot owner.
+
 - 2026-06-20: Goal-contract file loading now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for explicit
   `--goal-contract` artifacts. This removes the launch goal reader's raw

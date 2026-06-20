@@ -89,6 +89,10 @@ Latest quality snapshot from 2026-06-20:
   through the shared JSON-source helper too, so missing, malformed, or
   non-object file-backed launch contracts fail with path-labelled source
   errors before household launch/runtime consumers normalize the payload.
+  Runtime-map-prior file loading now routes direct cleanup, household agent
+  server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
+  Snapshot owner, preserving path-labelled source errors before raw runtime
+  maps or snapshot wrappers are normalized.
   Robot-camera visual parity summary now routes its comparison, visual-sample,
   RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
   Isaac state artifacts through the shared JSON-source helper instead of a

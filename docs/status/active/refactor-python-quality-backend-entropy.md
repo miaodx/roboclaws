@@ -17,12 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Goal-contract file loading now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for explicit
-`--goal-contract` artifacts. Missing, malformed, or parseable non-object
-contract files use the canonical path-labelled helper wording before
-household launch/runtime consumers normalize the payload. Focused launch
-goal-contract source tests, core JSON-source tests, touched-file Ruff/format,
+2026-06-20: Runtime-map-prior file loading now uses a shared
+`roboclaws.maps.runtime_prior_snapshot.read_runtime_map_prior_artifact` source
+reader for direct cleanup, household agent server, and MCP smoke inputs.
+Missing, malformed, or parseable non-object explicit prior artifacts use the
+canonical path-labelled JSON-source wording before raw runtime maps or
+Runtime Map Prior Snapshot wrappers are normalized. Focused runtime-prior
+contract/source tests, core JSON-source tests, touched-file Ruff/format,
 `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
@@ -51,6 +52,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/compile_b1_map12_runtime_bundle.py`
 - `scripts/maps/export_bundle.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
+- `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
@@ -59,6 +61,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
+- `roboclaws/cli/household_agent_server.py`
+- `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
 - `roboclaws/launch/goals.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
@@ -91,6 +95,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_scene_index_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
 - `tests/contract/maps/test_runtime_map_prior_snapshot.py`
+- `tests/contract/maps/test_runtime_map_prior_source_loading.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`

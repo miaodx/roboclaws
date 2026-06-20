@@ -51,7 +51,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
-from roboclaws.maps.runtime_prior_snapshot import runtime_metric_map_from_prior_artifact
+from roboclaws.maps.runtime_prior_snapshot import read_runtime_map_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 AGIBOT_GDK_BACKEND = "agibot_gdk"
@@ -266,10 +266,7 @@ def _is_loopback_url(url: str) -> bool:
 
 
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
-    if path is None or str(path) == "":
-        return None
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    return runtime_metric_map_from_prior_artifact(payload)
+    return read_runtime_map_prior_artifact(path)
 
 
 def _prepare_server_backend_setup(
