@@ -22,6 +22,10 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 79.
+- Current shared-checkout note after the grasp-cache-generation manifest slice:
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
+  reports 1 Ruff complexity row in unrelated dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -126,6 +130,11 @@ Latest quality snapshot from 2026-06-20:
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled
   source errors before runner schema or alignment validation.
+  Grasp cache generation now routes proof-bundle run manifest input through
+  the shared JSON-object helper before extracting
+  `grasp_cache_generation_preflight`, so missing, malformed, or non-object
+  manifests fail with path-labelled source errors before generation preflight
+  validation.
   Molmo live CI report status loading now routes published `status.json`
   artifacts through the shared JSON-object helper, so missing, malformed, or
   non-object status sources fail with path-labelled source errors before CI

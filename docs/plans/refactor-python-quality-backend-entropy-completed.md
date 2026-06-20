@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Grasp cache generation now uses
+  `roboclaws.core.json_sources.read_json_object` for proof-bundle run manifest
+  input before extracting `grasp_cache_generation_preflight`. Missing,
+  malformed, or parseable non-object proof-bundle manifests now use canonical
+  path-labelled source wording before generation preflight shape validation.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation / fail-aloud source validation. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized
+  modules; this slice did not add new complexity in touched files. Proof:
+  focused grasp cache generation tests, touched-file ruff/format checks, and
+  `git diff --check`; global ratchet is blocked by unrelated dirty runtime
+  bundle work. Reopen only if grasp cache generation regains a local raw JSON
+  file reader for proof-bundle manifests or corrupt manifests can again reach
+  generation preflight validation as parser tracebacks or wrong-shaped
+  payloads.
+
 - 2026-06-20: Grasp pose-policy cache loading now uses
   `roboclaws.core.json_sources.read_json_object` for initial-contact result
   artifacts before best-variant pose-policy selection. Malformed or parseable

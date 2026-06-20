@@ -17,12 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Grasp pose-policy cache loading now routes initial-contact result
-artifacts through the shared JSON-object source helper before best-variant
-selection. Malformed or non-object result files fail with canonical
-path-labelled source wording before pose-policy validation. Focused grasp
-pose-policy cache tests, touched-file Ruff/format, `git diff --check`, and
-ratchet passed. Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Grasp cache generation now routes proof-bundle run manifests
+through the shared JSON-object source helper before extracting
+`grasp_cache_generation_preflight`. Missing, malformed, or non-object
+manifests fail with canonical path-labelled source wording before generation
+preflight validation. Focused grasp cache generation tests, touched-file
+Ruff/format, and `git diff --check` passed. Current shared-checkout ratchet
+summary is blocked by unrelated dirty
+`scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
+79 oversized modules.
 
 ## Next Action
 
@@ -79,6 +82,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/core/json_sources.py`
 - `roboclaws/household/camera_control.py`
 - `roboclaws/household/ci_live_reports.py`
+- `roboclaws/household/grasp_cache_generation.py`
 - `roboclaws/household/grasp_generation_setup.py`
 - `roboclaws/household/grasp_pose_policy_cache.py`
 - `roboclaws/launch/goals.py`
@@ -122,6 +126,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
 - `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
