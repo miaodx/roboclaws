@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console request-field readiness now uses
+  `roboclaws.core.json_sources.read_json_object` for attached JSON-object gate
+  artifacts while preserving existing gate statuses and operator-facing
+  unreadable/non-object message categories. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: source-reader consolidation with stable
+  route-readiness diagnostics. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+  unrelated no-touch debt, and this slice did not add new complexity in touched
+  files. Proof: focused Agibot readiness context tests, touched-file
+  ruff/format checks, changed-code review, `git diff --check`, and ratchet.
+  Reopen only if operator-console request-field readiness regains a local raw
+  JSON-object reader or attached context artifacts stop surfacing stable
+  readiness-gate diagnostics.
+
 - 2026-06-20: Provider timing proxy readiness now uses
   `roboclaws.core.json_sources.read_json_object` for present
   `provider_timing_proxy.ready.json` object parsing and writes the child ready

@@ -22,8 +22,8 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the provider timing proxy ready-source
-  slice:
+- Current shared-checkout note after the operator-console request-field
+  readiness source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
@@ -164,6 +164,9 @@ Latest quality snapshot from 2026-06-20:
   helper and writes the ready artifact atomically, so missing readiness still
   polls but malformed or non-object readiness fails startup with source-specific
   evidence instead of returning a fabricated proxy handle.
+  Operator-console request-field readiness now routes attached JSON-object gate
+  artifacts through the shared JSON-object helper while preserving existing
+  gate statuses and operator-facing unreadable/non-object message categories.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization
