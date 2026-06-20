@@ -205,6 +205,11 @@ Latest quality snapshot from 2026-06-20:
   shared helper before adding the private `_state_path` runtime field, so
   missing, malformed, or non-object worker state files fail with path-labelled
   source errors while valid state reads preserve worker state semantics.
+  Isaac B1 / Map 12 navigation-smoke child capture request and result reads now
+  route through the shared JSON-object helper, so malformed or non-object
+  `_capture-one` requests fail before worker import/capture and malformed
+  child results become explicit `child_failures` source-error evidence instead
+  of parser crashes during aggregation.
   MolmoSpaces subprocess worker state loading now routes required state-file
   reads through the shared helper, so missing, malformed, or non-object worker
   state files fail with path-labelled source errors while valid state payloads

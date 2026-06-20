@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac B1 / Map 12 navigation-smoke child capture request and
+  result artifact reads now route through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or non-object
+  `_capture-one` request files fail with path-labelled source errors before
+  worker import/capture, and malformed child result files become explicit
+  `child_failures` source-error evidence instead of raw parser crashes during
+  aggregation. Owner layer: Backend Runtime / Environment Primitive. Behavior
+  change class: required artifact source-reader consolidation with stable
+  blocked-run evidence. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused navigation-smoke CLI source-error tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` regains local
+  raw JSON-object readers for child request/result artifacts or malformed child
+  result sources can crash aggregation instead of becoming source-error
+  evidence.
+
 - 2026-06-20: Agibot map-context capture/update and PNC waypoint verification
   now route required operator-authored context reads through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, and
