@@ -9,6 +9,13 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object
+
 SUGGESTION_SCHEMA = "b1_map12_manual_anchor_semantic_suggestions_v1"
 REVIEW_PACKET_SCHEMA = "b1_map12_manual_anchor_semantic_review_packet_v1"
 DEFAULT_DRAFT = Path("docs/status/active/b1-map12-scene-correspondences-draft.json")
@@ -56,16 +63,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        draft = _read_json_object(args.draft, label="manual draft")
+        draft = read_json_object(args.draft, label="manual draft")
         payload = build_semantic_suggestions(
             draft=draft,
-            review_manifest=_read_json_object(args.review_manifest, label="review manifest"),
-            scene_diagnostic=_read_json_object(args.scene_diagnostic, label="scene diagnostic"),
+            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
+            scene_diagnostic=read_json_object(args.scene_diagnostic, label="scene diagnostic"),
             draft_path=args.draft,
             review_manifest_path=args.review_manifest,
             scene_diagnostic_path=args.scene_diagnostic,
         )
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -368,18 +375,6 @@ def scene_partitions(scene_diagnostic: dict[str, Any]) -> list[dict[str, Any]]:
     if not partitions:
         raise ValueError("scene diagnostic has no partition bounds")
     return partitions
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def nearest_map_candidates(

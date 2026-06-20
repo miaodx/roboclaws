@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 correspondence review rendering now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for explicit
-correspondence manifests and required scene topdown render packets. Missing,
-malformed, or parseable non-object artifacts keep path-labelled source errors
-under the canonical helper wording, and the renderer no longer carries a
-duplicate local JSON-object reader. Focused B1 correspondence review and core
-JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed.
+2026-06-20: B1 manual-anchor semantic suggestion loading now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for explicit draft,
+review-manifest, and scene-diagnostic artifacts. Missing, malformed, or
+parseable non-object artifacts keep path-labelled source errors under the
+canonical helper wording, and the CLI no longer carries a duplicate local
+JSON-object reader. Focused B1 manual-anchor semantic CLI and core JSON-source
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -96,5 +95,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
   `scripts/dev/stage_cloudml_cleanup_assets.sh`, and
   `tests/unit/evals/test_eval_runner.py`.
 - Do not touch unrelated `docs/status/active/2026-06-18-sdk-storage-targets.md`.
+- Do not touch unrelated
+  `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
 - Avoid adding to `tests/contract/maps/test_b1_map12_verified_alignment.py`
   unless also compacting local debt; it is at the 2000-line hard ceiling.

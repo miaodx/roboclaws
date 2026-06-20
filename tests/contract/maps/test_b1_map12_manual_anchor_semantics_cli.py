@@ -14,32 +14,32 @@ SCRIPT = REPO_ROOT / "scripts" / "maps" / "suggest_b1_map12_manual_anchor_semant
 @pytest.mark.parametrize(
     ("filename", "source", "message"),
     (
-        ("draft.json", None, "manual draft missing:"),
+        ("draft.json", None, "manual draft source is missing:"),
         (
             "draft.json",
             "{not-json\n",
-            "manual draft must contain valid JSON object",
+            "manual draft source must contain valid JSON object",
         ),
-        ("draft.json", "[]\n", "manual draft must contain a JSON object"),
+        ("draft.json", "[]\n", "manual draft source must contain a JSON object"),
         (
             "review.json",
             "{not-json\n",
-            "review manifest must contain valid JSON object",
+            "review manifest source must contain valid JSON object",
         ),
         (
             "review.json",
             "[]\n",
-            "review manifest must contain a JSON object",
+            "review manifest source must contain a JSON object",
         ),
         (
             "scene.json",
             "{not-json\n",
-            "scene diagnostic must contain valid JSON object",
+            "scene diagnostic source must contain valid JSON object",
         ),
         (
             "scene.json",
             "[]\n",
-            "scene diagnostic must contain a JSON object",
+            "scene diagnostic source must contain a JSON object",
         ),
     ),
 )

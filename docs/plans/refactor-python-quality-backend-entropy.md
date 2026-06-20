@@ -126,7 +126,9 @@ Latest quality snapshot from 2026-06-20:
   JSON-object sources through the shared source helper instead of a duplicate
   local reader. B1 manual-anchor semantic suggestion loading now treats
   explicit draft, review-manifest, and scene-diagnostic inputs as JSON-object
-  source truth before suggestion, review-packet, or review-report writes.
+  source truth before suggestion, review-packet, or review-report writes, and
+  routes those JSON-object sources through the shared source helper instead of
+  a duplicate local reader.
   Robot-camera visual parity summary loading now treats explicit
   baseline/probe manifests, RAW-FPV run results, calibration manifests,
   prepared USD summaries, paired comparison manifests, report visual sample

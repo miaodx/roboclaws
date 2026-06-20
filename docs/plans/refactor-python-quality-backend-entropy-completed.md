@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 manual-anchor semantic suggestion source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for explicit
+  draft, review-manifest, and scene-diagnostic artifacts. This removes the
+  CLI's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused B1
+  manual-anchor semantic CLI tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if the CLI
+  regains a local JSON-object source reader or stops routing draft,
+  review-manifest, and scene-diagnostic artifacts through the shared source
+  helper.
+
 - 2026-06-20: B1 correspondence review source loading now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for explicit
   correspondence manifests and required scene topdown render packets. This
