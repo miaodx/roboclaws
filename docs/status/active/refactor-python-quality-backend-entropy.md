@@ -17,21 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner proof result summarization now routes proof
-`run_result.json` reads through the shared source helper while preserving the
-existing missing/malformed/non-object unreadable-result payload shape. Focused
-planner-proof summary tests, touched-file ruff, touched-file format checks,
-diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
-violations, 80 oversized modules.
+2026-06-20: Planner grasp-cache JSON loader validation now routes present
+`*_grasps_filtered.json` sources through the shared source helper while
+preserving missing, non-object-as-empty, valid transform-count, and
+malformed-as-error preflight behavior. Focused planner task feasibility tests,
+touched-file ruff, touched-file format checks, diff check, and the ratchet
+summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules.
 
-Previous slice: Robot-camera apple-to-apple required JSON artifacts and
-explicit optional color-profile artifacts now route through the shared source
-helper while preserving absent optional color-profile input as empty.
+Previous slice: Planner proof result summarization now routes proof
+`run_result.json` reads through the shared source helper while preserving the
+existing missing/malformed/non-object unreadable-result payload shape.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the planner proof result summary reader slice.
+committing the planner grasp-cache JSON loader validation slice.
 
 ## Touched Areas
 
@@ -96,6 +97,7 @@ committing the planner proof result summary reader slice.
 - `roboclaws/household/scene_camera_source_artifacts.py`
 - `roboclaws/household/agibot_contract_rehearsal.py`
 - `roboclaws/household/planner_proof_requests.py`
+- `roboclaws/household/planner_task_feasibility.py`
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`

@@ -6072,6 +6072,17 @@ logs before choosing the next slice.
   ratchet. Reopen only if `planner_proof_requests.py` regains direct
   `json.loads(read_text(...))` proof-result parsing or stops preserving
   unreadable proof-result evidence for malformed/non-object sources.
+- Planner grasp-cache JSON loader validation now routes present
+  `*_grasps_filtered.json` sources through the shared JSON-source helper while
+  preserving missing, non-object-as-empty, valid transform-count, and
+  malformed-as-error preflight behavior. Owner layer: Backend Runtime /
+  Environment Primitive plus Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation with existing validation
+  status preservation. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: focused planner task feasibility tests, ruff,
+  format check, diff check, and ratchet. Reopen only if
+  `planner_task_feasibility.py` regains direct `json.loads(read_text(...))`
+  grasp-cache parsing or changes JSON cache validation status semantics.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
