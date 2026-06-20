@@ -22,13 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the grasp filter candidate-grasp
+- Current shared-checkout note after the scene-camera optional index
   source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched grasp filter diagnostics module is 516 lines and its focused
-  test file is 162 lines.
+  The touched scene-camera source artifacts module is 87 lines and its focused
+  test file is 49 lines.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -291,6 +291,11 @@ Latest quality snapshot from 2026-06-20:
   `*_grasps.json` sources fail with path-labelled source errors before subset
   generation, candidate counting, or filter-variant execution while missing
   candidate-grasp files keep the existing blocked-result path.
+  Scene-camera source artifacts now route optional nearby
+  `isaac_scene_index.json` probes through the shared JSON-object helper while
+  preserving the permissive optional-index contract: malformed, non-object,
+  unreadable, or mismatched nearby indexes are ignored, and matching valid
+  scene indexes still provide USD prim hints.
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.

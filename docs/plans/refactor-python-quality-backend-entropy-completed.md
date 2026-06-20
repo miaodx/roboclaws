@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-camera source artifacts now route optional nearby
+  `isaac_scene_index.json` probes through
+  `roboclaws.core.json_sources.read_json_object` while preserving the
+  permissive optional-index contract: malformed, non-object, unreadable, or
+  mismatched nearby indexes are ignored, and matching valid scene indexes still
+  provide USD prim hints. Owner layer: Backend Runtime / Environment Primitive
+  diagnostics. Behavior-change class: source-reader consolidation with stable
+  optional source semantics. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched source-artifacts module is 87 lines and its focused test file is
+  49 lines. Proof: focused scene-camera source artifact tests, nearby Isaac
+  view-spec tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if
+  `roboclaws/household/scene_camera_source_artifacts.py` regains a local raw
+  JSON parser for optional scene-index probes or matching valid indexes stop
+  providing USD prim hints.
+
 - 2026-06-20: Grasp filter diagnostics now route present candidate-grasp JSON
   artifact reads through `roboclaws.core.json_sources.read_json_object`.
   Missing candidate-grasp files keep the existing blocked-result path, while

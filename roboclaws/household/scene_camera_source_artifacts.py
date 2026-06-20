@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -51,16 +50,20 @@ def load_local_isaac_scene_index(scene_usd_path: Path) -> dict[str, Any]:
         reverse=True,
     )
     for candidate in candidates:
-        try:
-            payload = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
+        payload = _read_optional_scene_index(candidate)
+        if not payload:
             continue
         if str(payload.get("scene_usd") or "") != str(scene_usd_path):
             continue
         return payload
     return {}
+
+
+def _read_optional_scene_index(path: Path) -> dict[str, Any]:
+    try:
+        return read_json_object(path, label="local Isaac scene index")
+    except (OSError, ValueError):
+        return {}
 
 
 def isaac_scene_index_entry(anchor_id: str, scene_index: dict[str, Any]) -> dict[str, Any]:
