@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for Agibot
+  `source.json` and Nav2 cleanup `semantics.json` artifacts. This removes the
+  runtime prior owner's duplicate local JSON-object reader while preserving
+  fail-aloud path-labelled source errors for missing, malformed, or parseable
+  non-object artifacts under the canonical helper wording. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; `runtime_prior_snapshot.py`
+  dropped to 1162 lines. Proof: focused Runtime Map Prior contract tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if Runtime Map Prior Snapshot conversion regains a local
+  JSON-object source reader or stops routing Agibot source and Nav2 semantics
+  artifacts through the shared source helper.
+
 - 2026-06-20: B1 runtime bundle compilation now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for review-manifest,
   alignment-artifact, navigation-artifact, and semantic-projection artifacts.

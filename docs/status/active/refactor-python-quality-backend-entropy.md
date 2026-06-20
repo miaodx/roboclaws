@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 runtime bundle compilation now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for review-manifest,
-alignment-artifact, navigation-artifact, and semantic-projection artifacts.
-Missing, malformed, or parseable non-object artifacts keep path-labelled source
-errors under the canonical helper wording, and the compiler no longer carries a
-duplicate local JSON-object reader. Focused B1 runtime bundle and core
-JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed.
+2026-06-20: Runtime Map Prior Snapshot conversion now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for Agibot
+`source.json` and Nav2 cleanup `semantics.json` artifacts. Missing, malformed,
+or parseable non-object artifacts use the canonical path-labelled helper
+wording, and the runtime prior owner no longer carries a duplicate local
+JSON-object reader. Focused Runtime Map Prior contract and core JSON-source
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -57,6 +56,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `roboclaws/maps/runtime_prior_snapshot.py`
 - `roboclaws/core/json_sources.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
@@ -86,6 +86,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_scene_index_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
+- `tests/contract/maps/test_runtime_map_prior_snapshot.py`
 - `tests/unit/core/test_json_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`

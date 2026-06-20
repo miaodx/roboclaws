@@ -76,7 +76,12 @@ Latest quality snapshot from 2026-06-20:
   corrupt evidence. Runtime Map Prior Snapshot conversion and B1 runtime bundle
   compilation now reuse that shared parser too, removing their duplicate
   local readers, item-list parsers, item guards, and point/pose numeric
-  validators while preserving existing source-error diagnostics. B1 Map 12
+  validators while preserving existing source-error diagnostics. Runtime Map
+  Prior Snapshot conversion now also routes Agibot `source.json` and Nav2
+  cleanup `semantics.json` object artifacts through the shared JSON-source
+  helper instead of a duplicate local reader, preserving the canonical
+  path-labelled helper wording for missing, malformed, or non-object sources.
+  B1 Map 12
   label-tool draft export now rejects missing or invalid `polygon_role` source
   values instead of defaulting malformed draft labels to `navigation_area`,
   and explicitly supplied label-tool review manifests must now exist, parse to
