@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Molmo live CI report status loading now uses
+  `roboclaws.core.json_sources.read_json_object` for published `status.json`
+  artifacts. Missing, malformed, or parseable non-object status files now use
+  canonical path-labelled source wording before CI status schema validation,
+  live manifest rows, or live index assembly. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud source validation. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules. Proof: focused CI live report tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if Molmo live CI status loading regains a local raw JSON file reader or
+  corrupt published status files can again reach schema/index logic as parser
+  tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Scene-sampler source-prep, scanner-plan, and next-flow worklist
   runner inputs now use `roboclaws.core.json_sources.read_json_object` for
   file-backed source artifacts. Missing, malformed, or parseable non-object

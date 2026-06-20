@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from roboclaws.household.ci_live_reports import (
     MODEL_ENTRIES,
     base_status,
@@ -16,6 +18,7 @@ from roboclaws.household.ci_live_reports import (
     latest_seed_artifact_dir,
     publish_diagnostic_seed_run,
     publish_seed_run,
+    read_status,
     report_path_for_entry,
     status_path_for_entry,
     write_live_index,
@@ -71,6 +74,36 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
             "camera-raw-fpv",
         ),
     }
+
+
+def test_ci_live_status_reader_rejects_missing_source(tmp_path: Path) -> None:
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"Molmo live CI status source is missing: .*status\.json",
+    ):
+        read_status(tmp_path / "status.json")
+
+
+def test_ci_live_status_reader_rejects_malformed_source(tmp_path: Path) -> None:
+    status_path = tmp_path / "status.json"
+    status_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Molmo live CI status source must contain valid JSON object: .*status\.json",
+    ):
+        read_status(status_path)
+
+
+def test_ci_live_status_reader_rejects_non_object_source(tmp_path: Path) -> None:
+    status_path = tmp_path / "status.json"
+    status_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Molmo live CI status source must contain a JSON object: .*status\.json",
+    ):
+        read_status(status_path)
 
 
 def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:

@@ -17,13 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-sampler source-prep, scanner-plan, and next-flow worklist
-runner inputs now route explicit JSON-object artifacts through the shared
-source helper. Missing, malformed, or non-object runner inputs fail with
-canonical path-labelled source wording before runner schema or alignment
-validation. Focused operator-console scene-sampler runner tests, touched-file
-Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
-complexity rows, 79 oversized modules.
+2026-06-20: Molmo live CI report status loading now routes published
+`status.json` artifacts through the shared JSON-object source helper. Missing,
+malformed, or non-object status files fail with canonical path-labelled source
+wording before CI status schema validation or live index assembly. Focused CI
+live report tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed. Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -79,6 +78,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
 - `roboclaws/household/camera_control.py`
+- `roboclaws/household/ci_live_reports.py`
 - `roboclaws/launch/goals.py`
 - `roboclaws/maps/room_semantics.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
@@ -119,6 +119,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
+- `tests/unit/molmo_cleanup/test_ci_live_reports.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
 - `tests/unit/launch/test_goal_contract_sources.py`

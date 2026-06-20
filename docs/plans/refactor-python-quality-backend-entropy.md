@@ -126,6 +126,10 @@ Latest quality snapshot from 2026-06-20:
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled
   source errors before runner schema or alignment validation.
+  Molmo live CI report status loading now routes published `status.json`
+  artifacts through the shared JSON-object helper, so missing, malformed, or
+  non-object status sources fail with path-labelled source errors before CI
+  status schema validation or live index assembly.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
