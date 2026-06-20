@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-camera USDA prepared-scene summary loading now routes
+  present optional `summary.json` sidecars through
+  `roboclaws.core.json_sources.read_json_object` while preserving the render
+  contract's current optional evidence behavior: missing, malformed,
+  unreadable, or non-object summaries contribute no prepared-summary fields
+  instead of failing the USDA contract parser. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: source-reader consolidation with
+  stable optional scene-render sidecar semantics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused scene-camera USDA source tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/scene_camera_usda_contract.py` regains local raw JSON
+  parsing for prepared-scene summaries or corrupt optional summaries stop
+  resolving to `{}`.
+
 - 2026-06-20: Isaac report scene-index artifact loading now routes present
   optional `isaac_scene_index.json` sidecars through
   `roboclaws.core.json_sources.read_json_object` while preserving the report

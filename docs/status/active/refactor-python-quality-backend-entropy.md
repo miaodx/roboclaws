@@ -17,23 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac report scene-index artifact loading now routes present
+2026-06-20: Scene-camera USDA prepared-scene summary loading now routes
+present optional `summary.json` sidecars through the shared JSON-object helper
+while preserving the missing/corrupt/non-object-as-empty render-contract
+behavior. Focused scene-camera USDA source tests and touched-file Ruff/format
+passed, as did `git diff --check` and ratchet. Current shared-checkout ratchet
+summary still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+
+Previous slice: Isaac report scene-index artifact loading now routes present
 optional `isaac_scene_index.json` sidecars through the shared JSON-object
 helper while preserving the missing/corrupt/non-object-as-absent report
 behavior. Focused Isaac report-section source tests and touched-file
-Ruff/format passed, as did `git diff --check` and ratchet. Current
-shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-
-Previous slice: Isaac RBY1M robot import summary loading now routes present
-optional import summary files through the shared JSON-object helper while
-preserving the missing/corrupt/non-object-as-empty optional source contract.
-Focused Isaac robot import source tests and touched-file Ruff/format passed.
+Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac report scene-index sidecar source-reader slice.
+committing the scene-camera USDA summary source-reader slice.
 
 ## Touched Areas
 
@@ -103,6 +104,8 @@ committing the Isaac report scene-index sidecar source-reader slice.
 - `roboclaws/household/artifact_report.py`
 - `roboclaws/household/report_sections_isaac.py`
 - `tests/unit/molmo_cleanup/test_report_sections_isaac_sources.py`
+- `roboclaws/household/scene_camera_usda_contract.py`
+- `tests/unit/molmo_cleanup/test_scene_camera_usda_contract_sources.py`
 - `roboclaws/household/report_sections_timing.py`
 - `roboclaws/household/grasp_cache_generation.py`
 - `roboclaws/household/grasp_generation_setup.py`

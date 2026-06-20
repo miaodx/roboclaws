@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the Isaac report scene-index sidecar source-reader
+- Current shared-checkout note after the scene-camera USDA summary source-reader
   slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -265,6 +265,9 @@ Latest quality snapshot from 2026-06-20:
   Isaac report scene-index artifact loading now routes present optional
   `isaac_scene_index.json` sidecars through the shared JSON-object helper
   while preserving the missing/corrupt/non-object-as-absent report behavior.
+  Scene-camera USDA prepared-scene summary loading now routes present optional
+  `summary.json` sidecars through the shared JSON-object helper while
+  preserving the missing/corrupt/non-object-as-empty render-contract behavior.
   Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled
