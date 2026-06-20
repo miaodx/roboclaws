@@ -176,6 +176,29 @@ def test_runner_preserves_last_worker_stage_from_timeout_stdout() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("stdout", "message"),
+    [
+        (
+            'ordinary log\n{"event": "worker_start"}\n{bad-json}\n',
+            r"planner manipulation probe stdout row must contain valid JSON object: stdout:3",
+        ),
+        (
+            'ordinary log\n["not", "an", "event"]\n',
+            r"planner manipulation probe stdout row must contain a JSON object: stdout:2",
+        ),
+    ],
+)
+def test_runner_rejects_malformed_json_like_worker_stdout(
+    stdout: str,
+    message: str,
+) -> None:
+    runner = _load_runner_module()
+
+    with pytest.raises(ValueError, match=message):
+        runner._worker_payload_from_stdout(stdout)
+
+
 def test_runner_configures_exact_cleanup_task_scene_and_aliases(tmp_path: Path) -> None:
     scene_xml = tmp_path / "scene.xml"
     scene_xml.write_text("<mujoco/>", encoding="utf-8")

@@ -17,14 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Cleanup artifact-report trace JSONL reads now route through the
-shared JSONL source helper instead of a local parser. Malformed or non-object
-trace rows now fail with row-labelled `cleanup report trace` source errors
-before stale cleanup report re-rendering can derive semantic timeline evidence
-from partial trace data. Focused artifact-report contract tests, touched-file
-ruff, touched-file format checks, diff check, changed-code cleanup review, and
-the ratchet summary passed. Current ratchet: 0 Ruff complexity violations, 80
-oversized modules in the shared checkout.
+2026-06-21: Planner manipulation probe stdout parsing now fails malformed or
+non-object JSON-looking worker rows aloud instead of silently skipping them
+before timeout/runtime diagnostics are attached to manipulation evidence.
+Ordinary non-JSON log lines remain tolerated. Focused planner manipulation
+checker tests, touched-file ruff, touched-file format checks, diff check,
+changed-code cleanup review, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Cleanup artifact-report trace JSONL reads now route through
+the shared JSONL source helper instead of a local parser. Malformed or
+non-object trace rows now fail with row-labelled `cleanup report trace` source
+errors before stale cleanup report re-rendering can derive semantic timeline
+evidence from partial trace data. Focused artifact-report contract tests,
+touched-file ruff, touched-file format checks, diff check, changed-code
+cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
 
 Previous slice: RAW-FPV private-label trace JSONL reads now route through the
 shared JSONL source helper instead of a local parser. Malformed or non-object
@@ -173,15 +181,15 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the cleanup artifact-report trace-source slice. Avoid reopening
+committing the planner manipulation probe stdout-source slice. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
 grasp source validation, or Isaac runtime smoke sidecar-source validation
 without fresh false-green evidence. Avoid reopening Agibot map-build,
-Isaac semantic-pose, RAW-FPV private-label, or cleanup artifact-report
-trace-source validation unless fresh checker/generator/report evidence shows
-partial-trace false confidence again.
+Isaac semantic-pose, RAW-FPV private-label, cleanup artifact-report trace, or
+planner manipulation probe stdout-source validation unless fresh
+checker/generator/report/probe evidence shows false confidence again.
 
 ## Touched Areas
 
@@ -191,6 +199,8 @@ partial-trace false confidence again.
 - `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
 - `roboclaws/household/artifact_report.py`
 - `tests/contract/reports/test_molmo_cleanup_artifact_report.py`
+- `scripts/molmo_cleanup/planner_manipulation_probe_result.py`
+- `tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
 - `tests/contract/checkers/test_agibot_map_build_checker_trace_sources.py`
 - `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`

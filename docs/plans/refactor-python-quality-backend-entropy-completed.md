@@ -6454,6 +6454,17 @@ logs before choosing the next slice.
   format check, diff check, changed-code cleanup review, and ratchet. Reopen
   only if `artifact_report.py` regains local raw JSONL trace parsing or accepts
   malformed/non-object trace rows.
+- Planner manipulation probe stdout parsing now fails malformed or non-object
+  JSON-looking worker rows aloud instead of silently skipping them before
+  runtime diagnostics, CUDA snapshots, worker stage events, or blocked/proven
+  manipulation evidence are assembled. Ordinary non-JSON log lines remain
+  tolerated. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud structured stdout source validation.
+  Metric: ratchet remains at 0 Ruff complexity rows and 80 oversized modules.
+  Proof: focused planner manipulation checker tests, ruff, format check, diff
+  check, changed-code cleanup review, and ratchet. Reopen only if
+  `planner_manipulation_probe_result.py` again silently skips malformed or
+  non-object JSON-looking worker stdout rows.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the planner manipulation probe
+  stdout-source slice: worker stdout parsing now fails malformed or non-object
+  JSON-looking rows aloud while preserving ordinary log-line tolerance, so
+  timeout/runtime diagnostics cannot be assembled from partial structured
+  stdout evidence.
 - Current shared-checkout note after the cleanup artifact-report trace-source
   slice: stale cleanup report re-rendering now routes trace JSONL reads through
   the shared JSONL source helper instead of a local parser, so malformed or
