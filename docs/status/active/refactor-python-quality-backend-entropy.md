@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 manual-anchor semantic suggestion loading now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for explicit draft,
-review-manifest, and scene-diagnostic artifacts. Missing, malformed, or
-parseable non-object artifacts keep path-labelled source errors under the
-canonical helper wording, and the CLI no longer carries a duplicate local
-JSON-object reader. Focused B1 manual-anchor semantic CLI and core JSON-source
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: B1 Gaussian scene topdown capture now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for hidden
+`--camera-request` artifacts. Missing, malformed, or parseable non-object
+camera-request artifacts keep path-labelled source errors under the canonical
+helper wording, and the renderer no longer carries a duplicate local
+JSON-object reader. Focused B1 Gaussian topdown and core JSON-source tests,
+touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -39,6 +39,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/check_prepared_semantic_usd_summary.py`
 - `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
+- `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `scripts/maps/render_b1_map12_correspondence_review.py`
@@ -61,6 +62,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_asset_visual_comparison.py`
 - `tests/unit/molmo_cleanup/test_check_prepared_semantic_usd_summary.py`
 - `tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+- `tests/contract/maps/test_b1_scene_gaussian_topdown.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary_sources.py`
 - `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`

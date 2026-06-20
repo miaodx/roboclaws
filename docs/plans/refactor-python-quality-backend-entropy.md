@@ -106,7 +106,8 @@ Latest quality snapshot from 2026-06-20:
   `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
-  writes. B1 waypoint pose request building now treats required
+  writes, and routes that JSON-object source through the shared source helper
+  instead of a duplicate local reader. B1 waypoint pose request building now treats required
   `--alignment-artifact` input and explicit `--points` input as source truth,
   failing missing, malformed, or wrong-shaped sources before pose-request
   artifact writes, and routes the alignment JSON-object source through the
