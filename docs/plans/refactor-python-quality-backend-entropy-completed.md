@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console HTTP POST bodies now route through the shared
+  JSON-object source helper instead of raw `json.loads` in the server request
+  handler. Malformed or non-object browser/operator payloads now return stable
+  400 JSON diagnostics labelled by HTTP method/path before launch, steer,
+  next-goal, control, pause, or stop handlers can mutate run state. The
+  control-endpoint tests also assert corrupt request bodies do not append
+  operator-control rows. Owner layer: Thin Runtime / Server Adapter.
+  Behavior-change class: public local-operator HTTP ingress source-reader
+  hardening with fail-aloud diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused operator-console control-endpoint tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `roboclaws/operator_console/server.py` regains raw POST-body JSON
+  parsing or malformed browser/operator request bodies can again reach launch
+  or control handlers before source-labelled diagnostics.
+
 - 2026-06-21: Launch goal-contract inline JSON now routes through the shared
   JSON-object source helper instead of raw `json.loads`. Malformed or
   non-object `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` payloads

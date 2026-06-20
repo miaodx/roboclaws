@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Launch goal-contract inline JSON now routes through the shared
+2026-06-21: Operator-console HTTP POST bodies now route through the shared
+JSON-object source helper instead of raw `json.loads` in the server request
+handler. Malformed or non-object browser/operator payloads now return stable
+400 JSON diagnostics labelled by HTTP method/path before steer, next-goal,
+control, pause, stop, or launch handlers can run; the focused control-endpoint
+tests also assert no operator-control rows are written for corrupt request
+bodies. Focused proof passed: operator-console control-endpoint tests,
+touched-file ruff, touched-file format check. Current ratchet before final
+slice closeout: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Launch goal-contract inline JSON now routes through the shared
 JSON-object source helper instead of raw `json.loads`. Malformed or non-object
 `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` payloads now fail with
 source-labelled launch diagnostics before prompt rendering, MCP server startup,

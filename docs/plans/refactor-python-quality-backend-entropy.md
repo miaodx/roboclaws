@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-console HTTP body source
+  slice: POST request bodies now reuse the shared JSON-object source helper
+  instead of raw `json.loads`, so malformed or non-object browser/operator
+  payloads return stable 400 diagnostics labelled by HTTP method/path before
+  launch, steer, next-goal, control, pause, or stop handlers can mutate run
+  state.
 - Current shared-checkout note after the launch goal-contract inline source
   slice: inline goal-contract payloads now reuse the shared JSON-object source
   helper instead of raw `json.loads`, so malformed or non-object
