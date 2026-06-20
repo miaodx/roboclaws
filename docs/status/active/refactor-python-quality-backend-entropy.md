@@ -17,13 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 asset visual comparison now uses the shared
+2026-06-20: B1 navigation smoke now uses the shared
 `roboclaws.core.json_sources.read_json_object` source reader for explicit
-baseline/candidate navigation artifacts. Missing, malformed, or parseable
-non-object artifacts keep path-labelled source errors under the canonical
-helper wording, and the comparison script no longer carries a duplicate local
-JSON-object reader. Focused B1 asset visual comparison and core JSON-source
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+readiness artifacts and waypoint pose request artifacts. Missing, malformed,
+or parseable non-object artifacts keep path-labelled source errors under the
+canonical helper wording, and the navigation smoke script no longer carries a
+duplicate local JSON-object reader. Focused B1 navigation smoke and core
+JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 navigation smoke source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit readiness
+  artifacts and waypoint pose request artifacts. This removes the smoke
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the navigation smoke script
+  dropped from 466 to 455 lines. Proof: focused B1 navigation smoke tests,
+  core JSON-source tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only if the smoke script regains a local JSON-object
+  source reader or stops routing explicit readiness/waypoint request artifacts
+  through the shared source helper.
+
 - 2026-06-20: B1 asset visual comparison source loading now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for explicit
   baseline/candidate navigation artifacts. This removes the comparison

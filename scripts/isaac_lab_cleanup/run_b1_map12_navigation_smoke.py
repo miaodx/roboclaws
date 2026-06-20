@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
 
 from PIL import Image
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
@@ -308,7 +309,7 @@ def capture_one(args: argparse.Namespace) -> int:
 
 def load_or_build_readiness(args: argparse.Namespace) -> dict[str, Any]:
     if args.readiness_artifact is not None:
-        payload = _read_json_object(Path(args.readiness_artifact), label="readiness artifact")
+        payload = read_json_object(Path(args.readiness_artifact), label="readiness artifact")
         if payload.get("schema") != READINESS_SCHEMA:
             raise ValueError(f"unexpected readiness artifact schema: {payload.get('schema')!r}")
         return payload
@@ -337,7 +338,7 @@ def navigation_smoke_waypoints(
     waypoint_pose_requests: Path | None,
 ) -> tuple[list[dict[str, Any]], str]:
     if waypoint_pose_requests is not None:
-        payload = _read_json_object(
+        payload = read_json_object(
             Path(waypoint_pose_requests),
             label="waypoint pose request artifact",
         )
@@ -376,18 +377,6 @@ def navigation_smoke_waypoints(
             "artifact with reviewed-correspondence candidate waypoints"
         )
     return readiness_waypoints, ""
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def navigation_smoke_has_distinct_pose_evidence(waypoint_evidence: list[dict[str, Any]]) -> bool:
