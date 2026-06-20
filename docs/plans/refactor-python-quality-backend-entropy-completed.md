@@ -6007,6 +6007,15 @@ logs before choosing the next slice.
   timing tests, ruff, format check, diff check, and ratchet. Reopen only if
   `run_live_claude_cleanup.py` regains permissive malformed/non-object
   `run_result.json` timing fallback.
+- B1 runtime-bundle room-semantics reference validation now delegates per-room
+  checks to a focused helper, preserving existing validation errors while
+  clearing the last Ruff complexity row. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: internal validation helper split. Metric:
+  ratchet improved from 1 Ruff complexity row to 0; oversized modules remain
+  80. Proof: focused B1 runtime-bundle contract tests, ruff, format check,
+  diff check, and ratchet. Reopen only if
+  `room_semantics_reference_errors` regains C901 complexity or drifts from the
+  checked-in room semantics reference error contract.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

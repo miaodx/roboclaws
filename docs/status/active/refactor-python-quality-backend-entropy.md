@@ -17,20 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Claude live timing now routes present `run_result.json` object
-sources through the shared source helper before using runtime timing evidence.
-Malformed or non-object Claude run-result artifacts now fail live timing aloud
-instead of silently falling back to trace-derived timing and preserving a green
-finished status. Focused live-timing tests, touched-file ruff, touched-file
-format checks, diff check, and the ratchet summary passed.
+2026-06-20: B1 runtime-bundle room-semantics reference validation now delegates
+per-room checks to a focused helper, clearing the remaining Ruff C901 row while
+preserving existing error output. Focused B1 runtime-bundle contract tests,
+touched-file ruff, touched-file format checks, diff check, and the ratchet
+summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules.
 
-Previous slice: Live Codex Agibot map-build result loading now routes the
-required `run_result.json` object source through the shared source helper.
+Previous slice: Claude live timing now routes present `run_result.json` object
+sources through the shared source helper before using runtime timing evidence.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Claude live timing run-result source-reader slice.
+committing the B1 runtime-bundle room-semantics validation split.
 
 ## Touched Areas
 

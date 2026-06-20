@@ -356,25 +356,37 @@ def room_semantics_reference_errors(
         if not isinstance(raw_room, dict):
             errors.append(f"rooms[{index}] must be an object")
             continue
-        partition_id = str(raw_room.get("asset_partition_id") or raw_room.get("room_id") or "")
-        if not partition_id:
-            errors.append(f"rooms[{index}] missing asset_partition_id")
-        if partition_id in seen:
-            errors.append(f"duplicate asset_partition_id: {partition_id}")
-        seen.add(partition_id)
-        if not str(raw_room.get("room_label") or ""):
-            errors.append(f"room {partition_id or index} missing room_label")
-        if not str(raw_room.get("category") or ""):
-            errors.append(f"room {partition_id or index} missing category")
-        review_status = str(raw_room.get("review_status") or "")
-        if review_status not in ROOM_REFERENCE_REVIEW_STATUSES:
-            statuses = ", ".join(sorted(ROOM_REFERENCE_REVIEW_STATUSES))
-            errors.append(f"room {partition_id or index} review_status must be one of: {statuses}")
-        if "geometry" in raw_room or "polygon" in raw_room or "map_polygon" in raw_room:
-            errors.append(
-                f"room {partition_id or index} must not carry Map12 geometry; "
-                "use a semantic projection artifact for map-frame room polygons"
-            )
+        errors.extend(_room_semantics_room_errors(raw_room, index=index, seen=seen))
+    return errors
+
+
+def _room_semantics_room_errors(
+    raw_room: dict[str, Any],
+    *,
+    index: int,
+    seen: set[str],
+) -> list[str]:
+    errors: list[str] = []
+    partition_id = str(raw_room.get("asset_partition_id") or raw_room.get("room_id") or "")
+    room_ref = partition_id or str(index)
+    if not partition_id:
+        errors.append(f"rooms[{index}] missing asset_partition_id")
+    if partition_id in seen:
+        errors.append(f"duplicate asset_partition_id: {partition_id}")
+    seen.add(partition_id)
+    if not str(raw_room.get("room_label") or ""):
+        errors.append(f"room {room_ref} missing room_label")
+    if not str(raw_room.get("category") or ""):
+        errors.append(f"room {room_ref} missing category")
+    review_status = str(raw_room.get("review_status") or "")
+    if review_status not in ROOM_REFERENCE_REVIEW_STATUSES:
+        statuses = ", ".join(sorted(ROOM_REFERENCE_REVIEW_STATUSES))
+        errors.append(f"room {room_ref} review_status must be one of: {statuses}")
+    if "geometry" in raw_room or "polygon" in raw_room or "map_polygon" in raw_room:
+        errors.append(
+            f"room {room_ref} must not carry Map12 geometry; "
+            "use a semantic projection artifact for map-frame room polygons"
+        )
     return errors
 
 
