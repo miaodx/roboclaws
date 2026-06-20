@@ -17,10 +17,21 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: OpenAI Agents RAW-FPV budget guard trace reads now route present
-`trace.jsonl` rows through the shared JSONL source helper instead of a local
-row parser. Missing trace files remain the intentional no-budget-evidence path,
-while malformed or non-object present rows use canonical
+2026-06-21: Operator-console trace/event/control/history JSONL row reads now
+share one console-owned JSONL row collector instead of three local
+`read_text`/`splitlines`/`json.loads` loops. State and history display paths
+still keep valid partial rows visible while surfacing malformed or non-object
+present rows as source errors, and operator control remains fail-fast before
+appending a new operator command. Focused proof passed: operator-console
+state/history/control endpoint tests, touched-file ruff, touched-file format
+check, diff check, changed-code cleanup review, and ratchet summary. Current
+ratchet: 0 Ruff complexity violations, 80 oversized modules in the shared
+checkout.
+
+Previous slice: OpenAI Agents RAW-FPV budget guard trace reads now route
+present `trace.jsonl` rows through the shared JSONL source helper instead of a
+local row parser. Missing trace files remain the intentional no-budget-evidence
+path, while malformed or non-object present rows use canonical
 `OpenAI Agents budget trace` `path:row` source wording before candidate,
 repeated-failure, or observe-per-waypoint budget decisions can derive
 confidence from partial trace history. Focused proof passed: OpenAI Agents
@@ -272,9 +283,16 @@ rows can again feed fitting, holdout validation, or coefficient-set confidence.
 Avoid reopening OpenAI Agents RAW-FPV budget trace source consolidation unless
 fresh budget-guard evidence shows corrupt present `trace.jsonl` rows can again
 feed candidate, repeated-failure, or observe-per-waypoint budget confidence.
+Avoid reopening operator-console JSONL row collection unless fresh console
+state/history/control evidence shows corrupt present JSONL rows can again feed
+operator-visible status or append new operator-control rows without source
+diagnostics.
 
 ## Touched Areas
 
+- `roboclaws/operator_console/jsonl_sources.py`
+- `roboclaws/operator_console/control.py`
+- `tests/unit/operator_console/test_history.py`
 - `scripts/molmo_cleanup/openai_agents_budget.py`
 - `tests/unit/agents/test_openai_agents_budget_sources.py`
 - `tests/unit/agents/test_live_runtime.py`

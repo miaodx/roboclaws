@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console JSONL row reading now has one console-owned
+  source collector for trace/event state display, run-history attachment, and
+  operator-control append preflight. State and history paths preserve their
+  partial valid-row display behavior while surfacing malformed or non-object
+  present rows as source errors, and operator control remains fail-fast before
+  adding a new command row. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: internal source-reader consolidation with stable
+  operator-visible diagnostics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout; three
+  local JSONL parsers became one console helper. Proof: focused
+  operator-console state/history/control endpoint tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if console state/history/control regains duplicate row
+  parsers or corrupt present JSONL rows can again feed operator-visible status
+  or append new operator-control rows without source diagnostics.
+
 - 2026-06-21: OpenAI Agents RAW-FPV budget guard trace parsing now delegates to
   the shared JSONL source helper for present `trace.jsonl` rows. Missing trace
   files remain the deliberate no-budget-evidence path, while malformed or

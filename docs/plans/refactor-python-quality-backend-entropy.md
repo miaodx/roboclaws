@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-console JSONL row source
+  consolidation slice: console state, history, and operator-control JSONL row
+  reads now share one console-owned collector. State and history still keep
+  valid partial rows visible while surfacing malformed or non-object present
+  rows as source errors, and operator control remains fail-fast before
+  appending a new operator command.
 - Current shared-checkout note after the OpenAI Agents RAW-FPV budget trace
   source consolidation slice: budget-guard reads now route present
   `trace.jsonl` rows through the shared JSONL source helper instead of a local

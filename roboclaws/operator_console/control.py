@@ -12,6 +12,7 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import derive_operator_state
@@ -233,32 +234,26 @@ def _operator_intervention_summary(run_dir: Path) -> dict[str, Any]:
 
 def _read_control_rows(run_dir: Path) -> list[dict[str, Any]]:
     path = run_dir / CONTROL_ARTIFACT
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        raise OperatorControlError(
-            f"operator control source cannot be read at {path}: {exc}",
-            status=409,
-        ) from exc
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
+    rows, issues = collect_jsonl_objects(path, label="operator control", encoding_errors="strict")
+    if issues:
+        issue = issues[0]
+        if issue.kind == "read_error":
             raise OperatorControlError(
-                f"operator control source contains invalid JSON at {path}:{line_number}: {exc.msg}",
-                status=409,
-            ) from exc
-        if not isinstance(payload, dict):
-            raise OperatorControlError(
-                f"operator control source row must be an object at {path}:{line_number}",
+                f"operator control source cannot be read at {path}: {issue.message}",
                 status=409,
             )
-        rows.append(payload)
+        if issue.kind == "invalid_json":
+            raise OperatorControlError(
+                (
+                    "operator control source contains invalid JSON at "
+                    f"{path}:{issue.line_number}: {issue.message}"
+                ),
+                status=409,
+            )
+        raise OperatorControlError(
+            f"operator control source row must be an object at {path}:{issue.line_number}",
+            status=409,
+        )
     return rows
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
@@ -166,39 +167,11 @@ def _candidate_payload(
 
 def _read_history_rows(root: Path) -> tuple[list[dict[str, Any]], tuple[HistorySourceError, ...]]:
     path = _history_path(root)
-    if not path.exists():
-        return [], ()
-    rows: list[dict[str, Any]] = []
-    source_errors: list[HistorySourceError] = []
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as exc:
-        return [], (HistorySourceError(path=path.resolve(), label="Run History", reason=str(exc)),)
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            source_errors.append(
-                HistorySourceError(
-                    path=path.resolve(),
-                    label="Run History",
-                    reason=f"invalid JSON at line {line_number} column {exc.colno}",
-                )
-            )
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-            continue
-        source_errors.append(
-            HistorySourceError(
-                path=path.resolve(),
-                label="Run History",
-                reason=f"line {line_number} expected JSON object",
-            )
-        )
-    return rows, tuple(source_errors)
+    rows, issues = collect_jsonl_objects(path, label="Run History")
+    return rows, tuple(
+        HistorySourceError(path=issue.path, label=issue.label, reason=issue.history_reason())
+        for issue in issues
+    )
 
 
 def _history_path(root: Path) -> Path:
