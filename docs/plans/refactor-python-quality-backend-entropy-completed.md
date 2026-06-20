@@ -6411,6 +6411,17 @@ logs before choosing the next slice.
   Reopen only if `check_isaac_lab_runtime_smoke_result.py` applies
   stdout-last-JSON tolerance to explicit sidecar artifacts again or accepts
   non-object sidecar evidence.
+- Agibot map-build checker trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `Agibot map-build trace` source errors before
+  public-trace privacy checks or duplicate-navigation checks can pass from
+  partial trace evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused Agibot and cleanup trace-source checker tests, ruff, format check,
+  diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `realworld_agibot_map_build_checker.py` regains local raw JSONL trace
+  parsing or accepts malformed/non-object trace rows.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

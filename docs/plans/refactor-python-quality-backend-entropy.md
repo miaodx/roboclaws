@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Agibot map-build trace-source slice:
+  checker trace JSONL reads now route through the shared JSONL source helper
+  instead of a local parser, so malformed or non-object trace rows fail with
+  row-labelled `Agibot map-build trace` source errors before public-trace
+  privacy checks or duplicate-navigation checks can derive confidence from
+  partial trace evidence.
 - Current shared-checkout note after the Isaac runtime smoke sidecar-source
   slice: the checker keeps stdout-last-JSON tolerance only for `--init-result`,
   while explicit `--state-path` and `--robot-views-result` artifacts now route

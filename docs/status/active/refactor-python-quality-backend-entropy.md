@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Isaac Lab runtime smoke checker sidecar reads now reserve
+2026-06-21: Agibot map-build checker trace JSONL reads now route through the
+shared JSONL source helper instead of a local parser. Malformed or non-object
+trace rows now fail with row-labelled `Agibot map-build trace` source errors
+before public-trace privacy checks or duplicate-navigation checks can derive
+confidence from partial trace evidence. Focused Agibot and cleanup trace-source
+checker tests, touched-file ruff, touched-file format checks, diff check,
+changed-code cleanup review, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Isaac Lab runtime smoke checker sidecar reads now reserve
 stdout-last-JSON tolerance for `--init-result` only. Explicit `--state-path`
 and `--robot-views-result` artifacts route through the shared JSON-object
 source helper, so prefixed log text, malformed JSON, or non-object sidecars
@@ -136,15 +145,19 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac runtime smoke sidecar-source slice. Avoid reopening closed
+committing the Agibot map-build trace-source slice. Avoid reopening closed
 visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
 grasp source validation, or Isaac runtime smoke sidecar-source validation
-without fresh false-green evidence.
+without fresh false-green evidence. Avoid reopening Agibot map-build
+trace-source validation unless fresh checker evidence shows partial-trace
+false confidence again.
 
 ## Touched Areas
 
+- `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
+- `tests/contract/checkers/test_agibot_map_build_checker_trace_sources.py`
 - `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
 - `scripts/molmo_cleanup/molmospaces_worker_protocol.py`
