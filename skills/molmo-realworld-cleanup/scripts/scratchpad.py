@@ -28,7 +28,7 @@ def empty_scratchpad() -> dict[str, Any]:
 def load_scratchpad(path: Path = DEFAULT_PATH) -> dict[str, Any]:
     if not path.exists():
         return empty_scratchpad()
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = _read_json_object(path, label="skill scratchpad")
     validate_scratchpad(data)
     return data
 
@@ -52,6 +52,35 @@ def validate_scratchpad(data: dict[str, Any]) -> None:
     ):
         if not isinstance(data.get(key), expected):
             raise ValueError(f"scratchpad field {key} must be {expected.__name__}")
+
+
+def parse_routine_result_json(text: str) -> dict[str, Any]:
+    return _parse_json_object_text(
+        text,
+        label="routine result JSON",
+        source="--result-json",
+    )
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        return _parse_json_object_text(
+            path.read_text(encoding="utf-8"),
+            label=label,
+            source=str(path),
+        )
+    except OSError as exc:
+        raise ValueError(f"{label} source cannot be read: {path}: {exc}") from exc
+
+
+def _parse_json_object_text(text: str, *, label: str, source: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} source must contain valid JSON object: {source}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} source must contain a JSON object: {source}")
+    return payload
 
 
 def record_intent(
@@ -112,27 +141,33 @@ def main(argv: list[str] | None = None) -> int:
     result.add_argument("--result-json", required=True)
 
     args = parser.parse_args(argv)
-    if args.command == "init":
-        save_scratchpad(empty_scratchpad(), args.path)
-        return 0
-    data = load_scratchpad(args.path)
-    if args.command == "validate":
-        validate_scratchpad(data)
-        print(json.dumps(data, indent=2, sort_keys=True))
-        return 0
-    if args.command == "intent":
+    try:
+        if args.command == "init":
+            save_scratchpad(empty_scratchpad(), args.path)
+            return 0
+        data = load_scratchpad(args.path)
+        if args.command == "validate":
+            validate_scratchpad(data)
+            print(json.dumps(data, indent=2, sort_keys=True))
+            return 0
+        if args.command == "intent":
+            save_scratchpad(
+                record_intent(
+                    data,
+                    object_id=args.object_id,
+                    fixture_id=args.fixture_id,
+                    note=args.note,
+                ),
+                args.path,
+            )
+            return 0
         save_scratchpad(
-            record_intent(
-                data,
-                object_id=args.object_id,
-                fixture_id=args.fixture_id,
-                note=args.note,
-            ),
+            record_routine_result(data, parse_routine_result_json(args.result_json)),
             args.path,
         )
         return 0
-    save_scratchpad(record_routine_result(data, json.loads(args.result_json)), args.path)
-    return 0
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

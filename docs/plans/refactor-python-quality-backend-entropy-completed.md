@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Molmo cleanup skill scratchpad CLI now routes present
+  `cleanup_scratch.json` files and inline `--result-json` payloads through one
+  script-local JSON-object source parser instead of raw `json.loads` calls.
+  Malformed or non-object scratchpad/result sources now fail with concise CLI
+  source diagnostics before local agent memory can be validated or updated.
+  Owner layer: Agent Skill. Behavior-change class: internal skill CLI
+  source-reader hardening with fail-aloud diagnostics for non-authoritative
+  agent memory inputs. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  Molmo cleanup scratchpad skill-script contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/scratchpad.py` regains raw
+  scratchpad/result JSON parsing or malformed scratchpad sources can again
+  produce tracebacks or update local memory as wrong-shaped payloads.
+
 - 2026-06-21: Scene-Gaussian alignment evidence summarizer now routes required
   readiness artifacts, explicit navigation artifacts, and explicit
   evidence-summary artifacts through one source-labelled JSON-object helper

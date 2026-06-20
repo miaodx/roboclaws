@@ -41,6 +41,11 @@ Latest quality snapshot from 2026-06-21:
   artifacts through one source-labelled JSON-object helper before writing
   alignment summaries or manifests, so corrupt proof inputs fail with concise
   CLI diagnostics instead of raw JSON tracebacks.
+- Current shared-checkout note after the Molmo cleanup skill scratchpad CLI
+  source slice: the skill-local scratchpad helper now routes present
+  `cleanup_scratch.json` files and inline `--result-json` payloads through one
+  script-local JSON-object source parser, so malformed or non-object agent
+  memory sources fail with concise CLI diagnostics before validation or update.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev

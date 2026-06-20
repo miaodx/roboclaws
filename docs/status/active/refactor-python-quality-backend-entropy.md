@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Scene-Gaussian alignment evidence summarizer now reads required
+2026-06-21: Molmo cleanup skill scratchpad CLI now routes present
+`cleanup_scratch.json` files and inline `--result-json` payloads through one
+script-local JSON-object source parser instead of raw `json.loads` calls.
+Malformed or non-object scratchpad/result sources now fail with concise CLI
+source diagnostics before local agent memory can be validated or updated.
+Focused proof passed: Molmo cleanup scratchpad skill-script contract tests,
+touched-file ruff, touched-file format check, diff check, and ratchet summary.
+Current ratchet: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Scene-Gaussian alignment evidence summarizer now reads required
 readiness artifacts, explicit navigation artifacts, and explicit evidence
 summary artifacts through one source-labelled JSON-object helper instead of
 raw `json.loads` calls. Malformed, missing, or non-object handoff artifacts now
