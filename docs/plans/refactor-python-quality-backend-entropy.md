@@ -88,7 +88,10 @@ Latest quality snapshot from 2026-06-20:
   or corrupt. B1 runtime bundle compilation now also treats explicit
   `--review-manifest` input as JSON-object source truth, sharing the same
   source guard as semantic projection artifacts so malformed or non-object
-  review manifests fail before validation or artifact writes. Explicit B1
+  review manifests fail before validation or artifact writes. B1 runtime
+  bundle compilation now routes review-manifest, alignment-artifact,
+  navigation-artifact, and semantic-projection JSON-object artifacts through
+  the shared source helper instead of a duplicate local reader. Explicit B1
   runtime alignment/navigation proof artifacts now use that same guard, so
   malformed or non-object robot-consumption proof evidence fails before proof
   validation or runtime bundle writes. B1 semantic projection CLI loading now
@@ -107,7 +110,8 @@ Latest quality snapshot from 2026-06-20:
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
   writes, and routes that JSON-object source through the shared source helper
-  instead of a duplicate local reader. B1 waypoint pose request building now treats required
+  instead of a duplicate local reader. B1 waypoint pose request building now
+  treats required
   `--alignment-artifact` input and explicit `--points` input as source truth,
   failing missing, malformed, or wrong-shaped sources before pose-request
   artifact writes, and routes the alignment JSON-object source through the

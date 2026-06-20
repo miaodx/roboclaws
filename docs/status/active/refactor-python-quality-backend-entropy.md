@@ -17,12 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Codex cleanup apple-to-apple summary loading now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for cleanup
-run-result and sidecar agent-view artifacts. Missing, malformed, or parseable
-non-object artifacts keep path-labelled source errors under the canonical
-helper wording, and the summary script no longer carries a duplicate local
-JSON-object reader. Focused Codex cleanup apple-to-apple summary and core
+2026-06-20: B1 runtime bundle compilation now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for review-manifest,
+alignment-artifact, navigation-artifact, and semantic-projection artifacts.
+Missing, malformed, or parseable non-object artifacts keep path-labelled source
+errors under the canonical helper wording, and the compiler no longer carries a
+duplicate local JSON-object reader. Focused B1 runtime bundle and core
 JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
 passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
@@ -47,6 +47,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
+- `scripts/maps/compile_b1_map12_runtime_bundle.py`
 - `scripts/maps/export_bundle.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
@@ -70,6 +71,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_alignment_fit_cli.py`
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
+- `tests/contract/maps/test_b1_map12_runtime_bundle.py`
 - `tests/contract/maps/test_nav2_map_bundle_contract.py`
 - `tests/unit/molmo_cleanup/test_apple2apple_test_grid.py`
 - `tests/contract/visual_grounding/test_visual_grounding_benchmark_checker_sources.py`

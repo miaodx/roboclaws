@@ -229,11 +229,11 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     [
         (
             "{not-json\n",
-            r"review manifest must contain valid JSON object: .*review\.json",
+            r"review manifest source must contain valid JSON object: .*review\.json",
         ),
         (
             "[]\n",
-            r"review manifest must contain a JSON object: .*review\.json",
+            r"review manifest source must contain a JSON object: .*review\.json",
         ),
     ],
 )
@@ -263,22 +263,23 @@ def test_runtime_compiler_rejects_bad_review_manifest_source(
         (
             "alignment",
             "{not-json\n",
-            r"alignment artifact must contain valid JSON object: .*alignment_residuals\.json",
+            r"alignment artifact source must contain valid JSON object: "
+            r".*alignment_residuals\.json",
         ),
         (
             "alignment",
             "[]\n",
-            r"alignment artifact must contain a JSON object: .*alignment_residuals\.json",
+            r"alignment artifact source must contain a JSON object: .*alignment_residuals\.json",
         ),
         (
             "navigation",
             "{not-json\n",
-            r"navigation artifact must contain valid JSON object: .*navigation_smoke\.json",
+            r"navigation artifact source must contain valid JSON object: .*navigation_smoke\.json",
         ),
         (
             "navigation",
             "[]\n",
-            r"navigation artifact must contain a JSON object: .*navigation_smoke\.json",
+            r"navigation artifact source must contain a JSON object: .*navigation_smoke\.json",
         ),
     ],
 )
@@ -413,7 +414,7 @@ def test_runtime_compiler_rejects_malformed_semantic_projection_artifact(
     with pytest.raises(
         ValueError,
         match=(
-            r"semantic projection artifact must contain valid JSON object: "
+            r"semantic projection artifact source must contain valid JSON object: "
             r".*semantic_projection\.json"
         ),
     ):
@@ -435,7 +436,7 @@ def test_runtime_compiler_rejects_non_object_semantic_projection_artifact(
     with pytest.raises(
         ValueError,
         match=(
-            r"semantic projection artifact must contain a JSON object: "
+            r"semantic projection artifact source must contain a JSON object: "
             r".*semantic_projection\.json"
         ),
     ):

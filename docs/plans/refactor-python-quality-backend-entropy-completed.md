@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 runtime bundle compilation now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for review-manifest,
+  alignment-artifact, navigation-artifact, and semantic-projection artifacts.
+  This removes the compiler's duplicate local JSON-object reader while
+  preserving fail-aloud path-labelled source errors for missing, malformed, or
+  parseable non-object artifacts under the canonical helper wording. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation / fail-aloud behavior preservation. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  compiler dropped to 1563 lines. Proof: focused B1 runtime bundle tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the compiler regains a local JSON-object source
+  reader or stops routing review/alignment/navigation/semantic-projection
+  artifacts through the shared source helper.
+
 - 2026-06-20: Codex cleanup apple-to-apple summary source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for cleanup
   run-result and sidecar agent-view artifacts. This removes the summary
