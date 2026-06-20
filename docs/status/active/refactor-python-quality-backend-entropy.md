@@ -17,22 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Agent SDK performance-matrix manifest loading now routes its
-explicit manifest JSON-object source through the shared source helper while
-preserving existing CLI failure behavior. Missing, malformed, or non-object
-manifests fail before row/schema validation, with the matrix command returning
-status 1 and stderr evidence. Focused Agent SDK performance matrix tests
-passed. Current shared-checkout ratchet summary still reports 1 unrelated Ruff
-complexity row in
+2026-06-20: Isaac scenario-builder generated-mess manifest loading now routes
+strict manifest JSON-object sources through the shared source helper while
+preserving schema-mismatch validation. Missing, malformed, or non-object
+manifests fail before Isaac worker init scenario assembly. Focused Isaac
+scenario-builder source tests passed. Current shared-checkout ratchet summary
+still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: MolmoSpaces Agibot contract rehearsal strict JSON-object
-artifact reads now route through the shared JSON-object source helper.
+Previous slice: Agent SDK performance-matrix manifest loading now routes its
+explicit manifest JSON-object source through the shared source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Agent SDK performance-matrix manifest source-reader slice.
+committing the Isaac scenario-builder generated-mess manifest source-reader
+slice.
 
 ## Touched Areas
 
@@ -52,6 +52,7 @@ committing the Agent SDK performance-matrix manifest source-reader slice.
 - `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py`
+- `scripts/isaac_lab_cleanup/isaac_scenario_builders.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`
@@ -124,6 +125,7 @@ committing the Agent SDK performance-matrix manifest source-reader slice.
 - `tests/contract/maps/test_b1_map12_asset_visual_comparison.py`
 - `tests/unit/molmo_cleanup/test_check_prepared_semantic_usd_summary.py`
 - `tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+- `tests/unit/molmo_cleanup/test_isaac_scenario_builder_sources.py`
 - `tests/contract/maps/test_b1_scene_gaussian_topdown.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
 - `tests/contract/maps/test_b1_map12_verified_alignment.py`

@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac scenario-builder generated-mess manifest loading now
+  routes strict manifest JSON-object sources through
+  `roboclaws.core.json_sources.read_json_object` while preserving
+  schema-mismatch validation. Missing, malformed, or non-object manifests now
+  fail before Isaac worker init scenario assembly. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: source-reader
+  consolidation for strict Isaac init manifest artifacts. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched Isaac scenario-builder script is 671 lines and its focused test
+  file is 64 lines. Proof: focused Isaac scenario-builder source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/isaac_lab_cleanup/isaac_scenario_builders.py` regains local
+  raw JSON parsing for generated-mess manifests or malformed/non-object
+  manifest sources can reach Isaac worker init scenario assembly.
+
 - 2026-06-20: Agent SDK performance-matrix manifest loading now routes
   explicit manifest JSON-object sources through
   `roboclaws.core.json_sources.read_json_object` while preserving existing CLI
