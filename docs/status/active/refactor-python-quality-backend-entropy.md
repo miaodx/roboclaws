@@ -17,12 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Detached live-run summary comparison manifests now route through
-the shared JSON-object source helper before comparison-list validation. Missing,
-malformed, or non-object manifests fail with canonical path-labelled source
-wording before report-performance comparison output. Focused summarize-live-run
-tests, touched-file Ruff/format, and `git diff --check` passed. Current
-shared-checkout ratchet summary is blocked by unrelated dirty
+2026-06-20: Detached live-run summary sidecar readers now route optional
+`live_status.json`, `live_timing.json`, `run_result.json`, and `trace.jsonl`
+artifacts through the shared JSON-object/JSONL source helpers while preserving
+missing sidecars as empty evidence. Malformed or non-object sources fail with
+canonical path-labelled source wording before summary rendering. Focused
+summarize-live-run tests, touched-file Ruff/format, and `git diff --check`
+passed. Current shared-checkout ratchet summary is blocked by unrelated dirty
 `scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
 79 oversized modules.
 

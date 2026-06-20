@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.reports.live_performance import (
     compare_report_performance_metrics,
@@ -636,38 +635,13 @@ def _tmux_state(session: str) -> str:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    events: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        source = f"{path}:{line_number}"
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"live-run summary {source}: invalid JSON: {exc.msg}") from exc
-        if not isinstance(item, dict):
-            raise ValueError(
-                f"live-run summary source {source}: non-object JSON: {type(item).__name__}"
-            )
-        events.append(item)
-    return events
+    return read_jsonl_objects(path, label="live-run summary trace")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"live-run summary source {path}: invalid JSON at line {exc.lineno} "
-            f"column {exc.colno}: {exc.msg}"
-        ) from exc
-    if not isinstance(data, dict):
-        raise ValueError(f"live-run summary source {path}: non-object JSON: {type(data).__name__}")
-    return data
+    return read_json_object(path, label="live-run summary")
 
 
 def _read_text(path: Path) -> str:
