@@ -18,6 +18,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.visual_grounding.build_visual_grounding_corpus_from_cleanup_run import (  # noqa: E402
     CORPUS_SCHEMA,
     DEFAULT_CATEGORY_FAMILY_MAP,
@@ -91,12 +92,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     source_paths = discover_run_results(args.roots)
-    source_corpora = [
-        corpus
-        for path in source_paths
-        if (corpus := build_source_corpus(path, skip_missing_images=args.skip_missing_images))
-        is not None
-    ]
+    try:
+        source_corpora = [
+            corpus
+            for path in source_paths
+            if (corpus := build_source_corpus(path, skip_missing_images=args.skip_missing_images))
+            is not None
+        ]
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     eligible_sources = [
         corpus for corpus in source_corpora if len(corpus["observations"]) >= args.min_raw_fpv
     ]
@@ -157,10 +161,7 @@ def discover_run_results(roots: list[Path]) -> list[Path]:
 
 
 def build_source_corpus(path: Path, *, skip_missing_images: bool) -> dict[str, Any] | None:
-    try:
-        run_result = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    run_result = read_json_object(path, label="cleanup run result")
     if not _has_private_labels(run_result):
         return None
     observations = build_source_observations(

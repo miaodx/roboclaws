@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -305,6 +306,55 @@ def test_representative_builder_samples_multiple_runs_and_dedupes_images(
         assert image_path.is_file()
         assert observation["capture_context"]["source_image_sha256"]
         assert observation["capture_context"]["source_run_result"] in {str(first), str(second)}
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("{not json", "cleanup run result source must contain valid JSON object"),
+        ("[]", "cleanup run result source must contain a JSON object"),
+    ],
+)
+def test_representative_builder_rejects_corrupt_run_result_sources(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    root = tmp_path / "runs"
+    valid = _write_raw_fpv_run(
+        root / "valid" / "seed-7",
+        scenario_id="valid",
+        colors=[(240, 10, 10)],
+        object_category="Plate",
+        object_id="plate_a_1_0_2",
+        room_id="room_2",
+    )
+    invalid = root / "invalid" / "seed-8" / "run_result.json"
+    invalid.parent.mkdir(parents=True)
+    invalid.write_text(source, encoding="utf-8")
+    output = tmp_path / "corpus" / "representative.json"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPRESENTATIVE_BUILDER),
+            str(root),
+            "--output",
+            str(output),
+            "--min-raw-fpv",
+            "1",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert message in result.stderr
+    assert str(invalid) in result.stderr
+    assert str(valid) not in result.stderr
+    assert not output.exists()
+    assert "Traceback" not in result.stderr
 
 
 def test_molmospaces_bbox_builder_normalizes_private_bbox_without_public_object_id() -> None:

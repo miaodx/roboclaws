@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the MolmoSpaces worker-init
+- Current shared-checkout note after the representative visual-grounding corpus
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -372,6 +372,10 @@ Latest quality snapshot from 2026-06-20:
   `run_result.json` inputs as object-typed source truth before writing corpus
   outputs and routes that JSON-object source through the shared helper instead
   of a duplicate local reader.
+  Representative visual-grounding corpus building now treats discovered
+  cleanup `run_result.json` inputs as object-typed source truth before
+  sampling or writing corpus outputs, and routes those JSON-object sources
+  through the shared helper instead of a duplicate local reader.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`, and

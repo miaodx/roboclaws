@@ -17,23 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces worker initialization generated-mess manifest and
-adjacent source scene JSON reads now route through the shared JSON-object
-helper while preserving existing schema and source-room diagnostics. Malformed
-or non-object scene JSON still reports the established worker-init error
-wording, and valid scene-room label behavior is unchanged. Focused MolmoSpaces
-worker-state tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed. Current shared-checkout ratchet summary still reports 1 unrelated Ruff
-complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-The touched Agibot contract test remains oversized at 1112 lines in a prior
-slice; that remains recorded ratchet pressure, not part of this source-reader
-slice.
+2026-06-20: The representative visual-grounding corpus builder now routes
+discovered cleanup `run_result.json` sources through the shared JSON-object
+helper. Malformed or non-object representative corpus inputs fail with
+path-labelled source errors and no traceback instead of being skipped or
+surfacing raw type failures; valid and ineligible-run filtering behavior stays
+unchanged. Focused visual-grounding corpus builder tests and touched-file
+Ruff/format passed, as did `git diff --check` and ratchet. Current
+shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row
+in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces worker-init source-reader slice.
+committing the representative visual-grounding corpus source-reader slice.
 
 ## Touched Areas
 

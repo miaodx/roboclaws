@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Representative visual-grounding corpus building now routes
+  discovered cleanup `run_result.json` sources through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or non-object
+  source runs now fail with path-labelled source errors and no traceback
+  instead of being skipped or surfacing raw type failures, while valid
+  ineligible-run filtering remains unchanged. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: source-reader consolidation with
+  fail-aloud corpus input diagnostics. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused visual-grounding corpus builder contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/visual_grounding/build_representative_visual_grounding_corpus.py`
+  regains a local raw JSON-object reader for discovered `run_result.json`
+  sources or corrupt representative inputs can disappear from corpus
+  generation.
+
 - 2026-06-20: MolmoSpaces worker initialization now routes generated-mess
   manifest and adjacent source scene JSON-object reads through
   `roboclaws.core.json_sources.read_json_object`. Generated-mess schema
