@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding cleanup-run corpus building now treats the
+  declared `run_result.json` as object-typed source truth. Malformed or
+  parseable non-object cleanup run-result sources now return concise builder
+  errors before corpus artifact writes, instead of surfacing raw parser/type
+  tracebacks. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-grounding corpus-builder source
+  truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused visual-grounding corpus-builder contract
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only with fresh corpus-builder evidence that malformed or non-object
+  declared cleanup `run_result.json` inputs again produce tracebacks or write
+  corpus outputs after source-load failure.
+
 - 2026-06-20: Visual-grounding benchmark runs now treat declared `--corpus`
   and `--matrix` inputs as source truth. Missing, malformed, or parseable
   non-object corpus/matrix JSON and wrong-shaped matrix row sources now return

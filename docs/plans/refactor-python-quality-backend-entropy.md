@@ -137,6 +137,9 @@ Latest quality snapshot from 2026-06-20:
   validation.
   Visual-grounding benchmark runs now treat declared corpus and matrix inputs
   as source truth before writing benchmark outputs.
+  Visual-grounding cleanup-run corpus building now treats declared
+  `run_result.json` inputs as object-typed source truth before writing corpus
+  outputs.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.

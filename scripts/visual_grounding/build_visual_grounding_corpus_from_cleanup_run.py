@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_result_path = _resolve_run_result(args.run_result)
     run_dir = run_result_path.parent
-    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result = _read_json_object(run_result_path, label="cleanup run result")
     output_path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -175,6 +175,16 @@ def _resolve_run_result(path: Path) -> Path:
     if not path.is_file():
         raise SystemExit(f"missing run_result.json: {path}")
     return path
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def _raw_fpv_observations(run_result: dict[str, Any]) -> list[dict[str, Any]]:
