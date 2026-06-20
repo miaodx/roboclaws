@@ -902,9 +902,9 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "manual draft missing"),
-        ("{not-json\n", "manual draft must contain valid JSON object"),
-        ("[]\n", "manual draft must contain a JSON object"),
+        (None, "manual draft source is missing"),
+        ("{not-json\n", "manual draft source must contain valid JSON object"),
+        ("[]\n", "manual draft source must contain a JSON object"),
     ],
 )
 def test_manual_draft_promotion_cli_rejects_bad_source_json(
@@ -1656,9 +1656,9 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "review packet missing"),
-        ("{not-json\n", "review packet must contain valid JSON object"),
-        ("[]\n", "review packet must contain a JSON object"),
+        (None, "review packet source is missing"),
+        ("{not-json\n", "review packet source must contain valid JSON object"),
+        ("[]\n", "review packet source must contain a JSON object"),
     ],
 )
 def test_strict_semantic_review_promotion_cli_rejects_bad_packet_source_json(
@@ -1753,9 +1753,9 @@ def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "review packet missing"),
-        ("{not-json\n", "review packet must contain valid JSON object"),
-        ("[]\n", "review packet must contain a JSON object"),
+        (None, "review packet source is missing"),
+        ("{not-json\n", "review packet source must contain valid JSON object"),
+        ("[]\n", "review packet source must contain a JSON object"),
     ],
 )
 def test_semantic_review_packet_fit_check_rejects_bad_packet_source_json(
@@ -1908,7 +1908,7 @@ def test_review_packet_rejects_label_inventory_scene_context(tmp_path: Path) -> 
 
 
 def test_review_packet_requires_scene_topdown_render_file(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="required scene top-down render missing"):
+    with pytest.raises(FileNotFoundError, match="scene top-down render source is missing"):
         build_review_packet(
             correspondence_manifest(anchors=[]),
             map_bundle=VENDOR_MAP12_BUNDLE,

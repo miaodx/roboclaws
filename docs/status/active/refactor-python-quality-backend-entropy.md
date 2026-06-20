@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Nav2 map-bundle export now routes explicit `--agent-view` and
-`--run-result` JSON-object sources through the shared JSON-source helper
-before extracting exporter payloads. Malformed, missing, or parseable
-non-object source files now use the canonical path-labelled wording while the
-CLI still exits without a traceback. Focused Nav2 map-bundle and core
-JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed.
+2026-06-20: B1 manual-draft verification promotion and semantic review-packet
+promotion now route explicit draft/review-packet sources through the shared
+JSON-source helper. Their CLI errors keep the existing no-traceback return path
+while using canonical path-labelled source wording, and a stale scene top-down
+missing-source assertion was aligned with the same helper wording. Focused B1
+verified-alignment and core JSON-source tests, touched-file Ruff/format, `git
+diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -50,6 +50,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `scripts/maps/compile_b1_map12_runtime_bundle.py`
 - `scripts/maps/export_bundle.py`
+- `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
 - `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`

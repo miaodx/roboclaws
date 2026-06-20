@@ -133,7 +133,10 @@ Latest quality snapshot from 2026-06-20:
   apply the same source-truth rule to explicit `--review-packet` inputs before
   promotion, preview, residual, or committed-manifest writes. B1 manual-draft
   verification promotion now applies the same source-truth rule to explicit
-  `--draft` inputs before verification-only manifest writes. B1 scene topdown
+  `--draft` inputs before verification-only manifest writes. The B1
+  manual-draft verification and semantic review-packet promotion readers now
+  route those JSON-object sources through the shared source helper instead of
+  duplicate local readers. B1 scene topdown
   diagnostics now apply the same source-truth rule to explicit
   `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit

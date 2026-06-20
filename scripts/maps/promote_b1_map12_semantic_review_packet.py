@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.maps.fit_b1_map12_scene_alignment import (  # noqa: E402
     ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_CORRESPONDENCES_SCHEMA,
@@ -201,17 +202,10 @@ def promoted_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
 
 
 def read_review_packet(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise PromotionError(f"review packet missing: {path}")
     try:
-        packet = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise PromotionError(
-            f"review packet must contain valid JSON object: {path}: {exc.msg}"
-        ) from exc
-    if not isinstance(packet, dict):
-        raise PromotionError(f"review packet must contain a JSON object: {path}")
-    return packet
+        return read_json_object(path, label="review packet")
+    except (FileNotFoundError, ValueError) as exc:
+        raise PromotionError(str(exc)) from exc
 
 
 if __name__ == "__main__":

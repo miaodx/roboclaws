@@ -726,6 +726,24 @@ logs before choosing the next slice.
   reader or stops routing declared agent-view/run-result file sources through
   the shared source helper.
 
+- 2026-06-20: B1 manual-draft verification promotion and semantic
+  review-packet promotion now route their explicit draft/review-packet
+  JSON-object sources through `roboclaws.core.json_sources.read_json_object`
+  instead of local duplicate readers. Existing CLI return codes and
+  no-traceback behavior stay intact through the scripts' local exception
+  wrappers, while missing, malformed, and parseable non-object source errors
+  use the canonical path-labelled wording. The verified-alignment contract's
+  scene top-down missing-source assertion was also aligned with the shared
+  helper wording already used by that owner. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; the verified-alignment contract
+  stayed at its 2000-line ceiling. Proof: focused B1 verified-alignment tests,
+  core JSON-source tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only if the promotion CLIs regain local JSON-object
+  readers or stop routing explicit draft/review-packet file sources through
+  the shared source helper.
+
 - 2026-06-20: Semantic map spatial-contract normalization now treats bundle
   `semantics.json` as JSON-object source truth before in-place writes. Missing,
   malformed, or parseable non-object semantics sources now return concise CLI
