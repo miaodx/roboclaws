@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Scene-Gaussian alignment evidence summarizer now routes required
+  readiness artifacts, explicit navigation artifacts, and explicit
+  evidence-summary artifacts through one source-labelled JSON-object helper
+  before writing alignment summaries or manifests. Malformed, missing, or
+  non-object proof artifacts now fail with concise CLI source diagnostics
+  instead of raw JSON tracebacks. Owner layer: Agent Skill plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal skill CLI
+  source-truth hardening with fail-aloud diagnostics for handoff artifacts.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused scene-Gaussian skill
+  contract tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if
+  `skills/scene-gaussian-map-alignment/scripts/summarize_alignment_evidence.py`
+  regains raw JSON artifact loading or malformed readiness/navigation/summary
+  inputs can again write alignment evidence or produce Python tracebacks.
+
 - 2026-06-21: Agibot SDK cleanup backend explicit JSON inputs now fail through
   source-labelled CLI diagnostics instead of raw `json.loads` tracebacks in
   the vendor runner. `--context-json`, `--agent-view-json`, live-navigation

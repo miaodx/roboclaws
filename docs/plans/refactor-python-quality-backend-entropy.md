@@ -35,6 +35,12 @@ Latest quality snapshot from 2026-06-21:
   `--agent-view-json`, live-navigation context checks, and attached Agibot map
   artifact `source.json` all route through one runner-local JSON-object source
   helper that preserves the standalone `vendors/agibot_sdk` subprocess context.
+- Current shared-checkout note after the scene-Gaussian alignment evidence
+  source slice: the skill handoff summarizer now routes required readiness
+  artifacts, explicit navigation artifacts, and explicit evidence-summary
+  artifacts through one source-labelled JSON-object helper before writing
+  alignment summaries or manifests, so corrupt proof inputs fail with concise
+  CLI diagnostics instead of raw JSON tracebacks.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev

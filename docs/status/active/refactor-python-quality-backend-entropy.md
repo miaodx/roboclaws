@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Agibot SDK cleanup backend explicit JSON inputs now fail through
+2026-06-21: Scene-Gaussian alignment evidence summarizer now reads required
+readiness artifacts, explicit navigation artifacts, and explicit evidence
+summary artifacts through one source-labelled JSON-object helper instead of
+raw `json.loads` calls. Malformed, missing, or non-object handoff artifacts now
+fail with concise CLI source diagnostics before evidence summaries or
+alignment manifests can be written from corrupt proof inputs. Focused proof
+passed: scene-Gaussian skill contract tests, touched-file ruff, touched-file
+format check, diff check, and ratchet summary. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Agibot SDK cleanup backend explicit JSON inputs now fail through
 source-labelled CLI diagnostics instead of raw `json.loads` tracebacks in the
 vendor runner. `--context-json`, `--agent-view-json`, live-navigation
 `--context-json`, and attached map artifact `source.json` all route through one
