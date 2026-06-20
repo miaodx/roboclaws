@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval suite/sample file loading now uses
+  `roboclaws.core.json_sources.read_json_object` for `load_eval_suite()` and
+  `load_eval_sample()` sources before schema validation. Missing, malformed,
+  or parseable non-object eval suite/sample files now use canonical
+  path-labelled source wording instead of raw file/parser errors or
+  wrong-shaped payloads reaching schema constructors. Owner layer: Eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: current shared-checkout ratchet summary reports
+  1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules;
+  this slice did not add new complexity in touched files. Proof: focused eval
+  model tests, touched-file ruff/format checks, changed-code review, and
+  `git diff --check`; global ratchet is blocked by unrelated dirty runtime
+  bundle work. Reopen only if eval suite/sample loading regains a local raw
+  JSON file reader or corrupt suite/sample files can again reach schema
+  validation as parser tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Detached live-run summary sidecar readers now use
   `roboclaws.core.json_sources.read_json_object` and `read_jsonl_objects` for
   optional `live_status.json`, `live_timing.json`, `run_result.json`, and

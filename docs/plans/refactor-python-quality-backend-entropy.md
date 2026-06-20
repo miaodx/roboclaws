@@ -22,8 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 79.
-- Current shared-checkout note after the summarize-live-run sidecar-reader
-  slice:
+- Current shared-checkout note after the eval suite/sample source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in unrelated dirty
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules.
@@ -148,6 +147,10 @@ Latest quality snapshot from 2026-06-20:
   `live_status.json`, `live_timing.json`, `run_result.json`, and `trace.jsonl`
   artifacts through the shared JSON-object/JSONL helpers while preserving
   missing sidecars as empty evidence.
+  Eval suite/sample file loading now routes explicit suite/sample JSON sources
+  through the shared JSON-object helper, so missing, malformed, or non-object
+  eval suite/sample files fail with path-labelled source errors before schema
+  validation.
   Molmo live CI report status loading now routes published `status.json`
   artifacts through the shared JSON-object helper, so missing, malformed, or
   non-object status sources fail with path-labelled source errors before CI

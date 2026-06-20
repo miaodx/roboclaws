@@ -17,15 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Detached live-run summary sidecar readers now route optional
-`live_status.json`, `live_timing.json`, `run_result.json`, and `trace.jsonl`
-artifacts through the shared JSON-object/JSONL source helpers while preserving
-missing sidecars as empty evidence. Malformed or non-object sources fail with
-canonical path-labelled source wording before summary rendering. Focused
-summarize-live-run tests, touched-file Ruff/format, and `git diff --check`
-passed. Current shared-checkout ratchet summary is blocked by unrelated dirty
-`scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
-79 oversized modules.
+2026-06-20: Eval suite/sample file loading now routes
+`load_eval_suite()` and `load_eval_sample()` through the shared JSON-object
+source helper. Missing, malformed, or non-object suite/sample files fail with
+canonical path-labelled source wording before eval schema validation. Focused
+eval model tests, touched-file Ruff/format, changed-code review, and
+`git diff --check` passed. Current shared-checkout ratchet summary is blocked
+by unrelated dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` work:
+1 Ruff complexity row, 79 oversized modules.
 
 ## Next Action
 
@@ -88,6 +87,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/household/grasp_generation_setup.py`
 - `roboclaws/household/grasp_pose_policy_cache.py`
 - `roboclaws/launch/goals.py`
+- `roboclaws/evals/models.py`
 - `roboclaws/maps/room_semantics.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
@@ -133,6 +133,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
 - `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
+- `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
