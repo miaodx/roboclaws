@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Generated-mess placement seeding now reuses the canonical
+2026-06-21: MolmoSpaces grasp initial-contact diagnostics now validate
+explicit candidate grasp JSON in the parent before launching the child probe.
+Present malformed or non-object candidate grasp files fail with path-labelled
+`candidate grasp JSON` source errors, while missing candidate files keep the
+existing blocked-result path and valid candidates still reach the probe.
+Focused initial-contact diagnostics tests, touched-file ruff, touched-file
+format checks, diff check, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Generated-mess placement seeding now reuses the canonical
 generated-mess manifest relation/index validators in both MolmoSpaces and
 Isaac scenario-state helpers. Persisted or hand-built worker state with bad
 manifest `relation` or `placement_index` values now fails before placement
@@ -117,11 +126,11 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the generated-mess placement-field source slice. Avoid reopening
+committing the initial-contact candidate-grasp source slice. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
-handling, Docker inventory mount source handling, camera-control vectors, or
-generated-mess relation/index placement fields without fresh false-green
-evidence.
+handling, Docker inventory mount source handling, camera-control vectors,
+generated-mess relation/index placement fields, or initial-contact candidate
+grasp source validation without fresh false-green evidence.
 
 ## Touched Areas
 

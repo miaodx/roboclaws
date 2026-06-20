@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MolmoSpaces grasp initial-contact
+  candidate-source slice: initial-contact diagnostics now validate explicit
+  candidate grasp JSON in the parent before launching the child probe, so
+  malformed or non-object candidate files fail with path-labelled source
+  errors instead of becoming generic child-probe blocked payloads. Missing
+  candidate files keep the existing blocked-result path.
 - Current shared-checkout note after the generated-mess placement-field source
   slice: MolmoSpaces and Isaac scenario-state placement seeding now reuse the
   canonical generated-mess manifest validators for `relation` and

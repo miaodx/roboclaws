@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: MolmoSpaces grasp initial-contact diagnostics now validate
+  explicit candidate grasp JSON in the parent process before launching the
+  child probe. Present malformed or non-object candidate files fail with
+  path-labelled `candidate grasp JSON` source errors, valid candidate files
+  still launch the probe, and missing candidate files keep the existing
+  blocked-result path. Owner layer: Backend Runtime / Environment Primitive
+  plus artifact diagnostics. Behavior-change class: fail-aloud explicit
+  artifact source validation. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused initial-contact diagnostics tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if corrupt initial-contact
+  candidate grasp JSON can again reach the child probe and be reported as a
+  generic probe blocker instead of a candidate source error.
+
 - 2026-06-21: Generated-mess placement seeding now treats manifest
   `relation` and `placement_index` as canonical source truth in both
   MolmoSpaces and Isaac scenario-state helpers. The generated-mess contract
