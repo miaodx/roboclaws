@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Report-performance JSON artifact loading now routes object reads
-through the shared JSON-object source helper while preserving existing
-`ReportPerformanceSourceError` wording for missing, malformed, and non-object
-sources; JSONL parsing is unchanged. Focused report-performance malformed
-JSON/JSONL source tests, touched-file Ruff/format, changed-code review, and
-`git diff --check` passed. Current shared-checkout ratchet summary is blocked
-by unrelated dirty
+2026-06-20: Live-agent artifact JSON loading now routes object reads through
+the shared JSON-object source helper while preserving existing live-runtime
+artifact error wording for malformed and non-object `live_status.json` /
+`run_result.json` sources. Focused live-runtime source tests, existing
+live-agent artifact normalization tests, touched-file Ruff/format,
+changed-code review, and `git diff --check` passed. Current shared-checkout
+ratchet summary is blocked by unrelated dirty
 `scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
 80 oversized modules; the added oversized entry is unrelated no-touch dirty
 `tests/contract/maps/test_b1_map12_label_tool.py`.
@@ -156,6 +156,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/evals/runner.py`
 - `tests/unit/evals/test_eval_runner_sources.py`
 - `roboclaws/reports/live_performance.py`
+- `roboclaws/agents/live_runtime.py`
+- `tests/unit/agents/test_live_runtime_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

@@ -156,6 +156,9 @@ Latest quality snapshot from 2026-06-20:
   Report-performance JSON artifact loading now routes object reads through the
   shared JSON-object helper while preserving existing
   `ReportPerformanceSourceError` wording for malformed or non-object sources.
+  Live-agent artifact JSON loading now routes object reads through the shared
+  JSON-object helper while preserving existing live-runtime artifact error
+  wording for malformed or non-object status/result sources.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

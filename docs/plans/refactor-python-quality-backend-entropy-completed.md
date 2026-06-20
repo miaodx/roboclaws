@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Live-agent artifact JSON loading now uses
+  `roboclaws.core.json_sources.read_json_object` for object parsing while
+  preserving existing live-runtime artifact error wording for missing,
+  malformed, unreadable, and non-object `live_status.json` / `run_result.json`
+  sources. Missing artifact behavior remains optional and empty. Owner layer:
+  Agent Engines and Provider Profiles / live runtime artifact normalization.
+  Behavior-change class: source-reader consolidation with stable normalized
+  live-runtime diagnostics. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the added oversized entry is unrelated no-touch dirty
+  `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did not
+  add new complexity in touched files. Proof: focused live-runtime source
+  helper tests, existing live-agent artifact normalization tests, touched-file
+  ruff/format checks, changed-code review, `git diff --check`, and ratchet.
+  Reopen only if live-agent artifact loading regains a local raw JSON-object
+  reader or malformed/non-object status/result artifacts stop surfacing stable
+  live-runtime source error wording.
+
 - 2026-06-20: Report-performance JSON artifact loading now uses
   `roboclaws.core.json_sources.read_json_object` for object parsing while
   preserving existing `ReportPerformanceSourceError` wording for missing,
