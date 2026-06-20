@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: MolmoSpaces rigid grasp-cache generation preflight now blocks
+2026-06-21: OpenAI Agents model-input compaction threshold parsing now fails
+booleans and non-positive values aloud across the env-backed live runtime path,
+direct `model_input_compaction.min_chars` metadata, and the perf-profile
+`model_input_compaction_min_chars` producer path instead of clamping invalid
+values to plausible `1`/`1200` thresholds. Focused OpenAI Agents runtime/config
+tests, touched-file ruff, touched-file format checks, diff check, changed-code
+cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: MolmoSpaces rigid grasp-cache generation preflight now blocks
 malformed, non-object, or path-less successful runtime-probe stdout instead of
 reporting `python_ready=True` with blank MolmoSpaces root/assets evidence.
 Focused planner task feasibility tests, touched-file ruff, touched-file format
@@ -25,7 +34,7 @@ checks, diff check, changed-code cleanup review, and the ratchet summary
 passed. Current ratchet: 0 Ruff complexity violations, 80 oversized modules in
 the shared checkout.
 
-Previous slice: Scene-camera comparison MolmoSpaces source provenance now reports
+Previous slice before that: Scene-camera comparison MolmoSpaces source provenance now reports
 installed-package `direct_url.json` metadata problems as `metadata_unavailable`
 or `metadata_unreadable` instead of false `not_installed` provenance. Focused
 scene-camera source tests, a nearby manifest serialization contract test,
@@ -44,8 +53,9 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces runtime-probe preflight slice. Avoid reopening
-closed JSON-source helper splits without fresh source-truth evidence.
+committing the OpenAI Agents model-input compaction threshold slice. Avoid
+reopening closed OpenAI Agents performance-profile/default owners without fresh
+route/source-truth evidence.
 
 ## Touched Areas
 
@@ -222,8 +232,11 @@ closed JSON-source helper splits without fresh source-truth evidence.
 - `tests/unit/evals/test_eval_runner_sources.py`
 - `roboclaws/reports/live_performance.py`
 - `roboclaws/agents/live_runtime.py`
+- `roboclaws/agents/drivers/openai_agents_model_input.py`
+- `scripts/molmo_cleanup/openai_agents_perf_profile.py`
 - `tests/unit/agents/test_live_runtime.py`
 - `tests/unit/agents/test_live_runtime_sources.py`
+- `tests/unit/agents/test_openai_agents_model_input_config.py`
 - `roboclaws/agents/provider_timing_proxy.py`
 - `tests/unit/agents/test_provider_timing_proxy.py`
 - `roboclaws/household/visual_backend_slots.py`

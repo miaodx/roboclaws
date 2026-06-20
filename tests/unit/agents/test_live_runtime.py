@@ -1351,7 +1351,7 @@ def test_model_input_compaction_rejects_invalid_min_chars_env(tmp_path: Path, mo
     payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
     assert payload["reason"] == "provider_config_failure"
     assert "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS" in payload["detail"]
-    assert "must be a non-negative integer" in payload["detail"]
+    assert "must be a positive integer" in payload["detail"]
 
 
 @pytest.mark.parametrize(

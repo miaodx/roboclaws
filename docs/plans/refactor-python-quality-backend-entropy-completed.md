@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents model-input compaction threshold parsing now
+  rejects boolean and non-positive values before live runtime or performance
+  profile metadata can report plausible compaction thresholds. The live
+  runtime path rejects bad `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS`
+  env values and direct `model_input_compaction.min_chars` metadata, and the
+  perf-profile producer rejects bad `model_input_compaction_min_chars` inputs
+  instead of normalizing `0`, negatives, or booleans to `1`/`1200`. Owner
+  layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud env/direct config validation for model-facing evidence policy.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout; the extra regression cases live in a
+  focused config test file instead of growing the largest live-runtime test
+  module. Proof: focused OpenAI Agents runtime/config tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if OpenAI Agents model-input compaction or perf-profile
+  threshold parsing again accepts booleans or non-positive values as valid
+  thresholds.
+
 - 2026-06-21: MolmoSpaces rigid grasp-cache generation preflight now treats
   successful runtime probes with malformed, non-object, or path-less stdout as
   blocked readiness evidence. The runtime probe parses stdout through the

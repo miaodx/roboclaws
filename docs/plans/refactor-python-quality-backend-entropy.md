@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents model-input compaction
+  threshold slice: `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS`,
+  direct `model_input_compaction.min_chars`, and perf-profile
+  `model_input_compaction_min_chars` now reject booleans and non-positive
+  values instead of clamping them to plausible `1`/`1200` thresholds in
+  live-runtime or profile metadata.
 - Current shared-checkout note after the MolmoSpaces runtime probe preflight
   slice: grasp-cache generation readiness now parses successful runtime-probe
   stdout through the shared JSON-object text helper and blocks malformed,
