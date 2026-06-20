@@ -215,6 +215,10 @@ Latest quality snapshot from 2026-06-20:
   rejecting malformed, non-object, wrong-shaped, unsupported-schema, or missing
   declared request sources before bundle writes instead of falling through to
   raw parser/type failures, assertions, or generic missing-request errors.
+  The cleanup checker now treats declared planner-proof request artifacts as
+  JSON-object source truth through `roboclaws.core.json_sources`, failing
+  malformed, non-object, or missing request manifests with path-labelled source
+  errors instead of raw parser tracebacks or generic assertions.
   Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing

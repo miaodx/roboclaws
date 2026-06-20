@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner-proof bundle generation now treats cleanup `run_result.json`,
-inline `planner_proof_requests`, `artifacts`, and declared
-`planner_proof_requests.json` artifacts as explicit source truth. Malformed or
-wrong-shaped source packets and missing declared request artifacts fail before
-bundle generation instead of flowing into raw parser/type failures, assertions,
-or generic missing-request errors. Focused planner-proof bundle tests,
-touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
-signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: The cleanup checker now treats declared planner-proof request
+artifacts as source truth through `roboclaws.core.json_sources.read_json_object`.
+Malformed, non-object, or missing declared request manifests fail with
+path-labelled source errors instead of raw parser tracebacks or generic
+assertions. Focused cleanup-checker source tests, shared JSON-source helper
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -52,6 +51,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
+- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `roboclaws/core/json_sources.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -71,6 +72,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+- `tests/contract/checkers/test_cleanup_checker_planner_proof_request_sources.py`
+- `tests/unit/core/test_json_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

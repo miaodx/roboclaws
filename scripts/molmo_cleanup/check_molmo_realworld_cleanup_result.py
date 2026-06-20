@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -1880,8 +1881,7 @@ def _assert_planner_proof_requests(data: dict[str, Any], base: Path, report_text
     manifest = data.get("planner_proof_requests")
     if manifest is None and artifacts.get("planner_proof_requests"):
         path = _resolve_path(base, str(artifacts["planner_proof_requests"]))
-        assert path.is_file(), path
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest = read_json_object(path, label="planner proof requests")
     if manifest is None:
         return
     assert "Planner Proof Requests" in report_text, report_text[:500]

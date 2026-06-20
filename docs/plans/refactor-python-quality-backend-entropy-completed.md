@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: The cleanup checker now treats declared planner-proof request
+  artifacts as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object declared request manifests now fail with concise
+  path-labelled source errors before report/checker validation, instead of
+  surfacing raw parser tracebacks or generic assertion failures. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  cleanup-checker planner-proof request source truth. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 79 oversized modules; the already-over-limit
+  checker did not move up the oversized list because the JSON-object source
+  guard lives in a shared core helper. Proof: focused cleanup-checker source
+  tests, shared JSON-source helper tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh cleanup-checker
+  evidence that corrupt or missing declared planner-proof request manifests
+  again produce raw JSON/type/assertion failures or pass into report validation
+  as plausible request evidence.
+
 - 2026-06-20: Planner-proof bundle generation now treats cleanup
   `run_result.json`, inline `planner_proof_requests`, the cleanup `artifacts`
   envelope, and declared `planner_proof_requests.json` artifacts as explicit
