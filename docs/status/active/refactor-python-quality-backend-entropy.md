@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Molmo cleanup target-query recovery helper now routes explicit
+2026-06-21: Visual result showcase rendering now routes required
+`run_result.json` and present `trace.jsonl` evidence through the shared
+JSON-object/JSONL source owners instead of raw local JSON parsing. Malformed or
+non-object run artifacts now fail with concise showcase source diagnostics
+before GIF/contact-sheet rendering can derive visible proof from corrupt result
+or trace evidence. Focused proof passed: visual result showcase skill contract
+tests, touched-file ruff, touched-file format check, diff check, and ratchet
+summary. Current ratchet: 0 Ruff complexity violations, 80 oversized modules
+in the shared checkout.
+
+Previous slice: Molmo cleanup target-query recovery helper now routes explicit
 `runtime_metric_map.json` artifact reads through the shared JSON-object source
 owner instead of raw `json.loads(path.read_text(...))`. Malformed, missing, or
 non-object Runtime Metric Map sources now fail with concise CLI source

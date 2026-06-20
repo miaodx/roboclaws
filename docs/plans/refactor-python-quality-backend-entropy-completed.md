@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Visual result showcase rendering now routes required
+  `run_result.json` and present `trace.jsonl` evidence through the shared
+  JSON-object/JSONL source owners instead of raw local JSON parsing. Malformed
+  or non-object run artifacts now fail with concise showcase source
+  diagnostics before GIF/contact-sheet rendering can derive visible proof from
+  corrupt result or trace evidence. Owner layer: Agent Skill plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal skill report
+  source-reader hardening with fail-aloud diagnostics for completed-run
+  artifacts. Metric: ratchet remains at 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused visual
+  result showcase skill contract tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if
+  `skills/visual-result-showcase/scripts/render_household_cleanup_showcase.py`
+  regains raw run-result or trace JSON parsing or malformed showcase sources
+  can again produce tracebacks or valid-looking visual evidence.
+
 - 2026-06-21: Molmo cleanup target-query recovery helper now routes explicit
   `runtime_metric_map.json` artifact reads through the shared JSON-object
   source owner instead of raw `json.loads(path.read_text(...))`. Malformed,

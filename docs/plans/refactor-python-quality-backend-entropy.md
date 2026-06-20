@@ -52,6 +52,12 @@ Latest quality snapshot from 2026-06-21:
   source owner, so malformed, missing, or non-object public map artifacts fail
   with concise CLI source diagnostics before target recovery can produce
   valid-looking matches from corrupt map evidence.
+- Current shared-checkout note after the visual-result-showcase source slice:
+  showcase rendering now routes required `run_result.json` and present
+  `trace.jsonl` evidence through the shared JSON-object/JSONL source owners, so
+  malformed or non-object completed-run artifacts fail with concise showcase
+  diagnostics before GIF/contact-sheet output can derive visible proof from
+  corrupt result or trace evidence.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev

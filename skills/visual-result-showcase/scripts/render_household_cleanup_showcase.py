@@ -12,6 +12,8 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from roboclaws.core.json_sources import read_json_object, read_jsonl_object_rows
+
 SCHEMA = "roboclaws_visual_showcase_v1"
 DEFAULT_SIZE = (1280, 720)
 DEFAULT_DURATION_MS = 900
@@ -77,17 +79,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     out_dir = args.out_dir or args.run_dir / "showcase"
-    manifest = render_showcase(
-        run_dir=args.run_dir,
-        out_dir=out_dir,
-        basename=args.basename,
-        size=(args.width, args.height),
-        duration_ms=args.duration_ms,
-        hold_ms=args.hold_ms,
-        prefer_bbox=not args.no_bbox,
-        write_gif=not args.skip_gif,
-        max_chain_frames=args.max_chain_frames,
-    )
+    try:
+        manifest = render_showcase(
+            run_dir=args.run_dir,
+            out_dir=out_dir,
+            basename=args.basename,
+            size=(args.width, args.height),
+            duration_ms=args.duration_ms,
+            hold_ms=args.hold_ms,
+            prefer_bbox=not args.no_bbox,
+            write_gif=not args.skip_gif,
+            max_chain_frames=args.max_chain_frames,
+        )
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     print(json.dumps(manifest, indent=2))
     return 0
 
@@ -320,7 +325,7 @@ def render_frame(
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"missing required artifact: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label=path.name)
 
 
 def _load_steps(run_result: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -358,10 +363,7 @@ def _observe_progress_by_label(trace_path: Path, total_waypoints: int) -> dict[s
     progress: dict[str, dict[str, Any]] = {}
     seen_waypoints: set[str] = set()
     pending: dict[str, Any] | None = None
-    for line in trace_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        event = json.loads(line)
+    for _, event in read_jsonl_object_rows(trace_path, label="showcase trace"):
         if event.get("event") == "response" and event.get("tool") == "observe":
             response = event.get("response", {})
             waypoint_id = response.get("waypoint_id") or response.get("inspection_waypoint_id")

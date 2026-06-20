@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -22,6 +23,17 @@ def _load_script() -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _run_showcase(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), *args],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
 
 
 def _write_view_set(robot_views: Path, label: str, action: str, *, obj: str = "") -> dict[str, str]:
@@ -153,6 +165,51 @@ def _write_synthetic_run(run_dir: Path) -> None:
             )
         )
     (run_dir / "trace.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_household_cleanup_showcase_rejects_malformed_run_result_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    run_result = run_dir / "run_result.json"
+    run_result.write_text("{bad json\n", encoding="utf-8")
+
+    completed = _run_showcase(
+        "--run-dir",
+        str(run_dir),
+        "--out-dir",
+        str(tmp_path / "out"),
+        "--skip-gif",
+    )
+
+    assert completed.returncode != 0
+    assert "Traceback" not in completed.stderr
+    assert "run_result.json source must contain valid JSON object" in completed.stderr
+    assert str(run_result) in completed.stderr
+
+
+def test_household_cleanup_showcase_rejects_malformed_trace_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    _write_synthetic_run(run_dir)
+    trace_path = run_dir / "trace.jsonl"
+    trace_path.write_text('{"event": "response"}\n{bad json}\n', encoding="utf-8")
+
+    completed = _run_showcase(
+        "--run-dir",
+        str(run_dir),
+        "--out-dir",
+        str(tmp_path / "out"),
+        "--skip-gif",
+    )
+
+    assert completed.returncode != 0
+    assert "Traceback" not in completed.stderr
+    assert "showcase trace source row must contain valid JSON object" in completed.stderr
+    assert f"{trace_path}:2" in completed.stderr
 
 
 def test_household_cleanup_showcase_renderer_writes_reviewable_outputs(tmp_path: Path) -> None:
