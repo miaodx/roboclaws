@@ -17,24 +17,21 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Robot-camera apple-to-apple required JSON artifacts and explicit
-optional color-profile artifacts now route through the shared source helper.
-Required missing, malformed, or non-object state/manifest artifacts fail with
-path-labelled source errors; absent optional color-profile input still stays
-empty while present malformed or non-object optional input fails aloud. Focused
-source-reader tests, touched-file ruff, touched-file format checks, diff check,
-and the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
-80 oversized modules.
+2026-06-20: Planner proof result summarization now routes proof
+`run_result.json` reads through the shared source helper while preserving the
+existing missing/malformed/non-object unreadable-result payload shape. Focused
+planner-proof summary tests, touched-file ruff, touched-file format checks,
+diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules.
 
-Previous slice: MolmoSpaces flattened semantic USD scene metadata loading now
-routes present `scene_metadata.json` object sources through the shared source
-helper, so malformed or non-object metadata fails before semantic label
-authoring while missing metadata still yields the existing blocked summary.
+Previous slice: Robot-camera apple-to-apple required JSON artifacts and
+explicit optional color-profile artifacts now route through the shared source
+helper while preserving absent optional color-profile input as empty.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the robot-camera apple-to-apple JSON artifact reader slice.
+committing the planner proof result summary reader slice.
 
 ## Touched Areas
 
@@ -98,6 +95,7 @@ committing the robot-camera apple-to-apple JSON artifact reader slice.
 - `roboclaws/household/grasp_initial_contact_diagnostics.py`
 - `roboclaws/household/scene_camera_source_artifacts.py`
 - `roboclaws/household/agibot_contract_rehearsal.py`
+- `roboclaws/household/planner_proof_requests.py`
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`

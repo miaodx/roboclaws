@@ -6062,6 +6062,16 @@ logs before choosing the next slice.
   Reopen only if `run_robot_camera_apple2apple_comparison.py` regains local
   `json.loads(read_text(...))` helpers for comparison state/manifest artifacts
   or accepts malformed/non-object explicit color-profile inputs.
+- Planner proof result summarization now routes proof `run_result.json` reads
+  through the shared JSON-source helper while preserving the existing
+  missing/malformed/non-object unreadable-result payload shape. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation with existing unreadable-evidence preservation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused planner-proof summary tests, ruff, format check, diff check, and
+  ratchet. Reopen only if `planner_proof_requests.py` regains direct
+  `json.loads(read_text(...))` proof-result parsing or stops preserving
+  unreadable proof-result evidence for malformed/non-object sources.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -22,11 +22,11 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80.
-- Current shared-checkout note after the robot-camera apple-to-apple JSON
-  artifact reader consolidation slice:
+- Current shared-checkout note after the planner proof result summary reader
+  consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 0 Ruff complexity rows and 80 oversized modules. The touched
-  robot-camera runner and focused source-reader tests remain under the current
+  planner proof summary owner and focused tests remain under the current
   ratchet ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
@@ -309,6 +309,9 @@ Latest quality snapshot from 2026-06-20:
   required missing, malformed, or non-object state/manifest artifacts fail with
   path-labelled source errors, absent optional color-profile input remains
   empty, and present bad optional input fails aloud.
+  Planner proof result summarization now routes proof `run_result.json` reads
+  through the shared JSON-source helper while preserving the existing
+  missing/malformed/non-object unreadable-result payload shape.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.
