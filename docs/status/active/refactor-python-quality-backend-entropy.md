@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 operator-console scene previews now treat existing preview
-metadata and declared camera artifacts as JSON-object source truth through
-`roboclaws.core.json_sources.read_json_object`. Malformed or non-object
-skip-existing metadata returns `metadata_unreadable` without rewriting metadata
-or deleting companion previews, and malformed or non-object camera artifacts
-surface `artifact_unreadable` in the existing unavailable result packet.
-Focused B1 preview source tests, existing preview tests, touched-file
-Ruff/format, `git diff --check`, changed-code review, and ratchet passed.
+2026-06-20: Codex live timing now treats present `run_result.json` as
+JSON-object source truth through `roboclaws.core.json_sources.read_json_object`
+before deriving MCP timing. Malformed or non-object run-result timing sources
+now fail the final live timing packet with `live_timing_source_error` instead
+of silently falling back to trace-derived timing evidence. Focused Codex live
+report tests, touched-file Ruff/format, `git diff --check`, changed-code
+review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

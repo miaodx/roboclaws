@@ -225,6 +225,11 @@ Latest quality snapshot from 2026-06-20:
   `metadata_unreadable` before metadata rewrites or companion preview deletion,
   and surfacing malformed or non-object camera artifacts as
   `artifact_unreadable` inside the existing unavailable preview packet.
+  Codex live timing now treats present `run_result.json` as JSON-object source
+  truth before deriving MCP timing, so malformed or non-object run-result
+  timing evidence fails the final `live_timing.json` packet with
+  `live_timing_source_error` instead of falling back to trace-derived timing
+  evidence.
   Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing

@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Codex live timing now treats present `run_result.json` as
+  JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object` before deriving MCP timing.
+  Malformed or parseable non-object run-result timing sources now fail the
+  final `live_timing.json` packet with `live_timing_source_error` instead of
+  silently falling back to trace-derived MCP timing evidence. Owner layer:
+  Agent Engines And Provider Profiles plus Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud Codex live timing source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules.
+  Proof: focused Codex live report tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh Codex live timing evidence that malformed present `run_result.json`
+  again falls back to trace timing or writes a passing final timing packet.
+
 - 2026-06-20: B1 operator-console scene previews now treat existing
   `b1-map12-preview.json` metadata and declared camera artifacts as
   JSON-object source truth through
