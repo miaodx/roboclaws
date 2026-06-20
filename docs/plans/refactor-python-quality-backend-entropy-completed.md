@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker goal-contract artifact loading now treats
+  declared `goal_contract.json` evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object goal-contract artifacts now fail with path-labelled
+  source errors before contract comparison, instead of surfacing raw file-read
+  or parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker goal-contract artifact
+  source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the checker dropped by one line while focused coverage
+  stayed in the small checker source-test file. Proof: focused checker source
+  tests, adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed declared goal-contract
+  artifacts again produce raw file/parser/type failures or reach contract
+  comparison as plausible artifact evidence.
+
 - 2026-06-20: Cleanup checker top-level `run_result.json` loading now treats
   single-file inputs, `seed-*` directories, and run-directory fallback inputs
   as JSON-object source truth through

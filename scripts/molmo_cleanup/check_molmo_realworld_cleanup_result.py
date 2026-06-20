@@ -920,8 +920,7 @@ def _assert_goal_contract(data: dict[str, Any], base: Path) -> None:
     assert contract.get("goal_scope") in {"whole-room", "prompt-scoped", "agent-declared"}, contract
     artifacts = data.get("artifacts") or {}
     path = _resolve_path(base, artifacts.get("goal_contract", ""))
-    assert path.is_file(), path
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_object(path, label="goal contract")
     assert payload == contract, (payload, contract)
 
 

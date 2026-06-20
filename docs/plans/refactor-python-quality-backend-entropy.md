@@ -223,6 +223,10 @@ Latest quality snapshot from 2026-06-20:
   `seed-*`, and run-directory fallback inputs as JSON-object source truth too,
   failing malformed or non-object run-result sources with path-labelled source
   errors before checker assertions.
+  Cleanup checker goal-contract artifact loading now treats declared
+  `goal_contract.json` evidence as JSON-object source truth, failing missing,
+  malformed, or non-object goal-contract artifacts with path-labelled source
+  errors before contract comparison.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as

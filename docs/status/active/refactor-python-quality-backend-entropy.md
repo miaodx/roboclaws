@@ -17,13 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker top-level `run_result.json` loading now treats
-single-file, `seed-*`, and run-directory fallback inputs as JSON-object source
-truth through `roboclaws.core.json_sources.read_json_object`. Malformed or
-non-object run-result sources fail with path-labelled source errors instead of
-parser tracebacks or wrong-shaped packets entering checker assertions. Focused
-checker source tests, adjacent planner-proof source tests, touched-file
-Ruff/format, `git diff --check`, changed-code review, and ratchet passed.
+2026-06-20: Cleanup checker goal-contract artifact loading now treats declared
+`goal_contract.json` evidence as JSON-object source truth through
+`roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+non-object goal-contract artifacts fail with path-labelled source errors
+instead of file-read/parser tracebacks or wrong-shaped packets entering
+contract comparison. Focused checker source tests, adjacent planner-proof
+source tests, touched-file Ruff/format, `git diff --check`, changed-code
+review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
