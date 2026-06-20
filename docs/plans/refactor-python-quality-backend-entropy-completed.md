@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Nav2 map-bundle export now treats missing explicit
+  `--agent-view` and `--run-result` sources as source-path errors before
+  bundle writes. This extends the existing malformed/non-object exporter
+  source guard so absent declared inputs no longer surface as raw file-read
+  tracebacks or create partial output directories. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud map/export
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules. Proof: focused Nav2 map-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh exporter evidence that missing declared agent-view or
+  run-result sources again read through raw file paths or write bundle outputs
+  after source-load failure.
+
 - 2026-06-20: Semantic map spatial-contract normalization now treats bundle
   `semantics.json` as JSON-object source truth before in-place writes. Missing,
   malformed, or parseable non-object semantics sources now return concise CLI

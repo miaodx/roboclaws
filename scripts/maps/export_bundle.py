@@ -120,6 +120,8 @@ def _load_agent_view(*, run_result: Path | None, agent_view: Path | None) -> dic
 
 
 def _load_json_source(path: Path, *, label: str) -> Any:
+    if not path.is_file():
+        raise SystemExit(f"{label} source is missing: {path}")
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:

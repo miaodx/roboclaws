@@ -130,6 +130,8 @@ Latest quality snapshot from 2026-06-20:
   Semantic map spatial-contract normalization now treats bundle
   `semantics.json` as JSON-object source truth before in-place writes, and the
   parity test reflects the current accepted B1 alignment-anchor manifest.
+  Nav2 map-bundle export now treats missing explicit `--agent-view` and
+  `--run-result` sources as source-path errors before bundle writes.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.

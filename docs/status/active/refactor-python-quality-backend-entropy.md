@@ -17,12 +17,11 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Semantic map spatial-contract normalization now treats
-`semantics.json` as JSON-object source truth before in-place bundle writes, and
-the parity test now reflects the current seven accepted B1 alignment anchors.
-Focused cross-environment semantic-map parity tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed. Quality signal: 0 Ruff complexity
-rows, 79 oversized modules.
+2026-06-20: Nav2 map-bundle export now treats missing explicit `--agent-view`
+and `--run-result` sources as source-path errors before bundle writes. Focused
+Nav2 map-bundle contract tests, touched-file Ruff/format, `git diff --check`,
+and ratchet passed. Quality signal: 0 Ruff complexity rows, 79 oversized
+modules.
 
 ## Next Action
 
@@ -43,6 +42,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
+- `scripts/maps/export_bundle.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -55,6 +55,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_alignment_fit_cli.py`
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
+- `tests/contract/maps/test_nav2_map_bundle_contract.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 
