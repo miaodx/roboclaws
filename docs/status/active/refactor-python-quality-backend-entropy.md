@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Molmo cleanup trace-preserving skill CLI now validates inline
+2026-06-21: Launch goal-contract inline JSON now routes through the shared
+JSON-object source helper instead of raw `json.loads`. Malformed or non-object
+`--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` payloads now fail with
+source-labelled launch diagnostics before prompt rendering, MCP server startup,
+or cleanup setup can derive task intent from corrupt inline operator context.
+Focused proof passed: launch goal-contract source tests, touched-file ruff,
+touched-file format check, and dependency sync. Current ratchet before final
+slice closeout: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Molmo cleanup trace-preserving skill CLI now validates inline
 `--static-fixture-projection-json` through a skill-local JSON-object source
 parser instead of raw `json.loads`. Malformed or non-object inline fixture
 projection payloads now fail with concise CLI diagnostics before routine-plan

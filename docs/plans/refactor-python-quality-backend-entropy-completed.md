@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Launch goal-contract inline JSON now routes through the shared
+  JSON-object source helper instead of raw `json.loads`. Malformed or
+  non-object `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` payloads
+  now fail with source-labelled launch diagnostics before prompt rendering,
+  MCP server startup, or cleanup setup can derive task intent from corrupt
+  inline operator context. Owner layer: Runnable Surface / Thin Runtime launch
+  boundary. Behavior-change class: public launch source-reader hardening with
+  fail-aloud diagnostics for explicit inline operator context. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused launch goal-contract source tests,
+  touched-file ruff/format checks, dependency sync, `git diff --check`, and
+  ratchet. Reopen only if `roboclaws/launch/goals.py` regains raw inline
+  goal-contract JSON parsing or malformed inline goal context can again
+  produce raw tracebacks or valid-looking launch intent.
+
 - 2026-06-21: Molmo cleanup trace-preserving skill CLI now validates inline
   `--static-fixture-projection-json` through a skill-local JSON-object source
   parser instead of raw `json.loads`. Malformed or non-object inline fixture

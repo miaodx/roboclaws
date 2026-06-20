@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the launch goal-contract inline source
+  slice: inline goal-contract payloads now reuse the shared JSON-object source
+  helper instead of raw `json.loads`, so malformed or non-object
+  `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` inputs fail with
+  source-labelled diagnostics before public launch prompt/server/cleanup
+  setup derives task intent from corrupt operator context.
 - Current shared-checkout note after the Molmo cleanup trace-preserving skill
   inline projection source slice: `--static-fixture-projection-json` now routes
   through a skill-local JSON-object source parser before routine-plan
