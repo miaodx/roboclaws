@@ -16,6 +16,7 @@ from roboclaws.agents.provider_registry import (
     default_provider_profile,
     provider_readiness,
 )
+from roboclaws.core.dotenv import load_dotenv_file
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
@@ -115,20 +116,7 @@ class LaunchRequest:
 def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
     """Return an environment with repo-local ``.env`` values loaded when present."""
 
-    env_map = dict(os.environ if env is None else env)
-    dotenv_path = root / ".env"
-    if not dotenv_path.exists():
-        return env_map
-    for raw_line in dotenv_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in env_map:
-            continue
-        env_map[key] = _clean_dotenv_value(value)
-    return env_map
+    return load_dotenv_file(root / ".env", env)
 
 
 def provider_key_present(route: ConsoleLaunchSelection, env: dict[str, str] | None = None) -> bool:
@@ -1012,15 +1000,6 @@ def _kill_tmux_session(display_run_dir: Path) -> None:
 
 def _override_key(value: str) -> str:
     return value.split("=", 1)[0]
-
-
-def _clean_dotenv_value(value: str) -> str:
-    clean = value.strip()
-    if clean.startswith("export "):
-        clean = clean.removeprefix("export ").strip()
-    if len(clean) >= 2 and clean[0] == clean[-1] and clean[0] in {"'", '"'}:
-        clean = clean[1:-1]
-    return clean
 
 
 def _parse_port(value: str) -> int:

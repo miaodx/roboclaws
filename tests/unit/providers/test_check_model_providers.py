@@ -77,6 +77,21 @@ def test_require_all_fails_on_skipped_probe(monkeypatch) -> None:
     assert script.main(["--mode", "agents-sdk", "--dotenv", "", "--require-all"]) == 1
 
 
+def test_load_dotenv_uses_explicit_file_and_preserves_existing_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    script = _load_script_module()
+    dotenv = tmp_path / "providers.env"
+    dotenv.write_text('MM_API_KEY="from file"\nKEEP=from-file\n', encoding="utf-8")
+    monkeypatch.delenv("MM_API_KEY", raising=False)
+    monkeypatch.setenv("KEEP", "host")
+
+    script.load_dotenv(dotenv)
+
+    assert script.os.environ["MM_API_KEY"] == "from file"
+    assert script.os.environ["KEEP"] == "host"
+
+
 def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
     script = _load_script_module()
 

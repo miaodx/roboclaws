@@ -17,7 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Shared subprocess worker stdout parsing now routes JSON-looking
+2026-06-21: Repo-local dotenv parsing now has a shared core owner in
+`roboclaws/core/dotenv.py`. The operator-console repo `.env` loader and the
+provider health/model-matrix dev scripts now use the same no-overwrite,
+comment/blank-line skipping, simple quote stripping, and `export ` value-prefix
+handling instead of carrying duplicate `read_text`/`splitlines`/local parsing
+loops. Explicit provider-script `--dotenv <path>` files still load by exact
+file path, and `load_dotenv()` keeps its side-effect behavior on `os.environ`.
+Focused proof passed: core dotenv tests, provider-script dotenv wrapper tests,
+existing operator-console repo-dotenv test, touched-file ruff, touched-file
+format check, diff check, changed-code cleanup review, and ratchet summary.
+Current ratchet: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Shared subprocess worker stdout parsing now routes JSON-looking
 worker result rows through the core JSON-object text helper instead of a local
 `json.loads` loop in `roboclaws/household/worker_runner.py`. MolmoSpaces and
 Isaac one-shot backend workers still tolerate ordinary stdout noise and

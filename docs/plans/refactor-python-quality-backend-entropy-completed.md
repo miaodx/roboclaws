@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Repo-local dotenv parsing now has a shared core owner in
+  `roboclaws/core/dotenv.py` instead of duplicate local parsers in provider
+  dev scripts and operator-console launch code. `load_repo_dotenv()` remains
+  the operator-console root `.env` facade, while
+  `scripts/dev/check_model_providers.py` and
+  `scripts/dev/benchmark_model_matrix.py` preserve explicit `--dotenv <path>`
+  loading and process-env side effects through the shared helper. Owner layer:
+  Thin Runtime / Server Adapters plus Harness recipes / dev provider
+  benchmark. Behavior-change class: internal parser consolidation with stable
+  no-overwrite, quote-cleaning, blank/comment skipping, and `export `
+  value-prefix behavior. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused core dotenv tests, provider-script dotenv wrapper tests, existing
+  operator-console repo-dotenv test, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  repo-local dotenv parsing regains separate parser loops or provider
+  `--dotenv` paths and operator-console `.env` loading diverge again.
+
 - 2026-06-21: Shared one-shot subprocess worker stdout result parsing now
   delegates JSON-looking rows to the core JSON-object text helper instead of
   keeping a local `json.loads` loop in

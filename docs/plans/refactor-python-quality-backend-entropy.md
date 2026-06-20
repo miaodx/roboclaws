@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the core dotenv owner slice:
+  repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
+  Operator-console repo `.env` loading plus provider health/model-matrix dev
+  script `--dotenv` loading reuse the same no-overwrite, quote-cleaning, and
+  value-prefix handling while preserving explicit dotenv file paths and
+  process-env side effects where callers already had them.
 - Current shared-checkout note after the shared subprocess worker stdout source
   consolidation slice: `roboclaws/household/worker_runner.py` now routes
   JSON-looking one-shot worker result stdout rows through the core JSON-object

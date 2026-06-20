@@ -60,6 +60,21 @@ def test_mimo_inside_cases_read_registry_env(monkeypatch) -> None:
     assert "Default-enabled" in case.note
 
 
+def test_load_dotenv_uses_explicit_file_and_preserves_existing_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    script = _load_script_module()
+    dotenv = tmp_path / "matrix.env"
+    dotenv.write_text('CODEX_API_KEY="from file"\nKEEP=from-file\n', encoding="utf-8")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    monkeypatch.setenv("KEEP", "host")
+
+    script.load_dotenv(dotenv)
+
+    assert script.os.environ["CODEX_API_KEY"] == "from file"
+    assert script.os.environ["KEEP"] == "host"
+
+
 def test_endpoint_urls_normalize_wire_api_suffixes() -> None:
     script = _load_script_module()
 
