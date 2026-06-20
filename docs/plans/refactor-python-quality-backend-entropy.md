@@ -142,8 +142,10 @@ Latest quality snapshot from 2026-06-20:
   JSON-object artifact through the shared source helper instead of a duplicate
   local reader.
   Semantic map spatial-contract normalization now treats bundle
-  `semantics.json` as JSON-object source truth before in-place writes, and the
-  parity test reflects the current accepted B1 alignment-anchor manifest.
+  `semantics.json` as JSON-object source truth before in-place writes, and
+  routes that JSON-object source through the shared source helper instead of a
+  duplicate local reader. The parity test reflects the current accepted B1
+  alignment-anchor manifest.
   Nav2 map-bundle export now treats missing explicit `--agent-view` and
   `--run-result` sources as source-path errors before bundle writes.
   Visual-grounding benchmark checks now treat declared result JSON and

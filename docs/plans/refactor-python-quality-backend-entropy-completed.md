@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Semantic map spatial-contract normalization now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for bundle
+  `semantics.json` artifacts. This removes the normalizer's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object semantics artifacts under
+  the canonical helper wording. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  behavior preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules. Proof: focused cross-environment semantic map parity
+  tests, core JSON-source tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if the normalizer regains a local
+  JSON-object source reader or stops routing bundle semantics artifacts
+  through the shared source helper.
+
 - 2026-06-20: B1 Gaussian scene topdown capture source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for hidden
   `--camera-request` artifacts. This removes the renderer's duplicate local

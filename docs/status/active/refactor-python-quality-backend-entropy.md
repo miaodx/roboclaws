@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 Gaussian scene topdown capture now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for hidden
-`--camera-request` artifacts. Missing, malformed, or parseable non-object
-camera-request artifacts keep path-labelled source errors under the canonical
-helper wording, and the renderer no longer carries a duplicate local
-JSON-object reader. Focused B1 Gaussian topdown and core JSON-source tests,
-touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: Semantic map spatial-contract normalization now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for bundle
+`semantics.json` artifacts. Missing, malformed, or parseable non-object
+semantics artifacts keep path-labelled source errors under the canonical helper
+wording, and the normalizer no longer carries a duplicate local JSON-object
+reader. Focused cross-environment semantic map parity and core JSON-source
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
