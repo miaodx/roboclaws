@@ -31,10 +31,18 @@ from roboclaws.maps.navigation_memory import (
 from roboclaws.maps.room_semantics import build_scene_room_semantic_overlay
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
+    GEOMETRY_SOURCE_GENERATED_CANDIDATE,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
     POLYGON_GEOMETRY_SOURCES,
     POLYGON_ROLE_NAVIGATION_AREA,
     POLYGON_ROLES,
+)
+from scripts.maps.render_b1_scene_topdown_diagnostic import (
+    DIAGNOSTIC_SCHEMA as SCENE_TOPDOWN_DIAGNOSTIC_SCHEMA,
+)
+from scripts.maps.render_b1_scene_topdown_diagnostic import (
+    projected_bounds_polygon,
+    scene_projector_from_topdown_packet,
 )
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
@@ -43,6 +51,14 @@ DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
+DEFAULT_ROOM_LABEL_REFERENCE = Path("assets/maps/b1-map12-room-semantics.json")
+DEFAULT_SCENE_TOPDOWN = Path(
+    "output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json"
+)
+DEFAULT_SCENE_TOPDOWN_DIAGNOSTIC = Path(
+    "output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json"
+)
+DEFAULT_ALIGNMENT_ARTIFACT = Path("output/b1-map12/alignment/alignment_residuals.json")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
 
 
@@ -68,6 +84,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Include scene/Gaussian evidence in the packet for review-only comparison.",
     )
+    parser.add_argument(
+        "--seed-review-shapes-from-scene-bounds",
+        action="store_true",
+        help=(
+            "Seed draft editable labels from Digital Twin object aggregate bounds. "
+            "Requires verified Map12->scene alignment and keeps exports candidate/draft."
+        ),
+    )
+    parser.add_argument(
+        "--room-label-reference",
+        type=Path,
+        default=DEFAULT_ROOM_LABEL_REFERENCE,
+        help="Digital Twin room label reference used only for review seed display names.",
+    )
+    parser.add_argument(
+        "--scene-topdown-render",
+        type=Path,
+        default=DEFAULT_SCENE_TOPDOWN,
+        help="Gaussian top-down render packet used for the review reference canvas.",
+    )
+    parser.add_argument(
+        "--scene-topdown-diagnostic",
+        type=Path,
+        default=DEFAULT_SCENE_TOPDOWN_DIAGNOSTIC,
+        help="Validated scene top-down diagnostic carrying object aggregate bounds.",
+    )
+    parser.add_argument(
+        "--alignment-artifact",
+        type=Path,
+        default=DEFAULT_ALIGNMENT_ARTIFACT,
+        help="Verified Map12->Digital Twin alignment artifact used to seed draft labels.",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     return parser.parse_args(argv)
 
@@ -80,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
             semantics_path=args.semantics,
             scene_root=args.scene_root,
             include_gaussian_scene=args.include_gaussian_scene,
+            seed_review_shapes_from_scene_bounds=args.seed_review_shapes_from_scene_bounds,
+            room_label_reference_path=args.room_label_reference,
+            scene_topdown_render_path=args.scene_topdown_render,
+            scene_topdown_diagnostic_path=args.scene_topdown_diagnostic,
+            alignment_artifact_path=args.alignment_artifact,
             output_dir=args.output_dir,
         )
     except ValueError as exc:
@@ -101,6 +154,11 @@ def write_label_tool_artifacts(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
+    seed_review_shapes_from_scene_bounds: bool = False,
+    room_label_reference_path: Path = DEFAULT_ROOM_LABEL_REFERENCE,
+    scene_topdown_render_path: Path = DEFAULT_SCENE_TOPDOWN,
+    scene_topdown_diagnostic_path: Path = DEFAULT_SCENE_TOPDOWN_DIAGNOSTIC,
+    alignment_artifact_path: Path = DEFAULT_ALIGNMENT_ARTIFACT,
     output_dir: Path,
 ) -> dict[str, Any]:
     packet = build_label_tool_packet(
@@ -108,15 +166,25 @@ def write_label_tool_artifacts(
         semantics_path=semantics_path,
         scene_root=scene_root,
         include_gaussian_scene=include_gaussian_scene,
+        seed_review_shapes_from_scene_bounds=seed_review_shapes_from_scene_bounds,
+        room_label_reference_path=room_label_reference_path,
+        scene_topdown_render_path=scene_topdown_render_path,
+        scene_topdown_diagnostic_path=scene_topdown_diagnostic_path,
+        alignment_artifact_path=alignment_artifact_path,
     )
     image_url = image_data_url(Path(packet["source_image"]))
+    scene_reference_url = scene_reference_image_data_url(packet)
     output_dir.mkdir(parents=True, exist_ok=True)
     materialize_scene_evidence_artifacts(packet, output_dir=output_dir)
     packet_path = output_dir / "label_tool_packet.json"
     html_path = output_dir / "label_tool.html"
     packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     html_path.write_text(
-        render_label_tool_html(packet, image_data_url_value=image_url),
+        render_label_tool_html(
+            packet,
+            image_data_url_value=image_url,
+            scene_reference_data_url_value=scene_reference_url,
+        ),
         encoding="utf-8",
     )
     return {
@@ -132,6 +200,11 @@ def build_label_tool_packet(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
+    seed_review_shapes_from_scene_bounds: bool = False,
+    room_label_reference_path: Path = DEFAULT_ROOM_LABEL_REFERENCE,
+    scene_topdown_render_path: Path = DEFAULT_SCENE_TOPDOWN,
+    scene_topdown_diagnostic_path: Path = DEFAULT_SCENE_TOPDOWN_DIAGNOSTIC,
+    alignment_artifact_path: Path = DEFAULT_ALIGNMENT_ARTIFACT,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
     map_yaml_path = map_bundle / "map.yaml"
@@ -158,6 +231,28 @@ def build_label_tool_packet(
     )
     frame_id = source_map_frame_id(semantics)
     shapes = seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
+    review_seed_policy: dict[str, Any] = {
+        "enabled": False,
+        "seed_count": 0,
+        "source": "",
+        "note": (
+            "No Digital Twin object aggregate bbox review seeds were requested. "
+            "The tool starts only from current source-map semantics."
+        ),
+    }
+    scene_reference: dict[str, Any] | None = None
+    if seed_review_shapes_from_scene_bounds:
+        seed_packet = scene_bounds_review_seed_packet(
+            scene_topdown_diagnostic_path=scene_topdown_diagnostic_path,
+            alignment_artifact_path=alignment_artifact_path,
+            room_label_reference_path=room_label_reference_path,
+            scene_topdown_render_path=scene_topdown_render_path,
+            transform=transform,
+            frame_id=frame_id,
+        )
+        shapes.extend(seed_packet["shapes"])
+        review_seed_policy = seed_packet["review_shape_seed_policy"]
+        scene_reference = seed_packet["scene_reference"]
     attach_room_geometry_conflicts(shapes)
     source_map_layers = source_map_layers_from_semantics(
         semantics,
@@ -204,6 +299,7 @@ def build_label_tool_packet(
             "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
             "review_status": "draft",
         },
+        "review_shape_seed_policy": review_seed_policy,
         "valid_polygon_roles": sorted(POLYGON_ROLES),
         "valid_geometry_sources": sorted(POLYGON_GEOMETRY_SOURCES),
         "shapes": shapes,
@@ -220,6 +316,8 @@ def build_label_tool_packet(
             },
         ),
     }
+    if scene_reference:
+        packet["scene_reference"] = scene_reference
     if include_gaussian_scene:
         packet["scene_evidence"] = scene_evidence_from_scene_root(
             scene_root,
@@ -307,6 +405,249 @@ def materialize_scene_evidence_artifacts(packet: dict[str, Any], *, output_dir: 
             copied[source_text] = dict(link)
             links.append(link)
         room["evidence_artifact_links"] = links
+
+
+def scene_bounds_review_seed_packet(
+    *,
+    scene_topdown_diagnostic_path: Path,
+    alignment_artifact_path: Path,
+    room_label_reference_path: Path,
+    scene_topdown_render_path: Path,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> dict[str, Any]:
+    diagnostic = read_scene_topdown_diagnostic(scene_topdown_diagnostic_path)
+    alignment = read_verified_scene_alignment(alignment_artifact_path)
+    selected_transform = alignment["selected_transform"]
+    label_reference = read_room_label_reference(room_label_reference_path)
+    scene_topdown = read_json_object(scene_topdown_render_path, label="scene topdown render")
+    projector = scene_projector_from_topdown_packet(scene_topdown)
+    topdown_image = Path(str(scene_topdown.get("topdown_image") or ""))
+    if not topdown_image.is_file():
+        raise FileNotFoundError(f"scene topdown image missing: {topdown_image}")
+    labels_by_partition = room_label_reference_by_partition(label_reference)
+    shapes: list[dict[str, Any]] = []
+    reference_regions = []
+    for index, partition in enumerate(scene_bound_partitions(diagnostic), start=1):
+        partition_id = str(partition["partition_id"])
+        bounds = partition["bounds"]
+        label_row = labels_by_partition.get(partition_id, {})
+        scene_polygon = scene_bounds_polygon(bounds)
+        map_polygon = [
+            transform_scene_xy_to_map_point(point, selected_transform) for point in scene_polygon
+        ]
+        pixel_polygon = [world_to_pixel(point["x"], point["y"], transform) for point in map_polygon]
+        center = _geometry_center({"kind": "polygon", "polygon": map_polygon})
+        scene_pixel_polygon = [
+            {"x": float(px), "y": float(py)}
+            for px, py in projected_bounds_polygon(bounds, projector)
+        ]
+        display_label = str(label_row.get("room_label") or label_row.get("label") or partition_id)
+        category = str(label_row.get("category") or "")
+        review_status = str(label_row.get("review_status") or "needs_review")
+        shape_id = f"scene_bbox_seed_{partition_id}"
+        shapes.append(
+            {
+                "shape_id": shape_id,
+                "label": display_label,
+                "category": category,
+                "navigation_area_id": "",
+                "asset_partition_id": partition_id,
+                "source_room_id": partition_id,
+                "semantic_source": "digital_twin_object_aggregate_bbox_review_seed",
+                "render_review_recommended": True,
+                "source_map_frame_id": frame_id,
+                "geometry": {
+                    "kind": "polygon",
+                    "polygon": map_polygon,
+                    "pixel_polygon": pixel_polygon,
+                },
+                "map_center": center,
+                "polygon_role": POLYGON_ROLE_NAVIGATION_AREA,
+                "geometry_source": GEOMETRY_SOURCE_GENERATED_CANDIDATE,
+                "source_alignment_status": "verified_transform_candidate_geometry",
+                "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
+                "review_status": "draft",
+                "review_seed": {
+                    "source": "digital_twin_object_aggregate_bbox",
+                    "partition_id": partition_id,
+                    "source_review_status": review_status,
+                    "object_bounds_count": int(partition.get("object_bounds_count") or 0),
+                    "bounds_status": str(bounds.get("status") or ""),
+                    "warning": (
+                        "This is an editable review seed from object aggregate bounds, "
+                        "not a verified room boundary."
+                    ),
+                },
+                "polygon_usage": {
+                    "navigation": True,
+                    "semantic_labeling": ALIGNMENT_STATUS_CANDIDATE,
+                    "review": True,
+                },
+            }
+        )
+        reference_regions.append(
+            {
+                "shape_id": shape_id,
+                "partition_id": partition_id,
+                "label": display_label,
+                "category": category,
+                "review_status": review_status,
+                "object_bounds_count": int(partition.get("object_bounds_count") or 0),
+                "scene_pixel_polygon": scene_pixel_polygon,
+                "note": "Read-only DT object aggregate bbox reference.",
+            }
+        )
+    return {
+        "review_shape_seed_policy": {
+            "enabled": True,
+            "seed_count": len(shapes),
+            "source": str(scene_topdown_diagnostic_path),
+            "alignment_artifact": str(alignment_artifact_path),
+            "room_label_reference": str(room_label_reference_path),
+            "geometry_source": GEOMETRY_SOURCE_GENERATED_CANDIDATE,
+            "label_status": "candidate_draft_only",
+            "note": (
+                "Seeds come from Digital Twin object aggregate bboxes transformed back "
+                "into Map12 with verified alignment. They are intentionally draft-only."
+            ),
+        },
+        "scene_reference": {
+            "schema": "b1_map12_label_tool_scene_reference_v1",
+            "source_topdown_render": str(scene_topdown_render_path),
+            "source_topdown_image": str(topdown_image),
+            "source_diagnostic": str(scene_topdown_diagnostic_path),
+            "coordinate_policy": (
+                "scene reference polygons are read-only Digital Twin object aggregate "
+                "bbox pixels; edit final labels on the Map12 canvas."
+            ),
+            "image_width_px": int(scene_topdown.get("width_px") or 0),
+            "image_height_px": int(scene_topdown.get("height_px") or 0),
+            "regions": reference_regions,
+        },
+        "shapes": shapes,
+    }
+
+
+def read_scene_topdown_diagnostic(path: Path) -> dict[str, Any]:
+    diagnostic = read_json_object(path, label="scene topdown diagnostic")
+    if diagnostic.get("schema") != SCENE_TOPDOWN_DIAGNOSTIC_SCHEMA:
+        raise ValueError(
+            f"scene topdown diagnostic schema must be {SCENE_TOPDOWN_DIAGNOSTIC_SCHEMA}: {path}"
+        )
+    validation = (
+        diagnostic.get("validation") if isinstance(diagnostic.get("validation"), dict) else {}
+    )
+    if validation.get("status") != "passed":
+        errors = validation.get("errors") if isinstance(validation.get("errors"), list) else []
+        raise ValueError(
+            f"scene topdown diagnostic must have validation.status=passed: {path}; errors={errors}"
+        )
+    return diagnostic
+
+
+def read_verified_scene_alignment(path: Path) -> dict[str, Any]:
+    alignment = read_json_object(path, label="alignment artifact")
+    if alignment.get("global_alignment_status") != "verified":
+        raise ValueError(f"alignment artifact must have global_alignment_status=verified: {path}")
+    transform = alignment.get("selected_transform")
+    if not isinstance(transform, dict):
+        raise ValueError(f"alignment artifact missing selected_transform: {path}")
+    if transform.get("type") != "rigid_2d":
+        raise ValueError(f"alignment artifact selected_transform.type must be rigid_2d: {path}")
+    if str(transform.get("source") or "") != "reviewed_correspondence_fit":
+        raise ValueError(
+            "alignment artifact selected_transform.source must be "
+            f"reviewed_correspondence_fit: {path}"
+        )
+    return alignment
+
+
+def read_room_label_reference(path: Path) -> dict[str, Any]:
+    reference = read_json_object(path, label="room label reference")
+    rooms = reference.get("rooms")
+    if not isinstance(rooms, list):
+        raise ValueError(f"room label reference must contain rooms list: {path}")
+    return reference
+
+
+def room_label_reference_by_partition(reference: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    output = {}
+    for room in reference.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        partition_id = str(room.get("asset_partition_id") or room.get("room_id") or "")
+        if partition_id:
+            output[partition_id] = room
+    return output
+
+
+def scene_bound_partitions(diagnostic: dict[str, Any]) -> list[dict[str, Any]]:
+    output = []
+    for partition in diagnostic.get("partitions") or []:
+        if not isinstance(partition, dict):
+            continue
+        partition_id = str(partition.get("partition_id") or "")
+        bounds = (
+            partition.get("scene_frame_bounds")
+            if isinstance(partition.get("scene_frame_bounds"), dict)
+            else {}
+        )
+        if not partition_id:
+            continue
+        if bounds.get("status") != "extracted_from_scene_usd_world_bounds":
+            continue
+        output.append(
+            {
+                "partition_id": partition_id,
+                "bounds": bounds,
+                "object_bounds_count": int(partition.get("object_bounds_count") or 0),
+            }
+        )
+    if not output:
+        raise ValueError("scene topdown diagnostic did not contain scene USD world bounds")
+    return output
+
+
+def scene_bounds_polygon(bounds: dict[str, Any]) -> list[dict[str, float]]:
+    required = ("min_x", "min_y", "max_x", "max_y")
+    try:
+        min_x, min_y, max_x, max_y = (float(bounds[key]) for key in required)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("scene bounds missing finite min_x/min_y/max_x/max_y") from exc
+    return [
+        {"x": min_x, "y": min_y},
+        {"x": max_x, "y": min_y},
+        {"x": max_x, "y": max_y},
+        {"x": min_x, "y": max_y},
+    ]
+
+
+def transform_scene_xy_to_map_point(
+    scene_point: dict[str, float],
+    transform: dict[str, Any],
+) -> dict[str, float]:
+    scale = float(transform.get("scale") or 1.0)
+    if scale == 0.0:
+        raise ValueError("alignment transform scale must be non-zero")
+    rotation = transform.get("rotation_matrix")
+    if not isinstance(rotation, list) or len(rotation) != 2:
+        raise ValueError("alignment transform rotation_matrix must be 2x2")
+    try:
+        r00 = float(rotation[0][0])
+        r01 = float(rotation[0][1])
+        r10 = float(rotation[1][0])
+        r11 = float(rotation[1][1])
+        tx = float((transform.get("translation") or [0.0, 0.0])[0])
+        ty = float((transform.get("translation") or [0.0, 0.0])[1])
+    except (TypeError, ValueError, IndexError) as exc:
+        raise ValueError("alignment transform must contain numeric rotation/translation") from exc
+    sx = (float(scene_point["x"]) - tx) / scale
+    sy = (float(scene_point["y"]) - ty) / scale
+    return {
+        "x": round(r00 * sx + r10 * sy, 6),
+        "y": round(r01 * sx + r11 * sy, 6),
+    }
 
 
 def source_map_frame_id(semantics: dict[str, Any]) -> str:
@@ -939,9 +1280,25 @@ def image_data_url(path: Path) -> str:
     return f"data:image/png;base64,{encoded}"
 
 
-def render_label_tool_html(packet: dict[str, Any], *, image_data_url_value: str) -> str:
+def scene_reference_image_data_url(packet: dict[str, Any]) -> str:
+    reference = (
+        packet.get("scene_reference") if isinstance(packet.get("scene_reference"), dict) else {}
+    )
+    source = str(reference.get("source_topdown_image") or "")
+    if not source:
+        return ""
+    return image_data_url(Path(source))
+
+
+def render_label_tool_html(
+    packet: dict[str, Any],
+    *,
+    image_data_url_value: str,
+    scene_reference_data_url_value: str = "",
+) -> str:
     packet_json = json.dumps(packet, sort_keys=True)
     image_json = json.dumps(image_data_url_value)
+    scene_reference_json = json.dumps(scene_reference_data_url_value)
     return (
         label_tool_template()
         .replace("__PACKET_JSON__", packet_json)
@@ -949,6 +1306,7 @@ def render_label_tool_html(packet: dict[str, Any], *, image_data_url_value: str)
             "__IMAGE_DATA_URL__",
             image_json,
         )
+        .replace("__SCENE_REFERENCE_DATA_URL__", scene_reference_json)
     )
 
 

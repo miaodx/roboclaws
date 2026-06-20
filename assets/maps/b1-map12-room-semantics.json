@@ -31,18 +31,16 @@
     },
     {
       "asset_partition_id": "meeting_room_b",
-      "room_label": "Open kitchen",
-      "category": "kitchen",
-      "semantic_source": "legacy_operator_room_overlay_candidate",
-      "confidence": 0.92,
-      "review_status": "needs_review",
-      "operator_note": "Introduced by 2026-06-11 operator override as Open kitchen; DT asset partition id remains meeting_room_b and this label needs human confirmation.",
+      "room_label": "Meeting room B",
+      "category": "meeting_room",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.88,
+      "review_status": "accepted",
+      "operator_note": "Corrected on 2026-06-20 from the earlier Open kitchen override after Map12 draft review against the Gaussian asset topdown.",
       "aliases": [
         "meeting_room_b",
-        "Open kitchen",
-        "kitchen",
-        "厨房",
-        "吧台"
+        "Meeting room B",
+        "meeting room"
       ],
       "evidence_artifacts": [
         "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0003_observe.fpv.png"
@@ -50,14 +48,14 @@
     },
     {
       "asset_partition_id": "meeting_room_c",
-      "room_label": "Meeting room B",
+      "room_label": "Meeting room C",
       "category": "meeting_room",
       "semantic_source": "digital_twin_room_semantic_reference",
       "confidence": 0.88,
       "review_status": "accepted",
       "aliases": [
         "meeting_room_c",
-        "Meeting room B",
+        "Meeting room C",
         "meeting room"
       ],
       "evidence_artifacts": [

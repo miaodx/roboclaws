@@ -11,12 +11,6 @@ from PIL import Image
 
 import scripts.maps.render_b1_scene_topdown_diagnostic as scene_diagnostic
 from scripts.maps.fit_b1_map12_scene_alignment import build_alignment_residuals
-from scripts.maps.render_b1_map12_base_label_review import (
-    REVIEW_PACKET_SCHEMA as BASE_LABEL_REVIEW_PACKET_SCHEMA,
-)
-from scripts.maps.render_b1_map12_base_label_review import (
-    build_review_packet as build_base_label_review_packet,
-)
 from scripts.maps.render_b1_map12_label_tool import (
     LABEL_DRAFT_MANIFEST_SCHEMA,
     LABEL_TOOL_PACKET_SCHEMA,
@@ -30,6 +24,7 @@ from scripts.maps.render_b1_map12_label_tool import (
     navigation_memory_layer_from_path,
     pixel_to_world,
     render_label_tool_html,
+    scene_bounds_review_seed_packet,
     validate_label_draft_manifest,
     world_to_pixel,
     write_label_tool_artifacts,
@@ -114,7 +109,7 @@ def test_label_tool_packet_starts_from_current_semantics_only(tmp_path: Path) ->
     assert all(label["alignment_status"] == "candidate" for label in manifest["labels"])
 
 
-def test_base_label_review_defaults_to_aligned_overlay_not_raw_source_map(
+def test_label_tool_scene_bound_review_uses_single_label_tool_entrypoint(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -134,35 +129,37 @@ def test_base_label_review_defaults_to_aligned_overlay_not_raw_source_map(
     diagnostic_path.write_text(json.dumps(diagnostic), encoding="utf-8")
     alignment_artifact = _write_verified_alignment_artifact(tmp_path)
 
-    packet = build_base_label_review_packet(
+    packet = build_label_tool_packet(
         map_bundle=MAP_BUNDLE,
-        navigation_memory_path=NAVIGATION_MEMORY,
-        room_semantics_path=ROOM_SEMANTICS,
-        scene_root=SCENE_ROOT,
         scene_topdown_render_path=scene_topdown,
         scene_topdown_diagnostic_path=diagnostic_path,
         alignment_artifact_path=alignment_artifact,
+        room_label_reference_path=ROOM_SEMANTICS,
+        seed_review_shapes_from_scene_bounds=True,
     )
 
-    assert packet["schema"] == BASE_LABEL_REVIEW_PACKET_SCHEMA
-    assert packet["alignment_status"] == "verified"
-    assert packet["policy"]["default_overlay"] == "digital_twin_room_bounds"
-    assert packet["policy"]["map12_candidate_polygons_are_retired"] is True
-    assert packet["scene_projection"]["topdown_image"].endswith("views/top2down.png")
-    assert packet["scene_projection"]["diagnostic_schema"] == "b1_scene_topdown_diagnostic_v1"
-    assert packet["scene_projection"]["digital_twin_room_bounds_count"] >= 6
-    assert packet["summary"]["object_aliases_supported"] is True
-    assert packet["summary"]["room_aliases_recommended_as_required_field"] is True
-    assert {area["digital_twin_partition_id"] for area in packet["areas"]} >= {
+    assert packet["schema"] == LABEL_TOOL_PACKET_SCHEMA
+    assert packet["review_shape_seed_policy"]["enabled"] is True
+    assert packet["review_shape_seed_policy"]["geometry_source"] == "generated_candidate"
+    assert packet["review_shape_seed_policy"]["label_status"] == "candidate_draft_only"
+    assert packet["scene_reference"]["source_topdown_image"].endswith("views/top2down.png")
+    assert packet["scene_reference"]["source_diagnostic"] == str(diagnostic_path)
+    assert len(packet["scene_reference"]["regions"]) >= 6
+    assert {shape["asset_partition_id"] for shape in packet["shapes"]} >= {
         "meeting_room_a",
         "meeting_room_b",
         "meeting_room_c",
     }
     assert all(
-        area["digital_twin_scene_bounds"]["frame_id"] == "digital_twin_scene"
-        for area in packet["areas"]
+        shape["review_seed"]["source"] == "digital_twin_object_aggregate_bbox"
+        for shape in packet["shapes"]
     )
-    assert all(area["human_action"] for area in packet["areas"])
+    assert {label["alignment_status"] for label in packet["initial_draft_manifest"]["labels"]} == {
+        "candidate"
+    }
+    assert {label["review_status"] for label in packet["initial_draft_manifest"]["labels"]} == {
+        "draft"
+    }
 
 
 def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> None:
@@ -369,6 +366,137 @@ def test_label_tool_packet_excludes_scene_evidence_by_default() -> None:
     assert "scene_evidence" not in packet
 
 
+def test_label_tool_does_not_seed_scene_bounds_by_default() -> None:
+    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+
+    assert packet["shapes"] == []
+    assert packet["review_shape_seed_policy"]["enabled"] is False
+    assert "scene_reference" not in packet
+
+
+def test_label_tool_can_seed_editable_draft_labels_from_dt_object_bounds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scene_topdown = _write_fake_scene_topdown_packet(tmp_path)
+    monkeypatch.setattr(
+        scene_diagnostic,
+        "scene_object_bounds_from_usd",
+        lambda _path: _fake_object_bounds_for_all_partitions(),
+    )
+    diagnostic = build_scene_topdown_diagnostic(
+        scene_root=SCENE_ROOT,
+        output_dir=tmp_path / "scene-diagnostic",
+        scene_topdown_render=scene_topdown,
+    )
+    diagnostic["validation"] = {"status": "passed", "errors": []}
+    diagnostic_path = tmp_path / "scene_topdown_diagnostic.json"
+    diagnostic_path.write_text(json.dumps(diagnostic), encoding="utf-8")
+    alignment_artifact = _write_verified_alignment_artifact(tmp_path)
+
+    packet = build_label_tool_packet(
+        map_bundle=MAP_BUNDLE,
+        scene_topdown_render_path=scene_topdown,
+        scene_topdown_diagnostic_path=diagnostic_path,
+        alignment_artifact_path=alignment_artifact,
+        room_label_reference_path=ROOM_SEMANTICS,
+        seed_review_shapes_from_scene_bounds=True,
+    )
+
+    assert packet["review_shape_seed_policy"] == {
+        "enabled": True,
+        "seed_count": 6,
+        "source": str(diagnostic_path),
+        "alignment_artifact": str(alignment_artifact),
+        "room_label_reference": str(ROOM_SEMANTICS),
+        "geometry_source": "generated_candidate",
+        "label_status": "candidate_draft_only",
+        "note": (
+            "Seeds come from Digital Twin object aggregate bboxes transformed back into "
+            "Map12 with verified alignment. They are intentionally draft-only."
+        ),
+    }
+    assert len(packet["shapes"]) == 6
+    meeting_room_b = {shape["asset_partition_id"]: shape for shape in packet["shapes"]}[
+        "meeting_room_b"
+    ]
+    assert meeting_room_b["shape_id"] == "scene_bbox_seed_meeting_room_b"
+    assert meeting_room_b["label"] == "Meeting room B"
+    assert meeting_room_b["semantic_source"] == "digital_twin_object_aggregate_bbox_review_seed"
+    assert meeting_room_b["geometry_source"] == "generated_candidate"
+    assert meeting_room_b["alignment_status"] == "candidate"
+    assert meeting_room_b["review_status"] == "draft"
+    assert meeting_room_b["review_seed"]["source"] == "digital_twin_object_aggregate_bbox"
+    assert meeting_room_b["review_seed"]["source_review_status"] == "accepted"
+    assert meeting_room_b["review_seed"]["object_bounds_count"] == 1
+    assert len(meeting_room_b["geometry"]["polygon"]) == 4
+    assert len(meeting_room_b["geometry"]["pixel_polygon"]) == 4
+    assert packet["scene_reference"]["schema"] == "b1_map12_label_tool_scene_reference_v1"
+    assert packet["scene_reference"]["source_topdown_image"].endswith("views/top2down.png")
+    assert len(packet["scene_reference"]["regions"]) == 6
+
+    manifest = packet["initial_draft_manifest"]
+    assert validate_label_draft_manifest(manifest) == []
+    assert {label["alignment_status"] for label in manifest["labels"]} == {"candidate"}
+    assert {label["review_status"] for label in manifest["labels"]} == {"draft"}
+
+
+def test_label_tool_rejects_scene_bound_seeds_without_verified_alignment(tmp_path: Path) -> None:
+    scene_topdown = _write_fake_scene_topdown_packet(tmp_path)
+    diagnostic = {
+        "schema": scene_diagnostic.DIAGNOSTIC_SCHEMA,
+        "validation": {"status": "passed", "errors": []},
+        "partitions": [
+            {
+                "partition_id": "meeting_room_a",
+                "object_bounds_count": 1,
+                "scene_frame_bounds": {
+                    "status": "extracted_from_scene_usd_world_bounds",
+                    "min_x": 1.0,
+                    "min_y": 2.0,
+                    "max_x": 3.0,
+                    "max_y": 4.0,
+                },
+            }
+        ],
+    }
+    diagnostic_path = tmp_path / "scene_topdown_diagnostic.json"
+    diagnostic_path.write_text(json.dumps(diagnostic), encoding="utf-8")
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(
+        json.dumps(
+            {
+                "global_alignment_status": "candidate",
+                "selected_transform": {
+                    "type": "rigid_2d",
+                    "source": "reviewed_correspondence_fit",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    transform = SourceMapTransform(
+        width_px=913,
+        height_px=716,
+        resolution_m=0.0500000007451,
+        origin_x=-35.1000022888,
+        origin_y=-22.3000011444,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="alignment artifact must have global_alignment_status=verified",
+    ):
+        scene_bounds_review_seed_packet(
+            scene_topdown_diagnostic_path=diagnostic_path,
+            alignment_artifact_path=alignment_path,
+            room_label_reference_path=ROOM_SEMANTICS,
+            scene_topdown_render_path=scene_topdown,
+            transform=transform,
+            frame_id="map",
+        )
+
+
 def test_label_tool_packet_exposes_scene_evidence_without_scene_object_coordinates() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE, include_gaussian_scene=True)
     scene_evidence = packet["scene_evidence"]
@@ -428,9 +556,21 @@ def test_label_tool_html_template_is_external_and_supports_shape_moves() -> None
 
     assert label_tool_template_path().name == "b1_map12_label_tool_template.html"
     assert label_tool_template().startswith("<!doctype html>")
+    assert 'data-mode="rectangle"' in html
+    assert 'id="undoAction"' in html
+    assert "function pushUndoSnapshot" in html
+    assert "function undoLastAction" in html
+    assert "function restoreEditorSnapshot" in html
+    assert "function createRectangleShape" in html
+    assert 'state.drag.type === "newRectangle"' in html
     assert "function moveShapeByDelta" in html
     assert "startGeometry: cloneGeometry(hit.shape.geometry)" in html
     assert "shape.geometry.polygon = geometry.polygon.map" in html
+    assert 'event.key.toLowerCase() === "z"' in html
+    assert 'pushUndoSnapshot("deleteShape")' in html
+    assert 'pushUndoSnapshot("resetInitial")' in html
+    assert 'pushUndoSnapshot("importDraft")' in html
+    assert 'pushUndoSnapshot("newRectangle")' in html
 
 
 def test_label_tool_rotates_polygons_without_rotated_box_schema(tmp_path: Path) -> None:
@@ -511,6 +651,39 @@ def test_label_tool_html_can_include_candidate_scene_panel_when_requested() -> N
     assert "evidence_artifact_links" in html
     assert "candidate_name_match_not_verified_identity" in html
     assert "do_not_project_scene_or_gaussian_objects_without_verified_transform" in html
+
+
+def test_label_tool_html_supports_read_only_scene_reference_canvas() -> None:
+    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    packet["scene_reference"] = {
+        "schema": "b1_map12_label_tool_scene_reference_v1",
+        "image_width_px": 320,
+        "image_height_px": 240,
+        "regions": [
+            {
+                "shape_id": "scene_bbox_seed_meeting_room_a",
+                "partition_id": "meeting_room_a",
+                "label": "Meeting room A",
+                "scene_pixel_polygon": [
+                    {"x": 10, "y": 20},
+                    {"x": 30, "y": 20},
+                    {"x": 30, "y": 40},
+                    {"x": 10, "y": 40},
+                ],
+            }
+        ],
+    }
+
+    html = render_label_tool_html(
+        packet,
+        image_data_url_value="data:image/png;base64,map",
+        scene_reference_data_url_value="data:image/png;base64,scene",
+    )
+
+    assert 'const SCENE_REFERENCE_DATA_URL = "data:image/png;base64,scene"' in html
+    assert 'id="sceneReferenceCanvas"' in html
+    assert "function drawSceneReference" in html
+    assert "Read-only Digital Twin object aggregate bbox reference" in html
 
 
 def test_label_draft_manifest_keeps_circle_candidate_and_review_only() -> None:

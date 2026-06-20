@@ -56,10 +56,10 @@ def test_checked_in_room_semantics_reference_is_dt_label_only() -> None:
         "short_corridor_a",
         "storage_room_a",
     }
-    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
-    assert rooms["meeting_room_b"]["review_status"] == "needs_review"
-    assert rooms["meeting_room_b"]["semantic_source"] == "legacy_operator_room_overlay_candidate"
-    assert "厨房" in rooms["meeting_room_b"]["aliases"]
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["review_status"] == "accepted"
+    assert rooms["meeting_room_b"]["semantic_source"] == "digital_twin_room_semantic_reference"
+    assert "Meeting room B" in rooms["meeting_room_b"]["aliases"]
     assert all("geometry" not in room and "polygon" not in room for room in rooms.values())
     assert all(
         "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()

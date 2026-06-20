@@ -1363,11 +1363,11 @@ def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_b",
-                room_label="Open kitchen",
+                room_label="Meeting room B",
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_c",
-                room_label="Meeting room B",
+                room_label="Meeting room C",
             ),
             accepted_room_reference(
                 asset_partition_id="reception_area_a",
@@ -1400,12 +1400,12 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_b",
-                room_label="Open kitchen",
-                category="kitchen",
+                room_label="Meeting room B",
+                category="meeting_room",
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_c",
-                room_label="Meeting room B",
+                room_label="Meeting room C",
                 category="meeting_room",
             ),
             accepted_room_reference(
@@ -1438,8 +1438,8 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
     assert rooms["meeting_room_a"]["semantic_anchor_count"] == 2
     assert rooms["meeting_room_a"]["navigation_area_id"] == "west_corridor"
     assert rooms["meeting_room_a"]["source_anchor_ids"] == ["anchor_1", "anchor_2"]
-    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
-    assert rooms["meeting_room_b"]["category"] == "kitchen"
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["category"] == "meeting_room"
     assert rooms["meeting_room_b"]["map_polygon"] == [
         {"x": 0.0, "y": 0.0},
         {"x": 2.0, "y": 0.0},
@@ -1460,8 +1460,8 @@ def test_semantic_projection_rejects_pending_room_semantics() -> None:
             ),
             pending_room_reference(
                 asset_partition_id="meeting_room_b",
-                room_label="Open kitchen",
-                category="kitchen",
+                room_label="Meeting room B",
+                category="meeting_room",
             ),
         ]
     )
@@ -1492,11 +1492,11 @@ def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_b",
-                room_label="Open kitchen",
+                room_label="Meeting room B",
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_c",
-                room_label="Meeting room B",
+                room_label="Meeting room C",
             ),
             accepted_room_reference(
                 asset_partition_id="reception_area_a",
@@ -1529,11 +1529,11 @@ def test_semantic_projection_rejects_malformed_anchor_map_polygon() -> None:
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_b",
-                room_label="Open kitchen",
+                room_label="Meeting room B",
             ),
             accepted_room_reference(
                 asset_partition_id="meeting_room_c",
-                room_label="Meeting room B",
+                room_label="Meeting room C",
             ),
             accepted_room_reference(
                 asset_partition_id="reception_area_a",

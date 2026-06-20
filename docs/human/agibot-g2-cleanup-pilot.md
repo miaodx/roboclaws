@@ -56,7 +56,7 @@ just dev::network-status
 当前 vendor submodule 已包含 `robot_map_12`，直接转换它：
 
 ```bash
-python skills/runtime-map-prior-conversion/scripts/convert_navigation_memory.py \
+python scripts/maps/convert_agibot_navigation_memory.py \
   vendors/agibot_sdk/artifacts/maps/robot_map_12 \
   --output output/maps/robot_map_12/runtime_map_prior_snapshot.json \
   --summary-json output/maps/robot_map_12/materialized_targets.json

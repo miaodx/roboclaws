@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -21,20 +20,6 @@ MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
-GENERATOR_PATH = (
-    REPO_ROOT
-    / "skills"
-    / "runtime-map-prior-conversion"
-    / "scripts"
-    / ("generate_scene_room_overlay.py")
-)
-OVERRIDES_PATH = (
-    REPO_ROOT
-    / "skills"
-    / "runtime-map-prior-conversion"
-    / "examples"
-    / "b1_map12_room_semantic_overrides.json"
-)
 
 
 def test_scene_room_overlay_labels_gaussian_partitions_as_public_room_semantics() -> None:
@@ -62,7 +47,7 @@ def test_scene_room_overlay_labels_gaussian_partitions_as_public_room_semantics(
     assert all(item["category"] for item in overlay["room_category_hints"])
 
 
-def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_living_room() -> None:
+def test_scene_room_overlay_accepts_operator_overrides_for_reviewed_room_labels() -> None:
     _require_scene_root()
 
     overlay = build_scene_room_semantic_overlay(
@@ -80,9 +65,9 @@ def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_livi
                 },
                 {
                     "asset_partition_id": "meeting_room_b",
-                    "room_label": "Open kitchen",
-                    "category": "kitchen",
-                    "confidence": 0.92,
+                    "room_label": "Meeting room B",
+                    "category": "meeting_room",
+                    "confidence": 0.88,
                     "semantic_source": "operator_authored_room_overlay",
                     "review_status": "accepted",
                 },
@@ -96,7 +81,7 @@ def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_livi
                 },
                 {
                     "asset_partition_id": "meeting_room_c",
-                    "room_label": "Meeting room B",
+                    "room_label": "Meeting room C",
                     "category": "meeting_room",
                     "confidence": 0.86,
                     "semantic_source": "operator_authored_room_overlay",
@@ -107,12 +92,12 @@ def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_livi
     )
     rooms = {item["asset_partition_id"]: item for item in overlay["rooms"]}
 
-    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
-    assert rooms["meeting_room_b"]["category"] == "kitchen"
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["category"] == "meeting_room"
     assert rooms["meeting_room_b"]["semantic_source"] == "operator_authored_room_overlay"
     assert rooms["meeting_room_a"]["room_label"] == "Meeting room A"
     assert rooms["meeting_room_a"]["category"] == "meeting_room"
-    assert rooms["meeting_room_c"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_c"]["room_label"] == "Meeting room C"
     assert rooms["meeting_room_c"]["category"] == "meeting_room"
     assert rooms["reception_area_a"]["category"] == "living_room"
 
@@ -238,34 +223,37 @@ def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
     assert semantics["provenance"]["room_semantics_reference"] == str(ROOM_SEMANTICS)
 
 
-def test_scene_room_overlay_skill_script_writes_overlay_and_bundle(
+def test_scene_room_overlay_builder_writes_review_overlay_without_bundle_side_effect(
     tmp_path: Path,
 ) -> None:
     _require_scene_root()
 
-    generator = _load_module(GENERATOR_PATH, "generate_scene_room_overlay")
     output = tmp_path / "room_semantic_overlay.json"
-
-    generator.main(
-        [
-            str(SCENE_ROOT),
-            "--source-bundle-dir",
-            str(MAP12_BUNDLE),
-            "--overrides-json",
-            str(OVERRIDES_PATH),
-            "--output",
-            str(output),
-        ]
+    overlay = build_scene_room_semantic_overlay(
+        SCENE_ROOT,
+        source_bundle_dir=MAP12_BUNDLE,
+        overrides={
+            "rooms": [
+                {
+                    "asset_partition_id": "meeting_room_b",
+                    "room_label": "Meeting room B",
+                    "category": "meeting_room",
+                    "semantic_source": "operator_authored_room_overlay",
+                    "confidence": 0.88,
+                    "review_status": "accepted",
+                }
+            ]
+        },
     )
+    output.write_text(json.dumps(overlay, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    written_overlay = json.loads(output.read_text(encoding="utf-8"))
 
-    overlay = json.loads(output.read_text(encoding="utf-8"))
-
-    assert overlay["schema"] == ROOM_SEMANTIC_OVERLAY_SCHEMA
-    assert {item["asset_partition_id"] for item in overlay["rooms"]} >= {
+    assert written_overlay["schema"] == ROOM_SEMANTIC_OVERLAY_SCHEMA
+    assert {item["asset_partition_id"] for item in written_overlay["rooms"]} >= {
         "meeting_room_a",
         "storage_room_a",
     }
-    assert any(item["room_label"] == "Open kitchen" for item in overlay["rooms"])
+    assert any(item["room_label"] == "Meeting room B" for item in written_overlay["rooms"])
     assert not (tmp_path / "bundle").exists()
 
 
@@ -277,11 +265,11 @@ def test_checked_in_b1_room_semantics_is_dt_label_reference_only() -> None:
     assert payload["policy"]["source_of_truth"] == "digital_twin_scene_partitions"
     assert payload["policy"]["contains_map12_candidate_polygons"] is False
     assert payload["policy"]["contains_navigation_area_bindings"] is False
-    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
-    assert rooms["meeting_room_b"]["review_status"] == "needs_review"
-    assert rooms["meeting_room_b"]["semantic_source"] == "legacy_operator_room_overlay_candidate"
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["review_status"] == "accepted"
+    assert rooms["meeting_room_b"]["semantic_source"] == "digital_twin_room_semantic_reference"
     assert rooms["reception_area_a"]["category"] == "living_room"
-    assert {room["review_status"] for room in rooms.values()} == {"accepted", "needs_review"}
+    assert {room["review_status"] for room in rooms.values()} == {"accepted"}
     assert all(
         "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()
     )
@@ -298,11 +286,3 @@ def _minimal_scene_root(tmp_path: Path) -> Path:
     (partition / "scene.usd").write_text("#usda 1.0\n", encoding="utf-8")
     return tmp_path / "scene"
 
-
-def _load_module(path: Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
