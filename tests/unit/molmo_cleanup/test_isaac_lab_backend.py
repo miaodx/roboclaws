@@ -74,11 +74,11 @@ def _write_b1_scene_gs_fixture(source_dir: Path) -> Path:
     source_dir.mkdir()
     scene_gs = source_dir / "scene_gs.usda"
     scene_gs.write_text(
-        '#usda 1.0\n'
+        "#usda 1.0\n"
         'def Xform "combined" {\n'
         '    def "sim" (prepend references = @./scene.usd@) {}\n'
         '    def Xform "gs" (prepend references = @./xm_large_scene.usdz@) {}\n'
-        '}\n',
+        "}\n",
         encoding="utf-8",
     )
     (source_dir / "scene.usd").write_text("#usda 1.0\n", encoding="utf-8")
@@ -87,6 +87,49 @@ def _write_b1_scene_gs_fixture(source_dir: Path) -> Path:
         archive.writestr("gauss.usda", "#usda 1.0\n")
         archive.writestr("xm_large_scene.nurec", b"nurec")
     return scene_gs
+
+
+def test_isaac_worker_read_state_rejects_missing_state_source(tmp_path: Path) -> None:
+    missing = tmp_path / "missing_state.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"Isaac worker state source is missing: .*missing_state\.json",
+    ):
+        isaac_lab_backend_worker.read_state(missing)
+
+
+def test_isaac_worker_read_state_rejects_malformed_state_source(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{bad json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Isaac worker state source must contain valid JSON object: .*state\.json",
+    ):
+        isaac_lab_backend_worker.read_state(state_path)
+
+
+def test_isaac_worker_read_state_rejects_non_object_state_source(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Isaac worker state source must contain a JSON object: .*state\.json",
+    ):
+        isaac_lab_backend_worker.read_state(state_path)
+
+
+def test_isaac_worker_read_state_preserves_state_path(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state = {"schema": "isaac_lab_backend_state_v1", "scenario": {"objects": []}}
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    loaded = isaac_lab_backend_worker.read_state(state_path)
+
+    assert loaded["schema"] == "isaac_lab_backend_state_v1"
+    assert loaded["_state_path"] == str(state_path)
 
 
 def test_isaac_lab_backend_reports_missing_runtime(tmp_path: Path) -> None:

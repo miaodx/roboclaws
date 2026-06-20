@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac worker state loading now routes required state-file reads
+  through `roboclaws.core.json_sources.read_json_object` before adding the
+  private `_state_path` runtime field. Missing, malformed, and non-object
+  worker state files now fail with path-labelled source errors instead of raw
+  parser/type failures. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: required worker source-reader consolidation with
+  unchanged valid-state behavior. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  this slice did not add new complexity in touched files. Proof: focused
+  Isaac worker state source-error and valid-state tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/isaac_worker_protocol.py` regains a local raw
+  JSON-object reader for required state files or valid state reads stop
+  preserving `_state_path`.
+
 - 2026-06-20: Agibot metric-map generation now routes the required
   `context_json` source through `roboclaws.core.json_sources.read_json_object`
   before map-context schema validation. Missing, malformed, and non-object
