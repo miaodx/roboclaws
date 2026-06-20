@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner-proof attachment loading now uses
+  `roboclaws.core.json_sources.read_json_object` for strict proof
+  `run_result.json` sources before evidence validation or proof-image copies.
+  Missing, malformed, or parseable non-object proof results now use canonical
+  path-labelled source wording instead of raw file/JSON parser failures.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation / fail-aloud source validation. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  planner-proof attachment tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  planner-proof attachment loading regains a local raw JSON file reader or
+  corrupt proof `run_result.json` sources can again reach strict evidence
+  validation as wrong-shaped payloads.
+
 - 2026-06-20: Compressed Agibot raw-map loading now uses
   `roboclaws.core.json_sources.read_gzip_json_object` for Map 12 consistency
   checks and Agibot Nav2 bundle export. Malformed, parseable non-object,

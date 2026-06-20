@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Compressed Agibot raw-map loading now routes Map 12 consistency
-and Agibot Nav2 bundle export reads through a shared gzip JSON-object source
-helper. Malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources
-use canonical path-labelled source wording, and the consistency checker returns
-source errors instead of generic missing-metadata results or tracebacks.
-Focused core JSON-source, Map 12 consistency, and Agibot map-bundle export
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
-Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Planner-proof attachment loading now routes strict proof
+`run_result.json` sources through the shared JSON-object source helper.
+Missing, malformed, or non-object proof run results fail with canonical
+path-labelled source wording before strict planner-backed evidence validation
+or image copies. Focused planner-proof attachment and core JSON-source tests,
+touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
+signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -68,6 +67,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/maps/bundle_validation.py`
 - `roboclaws/maps/project.py`
 - `roboclaws/household/agibot_map_bundle.py`
+- `roboclaws/household/planner_proof_attachment.py`
 - `roboclaws/cli/household_agent_server.py`
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
@@ -97,6 +97,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/visual_grounding/test_visual_grounding_corpus_builder.py`
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `tests/unit/molmo_cleanup/test_molmo_planner_proof_attachment.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_prior_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_planner_proof_request_sources.py`

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
@@ -25,7 +25,7 @@ def attach_planner_proof(
 ) -> dict[str, Any]:
     """Validate and copy a strict planner proof into a cleanup run directory."""
     proof_path = Path(proof_run_result_path)
-    proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    proof = read_json_object(proof_path, label="planner proof run result")
     evidence = _strict_planner_evidence(proof)
     copied_images = _copy_proof_images(
         proof_base=proof_path.parent,

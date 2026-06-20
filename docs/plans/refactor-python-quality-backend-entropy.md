@@ -101,6 +101,10 @@ Latest quality snapshot from 2026-06-20:
   malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources fail
   with path-labelled source errors instead of tracebacks or generic
   missing-metadata results.
+  Planner-proof attachment loading now routes strict proof `run_result.json`
+  sources through the shared JSON-object helper, so missing, malformed, or
+  non-object proof results fail with path-labelled source errors before strict
+  evidence validation or proof-image copies.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
