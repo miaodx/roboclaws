@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Agibot map-context capture/update and PNC waypoint verification
+  now route required operator-authored context reads through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, and
+  non-object context files now fail with path-labelled source errors before
+  capture upsert or robot waypoint verification, while the verifier's existing
+  authoring-schema validation remains unchanged. Owner layer: Backend Runtime
+  / Environment Primitive tooling at the Agibot map-authoring boundary.
+  Behavior-change class: required CLI source-reader consolidation with
+  fail-aloud diagnostics. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched Agibot contract test remains oversized at 1112 lines. Proof:
+  focused Agibot source-error tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/agibot/capture_map_context_views.py` or
+  `scripts/agibot/verify_waypoints_with_pnc.py` regain local raw JSON-object
+  readers for required context files or source diagnostics stop naming the
+  failing context path.
+
 - 2026-06-20: MolmoSpaces subprocess worker state loading now routes required
   state-file reads through `roboclaws.core.json_sources.read_json_object`.
   Missing, malformed, and non-object worker state files now fail with

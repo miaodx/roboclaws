@@ -197,7 +197,10 @@ Latest quality snapshot from 2026-06-20:
   Agibot metric-map generation now routes the required `context_json` source
   through the shared helper before map-context validation, so missing,
   malformed, or non-object authoring context files fail with path-labelled
-  source errors instead of raw parser/type failures.
+  source errors instead of raw parser/type failures. Agibot map-context
+  capture/update and PNC waypoint verification now use the same required
+  context source reader before capture upsert or robot waypoint verification
+  while preserving existing schema validation.
   Isaac worker state loading now routes required state-file reads through the
   shared helper before adding the private `_state_path` runtime field, so
   missing, malformed, or non-object worker state files fail with path-labelled

@@ -13,6 +13,13 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
+
 CAMERA_NAMES = (
     "head_back_fisheye",
     "head_left_fisheye",
@@ -340,12 +347,10 @@ def _authoring_template(
 
 
 def _load_context(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise SystemExit(f"context file does not exist: {path}")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise SystemExit(f"context file must contain a JSON object: {path}")
-    return data
+    try:
+        return read_json_object(path, label="Agibot map context")
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _upsert_capture_into_context(

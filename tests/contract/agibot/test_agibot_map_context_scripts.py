@@ -227,6 +227,33 @@ def test_capture_context_upsert_records_multiple_waypoints(tmp_path: Path) -> No
     )
 
 
+def test_capture_context_loader_rejects_invalid_context_sources(tmp_path: Path) -> None:
+    capture = _load_module(CAPTURE_PATH, "capture_map_context_views_source_errors")
+    missing = tmp_path / "missing_context.json"
+    malformed = tmp_path / "malformed_context.json"
+    non_object = tmp_path / "array_context.json"
+    malformed.write_text("{bad json\n", encoding="utf-8")
+    non_object.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit, match=r"Agibot map context source is missing: .*missing_context\.json"
+    ):
+        capture._load_context(missing)
+    with pytest.raises(
+        SystemExit,
+        match=(
+            r"Agibot map context source must contain valid JSON object: "
+            r".*malformed_context\.json"
+        ),
+    ):
+        capture._load_context(malformed)
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot map context source must contain a JSON object: .*array_context\.json",
+    ):
+        capture._load_context(non_object)
+
+
 def test_verify_helpers_select_map_check_and_record_status() -> None:
     verifier = _load_module(VERIFY_PATH, "verify_waypoints_with_pnc")
     context = _completed_context()
@@ -262,6 +289,37 @@ def test_verify_helpers_select_map_check_and_record_status() -> None:
     assert map_check["ok"] is True
     assert selected[0]["reachability_status"] == "verified"
     assert selected[0]["verification"]["primitive_provenance"] == "agibot_gdk_normal_navi"
+
+
+def test_verify_context_loader_rejects_invalid_context_sources(tmp_path: Path) -> None:
+    verifier = _load_module(VERIFY_PATH, "verify_waypoints_with_pnc_source_errors")
+    missing = tmp_path / "missing_context.json"
+    malformed = tmp_path / "malformed_context.json"
+    non_object = tmp_path / "array_context.json"
+    wrong_schema = tmp_path / "wrong_schema_context.json"
+    malformed.write_text("{bad json\n", encoding="utf-8")
+    non_object.write_text("[]", encoding="utf-8")
+    wrong_schema.write_text(json.dumps({"schema": "wrong"}), encoding="utf-8")
+
+    with pytest.raises(
+        SystemExit, match=r"Agibot map context source is missing: .*missing_context\.json"
+    ):
+        verifier._load_context(missing)
+    with pytest.raises(
+        SystemExit,
+        match=(
+            r"Agibot map context source must contain valid JSON object: "
+            r".*malformed_context\.json"
+        ),
+    ):
+        verifier._load_context(malformed)
+    with pytest.raises(
+        SystemExit,
+        match=r"Agibot map context source must contain a JSON object: .*array_context\.json",
+    ):
+        verifier._load_context(non_object)
+    with pytest.raises(SystemExit, match="context schema must be"):
+        verifier._load_context(wrong_schema)
 
 
 def test_verify_waypoint_timeout_records_cancel_evidence(monkeypatch) -> None:

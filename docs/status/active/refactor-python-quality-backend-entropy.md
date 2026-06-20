@@ -17,27 +17,31 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces subprocess worker state loading now routes required
-state-file reads through the shared JSON-object helper. Missing, malformed,
-and non-object worker state files fail with path-labelled source errors while
-valid state payloads remain unchanged. Focused MolmoSpaces worker state
-source-error and valid-state tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: Agibot map-context capture/update and PNC waypoint verification
+now route required operator-authored context reads through the shared
+JSON-object helper. Missing, malformed, and non-object authoring-context files
+fail with path-labelled source errors before capture upsert or robot waypoint
+verification, while existing schema validation remains unchanged. Focused
+Agibot source-error tests, touched-file Ruff/format, `git diff --check`, and
+ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
-801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry rolled out of
-the top-80 list after the touched Agibot contract test grew, but remains
-unrelated no-touch debt.
+801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+unrelated no-touch debt. The touched Agibot contract test remains oversized and
+grew to 1112 lines; that is recorded ratchet pressure, not part of this
+source-reader slice.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces worker state source-reader slice.
+committing the Agibot map-context source-reader slice.
 
 ## Touched Areas
 
 - `scripts/molmo_cleanup/molmospaces_worker_protocol.py`
+- `scripts/agibot/capture_map_context_views.py`
+- `scripts/agibot/verify_waypoints_with_pnc.py`
 - `scripts/agibot/generate_metric_map_from_context.py`
 - `scripts/isaac_lab_cleanup/isaac_worker_protocol.py`
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
