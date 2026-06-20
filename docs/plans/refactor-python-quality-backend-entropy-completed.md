@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Agibot SDK runner strict JSON-object artifact reads now route
+  through `roboclaws.core.json_sources.read_json_object`. Malformed or
+  non-object context, agent-view, and subphase result artifacts now fail with
+  path-labelled source errors before adapter consumers derive metric-map,
+  fixture projection, or stage metadata. Owner layer: Backend Runtime /
+  Environment Primitive. Behavior-change class: source-reader consolidation
+  for strict Agibot SDK runner artifacts. Metric: current shared-checkout
+  ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched runner module is 1189 lines and its focused test file is 44
+  lines. Proof: focused Agibot SDK runner source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/agibot_sdk_runner.py` regains local raw JSON parsing for
+  context, agent-view, or subphase result artifacts, or corrupt/non-object
+  strict artifacts can reach metric-map, fixture-projection, or stage metadata
+  consumers.
+
 - 2026-06-20: Scene-camera source artifacts now route optional nearby
   `isaac_scene_index.json` probes through
   `roboclaws.core.json_sources.read_json_object` while preserving the

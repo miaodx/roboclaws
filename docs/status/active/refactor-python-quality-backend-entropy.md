@@ -17,22 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-camera source artifacts now route optional nearby
-`isaac_scene_index.json` probes through the shared JSON-object source helper
-while preserving the permissive optional-index contract: malformed,
-non-object, unreadable, or mismatched nearby indexes are ignored, and matching
-valid scene indexes still provide USD prim hints. Focused scene-camera source
-artifact tests and nearby Isaac view-spec tests passed. Current shared-checkout
-ratchet summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: Agibot SDK runner strict JSON-object artifact reads now route
+through the shared JSON-object source helper. Malformed or non-object context,
+agent-view, and subphase result artifacts fail with path-labelled source errors
+before adapter consumers derive metric-map, fixture projection, or stage
+metadata. Focused Agibot SDK runner source tests passed. Current
+shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row
+in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Grasp filter diagnostics now route present candidate-grasp JSON
-artifact reads through the shared JSON-object source helper.
+Previous slice: Scene-camera source artifacts now route optional nearby
+`isaac_scene_index.json` probes through the shared JSON-object source helper
+while preserving the permissive optional-index contract.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the scene-camera optional index source-reader slice.
+committing the Agibot SDK runner artifact source-reader slice.
 
 ## Touched Areas
 
@@ -172,6 +172,7 @@ committing the scene-camera optional index source-reader slice.
 - `tests/unit/molmo_cleanup/test_robot_camera_prior_probe_sources.py`
 - `tests/unit/molmo_cleanup/test_molmo_grasp_initial_contact_diagnostics.py`
 - `tests/unit/molmo_cleanup/test_scene_camera_source_artifacts.py`
+- `tests/unit/molmo_cleanup/test_agibot_sdk_runner_sources.py`
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`

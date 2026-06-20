@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household import profiles as evidence_profiles
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import DEFAULT_AGIBOT_CONFIDENCE_LAYER
@@ -1177,10 +1178,7 @@ def _initial_locations(scenario: CleanupScenario) -> dict[str, str]:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"JSON object expected: {path}")
-    return data
+    return read_json_object(path, label="Agibot SDK runner artifact")
 
 
 def _relpath(path: Path | str, root: Path) -> str:
