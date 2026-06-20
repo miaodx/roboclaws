@@ -17,24 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Grasp initial-contact diagnostics now route parent-side child probe
-result reads through the shared JSON-object source helper. Present malformed or
-non-object `initial_contact_probe_result.json` files fail with path-labelled
-source errors before variant summary/report assembly; the embedded MuJoCo child
-script and candidate-grasp parsing behavior remain unchanged. Focused
-initial-contact diagnostics tests and touched-file Ruff/format passed. Current
-shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row
-in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: Grasp filter diagnostics now route present candidate-grasp JSON
+artifact reads through the shared JSON-object source helper. Missing candidate
+grasp files keep the existing blocked-result path, while malformed or
+non-object `*_grasps.json` files now fail with path-labelled source errors
+before subset generation, candidate counting, or filter-variant execution.
+Focused grasp-filter diagnostics tests passed. Current shared-checkout ratchet
+summary still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Robot-camera apple-to-apple prior-probe manifest readers now
-route light/shadow, material-response, and tone/color comparison history
-manifests through the shared JSON-object source helper while preserving the
-optional report contract.
+Previous slice: Grasp initial-contact diagnostics now route parent-side child
+probe result reads through the shared JSON-object source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the grasp initial-contact probe-result source-reader slice.
+committing the grasp filter candidate-grasp source-reader slice.
 
 ## Touched Areas
 

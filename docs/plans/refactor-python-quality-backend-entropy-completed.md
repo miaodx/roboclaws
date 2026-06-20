@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Grasp filter diagnostics now route present candidate-grasp JSON
+  artifact reads through `roboclaws.core.json_sources.read_json_object`.
+  Missing candidate-grasp files keep the existing blocked-result path, while
+  malformed or non-object `*_grasps.json` sources now fail with path-labelled
+  source errors before subset generation, candidate counting, or filter-variant
+  execution. Owner layer: Backend Runtime / Environment Primitive diagnostics.
+  Behavior-change class: fail-aloud source-reader consolidation for diagnostic
+  candidate-grasp evidence. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched diagnostics module is 516 lines and its focused test file is 162
+  lines. Proof: focused grasp-filter diagnostics tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/grasp_filter_diagnostics.py` regains local raw JSON
+  parsing for candidate-grasp artifacts or malformed/non-object
+  candidate-grasp sources can reach subset, count, or variant execution.
+
 - 2026-06-20: Grasp initial-contact diagnostics now route parent-side child
   `initial_contact_probe_result.json` reads through
   `roboclaws.core.json_sources.read_json_object`. Present malformed or
