@@ -6465,6 +6465,19 @@ logs before choosing the next slice.
   check, changed-code cleanup review, and ratchet. Reopen only if
   `planner_manipulation_probe_result.py` again silently skips malformed or
   non-object JSON-looking worker stdout rows.
+- Household cleanup and Agibot map-build MCP server self-trace loading now
+  routes `trace.jsonl` through the shared JSONL source helper instead of local
+  ad hoc readers. Malformed or non-object trace rows surface as
+  server-labelled source errors at the `done` boundary before readiness,
+  policy trace, raw-FPV observation, or run-result evidence can pass from a
+  partial MCP trace. Owner layer: MCP Capability Contract And Tools plus Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud source-reader
+  consolidation. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: focused cleanup and Agibot MCP server contract
+  tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if `realworld_mcp_server.py` or
+  `agibot_map_build_mcp_server.py` regains local permissive/self-trace parsing
+  or accepts malformed/non-object `trace.jsonl` rows before done evidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

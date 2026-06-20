@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Planner manipulation probe stdout parsing now fails malformed or
+2026-06-21: Household cleanup and Agibot map-build MCP server self-trace
+readers now route `trace.jsonl` through the shared JSONL source helper.
+Malformed or non-object rows now surface as server-labelled source errors at
+the `done` boundary before readiness, policy trace, raw-FPV observation, or
+run-result evidence can derive confidence from a partial MCP trace. Focused
+cleanup and Agibot MCP server contract tests, touched-file ruff, touched-file
+format checks, diff check, changed-code cleanup review, and the ratchet summary
+passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Planner manipulation probe stdout parsing now fails malformed or
 non-object JSON-looking worker rows aloud instead of silently skipping them
 before timeout/runtime diagnostics are attached to manipulation evidence.
 Ordinary non-JSON log lines remain tolerated. Focused planner manipulation
@@ -181,7 +191,7 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the planner manipulation probe stdout-source slice. Avoid reopening
+committing the MCP self-trace source slice. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
@@ -190,6 +200,9 @@ without fresh false-green evidence. Avoid reopening Agibot map-build,
 Isaac semantic-pose, RAW-FPV private-label, cleanup artifact-report trace, or
 planner manipulation probe stdout-source validation unless fresh
 checker/generator/report/probe evidence shows false confidence again.
+Avoid reopening household cleanup or Agibot map-build MCP self-trace parsing
+unless fresh live-server evidence shows corrupt present `trace.jsonl` rows can
+again feed readiness/done/run-result evidence.
 
 ## Touched Areas
 
@@ -201,6 +214,10 @@ checker/generator/report/probe evidence shows false confidence again.
 - `tests/contract/reports/test_molmo_cleanup_artifact_report.py`
 - `scripts/molmo_cleanup/planner_manipulation_probe_result.py`
 - `tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
+- `roboclaws/household/realworld_mcp_server.py`
+- `roboclaws/household/agibot_map_build_mcp_server.py`
+- `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+- `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`
 - `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
 - `tests/contract/checkers/test_agibot_map_build_checker_trace_sources.py`
 - `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`

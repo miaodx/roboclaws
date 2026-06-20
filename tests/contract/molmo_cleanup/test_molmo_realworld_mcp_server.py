@@ -258,6 +258,28 @@ def test_realworld_mcp_relative_pose_tool_traces_request_and_response(tmp_path: 
     )
 
 
+def test_realworld_mcp_done_surfaces_corrupt_trace_source(tmp_path: Path) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
+    )
+    try:
+        with (tmp_path / "trace.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write("[]\n")
+
+        response = server.call_tool("done", reason="source validation probe")
+    finally:
+        server.close()
+
+    assert response["ok"] is False
+    assert response["status"] == "error"
+    assert response["error_reason"] == "exception"
+    assert "Molmo real-world MCP trace source row must contain a JSON object" in response["error"]
+    assert "trace.jsonl:2" in response["error"]
+
+
 def test_realworld_mcp_operator_messages_pending_hint_and_seen(tmp_path: Path) -> None:
     operator_messages = tmp_path / "operator_messages.jsonl"
     operator_messages.write_text(

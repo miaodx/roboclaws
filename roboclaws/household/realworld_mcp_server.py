@@ -13,6 +13,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as MCPImage
 
+from roboclaws.core.json_sources import read_jsonl_objects
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -797,11 +798,7 @@ class RealWorldMolmoCleanupMCPServer:
     def _read_trace_events(self) -> list[dict[str, Any]]:
         with self._trace_lock:
             self._trace_fp.flush()
-        return [
-            json.loads(line)
-            for line in self.trace_path.read_text(encoding="utf-8").splitlines()
-            if line
-        ]
+        return read_jsonl_objects(self.trace_path, label="Molmo real-world MCP trace")
 
 
 def _compact_declare_visual_candidates_response(response: dict[str, Any]) -> dict[str, Any]:

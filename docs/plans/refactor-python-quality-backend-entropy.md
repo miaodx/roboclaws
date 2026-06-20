@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MCP self-trace source slice:
+  household cleanup and Agibot map-build MCP server self-trace reads now route
+  through the shared JSONL source helper, so malformed or non-object
+  `trace.jsonl` rows fail with server-labelled source errors before done
+  readiness, policy trace, raw-FPV observation, or run-result evidence can
+  derive confidence from partial MCP trace data.
 - Current shared-checkout note after the planner manipulation probe
   stdout-source slice: worker stdout parsing now fails malformed or non-object
   JSON-looking rows aloud while preserving ordinary log-line tolerance, so
