@@ -17,22 +17,21 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Realworld MCP smoke runner result loading now routes the required
+2026-06-20: Live Codex Agibot map-build result loading now routes the required
 `run_result.json` object source through the shared source helper. Missing,
-malformed, or non-object smoke result artifacts now fail with path-labelled
-source errors before checker/report consumers derive confidence from
-wrong-shaped evidence. Focused smoke artifact contract tests, touched-file ruff,
-touched-file format checks, diff check, and the ratchet summary passed.
+malformed, or non-object live map-build result artifacts now fail with
+path-labelled source errors before route identity checks or report links derive
+confidence from wrong-shaped evidence. Focused Agibot map-build runner unit
+tests, touched-file ruff, touched-file format checks, diff check, and the
+ratchet summary passed.
 
-Previous slice: Scene-sampler required Procthor preview metadata loading now
-routes `molmospaces-val_<N>-preview.json` object sources through the shared
-source helper while preserving missing-source, source-id, and backend
-validation.
+Previous slice: Realworld MCP smoke runner result loading now routes the
+required `run_result.json` object source through the shared source helper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the smoke-runner result source-reader slice.
+committing the live Codex Agibot map-build result source-reader slice.
 
 ## Touched Areas
 
@@ -70,6 +69,8 @@ committing the smoke-runner result source-reader slice.
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
+- `scripts/molmo_cleanup/run_live_codex_agibot_map_build.py`
+- `tests/unit/molmo_cleanup/test_live_codex_agibot_map_build.py`
 - `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py`
 - `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_smoke_artifacts.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`

@@ -5985,6 +5985,18 @@ logs before choosing the next slice.
   Reopen only if `run_molmo_realworld_agent_mcp_smoke.py` regains direct
   `json.loads(read_text(...))` result artifact parsing or accepts non-object
   result evidence.
+- Live Codex Agibot map-build result loading now routes required
+  `run_result.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object live map-build result artifacts fail with
+  path-labelled source errors before route identity checks or report links
+  derive confidence from wrong-shaped evidence. Owner layer: Agent Engines and
+  Provider Profiles plus Artifacts, reports, and eval suites.
+  Behavior-change class: strict source-reader consolidation. Metric: ratchet
+  remains at 1 Ruff complexity row and 80 oversized modules. Proof: focused
+  Agibot map-build runner unit tests, ruff, format check, diff check, and
+  ratchet. Reopen only if `run_live_codex_agibot_map_build.py` regains direct
+  `json.loads(read_text(...))` result artifact parsing or accepts non-object
+  result evidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
