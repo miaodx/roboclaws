@@ -2801,7 +2801,7 @@ def _assert_openai_agents_timeline_and_checker(
         (
             "trace.jsonl",
             json.dumps({"event": "request", "tool": "done"}) + "\n[]\n",
-            "trace.jsonl:2: non-object JSON: list",
+            "OpenAI Agents live source row must contain a JSON object",
         ),
     ],
 )
@@ -4964,7 +4964,11 @@ def test_openai_agents_event_metrics_fail_aloud_on_malformed_event_source(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"openai-agents-events\.jsonl:2.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain valid JSON object: "
+        r".*openai-agents-events\.jsonl:2",
+    ):
         _openai_agents_event_metrics(run_dir)
 
 
@@ -5166,7 +5170,11 @@ def test_openai_agents_span_metrics_fail_aloud_on_non_object_span_source(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"openai-agents-spans\.jsonl:1.*non-object JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain a JSON object: "
+        r".*openai-agents-spans\.jsonl:1",
+    ):
         _openai_agents_span_metrics(run_dir)
 
 
@@ -5287,7 +5295,10 @@ def test_openai_agents_context_growth_metrics_fail_aloud_on_malformed_trace_sour
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain valid JSON object: .*trace\.jsonl:2",
+    ):
         _context_growth_metrics(run_dir, {})
 
 

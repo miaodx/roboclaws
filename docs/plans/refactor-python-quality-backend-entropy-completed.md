@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents metrics JSONL reads now delegate to the shared
+  JSONL source owner through the existing metrics helper. Missing
+  `openai-agents-events*.jsonl`, `openai-agents-spans*.jsonl`, and
+  `trace.jsonl` files remain intentional empty evidence, while malformed or
+  non-object present rows now use canonical `OpenAI Agents metrics` or
+  `OpenAI Agents live` row-source diagnostics before event, span,
+  context-growth, or live-timing metrics can derive confidence from partial
+  artifacts. Owner layer: Agent Engines And Provider Profiles plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal source-reader
+  consolidation with stable optional-missing semantics and canonical row-source
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; the metrics helper
+  drops below the 800-line oversized threshold. Proof: focused OpenAI Agents
+  metrics source tests, existing live-runtime metrics source tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/openai_agents_metrics.py` regains a local JSONL row
+  parser or corrupt present OpenAI Agents metrics/live trace rows can again
+  feed metrics or live timing without canonical row-source diagnostics.
+
 - 2026-06-21: RAW-FPV perception probe Codex event JSONL reads now delegate to
   the shared JSONL source owner, including a new line-numbered row helper for
   consumers that need row-local secondary parsing. Present malformed or

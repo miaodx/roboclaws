@@ -22,6 +22,14 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents metrics JSONL source
+  consolidation slice: metrics and live-timing JSONL event reads now route
+  present OpenAI Agents event, span, and trace rows through the shared JSONL
+  source owner. Missing metric JSONL files remain intentional empty evidence,
+  while malformed or non-object present rows use canonical `OpenAI Agents
+  metrics` or `OpenAI Agents live` row-source diagnostics before event, span,
+  context-growth, or live-timing metrics can derive confidence from partial
+  artifacts.
 - Current shared-checkout note after the RAW-FPV Codex event artifact source
   consolidation slice: the perception probe now routes present
   `codex-events*.jsonl` rows through the shared JSONL source owner, including

@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: RAW-FPV perception probe Codex event artifact reads now use the
+2026-06-21: OpenAI Agents metrics JSONL reads now use the shared JSONL source
+owner instead of a local row parser. The existing metrics helper keeps missing
+`openai-agents-events*.jsonl`, `openai-agents-spans*.jsonl`, and `trace.jsonl`
+sources as intentional empty evidence, while malformed or non-object present
+rows now use canonical `OpenAI Agents metrics` or `OpenAI Agents live`
+row-source wording before event/span/context-growth metrics or live timing can
+derive confidence from partial JSONL artifacts. Focused proof passed:
+OpenAI Agents metrics source tests, existing live-runtime metrics source
+tests, touched-file ruff, touched-file format check, diff check, changed-code
+cleanup review, and ratchet summary. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: RAW-FPV perception probe Codex event artifact reads now use the
 shared JSONL source owner instead of a local row parser. The shared helper can
 also return source line numbers for callers that need row-local secondary
 parsing, so malformed or non-object present `codex-events*.jsonl` rows use
