@@ -125,6 +125,8 @@ Latest quality snapshot from 2026-06-20:
   prepared USD summaries, paired comparison manifests, report visual sample
   manifests, and nested RGB-gain source manifests as JSON-object source truth
   before writing `visual_parity_summary.json` or `report.html`.
+  B1 asset visual comparisons now treat explicit baseline/candidate navigation
+  artifacts as JSON-object source truth before writing comparison outputs.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.

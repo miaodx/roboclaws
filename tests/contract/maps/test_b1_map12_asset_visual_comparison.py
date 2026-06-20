@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from scripts.isaac_lab_cleanup.check_b1_map12_asset_visual_comparison import (
@@ -14,6 +17,9 @@ from tests.contract.maps.test_b1_map12_digital_twin_readiness import (
     _write_reviewable_image,
     navigation_payload,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "check_b1_map12_asset_visual_comparison.py"
 
 
 def test_asset_visual_comparison_accepts_custom_scene_same_pose_evidence(
@@ -47,6 +53,92 @@ def test_asset_visual_comparison_accepts_custom_scene_same_pose_evidence(
     assert artifact["candidate"]["navigation_status"] == "blocked"
     assert artifact["waypoint_count"] == 2
     assert artifact["validation"]["errors"] == []
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "navigation artifact must contain valid JSON object"),
+        ("[]\n", "navigation artifact must contain a JSON object"),
+    ),
+)
+def test_asset_visual_comparison_cli_rejects_bad_baseline_navigation_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    baseline_path = tmp_path / "bad_navigation_smoke.json"
+    candidate_path = _write_custom_scene_navigation(
+        tmp_path / "v2",
+        scene_usd="output/assets/v2/default.usda",
+    )
+    output_path = tmp_path / "asset_visual_comparison.json"
+    baseline_path.write_text(source, encoding="utf-8")
+
+    completed = _run_asset_visual_comparison(
+        baseline_navigation=baseline_path,
+        candidate_navigation=candidate_path,
+        output=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(baseline_path) in completed.stderr
+    assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "navigation artifact must contain valid JSON object"),
+        ("[]\n", "navigation artifact must contain a JSON object"),
+    ),
+)
+def test_asset_visual_comparison_cli_rejects_bad_candidate_navigation_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    baseline_path = _write_custom_scene_navigation(
+        tmp_path / "v1",
+        scene_usd="output/assets/v1/default.usda",
+    )
+    candidate_path = tmp_path / "bad_navigation_smoke.json"
+    output_path = tmp_path / "asset_visual_comparison.json"
+    candidate_path.write_text(source, encoding="utf-8")
+
+    completed = _run_asset_visual_comparison(
+        baseline_navigation=baseline_path,
+        candidate_navigation=candidate_path,
+        output=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(candidate_path) in completed.stderr
+    assert not output_path.exists()
+
+
+def test_asset_visual_comparison_cli_rejects_missing_navigation_source(
+    tmp_path: Path,
+) -> None:
+    baseline_path = tmp_path / "missing_navigation_smoke.json"
+    candidate_path = _write_custom_scene_navigation(
+        tmp_path / "v2",
+        scene_usd="output/assets/v2/default.usda",
+    )
+    output_path = tmp_path / "asset_visual_comparison.json"
+
+    completed = _run_asset_visual_comparison(
+        baseline_navigation=baseline_path,
+        candidate_navigation=candidate_path,
+        output=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert "navigation artifact missing" in completed.stderr
+    assert str(baseline_path) in completed.stderr
+    assert not output_path.exists()
 
 
 def test_asset_visual_comparison_rejects_pose_mismatch(tmp_path: Path) -> None:
@@ -96,6 +188,30 @@ def test_asset_visual_comparison_can_keep_low_detail_as_warning(tmp_path: Path) 
     assert artifact["status"] == "passed"
     assert artifact["validation"]["errors"] == []
     assert any("image has too little visual detail" in warning for warning in artifact["warnings"])
+
+
+def _run_asset_visual_comparison(
+    *,
+    baseline_navigation: Path,
+    candidate_navigation: Path,
+    output: Path,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--baseline-navigation",
+            str(baseline_navigation),
+            "--candidate-navigation",
+            str(candidate_navigation),
+            "--output",
+            str(output),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
 
 def _write_custom_scene_navigation(run_dir: Path, *, scene_usd: str) -> Path:

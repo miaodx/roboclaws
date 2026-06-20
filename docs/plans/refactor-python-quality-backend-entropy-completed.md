@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 asset visual comparisons now treat explicit
+  `--baseline-navigation` and `--candidate-navigation` artifacts as
+  JSON-object source truth. Missing, malformed, or parseable non-object
+  navigation artifacts now return concise CLI source-path errors before
+  writing comparison outputs, instead of surfacing raw parser/type failures or
+  deriving same-pose visual comparison packets from corrupt evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 asset visual comparison source truth. Metric: staged/add-N
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  focused asset-comparison CLI source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh asset-comparison
+  evidence that explicit baseline or candidate navigation artifacts again load
+  through raw parser/type paths, accept plausible non-object packets, or write
+  comparison outputs after source-load failure.
+
 - 2026-06-20: Prepared semantic USD summary validation now treats the explicit
   summary path as JSON-object source truth. Missing, malformed, or parseable
   non-object summary sources now return concise CLI source-path errors before

@@ -51,14 +51,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    artifact = build_asset_visual_comparison(
-        baseline_name=args.baseline_name,
-        baseline_navigation_path=args.baseline_navigation,
-        candidate_name=args.candidate_name,
-        candidate_navigation_path=args.candidate_navigation,
-        contact_sheet=args.contact_sheet,
-        allow_low_detail=bool(args.allow_low_detail),
-    )
+    try:
+        artifact = build_asset_visual_comparison(
+            baseline_name=args.baseline_name,
+            baseline_navigation_path=args.baseline_navigation,
+            candidate_name=args.candidate_name,
+            candidate_navigation_path=args.candidate_navigation,
+            contact_sheet=args.contact_sheet,
+            allow_low_detail=bool(args.allow_low_detail),
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
@@ -348,7 +352,19 @@ def _contact_sheet_status(contact_sheet: Path | None) -> tuple[str, list[str]]:
 
 
 def _load_navigation_artifact(path: Path) -> dict[str, Any]:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    return _read_json_object(path, label="navigation artifact")
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def _navigation_artifact_shape_errors(payload: dict[str, Any], *, label: str) -> list[str]:
