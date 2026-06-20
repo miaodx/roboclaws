@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Environment setup private/report metadata env parsing now routes
+  present `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` payloads through the shared
+  JSON-object text helper. Missing or blank env stays the documented
+  no-metadata default, while malformed or non-object present env values fail
+  aloud before run-result private setup provenance can silently disappear.
+  Owner layer: Runnable Surfaces And Presets plus Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud env-source validation with stable
+  valid metadata merge semantics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused core JSON-source and environment setup boundary tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if environment setup metadata env parsing regains a
+  local permissive `json.loads` branch that treats present malformed or
+  non-object private setup metadata as absent.
+
 - 2026-06-20: Base Navigation Map v1 area semantic validation now splits
   geometry, label, category, source, and review checks into focused helpers in
   `roboclaws/maps/bundle_validation.py`. The strict validator keeps the same

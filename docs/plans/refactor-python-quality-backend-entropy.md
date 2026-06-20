@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-20
+last_verified: 2026-06-21
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,10 +18,15 @@ live only in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`; do not copy
 their full execution notes back here.
 
-Latest quality snapshot from 2026-06-20:
+Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the environment setup metadata env-source
+  slice: present `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` values now parse through
+  the shared JSON-object text helper, so malformed or non-object private setup
+  provenance fails aloud instead of disappearing as absent metadata; missing
+  or blank env remains the explicit no-metadata default.
 - Current shared-checkout note after the B1 readiness navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`

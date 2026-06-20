@@ -15,16 +15,21 @@ def read_json_value(path: Path, *, label: str) -> Any:
         raise ValueError(f"{label} source must contain valid JSON: {path}") from exc
 
 
+def parse_json_object_text(text: str, *, label: str, source: str = "") -> dict[str, Any]:
+    source_suffix = f": {source}" if source else ""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} source must contain valid JSON object{source_suffix}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} source must contain a JSON object{source_suffix}")
+    return payload
+
+
 def read_json_object(path: Path, *, label: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} source is missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} source must contain valid JSON object: {path}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} source must contain a JSON object: {path}")
-    return payload
+    return parse_json_object_text(path.read_text(encoding="utf-8"), label=label, source=str(path))
 
 
 def json_source_type_name(path: Path) -> str:

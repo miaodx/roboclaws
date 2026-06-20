@@ -17,27 +17,31 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Base Navigation Map v1 area semantic validation now splits
+2026-06-21: Environment setup private/report metadata env parsing now fails
+present malformed or non-object `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` values aloud
+through the shared JSON-object text helper while preserving missing/blank env as
+the no-metadata default. Focused core JSON-source and environment setup boundary
+tests, touched-file ruff, touched-file format checks, diff check, changed-code
+cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Base Navigation Map v1 area semantic validation now splits
 geometry, label, category, source, and review checks into focused helpers while
 preserving strict validator diagnostics. Focused map bundle contract tests,
 touched-file ruff, touched-file format checks, diff check, and the ratchet
 summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
 modules in the shared checkout.
 
-Previous slice: Shared JSON source helpers now own parseable source type-name
+Previous committed slice before that: Shared JSON source helpers now own parseable source type-name
 reporting for non-object source diagnostics. Live-agent artifact loading and
 report-performance JSON loading no longer keep duplicate local file reparsing
 helpers, while preserving existing non-object error wording.
 
-Previous committed slice before that: Scene-sampler scanner optional preview and product-smoke
-sidecar loading now routes through the shared JSON-source helper while
-preserving the missing, unreadable, malformed, or non-object-as-empty optional
-metadata contract.
-
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Base Navigation Map v1 area-validator complexity slice.
+committing the environment setup metadata env-source slice. Avoid reopening
+closed JSON-source helper splits without fresh source-truth evidence.
 
 ## Touched Areas
 

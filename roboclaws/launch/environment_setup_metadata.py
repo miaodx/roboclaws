@@ -6,6 +6,7 @@ import json
 import os
 from typing import Any
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_BASELINE,
     ENVIRONMENT_SETUP_OPTIONS,
@@ -80,12 +81,7 @@ def environment_setup_run_metadata_from_env(
     raw = str(env_map.get(ENVIRONMENT_SETUP_METADATA_ENV) or "").strip()
     if not raw:
         return {}
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
+    payload = parse_json_object_text(raw, label=ENVIRONMENT_SETUP_METADATA_ENV)
     return environment_setup_run_metadata(payload)
 
 

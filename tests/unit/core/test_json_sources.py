@@ -7,6 +7,7 @@ import pytest
 
 from roboclaws.core.json_sources import (
     json_source_type_name,
+    parse_json_object_text,
     read_gzip_json_object,
     read_json_object,
     read_json_value,
@@ -86,6 +87,25 @@ def test_read_json_value_rejects_malformed_source(tmp_path: Path) -> None:
 def test_read_json_value_rejects_missing_source(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"sample source is missing: .*missing\.json"):
         read_json_value(tmp_path / "missing.json", label="sample")
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("{not-json\n", r"sample env source must contain valid JSON object"),
+        ("[]\n", r"sample env source must contain a JSON object"),
+    ],
+)
+def test_parse_json_object_text_rejects_malformed_sources(
+    source: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        parse_json_object_text(source, label="sample env")
+
+
+def test_parse_json_object_text_returns_object_payload() -> None:
+    assert parse_json_object_text('{"ok": true}', label="sample env") == {"ok": True}
 
 
 @pytest.mark.parametrize(
