@@ -6115,6 +6115,16 @@ logs before choosing the next slice.
   focused scene-sampler preview/selection tests, ruff, format check, diff
   check, and ratchet. Reopen only if `scene_sampler.py` reintroduces a local
   permissive raw JSON reader instead of using focused source readers.
+- Operator-console MolmoSpaces scene preview rendering now routes required
+  `molmospaces_backend_state.json` reads through the shared JSON-source helper,
+  so missing, malformed, or non-object backend state fails before scene
+  alignment or top-down camera request construction. Owner layer: Thin Runtime
+  / Server Adapters. Behavior-change class: strict source-reader
+  consolidation. Metric: ratchet remains at 0 Ruff complexity rows and 80
+  oversized modules. Proof: focused operator-console preview source tests,
+  ruff, format check, diff check, and ratchet. Reopen only if
+  `render_scene_previews.py` regains direct `json.loads(read_text(...))`
+  parsing for MolmoSpaces backend-state artifacts.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

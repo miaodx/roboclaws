@@ -17,22 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-sampler facade no longer carries the unused permissive
-`_read_json_if_exists` raw JSON helper or direct `json` import; active preview
-metadata reads already route through focused strict source readers. Exact
-no-reference search, focused scene-sampler preview/selection tests, touched-file
-ruff, touched-file format checks, diff check, and the ratchet summary passed.
-Current ratchet: 0 Ruff complexity violations, 80 oversized modules.
+2026-06-20: Operator-console MolmoSpaces scene preview rendering now routes
+required `molmospaces_backend_state.json` reads through the shared JSON-source
+helper, so missing, malformed, or non-object backend state fails before scene
+alignment or top-down camera request construction. Focused operator-console
+preview source tests, touched-file ruff, touched-file format checks, diff
+check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules.
 
-Previous slice: B1 base-navigation label validation now splits source,
-label-row, navigation-area, usage, identity, and geometry checks into focused
-helpers, preserving existing validation errors while clearing the two C901 rows
-introduced by the concurrent base-navigation map builder commit.
+Previous slice: Scene-sampler facade no longer carries the unused permissive
+`_read_json_if_exists` raw JSON helper or direct `json` import; active preview
+metadata reads already route through focused strict source readers.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the scene-sampler facade dead raw-reader removal slice.
+committing the operator-console MolmoSpaces preview backend-state reader slice.
 
 ## Touched Areas
 

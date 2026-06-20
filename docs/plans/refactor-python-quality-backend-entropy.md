@@ -22,12 +22,12 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80.
-- Current shared-checkout note after the scene-sampler facade dead raw-reader
-  removal slice:
+- Current shared-checkout note after the operator-console MolmoSpaces preview
+  backend-state source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 0 Ruff complexity rows and 80 oversized modules. The touched
-  scene-sampler facade and focused launch tests remain under the current
-  ratchet ceiling.
+  operator-console preview renderer and focused source tests remain under the
+  current ratchet ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -327,6 +327,10 @@ Latest quality snapshot from 2026-06-20:
   `_read_json_if_exists` raw JSON helper or its direct `json` import; active
   preview metadata reads already route through their focused strict source
   readers.
+  Operator-console MolmoSpaces scene preview rendering now routes required
+  `molmospaces_backend_state.json` reads through the shared JSON-source helper,
+  so missing, malformed, or non-object backend state fails before scene
+  alignment or top-down camera request construction.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

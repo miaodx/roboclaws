@@ -8,6 +8,7 @@ from PIL import Image
 
 from scripts.operator_console.render_scene_previews import (
     PREVIEW_METADATA_SCHEMA,
+    _read_molmospaces_backend_state,
     render_b1_map12_preview,
 )
 
@@ -79,3 +80,36 @@ def test_b1_preview_reports_unreadable_camera_artifact_as_source_error(
     metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
     assert metadata["views"] == {}
+
+
+def test_molmospaces_preview_backend_state_loads_json_object(tmp_path: Path) -> None:
+    state_path = tmp_path / "molmospaces_backend_state.json"
+    state_path.write_text(json.dumps({"schema": "molmospaces_backend_state_v1"}), encoding="utf-8")
+
+    assert _read_molmospaces_backend_state(state_path) == {"schema": "molmospaces_backend_state_v1"}
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        ("{bad json\n", "MolmoSpaces backend state source must contain valid JSON object"),
+        ("[]\n", "MolmoSpaces backend state source must contain a JSON object"),
+    ],
+)
+def test_molmospaces_preview_backend_state_rejects_bad_source(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    state_path = tmp_path / "molmospaces_backend_state.json"
+    state_path.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        _read_molmospaces_backend_state(state_path)
+
+
+def test_molmospaces_preview_backend_state_rejects_missing_source(tmp_path: Path) -> None:
+    state_path = tmp_path / "missing_backend_state.json"
+
+    with pytest.raises(FileNotFoundError, match="MolmoSpaces backend state source is missing"):
+        _read_molmospaces_backend_state(state_path)

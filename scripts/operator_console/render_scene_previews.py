@@ -234,8 +234,9 @@ def render_molmospaces_preview(
                 "views": views,
             }
 
-        state_path = run_dir / "backend" / "molmospaces_backend_state.json"
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = _read_molmospaces_backend_state(
+            run_dir / "backend" / "molmospaces_backend_state.json"
+        )
         scene_alignment = _scene_alignment(state, width=width, height=height)
         static_map = _static_navigation_preview(
             contract=contract,
@@ -498,6 +499,10 @@ def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
     if not isinstance(views, dict):
         return False
     return "fpv" not in views and "chase" not in views
+
+
+def _read_molmospaces_backend_state(path: Path) -> dict[str, Any]:
+    return read_json_object(path, label="MolmoSpaces backend state")
 
 
 def _b1_metadata_has_real_camera_previews(
