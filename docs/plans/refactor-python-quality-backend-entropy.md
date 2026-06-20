@@ -150,6 +150,9 @@ Latest quality snapshot from 2026-06-20:
   do-not-promote stop label before source reads or writes, so malformed,
   missing, or non-object promotion sources fail with path-labelled source
   errors before regression sample or suite outputs are written.
+  Eval-runner optional/required JSON sidecar grading now routes object reads
+  through the shared JSON-object helper while preserving existing grader
+  reason codes for missing, malformed, non-object, and unreadable sidecars.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

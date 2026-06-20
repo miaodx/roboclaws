@@ -17,15 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Eval regression promotion now routes explicit eval-results and
-suite JSON-object inputs through the shared JSON-object source helper while
-preserving the `eval-regression:do-not-promote` stop label before source reads
-or writes. Malformed, non-object, or missing promotion sources fail with
-canonical path-labelled source wording before regression sample or suite output
-writes. Focused regression-promotion source tests, existing regression
-promotion tests, touched-file Ruff/format, changed-code review, and
-`git diff --check` passed. Current shared-checkout ratchet summary is blocked
-by unrelated dirty
+2026-06-20: Eval-runner optional/required JSON sidecar grading now routes
+object reads through the shared JSON-object source helper while preserving the
+existing grader reason-code contract (`missing`, `invalid_json`,
+`invalid_json_object`, and `read_error`). Focused eval-runner source helper
+tests, existing malformed artifact/sidecar eval-runner tests, touched-file
+Ruff/format, changed-code review, and `git diff --check` passed. Current
+shared-checkout ratchet summary is blocked by unrelated dirty
 `scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
 80 oversized modules; the added oversized entry is unrelated no-touch dirty
 `tests/contract/maps/test_b1_map12_label_tool.py`.
@@ -155,6 +153,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/evals/test_live_artifacts_sources.py`
 - `roboclaws/evals/regression.py`
 - `tests/unit/evals/test_regression_promotion_sources.py`
+- `roboclaws/evals/runner.py`
+- `tests/unit/evals/test_eval_runner_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

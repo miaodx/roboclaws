@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval-runner optional and required JSON sidecar grading now uses
+  `roboclaws.core.json_sources.read_json_object` for object parsing while
+  preserving the existing grader reason-code contract: `missing`,
+  `invalid_json`, `invalid_json_object`, and `read_error`. The optional and
+  required sidecar loaders now share one internal converter instead of
+  duplicating raw file reads, JSON parsing, and object checks. Owner layer:
+  Eval suites and eval-run artifact grading. Behavior-change class:
+  source-reader consolidation with stable grader failure classification.
+  Metric: current shared-checkout ratchet summary reports 1 unrelated Ruff
+  complexity row in dirty `scripts/maps/compile_b1_map12_runtime_bundle.py`
+  and 80 oversized modules; the added oversized entry is unrelated no-touch
+  dirty `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did
+  not add new complexity in touched files. Proof: focused eval-runner source
+  helper tests, existing malformed artifact/sidecar eval-runner behavior
+  tests, touched-file ruff/format checks, changed-code review,
+  `git diff --check`, and ratchet. Reopen only if eval-runner JSON sidecar
+  grading regains local raw JSON-object readers or corrupt sidecars stop
+  producing stable grader reason codes.
+
 - 2026-06-20: Eval regression promotion now uses
   `roboclaws.core.json_sources.read_json_object` for explicit eval-results and
   suite JSON-object inputs while preserving the
