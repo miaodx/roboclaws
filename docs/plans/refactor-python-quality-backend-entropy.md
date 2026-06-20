@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the operator-console launcher dead raw-reader
+- Current shared-checkout note after the operator-console state dead raw-reader
   removal
   slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
@@ -276,6 +276,9 @@ Latest quality snapshot from 2026-06-20:
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.
+  Operator-console state normalization no longer carries an unused `_read_json`
+  wrapper; active state reads use `_read_json_source` and preserve
+  source-error evidence for malformed live state artifacts.
   Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled

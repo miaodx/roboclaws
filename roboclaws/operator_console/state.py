@@ -326,11 +326,6 @@ def _live_status_owner_pid(live_status: dict[str, Any]) -> int | None:
     return None
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    source = _read_json_source(path, label=path.name)
-    return _json_source_payload(source)
-
-
 def _read_json_source(path: Path, *, label: str) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}

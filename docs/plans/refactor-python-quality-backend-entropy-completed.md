@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console state normalization no longer carries the
+  unused `_read_json` wrapper that collapsed `JsonSourceError` state into `{}`.
+  Active state reads already flow through `_read_json_source` and preserve
+  source-error evidence for malformed live status, run-result, operator-state,
+  trace, and agent-event artifacts. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: no-caller dead raw-reader removal. Metric:
+  current shared-checkout ratchet summary reports 1 unrelated Ruff complexity
+  row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized
+  modules. Proof: exact no-reference search for `_read_json(` in
+  `roboclaws/operator_console/state.py` and operator-console state tests,
+  focused operator-console state unit tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/state.py` reintroduces a local permissive raw
+  JSON object reader instead of using `_read_json_source` /
+  `read_json_object`.
+
 - 2026-06-20: Operator-console launcher no longer carries the unused permissive
   `_read_json` helper that duplicated raw JSON parsing. All remaining launcher
   JSON-object reads now flow through the existing strict/optional

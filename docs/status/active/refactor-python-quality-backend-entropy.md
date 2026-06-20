@@ -17,24 +17,25 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console launcher no longer carries the unused permissive
-`_read_json` helper that duplicated raw JSON parsing. Remaining launcher
-JSON-object reads use the existing strict/optional `read_json_object`-backed
-path. Exact no-reference search, focused launcher unit tests, and touched-file
-Ruff/format passed, as did `git diff --check` and ratchet. Current
+2026-06-20: Operator-console state normalization no longer carries the unused
+`_read_json` wrapper that collapsed `JsonSourceError` state into `{}`. Active
+state reads use `_read_json_source` and preserve source-error evidence for
+malformed live state artifacts. Exact no-reference search, focused state unit
+tests, and touched-file Ruff/format passed, as did `git diff --check` and
+ratchet. Current
 shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Operator-console passive interaction state reads now route
-present `operator_state.json` summary files through the shared JSON-object
-helper while preserving the missing/corrupt/non-object-as-empty passive
-UI-summary behavior. Focused operator-console interaction unit tests and
-touched-file Ruff/format passed.
+Previous slice: Operator-console launcher no longer carries the unused
+permissive `_read_json` helper that duplicated raw JSON parsing. Remaining
+launcher JSON-object reads use the existing strict/optional
+`read_json_object`-backed path. Focused launcher unit tests and touched-file
+Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console launcher dead raw-reader removal slice.
+committing the operator-console state dead raw-reader removal slice.
 
 ## Touched Areas
 
