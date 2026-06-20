@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console control endpoint operator-state reads now route
-strict operator-state object sources through the shared JSON-object source
-helper while preserving existing `OperatorControlError` wording and status
-codes for missing, malformed, non-object, and unreadable sources. Control JSONL
-row parsing stays local because it is row-oriented. Full operator-console
-tests, touched-file Ruff/format, changed-code review, `git diff --check`, and
-ratchet passed.
+2026-06-20: Operator-console runtime inventory optional JSON-object source
+reads now route through the shared JSON-object source helper while preserving
+existing `JsonSourceError` reason codes and source-error task messages for
+missing, malformed, non-object, unreadable, and non-file sources. Runtime
+inventory/blocker semantics and host probes stay unchanged. Focused
+runtime-inventory tests, touched-file Ruff/format, changed-code review,
+`git diff --check`, and ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
@@ -33,7 +33,7 @@ unrelated no-touch debt.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console control source-reader slice.
+committing the operator-console runtime-inventory source-reader slice.
 
 ## Touched Areas
 

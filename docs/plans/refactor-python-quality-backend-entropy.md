@@ -22,8 +22,8 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the operator-console control source-reader
-  slice:
+- Current shared-checkout note after the operator-console runtime-inventory
+  source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
@@ -183,6 +183,9 @@ Latest quality snapshot from 2026-06-20:
   operator-state object sources through the shared helper while preserving
   existing `OperatorControlError` wording and status codes; control JSONL row
   parsing remains local because it is row-oriented.
+  Operator-console runtime inventory optional JSON-object source reads now
+  route through the shared helper while preserving existing `JsonSourceError`
+  reason codes and source-error task messages.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

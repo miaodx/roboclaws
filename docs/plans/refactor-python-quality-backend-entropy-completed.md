@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console runtime inventory optional JSON-object source
+  reads now use `roboclaws.core.json_sources.read_json_object` while
+  preserving existing `JsonSourceError` reason codes and source-error task
+  messages for missing, malformed, non-object, unreadable, and non-file
+  sources. Runtime inventory/blocker semantics and host probes stay unchanged.
+  Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  source-reader consolidation with stable runtime-inventory diagnostics.
+  Metric: current shared-checkout ratchet summary reports 1 unrelated Ruff
+  complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+  oversized modules; the 801-line
+  `tests/contract/maps/test_b1_map12_label_tool.py` entry remains unrelated
+  no-touch debt, and this slice did not add new complexity in touched files.
+  Proof: focused runtime-inventory tests, touched-file ruff/format checks,
+  changed-code review, `git diff --check`, and ratchet. Reopen only if
+  operator-console runtime inventory regains a local raw JSON-object reader or
+  corrupt present runtime source artifacts stop surfacing stable
+  `JsonSourceError` task evidence.
+
 - 2026-06-20: Operator-console control endpoint operator-state reads now use
   `roboclaws.core.json_sources.read_json_object` for strict operator-state
   object sources while preserving existing `OperatorControlError` wording and
