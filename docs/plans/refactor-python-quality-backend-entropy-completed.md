@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Report-server index summary loading now uses
+  `roboclaws.core.json_sources.read_json_object` for present
+  `run_result.json` sidecars while preserving missing sidecars as empty
+  summary badges. Malformed or parseable non-object report summaries now use
+  canonical path-labelled source wording instead of being silently hidden as
+  missing metadata. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: current shared-checkout ratchet summary reports
+  1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules;
+  this slice did not add new complexity in touched files. Proof: focused
+  report-server source tests, touched-file ruff/format checks, changed-code
+  review, and `git diff --check`; global ratchet is blocked by unrelated dirty
+  runtime bundle work. Reopen only if report-server summary loading regains a
+  local raw JSON reader or corrupt `run_result.json` sidecars can again be
+  treated like absent summary metadata.
+
 - 2026-06-20: Eval suite/sample file loading now uses
   `roboclaws.core.json_sources.read_json_object` for `load_eval_suite()` and
   `load_eval_sample()` sources before schema validation. Missing, malformed,

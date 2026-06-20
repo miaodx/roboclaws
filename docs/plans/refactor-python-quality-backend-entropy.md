@@ -22,7 +22,8 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 79.
-- Current shared-checkout note after the eval suite/sample source-reader slice:
+- Current shared-checkout note after the report-server summary source-reader
+  slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in unrelated dirty
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized modules.
@@ -121,6 +122,10 @@ Latest quality snapshot from 2026-06-20:
   `--manifest` artifacts through the shared JSON-object helper, so missing,
   malformed, or non-object comparison manifests fail with path-labelled source
   errors before comparison-list validation or run-dir extraction.
+  Report-server index summary loading now routes present `run_result.json`
+  sidecars through the shared JSON-object helper, so malformed or non-object
+  sidecars fail with path-labelled source errors instead of being hidden as
+  missing summary metadata.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization
