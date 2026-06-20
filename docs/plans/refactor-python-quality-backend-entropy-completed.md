@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Shared one-shot subprocess worker stdout result parsing now
+  delegates JSON-looking rows to the core JSON-object text helper instead of
+  keeping a local `json.loads` loop in
+  `roboclaws/household/worker_runner.py`. MolmoSpaces and Isaac backend
+  workers still tolerate ordinary stdout noise and bracketed log rows such as
+  `[INFO]`, while malformed object-shaped rows or parseable non-object rows now
+  fail with line-labelled `<worker> worker stdout row` source diagnostics
+  before backend callers can use missing or stale structured worker packets.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change class:
+  internal worker stdout source-reader consolidation with fail-aloud
+  structured-row diagnostics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused worker-runner parser/subprocess tests, MolmoSpaces parser alias test,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if `worker_runner.py` regains a local JSON
+  stdout parser or malformed object-shaped/non-object worker result rows can
+  again be skipped into a generic missing-result path after a previous valid
+  worker packet.
+
 - 2026-06-21: Eval-runner tolerant `trace.jsonl` reading now delegates to a
   core JSONL row collector instead of keeping a local
   `read_text` / `splitlines` / `json.loads` loop in

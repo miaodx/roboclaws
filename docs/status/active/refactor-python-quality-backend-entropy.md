@@ -17,7 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Eval-runner tolerant `trace.jsonl` reads now use a core JSONL row
+2026-06-21: Shared subprocess worker stdout parsing now routes JSON-looking
+worker result rows through the core JSON-object text helper instead of a local
+`json.loads` loop in `roboclaws/household/worker_runner.py`. MolmoSpaces and
+Isaac one-shot backend workers still tolerate ordinary stdout noise and
+bracketed log rows such as `[INFO]`, while malformed object-shaped result rows
+or parseable non-object rows now fail with line-labelled
+`<worker> worker stdout row` source diagnostics before backend callers can use
+missing or stale structured worker evidence. Focused proof passed:
+worker-runner parser/subprocess tests, MolmoSpaces parser alias test,
+touched-file ruff, touched-file format check, diff check, changed-code cleanup
+review, and ratchet summary. Current ratchet: 0 Ruff complexity violations,
+80 oversized modules in the shared checkout.
+
+Previous slice: Eval-runner tolerant `trace.jsonl` reads now use a core JSONL row
 collector instead of a local parser in `roboclaws/evals/runner.py`. The new
 core collector keeps partial valid rows plus row-level issues for consumers
 that intentionally grade from partial trace evidence, while eval trajectory

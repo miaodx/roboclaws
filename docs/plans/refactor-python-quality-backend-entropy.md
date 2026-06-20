@@ -22,6 +22,14 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the shared subprocess worker stdout source
+  consolidation slice: `roboclaws/household/worker_runner.py` now routes
+  JSON-looking one-shot worker result stdout rows through the core JSON-object
+  text helper instead of a local parser. MolmoSpaces and Isaac backend workers
+  keep ordinary stdout-noise tolerance, while malformed object-shaped result
+  rows or parseable non-object structured rows fail with line-labelled
+  `<worker> worker stdout row` source diagnostics before backend callers can
+  derive confidence from missing or stale worker packets.
 - Current shared-checkout note after the eval-runner trace JSONL source
   consolidation slice: tolerant `trace.jsonl` row reads now route through a
   core JSONL row collector instead of a local parser in
