@@ -115,7 +115,9 @@ Latest quality snapshot from 2026-06-20:
   smoke artifact writes. B1 navigation report rendering now treats the
   required navigation artifact, explicit optional readiness/waypoint-request
   artifacts, and present default sidecars as JSON-object source truth before
-  report writes.
+  report writes. B1 manual-anchor semantic suggestion loading now treats
+  explicit draft, review-manifest, and scene-diagnostic inputs as JSON-object
+  source truth before suggestion, review-packet, or review-report writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

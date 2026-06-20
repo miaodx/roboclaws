@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 manual-anchor semantic suggestion CLI loading now treats
+  `--draft`, `--review-manifest`, and `--scene-diagnostic` inputs as
+  JSON-object source truth. Missing, malformed, or parseable non-object source
+  packets now return concise CLI source-path errors before writing semantic
+  suggestions, semantic review packets, or HTML review reports, instead of
+  surfacing raw file/parser/type failures or rereading draft state for the
+  review packet. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 manual-anchor semantic suggestion
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules; coverage landed in a small dedicated CLI contract
+  test file instead of adding to the 2000-line B1 alignment hard-ceiling test.
+  Proof: focused manual-anchor semantic CLI tests, existing manual-anchor
+  semantic alignment tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh
+  manual-anchor semantic suggestion evidence that draft/review/scene sources
+  are again loaded through raw parser/type paths, accepted as plausible
+  non-object packets, reread inconsistently between outputs, or allowed to
+  write artifacts after source-load failure.
+
 - 2026-06-20: B1 navigation report rendering now treats
   `navigation_smoke.json`, explicitly supplied `--readiness-artifact` /
   `--waypoint-pose-requests`, and present default readiness/waypoint request
