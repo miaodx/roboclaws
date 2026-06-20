@@ -209,7 +209,13 @@ Latest quality snapshot from 2026-06-20:
   malformed or non-object baseline/candidate run source artifacts, and manifests
   now require non-empty object row sources instead of
   accepting, rejecting, recommending, or dry-running speedup work from empty,
-  partial, or zero-row evidence. Codex and Claude live-run timing writers now
+  partial, or zero-row evidence. Planner-proof bundle generation now treats
+  cleanup `run_result.json`, inline `planner_proof_requests`, `artifacts`, and
+  declared `planner_proof_requests.json` artifacts as explicit source truth,
+  rejecting malformed, non-object, wrong-shaped, unsupported-schema, or missing
+  declared request sources before bundle writes instead of falling through to
+  raw parser/type failures, assertions, or generic missing-request errors.
+  Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing
   model/timing summaries. Eval-runner graders now fail rows aloud on present

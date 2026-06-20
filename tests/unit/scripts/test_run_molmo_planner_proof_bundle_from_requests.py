@@ -1714,6 +1714,129 @@ def test_runner_requires_planner_proof_requests(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("{not-json\n", r"cleanup run result must contain valid JSON object: .*run_result\.json"),
+        ("[]\n", r"cleanup run result must contain a JSON object: .*run_result\.json"),
+    ],
+)
+def test_runner_rejects_malformed_cleanup_run_result_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
+def test_runner_rejects_non_object_inline_planner_proof_requests(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"inline planner proof requests must contain a JSON object: .*run_result\.json",
+    ):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
+def test_runner_rejects_non_object_artifact_envelope(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(json.dumps({"artifacts": []}), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"cleanup run result artifacts must contain a JSON object: .*run_result\.json",
+    ):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
+def test_runner_rejects_missing_declared_request_artifact(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"artifacts": {"planner_proof_requests": "missing_requests.json"}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"planner proof requests artifact is missing: .*missing_requests\.json",
+    ):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
+@pytest.mark.parametrize("declared_source", [None, [], ""])
+def test_runner_rejects_wrong_shaped_declared_request_artifact_path(
+    tmp_path: Path,
+    declared_source: object,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"artifacts": {"planner_proof_requests": declared_source}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"planner proof requests artifact path must be a non-empty string: "
+            r".*run_result\.json"
+        ),
+    ):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
+@pytest.mark.parametrize(
+    ("source", "valid"),
+    [
+        ("{not-json\n", False),
+        ("[]\n", True),
+    ],
+)
+def test_runner_rejects_malformed_declared_request_artifact_source(
+    tmp_path: Path,
+    source: str,
+    valid: bool,
+) -> None:
+    runner = _load_module()
+    cleanup_dir = tmp_path / "cleanup"
+    cleanup_dir.mkdir()
+    (cleanup_dir / "planner_proof_requests.json").write_text(source, encoding="utf-8")
+    cleanup_run_result = cleanup_dir / "run_result.json"
+    cleanup_run_result.write_text(
+        json.dumps({"artifacts": {"planner_proof_requests": "planner_proof_requests.json"}}),
+        encoding="utf-8",
+    )
+
+    reason = "a JSON object" if valid else "valid JSON object"
+    message = rf"planner proof requests must contain {reason}: .*planner_proof_requests\.json"
+    with pytest.raises(ValueError, match=message):
+        _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
+
+
 def test_runner_cli_prints_manifest_report_and_status(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1751,6 +1874,25 @@ def test_runner_cli_prints_manifest_report_and_status(
     assert payload["manifest"].endswith("proof_bundle_run_manifest.json")
     assert payload["report"].endswith("report.html")
     assert (output_dir / "report.html").is_file()
+
+
+def _run_minimal_bundle(runner, cleanup_run_result: Path, *, output_dir: Path) -> dict[str, object]:
+    return runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=output_dir,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+    )
 
 
 def _proof_requests() -> dict[str, object]:

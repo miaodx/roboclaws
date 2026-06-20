@@ -17,12 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Agent SDK speedup matrix manifests now require a non-empty
-object-row `rows` array at load time. Missing, empty, or wrong-shaped rows fail
-before dry-run/preflight packets instead of producing successful zero-row
-matrix evidence. Focused Agent SDK perf-matrix tests, touched-file Ruff/format,
-`git diff --check`, changed-code review, and ratchet passed. Quality signal:
-0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Planner-proof bundle generation now treats cleanup `run_result.json`,
+inline `planner_proof_requests`, `artifacts`, and declared
+`planner_proof_requests.json` artifacts as explicit source truth. Malformed or
+wrong-shaped source packets and missing declared request artifacts fail before
+bundle generation instead of flowing into raw parser/type failures, assertions,
+or generic missing-request errors. Focused planner-proof bundle tests,
+touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
+signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -49,6 +51,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
+- `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -67,6 +70,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/visual_grounding/test_visual_grounding_corpus_builder.py`
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

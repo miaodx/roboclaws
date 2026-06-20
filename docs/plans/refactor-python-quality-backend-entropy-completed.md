@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner-proof bundle generation now treats cleanup
+  `run_result.json`, inline `planner_proof_requests`, the cleanup `artifacts`
+  envelope, and declared `planner_proof_requests.json` artifacts as explicit
+  source truth. Malformed or parseable non-object cleanup run results, inline
+  request packets, artifact envelopes, and declared request artifacts now fail
+  before bundle generation, and declared-but-missing request artifacts raise
+  source-path errors instead of disappearing into generic missing-request
+  behavior. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud planner-proof bundle request source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  planner-proof bundle tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only with fresh planner-proof bundle evidence
+  that malformed cleanup run results, wrong-shaped inline/artifact request
+  sources, or missing declared request artifacts again produce raw
+  parser/type/assertion failures, write bundle outputs after source-load
+  failure, or hide declared request-source errors as generic missing-request
+  packets.
+
 - 2026-06-20: Agent SDK speedup matrix manifests now require a non-empty
   `rows` array whose entries are JSON objects. Missing, empty, non-array, or
   wrong-shaped row sources now fail at manifest load before dry-run or

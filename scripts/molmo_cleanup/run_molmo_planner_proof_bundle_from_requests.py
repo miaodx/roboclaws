@@ -179,7 +179,7 @@ def run_from_cleanup_result(
 ) -> dict[str, Any]:
     cleanup_run_result = cleanup_run_result.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    source_run = json.loads(cleanup_run_result.read_text(encoding="utf-8"))
+    source_run = _read_json_object(cleanup_run_result, label="cleanup run result")
     requests = _load_proof_requests(source_run, cleanup_run_result.parent)
     prior_summary = _load_prior_proof_result_summary(
         prior_proof_bundle_manifest,
@@ -408,16 +408,58 @@ def _local_runtime_preflight_blocked(preflight: dict[str, Any]) -> bool:
 
 
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:
-    inline = source_run.get("planner_proof_requests")
-    if isinstance(inline, dict) and inline.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA:
+    if "planner_proof_requests" in source_run:
+        inline = source_run.get("planner_proof_requests")
+        if not isinstance(inline, dict):
+            source_path = base / "run_result.json"
+            raise ValueError(
+                f"inline planner proof requests must contain a JSON object: {source_path}"
+            )
+        if inline.get("schema") != PLANNER_PROOF_REQUESTS_SCHEMA:
+            raise ValueError(
+                f"inline planner proof requests use unsupported schema: {base / 'run_result.json'}"
+            )
         return _with_source_planner_scene(inline, source_run)
-    artifacts = source_run.get("artifacts") or {}
-    request_path = _resolve_path(base, str(artifacts.get("planner_proof_requests") or ""))
+    if "artifacts" not in source_run:
+        artifacts: dict[str, Any] = {}
+    elif not isinstance(source_run["artifacts"], dict):
+        raise ValueError(
+            f"cleanup run result artifacts must contain a JSON object: {base / 'run_result.json'}"
+        )
+    else:
+        artifacts = source_run["artifacts"]
+    declared_request_path = _declared_planner_proof_request_path(artifacts, base)
+    request_path = _resolve_path(base, declared_request_path)
     if request_path.is_file():
-        data = json.loads(request_path.read_text(encoding="utf-8"))
-        assert data.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, data
+        data = _read_json_object(request_path, label="planner proof requests")
+        if data.get("schema") != PLANNER_PROOF_REQUESTS_SCHEMA:
+            raise ValueError(f"planner proof requests use unsupported schema: {request_path}")
         return _with_source_planner_scene(data, source_run)
+    if declared_request_path:
+        raise FileNotFoundError(f"planner proof requests artifact is missing: {request_path}")
     raise ValueError("cleanup run_result does not include planner proof requests")
+
+
+def _declared_planner_proof_request_path(artifacts: dict[str, Any], base: Path) -> str:
+    if "planner_proof_requests" not in artifacts:
+        return ""
+    declared_request_source = artifacts["planner_proof_requests"]
+    if not isinstance(declared_request_source, str) or not declared_request_source.strip():
+        raise ValueError(
+            "planner proof requests artifact path must be a non-empty string: "
+            f"{base / 'run_result.json'}"
+        )
+    return declared_request_source.strip()
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def _with_source_planner_scene(
