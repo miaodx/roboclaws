@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-message inbox JSONL reading now delegates to the
+  console-owned row collector used by other operator-console JSONL sources.
+  `interactions.py` no longer has a separate `read_text` / `splitlines` /
+  `json.loads` loop for `operator_messages.jsonl`; valid partial rows remain
+  visible in list/state views while malformed or non-object present rows keep
+  the existing operator-message source-error payload, and MCP
+  `check_operator_messages` still fails closed before returning queued
+  steering. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: internal source-reader consolidation with stable operator-visible
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  operator-console interaction source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `roboclaws/operator_console/interactions.py` regains a local
+  `operator_messages.jsonl` parser or corrupt present operator-message rows
+  can again feed MCP steering without source diagnostics.
+
 - 2026-06-21: OpenAI Agents metrics JSONL reads now delegate to the shared
   JSONL source owner through the existing metrics helper. Missing
   `openai-agents-events*.jsonl`, `openai-agents-spans*.jsonl`, and

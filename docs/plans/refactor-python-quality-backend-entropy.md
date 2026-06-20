@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-message inbox JSONL source
+  consolidation slice: `operator_messages.jsonl` reads now route through the
+  console-owned JSONL row collector instead of a local parser in
+  `interactions.py`. Valid partial message rows remain visible in
+  list/state views while malformed or non-object present rows keep the
+  existing operator-message source-error payload and MCP message checks fail
+  closed before returning queued steering.
 - Current shared-checkout note after the OpenAI Agents metrics JSONL source
   consolidation slice: metrics and live-timing JSONL event reads now route
   present OpenAI Agents event, span, and trace rows through the shared JSONL

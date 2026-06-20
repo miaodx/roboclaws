@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: OpenAI Agents metrics JSONL reads now use the shared JSONL source
+2026-06-21: Operator-message inbox JSONL reads now use the console-owned JSONL
+row collector instead of a local parser in `interactions.py`. Valid partial
+message rows remain visible in list/state views while malformed or non-object
+present rows still surface the existing operator-message source-error payload,
+and MCP `check_operator_messages` continues to fail closed before returning
+queued steering. Focused proof passed: operator-console interaction source
+tests, touched-file ruff, touched-file format check, diff check, changed-code
+cleanup review, and ratchet summary. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
+Previous slice: OpenAI Agents metrics JSONL reads now use the shared JSONL source
 owner instead of a local row parser. The existing metrics helper keeps missing
 `openai-agents-events*.jsonl`, `openai-agents-spans*.jsonl`, and `trace.jsonl`
 sources as intentional empty evidence, while malformed or non-object present
