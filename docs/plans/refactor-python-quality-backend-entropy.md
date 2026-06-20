@@ -22,13 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the scene-sampler Procthor preview
-  metadata source-reader consolidation slice:
+- Current shared-checkout note after the realworld MCP smoke runner
+  run-result source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched scene sampler is 1944 lines and its focused unit test file is
-  1949 lines.
+  The touched smoke runner remains under the current ratchet ceiling and its
+  focused smoke artifact contract test file remains small.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -275,6 +275,11 @@ Latest quality snapshot from 2026-06-20:
   path-labelled source errors before scanner admission or eval sample rows
   derive preview status from wrong-shaped metadata while missing-source,
   source-id, and backend validation remain explicit.
+  Realworld MCP smoke runner result loading now routes required
+  `run_result.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object smoke result artifacts fail with
+  path-labelled source errors before checker/report consumers derive confidence
+  from wrong-shaped evidence.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

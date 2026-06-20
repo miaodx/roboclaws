@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.backend_contract import (  # noqa: E402
     SYNTHETIC_BACKEND,
     build_cleanup_backend_session,
@@ -186,7 +187,11 @@ def run_smoke(
     finally:
         server.close()
 
-    return json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    return _read_smoke_run_result(Path(done["run_result"]))
+
+
+def _read_smoke_run_result(path: Path) -> dict[str, Any]:
+    return read_json_object(path, label="smoke run_result")
 
 
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:

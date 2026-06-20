@@ -17,23 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-sampler required Procthor preview metadata loading now routes
-`molmospaces-val_<N>-preview.json` object sources through the shared source
-helper while preserving missing-source, source-id, and backend validation.
-Malformed or non-object preview metadata now fails before scanner admission or
-eval sample rows derive preview status from wrong-shaped metadata. Focused
-scene-sampler unit tests, touched-file ruff, and touched-file format checks
-passed.
+2026-06-20: Realworld MCP smoke runner result loading now routes the required
+`run_result.json` object source through the shared source helper. Missing,
+malformed, or non-object smoke result artifacts now fail with path-labelled
+source errors before checker/report consumers derive confidence from
+wrong-shaped evidence. Focused smoke artifact contract tests, touched-file ruff,
+touched-file format checks, diff check, and the ratchet summary passed.
 
-Previous slice: Cleanup-result Isaac runtime checker scene-index artifact
-loading now routes required `isaac_scene_index.json` object sources through the
-shared source helper.
+Previous slice: Scene-sampler required Procthor preview metadata loading now
+routes `molmospaces-val_<N>-preview.json` object sources through the shared
+source helper while preserving missing-source, source-id, and backend
+validation.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac scenario-builder generated-mess manifest source-reader
-slice.
+committing the smoke-runner result source-reader slice.
 
 ## Touched Areas
 
@@ -72,6 +71,7 @@ slice.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
 - `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py`
+- `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_smoke_artifacts.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
