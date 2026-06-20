@@ -54,6 +54,7 @@ B1_MAP12_RUNTIME_PROVENANCE_SCHEMA = "b1_map12_runtime_bundle_provenance_v1"
 B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA = "b1_map12_robot_consumption_manifest_v1"
 ROOM_SEMANTICS_REFERENCE_SCHEMA = "scene_room_semantic_overlay_overrides_v1"
 ACCEPTED_ROOM_STATUS = "accepted"
+ROOM_REFERENCE_REVIEW_STATUSES = {ACCEPTED_ROOM_STATUS, "needs_review"}
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
 DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
@@ -365,8 +366,10 @@ def room_semantics_reference_errors(
             errors.append(f"room {partition_id or index} missing room_label")
         if not str(raw_room.get("category") or ""):
             errors.append(f"room {partition_id or index} missing category")
-        if str(raw_room.get("review_status") or "") != ACCEPTED_ROOM_STATUS:
-            errors.append(f"room {partition_id or index} review_status must be accepted")
+        review_status = str(raw_room.get("review_status") or "")
+        if review_status not in ROOM_REFERENCE_REVIEW_STATUSES:
+            statuses = ", ".join(sorted(ROOM_REFERENCE_REVIEW_STATUSES))
+            errors.append(f"room {partition_id or index} review_status must be one of: {statuses}")
         if "geometry" in raw_room or "polygon" in raw_room or "map_polygon" in raw_room:
             errors.append(
                 f"room {partition_id or index} must not carry Map12 geometry; "

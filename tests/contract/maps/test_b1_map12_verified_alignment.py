@@ -253,6 +253,20 @@ def accepted_room_reference(
     }
 
 
+def pending_room_reference(
+    *,
+    asset_partition_id: str,
+    room_label: str,
+    category: str = "room",
+) -> dict[str, object]:
+    return {
+        "asset_partition_id": asset_partition_id,
+        "review_status": "needs_review",
+        "room_label": room_label,
+        "category": category,
+    }
+
+
 def _test_map_polygon() -> list[dict[str, float]]:
     return [
         {"x": 0.0, "y": 0.0},
@@ -1432,6 +1446,37 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
         {"x": 2.0, "y": 2.0},
         {"x": 0.0, "y": 2.0},
     ]
+
+
+def test_semantic_projection_rejects_pending_room_semantics() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            ),
+            pending_room_reference(
+                asset_partition_id="meeting_room_b",
+                room_label="Open kitchen",
+                category="kitchen",
+            ),
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "accepted semantic anchors reference missing accepted DT room semantics: "
+            ".*meeting_room_b"
+        ),
+    ):
+        build_semantic_projection(
+            correspondences=promoted,
+            room_semantics=room_semantics,
+        )
 
 
 def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:

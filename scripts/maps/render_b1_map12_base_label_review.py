@@ -341,9 +341,13 @@ def area_review_row(
         for item in nav_items
         if item_matches_category(item, semantic_category)
     ]
-    raw_dt_label = canonical_label
-    name_conversion = "digital_twin_reference_label"
     status = str(room.get("review_status") or "needs_review")
+    raw_dt_label = canonical_label
+    name_conversion = (
+        "digital_twin_reference_label"
+        if status == "accepted"
+        else "candidate_display_label_needs_review"
+    )
     evidence = room.get("evidence") if isinstance(room.get("evidence"), dict) else {}
     human_action = "accept_as_is" if status == "accepted" else "review_digital_twin_room_label"
     return {
@@ -447,16 +451,21 @@ def normalization_notes(areas: list[dict[str, Any]]) -> list[dict[str, str]]:
     notes = []
     for area in areas:
         if area["name_conversion"] != "same_as_digital_twin":
+            reason = (
+                "raw DT partition/folder name is source evidence; display label is accepted"
+                if area["review_status"] == "accepted"
+                else (
+                    "raw DT partition/folder name is source evidence; "
+                    "display label is a candidate pending human review"
+                )
+            )
             notes.append(
                 {
                     "digital_twin_partition_id": area["digital_twin_partition_id"],
                     "digital_twin_raw_label": area["digital_twin_raw_label"],
                     "canonical_label": area["canonical_label"],
                     "semantic_category": area["semantic_category"],
-                    "reason": (
-                        "raw DT partition/folder name is evidence, canonical label is "
-                        "product-facing"
-                    ),
+                    "reason": reason,
                 }
             )
     return notes
@@ -511,7 +520,10 @@ def render_aligned_overlay(
             origin=map_origin,
         )
         if dt_center:
-            label = f"{index}. DT {area['canonical_label']}\n{area['digital_twin_partition_id']}"
+            label = (
+                f"{index}. Label: {area['canonical_label']}\n"
+                f"DT partition: {area['digital_twin_partition_id']}"
+            )
             label_anchor = dt_label_anchor(area, dt_center)
             draw.line(
                 (dt_center[0], dt_center[1], label_anchor[0], label_anchor[1]),
@@ -674,8 +686,8 @@ def draw_review_table(
         action = area["human_action"]
         action_color = (178, 73, 18) if action != "accept_as_is" else (23, 119, 82)
         row_text = (
-            f"{index}. {area['canonical_label']} | {area['semantic_category']}\n"
-            f"DT: {area['digital_twin_partition_id']} -> {area['canonical_label']}\n"
+            f"{index}. Label: {area['canonical_label']} | {area['semantic_category']}\n"
+            f"DT partition: {area['digital_twin_partition_id']}\n"
             f"status: {area['review_status']} | action: {action}"
         )
         lines = []
@@ -726,7 +738,7 @@ def render_markdown(packet: dict[str, Any]) -> str:
         "",
         "## Room / Area Checklist",
         "",
-        "| # | Map area | DT partition | Canonical label | Category | Status | Human action |",
+        "| # | Map area | DT partition | Display label | Category | Status | Human action |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for area in packet["areas"]:
@@ -736,10 +748,10 @@ def render_markdown(packet: dict[str, Any]) -> str:
             "`{human_action}` |"
         )
         lines.append(row.format(**area))
-    lines.extend(["", "## Name Normalization Notes", ""])
+    lines.extend(["", "## Source Partition / Display Label Notes", ""])
     for note in packet["normalization_notes"]:
         note_row = (
-            "- `{digital_twin_partition_id}` / {digital_twin_raw_label} -> "
+            "- DT partition `{digital_twin_partition_id}` uses display label "
             "{canonical_label} (`{semantic_category}`): {reason}"
         )
         lines.append(note_row.format(**note))

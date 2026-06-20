@@ -57,10 +57,26 @@ def test_checked_in_room_semantics_reference_is_dt_label_only() -> None:
         "storage_room_a",
     }
     assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["meeting_room_b"]["review_status"] == "needs_review"
+    assert rooms["meeting_room_b"]["semantic_source"] == "legacy_operator_room_overlay_candidate"
     assert "厨房" in rooms["meeting_room_b"]["aliases"]
     assert all("geometry" not in room and "polygon" not in room for room in rooms.values())
     assert all(
         "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()
+    )
+
+
+def test_room_semantics_reference_allows_pending_review_labels() -> None:
+    payload = read_room_semantics_reference(ROOM_SEMANTICS)
+    pending = [room for room in payload["rooms"] if room["asset_partition_id"] == "meeting_room_b"]
+
+    assert pending
+    assert (
+        room_semantics_reference_errors(
+            payload,
+            room_semantics_path=ROOM_SEMANTICS,
+        )
+        == []
     )
 
 

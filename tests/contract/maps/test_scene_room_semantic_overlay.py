@@ -278,8 +278,10 @@ def test_checked_in_b1_room_semantics_is_dt_label_reference_only() -> None:
     assert payload["policy"]["contains_map12_candidate_polygons"] is False
     assert payload["policy"]["contains_navigation_area_bindings"] is False
     assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["meeting_room_b"]["review_status"] == "needs_review"
+    assert rooms["meeting_room_b"]["semantic_source"] == "legacy_operator_room_overlay_candidate"
     assert rooms["reception_area_a"]["category"] == "living_room"
-    assert all(room["review_status"] == "accepted" for room in rooms.values())
+    assert {room["review_status"] for room in rooms.values()} == {"accepted", "needs_review"}
     assert all(
         "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()
     )

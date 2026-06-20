@@ -115,6 +115,7 @@ def test_b1_uses_dt_room_reference_and_alignment_correspondence_manifest() -> No
     assert room_semantics["policy"]["source_of_truth"] == "digital_twin_scene_partitions"
     assert room_semantics["policy"]["contains_map12_candidate_polygons"] is False
     assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["meeting_room_b"]["review_status"] == "needs_review"
     assert correspondences["schema"] == "b1_map12_scene_correspondences_v1"
     assert len(correspondences["anchors"]) == 7
     assert {anchor["review_status"] for anchor in correspondences["anchors"]} == {"accepted"}

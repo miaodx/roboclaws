@@ -5,9 +5,11 @@
     "source_of_truth": "digital_twin_scene_partitions",
     "contains_map12_candidate_polygons": false,
     "contains_navigation_area_bindings": false,
+    "allows_pending_review_labels": true,
     "notes": [
       "This file is the reviewed room-label reference for B1 / Map 12.",
-      "Map12 navigation geometry must come from a validated Base Navigation Map or an explicit semantic projection artifact, not from this room-label reference."
+      "Map12 navigation geometry must come from a validated Base Navigation Map or an explicit semantic projection artifact, not from this room-label reference.",
+      "Rows with review_status=needs_review are display-label candidates only and must not be promoted into verified room semantics."
     ]
   },
   "rooms": [
@@ -31,9 +33,10 @@
       "asset_partition_id": "meeting_room_b",
       "room_label": "Open kitchen",
       "category": "kitchen",
-      "semantic_source": "digital_twin_room_semantic_reference",
+      "semantic_source": "legacy_operator_room_overlay_candidate",
       "confidence": 0.92,
-      "review_status": "accepted",
+      "review_status": "needs_review",
+      "operator_note": "Introduced by 2026-06-11 operator override as Open kitchen; DT asset partition id remains meeting_room_b and this label needs human confirmation.",
       "aliases": [
         "meeting_room_b",
         "Open kitchen",
