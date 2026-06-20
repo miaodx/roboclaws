@@ -129,6 +129,9 @@ Latest quality snapshot from 2026-06-20:
   B1 map-scene alignment fitting now treats explicit correspondences as
   JSON-object source truth before writing `alignment_residuals.json` or preview
   artifacts.
+  B1 manual alignment overlay rendering now treats explicit scene-topdown and
+  alignment artifacts as JSON-object source truth before writing overlay
+  metadata or preview images.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

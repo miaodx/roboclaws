@@ -42,12 +42,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    packet = render_overlay(
-        map_bundle=args.map_bundle,
-        scene_topdown_render=args.scene_topdown_render,
-        alignment_artifact=args.alignment_artifact,
-        output_dir=args.output_dir,
-    )
+    try:
+        packet = render_overlay(
+            map_bundle=args.map_bundle,
+            scene_topdown_render=args.scene_topdown_render,
+            alignment_artifact=args.alignment_artifact,
+            output_dir=args.output_dir,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print(
         json.dumps(
             {
@@ -149,7 +153,10 @@ def render_overlay(
 def load_json(path: Path, label: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} missing: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object: {path}")
     return payload

@@ -17,12 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 map-scene alignment fitting now treats explicit
-`--correspondences` input as JSON-object source truth before writing
-`alignment_residuals.json` or preview artifacts. Focused alignment-fit CLI
-source tests, selected existing B1 alignment fitter tests, touched-file
-Ruff/format, `git diff --check`, changed-code review, and ratchet passed.
-Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: B1 manual alignment overlay rendering now treats explicit
+`--scene-topdown-render` and `--alignment-artifact` inputs as JSON-object
+source truth before writing overlay metadata or preview images. Focused
+manual-alignment-overlay CLI source tests, selected existing overlay transform
+test, touched-file Ruff/format, and ratchet passed. Quality signal: 0 Ruff
+complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -36,12 +36,14 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `scripts/maps/render_b1_map12_correspondence_review.py`
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
+- `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_manual_anchor_semantics_cli.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary_sources.py`
 - `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`
 - `tests/contract/maps/test_b1_map12_alignment_fit_cli.py`
+- `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

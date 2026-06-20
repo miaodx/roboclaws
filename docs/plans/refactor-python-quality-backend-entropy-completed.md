@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 manual alignment overlay rendering now treats explicit
+  `--scene-topdown-render` and `--alignment-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object scene top-down
+  render packets and alignment artifacts now return concise CLI source-path
+  errors before writing `map12_on_gaussian_topdown.json` or preview images,
+  instead of surfacing raw parser/type failures or publishing plausible overlay
+  evidence from corrupt sources. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud B1 manual-overlay source truth.
+  Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; coverage landed in a small dedicated manual-overlay CLI
+  contract test file instead of expanding the 2000-line B1 alignment
+  hard-ceiling test. Proof: focused manual-overlay CLI source tests, selected
+  existing overlay transform test, touched-file ruff/format checks, and
+  ratchet. Reopen only with fresh B1 manual-overlay evidence that explicit
+  topdown or alignment artifacts again load through raw parser/type paths,
+  accept plausible non-object packets, or write overlay artifacts after
+  source-load failure.
+
 - 2026-06-20: B1 map-scene alignment fitter CLI loading now treats explicit
   `--correspondences` input as JSON-object source truth. Missing, malformed,
   or parseable non-object correspondence manifests now return concise CLI
