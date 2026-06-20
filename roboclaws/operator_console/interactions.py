@@ -612,10 +612,9 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return read_json_object(path, label=path.name)
+    except (OSError, ValueError):
         return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def _read_session_json(path: Path, *, session_id: str) -> dict[str, Any]:

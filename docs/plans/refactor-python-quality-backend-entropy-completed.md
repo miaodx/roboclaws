@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console passive interaction state reads now route
+  present `operator_state.json` summary files through
+  `roboclaws.core.json_sources.read_json_object` while preserving the passive
+  UI-summary behavior: missing, malformed, unreadable, or non-object state
+  sources return `{}` for message listing/state summaries instead of surfacing
+  strict interaction errors. Strict steer/next-goal readers remain fail-aloud.
+  Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  source-reader consolidation with stable passive-summary semantics. Metric:
+  current shared-checkout ratchet summary reports 1 unrelated Ruff complexity
+  row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized
+  modules. Proof: focused operator-console interaction unit tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `roboclaws/operator_console/interactions.py` regains local raw JSON
+  parsing for passive state reads or passive malformed/non-object state begins
+  surfacing as a source error.
+
 - 2026-06-20: Scene-camera USDA prepared-scene summary loading now routes
   present optional `summary.json` sidecars through
   `roboclaws.core.json_sources.read_json_object` while preserving the render

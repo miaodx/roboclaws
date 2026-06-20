@@ -17,24 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-camera USDA prepared-scene summary loading now routes
+2026-06-20: Operator-console passive interaction state reads now route present
+`operator_state.json` summary files through the shared JSON-object helper
+while preserving the missing/corrupt/non-object-as-empty passive UI-summary
+behavior. Focused operator-console interaction unit tests and touched-file
+Ruff/format passed, as did `git diff --check` and ratchet. Current
+shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+
+Previous slice: Scene-camera USDA prepared-scene summary loading now routes
 present optional `summary.json` sidecars through the shared JSON-object helper
 while preserving the missing/corrupt/non-object-as-empty render-contract
 behavior. Focused scene-camera USDA source tests and touched-file Ruff/format
-passed, as did `git diff --check` and ratchet. Current shared-checkout ratchet
-summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-
-Previous slice: Isaac report scene-index artifact loading now routes present
-optional `isaac_scene_index.json` sidecars through the shared JSON-object
-helper while preserving the missing/corrupt/non-object-as-absent report
-behavior. Focused Isaac report-section source tests and touched-file
-Ruff/format passed.
+passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the scene-camera USDA summary source-reader slice.
+committing the operator-console passive interaction state source-reader slice.
 
 ## Touched Areas
 
@@ -187,6 +187,7 @@ committing the scene-camera USDA summary source-reader slice.
 - `roboclaws/operator_console/readiness.py`
 - `roboclaws/operator_console/state.py`
 - `roboclaws/operator_console/interactions.py`
+- `tests/unit/operator_console/test_interactions.py`
 - `roboclaws/operator_console/history.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`

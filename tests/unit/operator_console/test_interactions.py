@@ -117,12 +117,14 @@ def test_next_goal_rejects_non_object_operator_state_source_without_writing_queu
     assert not (run_dir / "next_goal_queue.jsonl").exists()
 
 
-def test_list_messages_preserves_passive_malformed_operator_state_summary(
+@pytest.mark.parametrize("source", ["{not-json", "[]\n"])
+def test_list_messages_preserves_passive_bad_operator_state_summary(
     tmp_path: Path,
+    source: str,
 ) -> None:
     run_dir = _write_run(tmp_path, phase="running-codex")
     state_path = run_dir / "operator_state.json"
-    state_path.write_text("{not-json", encoding="utf-8")
+    state_path.write_text(source, encoding="utf-8")
 
     messages = list_operator_messages(tmp_path, "run-a")
     state = operator_message_state(tmp_path, run_dir)
@@ -132,6 +134,7 @@ def test_list_messages_preserves_passive_malformed_operator_state_summary(
     assert messages["source_error"] is False
     assert state["operator_session_id"] == ""
     assert state["source_error"] is False
+    assert state_path.read_text(encoding="utf-8") == source
 
 
 def test_get_operator_session_rejects_malformed_session_source(tmp_path: Path) -> None:
