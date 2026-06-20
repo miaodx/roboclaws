@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac segmentation AOV comparisons now treat explicit
+  `--control-state` and `--candidate-state` artifacts as JSON-object source
+  truth. Missing, malformed, or parseable non-object state artifacts now return
+  concise CLI source-path errors before writing comparison outputs, instead of
+  surfacing raw parser/type failures or producing plausible comparison packets
+  from corrupt evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Isaac AOV comparison source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused AOV comparison CLI source tests, existing AOV
+  comparison/matrix tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only with fresh AOV comparison evidence that explicit
+  control or candidate artifacts again load through raw parser/type paths,
+  accept plausible non-object packets, or write comparison outputs after
+  source-load failure.
+
 - 2026-06-20: Isaac segmentation AOV matrix summaries now treat explicit
   `--entry LABEL=PATH` artifacts as JSON-object source truth. Missing,
   malformed, or parseable non-object entry artifacts now return concise CLI

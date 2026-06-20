@@ -11,6 +11,7 @@ from scripts.isaac_lab_cleanup.compare_isaac_segmentation_aov import compare_sta
 from scripts.isaac_lab_cleanup.summarize_isaac_aov_matrix import summarize_entries
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+COMPARE_SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "compare_isaac_segmentation_aov.py"
 MATRIX_SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "summarize_isaac_aov_matrix.py"
 
 
@@ -116,6 +117,80 @@ def test_aov_matrix_identifies_official_control_vs_molmospaces_collapse(
 
 
 @pytest.mark.parametrize(
+    ("bad_arg", "source", "message"),
+    (
+        ("--control-state", "{not-json\n", "state artifact must contain valid JSON object"),
+        ("--control-state", "[]\n", "state artifact must contain a JSON object"),
+        ("--candidate-state", "{not-json\n", "state artifact must contain valid JSON object"),
+        ("--candidate-state", "[]\n", "state artifact must contain a JSON object"),
+    ),
+)
+def test_aov_comparison_cli_rejects_bad_state_source(
+    tmp_path: Path,
+    bad_arg: str,
+    source: str,
+    message: str,
+) -> None:
+    control_path = tmp_path / "control_state.json"
+    candidate_path = tmp_path / "candidate_state.json"
+    output_path = tmp_path / "aov_comparison.json"
+    control_path.write_text(
+        json.dumps(_state(unique_id_count=4, label="/World/mug")), encoding="utf-8"
+    )
+    candidate_path.write_text(
+        json.dumps(_state(unique_id_count=1, label="BACKGROUND")), encoding="utf-8"
+    )
+    bad_path = control_path if bad_arg == "--control-state" else candidate_path
+    bad_path.write_text(source, encoding="utf-8")
+
+    completed = _run_comparison(
+        control_path=control_path,
+        candidate_path=candidate_path,
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(bad_path) in completed.stderr
+    assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
+    "missing_arg",
+    ("--control-state", "--candidate-state"),
+)
+def test_aov_comparison_cli_rejects_missing_state_source(
+    tmp_path: Path,
+    missing_arg: str,
+) -> None:
+    control_path = tmp_path / "control_state.json"
+    candidate_path = tmp_path / "candidate_state.json"
+    output_path = tmp_path / "aov_comparison.json"
+    control_path.write_text(
+        json.dumps(_state(unique_id_count=4, label="/World/mug")), encoding="utf-8"
+    )
+    candidate_path.write_text(
+        json.dumps(_state(unique_id_count=1, label="BACKGROUND")), encoding="utf-8"
+    )
+    missing_path = tmp_path / f"missing_{missing_arg.removeprefix('--')}.json"
+    if missing_arg == "--control-state":
+        control_path = missing_path
+    else:
+        candidate_path = missing_path
+
+    completed = _run_comparison(
+        control_path=control_path,
+        candidate_path=candidate_path,
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert "state artifact is missing" in completed.stderr
+    assert str(missing_path) in completed.stderr
+    assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
     ("source", "message"),
     (
         ("{not-json\n", "artifact must contain valid JSON object"),
@@ -149,6 +224,28 @@ def test_aov_matrix_cli_rejects_missing_entry_source(tmp_path: Path) -> None:
     assert "artifact is missing" in completed.stderr
     assert str(entry_path) in completed.stderr
     assert not output_path.exists()
+
+
+def _run_comparison(
+    *,
+    control_path: Path,
+    candidate_path: Path,
+    output_path: Path,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(COMPARE_SCRIPT),
+            "--control-state",
+            str(control_path),
+            "--candidate-state",
+            str(candidate_path),
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
 
 
 def _run_matrix(

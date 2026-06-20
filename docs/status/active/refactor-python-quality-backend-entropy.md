@@ -17,11 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac segmentation AOV matrix summaries now treat explicit
-`--entry LABEL=PATH` artifacts as JSON-object source truth before writing
-matrix outputs. Focused AOV matrix CLI source tests, existing AOV comparison
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
-Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Isaac segmentation AOV comparisons now treat explicit
+`--control-state` and `--candidate-state` artifacts as JSON-object source truth
+before writing comparison outputs. Focused AOV comparison CLI source tests,
+existing AOV comparison/matrix tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed. Quality signal: 0 Ruff complexity rows,
+79 oversized modules.
 
 ## Next Action
 
@@ -32,6 +33,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
+- `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`

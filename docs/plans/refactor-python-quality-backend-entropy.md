@@ -133,7 +133,9 @@ Latest quality snapshot from 2026-06-20:
   artifacts.
   B1 manual alignment overlay rendering now treats explicit scene-topdown and
   alignment artifacts as JSON-object source truth before writing overlay
-  metadata or preview images. Isaac segmentation AOV matrix summaries now treat
+  metadata or preview images. Isaac segmentation AOV comparisons now treat
+  explicit control/candidate state artifacts as JSON-object source truth before
+  writing comparison outputs, and AOV matrix summaries now treat
   explicit `--entry LABEL=PATH` artifacts as JSON-object source truth before
   writing matrix outputs.
   The Nav2 map-bundle
