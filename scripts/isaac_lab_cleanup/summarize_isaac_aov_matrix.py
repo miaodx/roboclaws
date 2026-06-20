@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.isaac_lab_cleanup.compare_isaac_segmentation_aov import (
     BACKGROUND_LABELS,
     SEGMENTATION_TYPE,
@@ -80,15 +81,17 @@ def _summarize_path(path: Path) -> dict[str, Any]:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"artifact is missing: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"artifact must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"artifact must contain a JSON object: {path}")
-    return payload
+        return read_json_object(path, label="artifact")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"artifact is missing: {path}") from exc
+    except ValueError as exc:
+        message = str(exc)
+        if "must contain valid JSON object" in message:
+            raise ValueError(f"artifact must contain valid JSON object: {path}") from exc
+        if "must contain a JSON object" in message:
+            raise ValueError(f"artifact must contain a JSON object: {path}") from exc
+        raise
 
 
 def _summarize_preflight(path: Path, payload: dict[str, Any]) -> dict[str, Any]:

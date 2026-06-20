@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac segmentation AOV comparison and matrix summary artifact
+  reads now route explicit control/candidate state artifacts and
+  `--entry LABEL=PATH` state/preflight artifacts through
+  `roboclaws.core.json_sources.read_json_object`. Existing CLI wording remains
+  stable for missing, malformed, and non-object state/preflight sources, and
+  comparison/matrix decision behavior is unchanged. Owner layer: Backend
+  Runtime / Environment Primitive diagnostics. Behavior-change class:
+  source-reader consolidation with stable CLI diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused Isaac segmentation AOV comparison/matrix tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py` or
+  `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py` regains local raw
+  JSON-object parsing for state/preflight artifact sources or corrupt AOV
+  source diagnostics drift from the current CLI wording.
+
 - 2026-06-20: Shared Agibot navigation-memory source loading now routes
   required `navigation_memory.json` object reads through
   `roboclaws.core.json_sources.read_json_object`. Existing

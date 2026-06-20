@@ -17,20 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: The shared Agibot navigation-memory source owner now routes
-required `navigation_memory.json` object reads through the shared JSON-object
-helper while preserving existing navigation-memory-specific error wording for
-missing, malformed, non-object, item-list, and point-geometry failures across
-runtime-prior, consistency, label-tool, and B1 runtime-bundle consumers.
-Focused navigation-memory consumer tests and touched-file Ruff/format passed,
-as did `git diff --check` and ratchet. Current shared-checkout ratchet summary
-still reports 1 unrelated Ruff complexity row in
+2026-06-20: Isaac segmentation AOV comparison and matrix summary artifact
+reads now route through the shared JSON-object helper while preserving existing
+CLI wording for missing, malformed, and non-object state/preflight artifacts.
+Focused AOV comparison/matrix tests and touched-file Ruff/format passed, as did
+`git diff --check` and ratchet. Current shared-checkout ratchet summary still
+reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the shared navigation-memory source-reader slice.
+committing the Isaac segmentation AOV source-reader slice.
 
 ## Touched Areas
 

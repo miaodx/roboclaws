@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 SCHEMA = "isaac_segmentation_aov_comparison_v1"
 SEGMENTATION_TYPE = "semantic_segmentation"
 BACKGROUND_LABELS = {"", "background", "unlabelled", "unlabeled"}
@@ -75,17 +77,17 @@ def compare_states(*, control_state_path: Path, candidate_state_path: Path) -> d
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"state artifact is missing: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"state artifact must contain valid JSON object: {path}: {exc.msg}"
-        ) from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"state artifact must contain a JSON object: {path}")
-    return payload
+        return read_json_object(path, label="state artifact")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"state artifact is missing: {path}") from exc
+    except ValueError as exc:
+        message = str(exc)
+        if "must contain valid JSON object" in message:
+            raise ValueError(f"state artifact must contain valid JSON object: {path}") from exc
+        if "must contain a JSON object" in message:
+            raise ValueError(f"state artifact must contain a JSON object: {path}") from exc
+        raise
 
 
 def _summarize_state(path: Path, state: dict[str, Any]) -> dict[str, Any]:
