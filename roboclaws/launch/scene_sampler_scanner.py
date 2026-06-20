@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import shlex
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 _SOURCE_PREP_ACTIONS = {
     "complete": "none",
@@ -833,12 +834,9 @@ def world_id_slug(world_id: str) -> str:
 
 def _read_json_if_exists(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
+        return read_json_object(path, label="scene sampler scanner optional JSON")
+    except (FileNotFoundError, ValueError, OSError):
         return {}
-    if not isinstance(payload, dict):
-        return {}
-    return payload
 
 
 def _preview_statuses(preview: dict[str, Any]) -> dict[str, str]:

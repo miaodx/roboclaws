@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-sampler scanner optional preview and product-smoke sidecar
+  loading now routes through `roboclaws.core.json_sources.read_json_object`
+  while preserving the permissive optional metadata contract: missing,
+  unreadable, malformed, and non-object sources return empty metadata. Owner
+  layer: Runnable Surfaces And Presets / launch scene sampler. Behavior-change
+  class: permissive optional source-reader consolidation with stable
+  empty-metadata semantics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 79 oversized modules in the current shared checkout; the new
+  focused scanner-source test file is 45 lines instead of growing the
+  oversized scene sampler test module. Proof: focused scene-sampler scanner
+  optional JSON tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only if `scene_sampler_scanner.py` regains direct
+  `json.loads(read_text(...))` parsing for optional preview/product-smoke
+  sidecars or stops preserving empty metadata for missing/corrupt optional
+  sources.
+
 - 2026-06-20: OpenAI Agents SDK live timing now routes present
   `run_result.json` reads through
   `roboclaws.core.json_sources.read_json_value` while preserving the existing

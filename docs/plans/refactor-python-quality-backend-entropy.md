@@ -23,8 +23,8 @@ Latest quality snapshot from 2026-06-20:
 - Ruff complexity rows: 0.
 - Oversized modules: 79 in the current shared checkout. The count change from
   the prior 80-module checkpoint is affected by unrelated no-touch worktree
-  state and is not claimed by the backend runtime or OpenAI Agents live timing
-  source-reader slices.
+  state and is not claimed by the backend runtime, OpenAI Agents live timing,
+  or scene-sampler scanner optional source-reader slices.
 - Current shared-checkout note after the B1 readiness navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
@@ -41,6 +41,11 @@ Latest quality snapshot from 2026-06-20:
   reads through the shared JSON-value helper while preserving the existing
   `OpenAI Agents live source ...` timing-source error wording for malformed
   and non-object run results.
+- Current shared-checkout note after the scene-sampler scanner optional
+  source-reader slice: scanner preview/product-smoke optional JSON sidecars
+  now route through the shared JSON-object helper while preserving the
+  missing, unreadable, malformed, or non-object-as-empty optional metadata
+  contract.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -332,6 +337,10 @@ Latest quality snapshot from 2026-06-20:
   Scene-sampler prefilter optional JSON sidecar loading now routes through the
   shared JSON-source helper while preserving missing, unreadable, malformed,
   and non-object sources as empty optional metadata.
+  Scene-sampler scanner optional preview and product-smoke sidecar loading now
+  routes through the shared JSON-source helper while preserving the same empty
+  optional metadata behavior for missing, unreadable, malformed, or non-object
+  sources.
   B1 base-navigation label validation now splits source, label-row,
   navigation-area, usage, identity, and geometry checks into focused helpers,
   preserving existing validation errors while clearing the two C901 rows

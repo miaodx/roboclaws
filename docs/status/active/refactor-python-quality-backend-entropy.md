@@ -17,23 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: OpenAI Agents SDK live timing now routes present
+2026-06-20: Scene-sampler scanner optional preview and product-smoke sidecar
+loading now routes through the shared JSON-source helper while preserving the
+missing, unreadable, malformed, or non-object-as-empty optional metadata
+contract. Focused scene-sampler scanner optional JSON tests, touched-file ruff,
+touched-file format checks, diff check, and the ratchet summary passed.
+Current ratchet: 0 Ruff complexity violations, 79 oversized modules in the
+shared checkout.
+
+Previous slice: OpenAI Agents SDK live timing now routes present
 `run_result.json` reads through the shared JSON-value helper while preserving
 existing `OpenAI Agents live source ...` timing-source error wording for
-malformed and non-object run results. Focused OpenAI Agents live timing
-source-error tests, touched-file ruff, touched-file format checks, diff check,
-and the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
-79 oversized modules in the shared checkout.
-
-Previous slice: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
-route through the shared JSON-source helper, preserving valid state accessor
-behavior while failing missing, malformed, or non-object backend state with
-path-labelled source errors.
+malformed and non-object run results.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the OpenAI Agents live timing source-reader slice.
+committing the scene-sampler scanner optional source-reader slice.
 
 ## Touched Areas
 
@@ -85,6 +85,7 @@ committing the OpenAI Agents live timing source-reader slice.
 - `scripts/operator_console/run_scene_sampler_source_prep.py`
 - `scripts/operator_console/run_scene_sampler_scanner_plan.py`
 - `roboclaws/launch/scene_sampler_prefilter.py`
+- `roboclaws/launch/scene_sampler_scanner.py`
 - `scripts/reports/write_pages_index.py`
 - `scripts/reports/compare_live_report_metrics.py`
 - `scripts/reports/serve_reports.py`
@@ -197,6 +198,7 @@ committing the OpenAI Agents live timing source-reader slice.
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
+- `tests/unit/launch/test_scene_sampler_scanner_sources.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `tests/unit/reports/test_write_pages_index_sources.py`
 - `tests/unit/reports/test_compare_live_report_metrics_sources.py`
