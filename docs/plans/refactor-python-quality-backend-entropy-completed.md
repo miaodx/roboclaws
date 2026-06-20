@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup report artifact re-rendering now uses
+  `roboclaws.core.json_sources.read_json_object` for run-result, scenario, and
+  adjacent private-manifest JSON-object sources. Malformed or parseable
+  non-object report inputs now use canonical path-labelled source wording
+  before report assembly, while `is_cleanup_run_result_artifact()` still
+  returns false for invalid candidates and declared artifact path validation
+  stays unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: current shared-checkout ratchet summary reports
+  1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the added oversized entry is unrelated no-touch dirty
+  `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did not
+  add new complexity in touched files. Proof: focused
+  cleanup report artifact contract tests, touched-file ruff/format checks,
+  changed-code review, `git diff --check`, and ratchet. Reopen only if cleanup
+  report artifact re-rendering regains a local raw JSON reader or corrupt
+  report input artifacts can again reach report assembly as parser tracebacks
+  or wrong-shaped payloads.
+
 - 2026-06-20: Skill scratchpad artifact loading now uses
   `roboclaws.core.json_sources.read_json_object` for present
   `agent_scratchpad.json` and legacy `cleanup_scratch.json` sources while

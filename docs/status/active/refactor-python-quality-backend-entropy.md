@@ -17,15 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Skill scratchpad artifact loading now routes present
-`agent_scratchpad.json` and legacy `cleanup_scratch.json` sources through the
-shared JSON-object source helper while preserving missing-source creation.
-Malformed or non-object scratchpad artifacts fail with canonical path-labelled
-source wording before MCP done-artifact assembly. Focused scratchpad source
-tests, touched-file Ruff/format, changed-code review, and `git diff --check`
-passed. Current shared-checkout ratchet summary is blocked by unrelated dirty
-`scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
-79 oversized modules.
+2026-06-20: Cleanup report artifact re-rendering now routes run-result,
+scenario, and private-manifest JSON-object sources through the shared
+JSON-object source helper. Malformed or non-object report inputs fail with
+canonical path-labelled source wording before report assembly. Focused report
+artifact contract tests, touched-file Ruff/format, changed-code review, and
+`git diff --check` passed. Current shared-checkout ratchet summary is blocked
+by unrelated dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1
+Ruff complexity row, 80 oversized modules; the added oversized entry is
+unrelated no-touch dirty `tests/contract/maps/test_b1_map12_label_tool.py`.
 
 ## Next Action
 
@@ -86,6 +86,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/core/json_sources.py`
 - `roboclaws/household/camera_control.py`
 - `roboclaws/household/ci_live_reports.py`
+- `roboclaws/household/artifact_report.py`
 - `roboclaws/household/grasp_cache_generation.py`
 - `roboclaws/household/grasp_generation_setup.py`
 - `roboclaws/household/grasp_pose_policy_cache.py`
@@ -134,6 +135,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `tests/contract/reports/test_molmo_cleanup_artifact_report.py`
 - `tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
 - `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
