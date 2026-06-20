@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Isaac semantic-pose checker trace JSONL reads now route through
+2026-06-21: RAW-FPV private-label trace JSONL reads now route through the
+shared JSONL source helper instead of a local parser. Malformed or non-object
+trace rows now fail with row-labelled `RAW-FPV private-label trace` source
+errors before private-label generation can derive first-sweep observations
+from partial trace evidence. Focused RAW-FPV perception probe tests,
+touched-file ruff, touched-file format checks, diff check, changed-code
+cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Isaac semantic-pose checker trace JSONL reads now route through
 the shared JSONL source helper instead of a local parser. Malformed or
 non-object trace rows now fail with row-labelled `Isaac semantic-pose trace`
 source errors before semantic-pose pick/place provenance checks can derive
@@ -155,7 +164,7 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac semantic-pose trace-source slice. Avoid reopening closed
+committing the RAW-FPV private-label trace-source slice. Avoid reopening closed
 visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
@@ -164,12 +173,15 @@ without fresh false-green evidence. Avoid reopening Agibot map-build
 trace-source validation unless fresh checker evidence shows partial-trace
 false confidence again. Avoid reopening Isaac semantic-pose trace-source
 validation unless fresh checker evidence shows partial-trace false confidence
-again.
+again. Avoid reopening RAW-FPV private-label trace-source validation unless
+fresh generator evidence shows partial-trace false confidence again.
 
 ## Touched Areas
 
 - `scripts/molmo_cleanup/isaac_semantic_pose_checker.py`
 - `tests/contract/checkers/test_isaac_semantic_pose_checker_trace_sources.py`
+- `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+- `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
 - `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
 - `tests/contract/checkers/test_agibot_map_build_checker_trace_sources.py`
 - `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`

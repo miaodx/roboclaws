@@ -6433,6 +6433,16 @@ logs before choosing the next slice.
   check, diff check, changed-code cleanup review, and ratchet. Reopen only if
   `isaac_semantic_pose_checker.py` regains local raw JSONL trace parsing or
   accepts malformed/non-object trace rows.
+- RAW-FPV private-label trace JSONL loading now routes through the shared JSONL
+  source helper instead of a local parser. Malformed or non-object trace rows
+  fail with row-labelled `RAW-FPV private-label trace` source errors before
+  first-sweep observation extraction can pass from partial trace evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet remains at 0 Ruff
+  complexity rows and 80 oversized modules. Proof: focused RAW-FPV perception
+  probe tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if `generate_raw_fpv_private_labels.py` regains local
+  raw JSONL trace parsing or accepts malformed/non-object trace rows.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

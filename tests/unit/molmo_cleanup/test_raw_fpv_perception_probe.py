@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -1319,6 +1320,34 @@ def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) ->
     assert [item["observation_id"] for item in observations] == ["raw_fpv_001"]
     assert observations[0]["robot_pose"]["x"] == 1.25
     assert observations[0]["image_artifact"] == "robot_views/0001_raw_fpv_001.fpv.png"
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            '{"event": "response", "tool": "observe", "response": {}}\n{not-json\n',
+            r"RAW-FPV private-label trace source row must contain valid JSON object: "
+            r".*trace\.jsonl:2",
+        ),
+        (
+            '{"event": "response", "tool": "observe", "response": {}}\n[]\n',
+            r"RAW-FPV private-label trace source row must contain a JSON object: "
+            r".*trace\.jsonl:2",
+        ),
+    ],
+)
+def test_private_label_generator_rejects_malformed_trace_rows(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    labels = _load_label_module()
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        labels._iter_trace_rows(trace_path)
 
 
 def test_private_label_generator_rejects_malformed_backend_state_source(
