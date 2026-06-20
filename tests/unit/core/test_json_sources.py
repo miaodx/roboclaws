@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from roboclaws.core.json_sources import (
+    json_source_type_name,
     read_gzip_json_object,
     read_json_object,
     read_json_value,
@@ -35,6 +36,36 @@ def test_read_json_object_rejects_malformed_sources(
 def test_read_json_object_rejects_missing_source(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"sample source is missing: .*missing\.json"):
         read_json_object(tmp_path / "missing.json", label="sample")
+
+
+@pytest.mark.parametrize(
+    ("source", "type_name"),
+    [
+        ("[]\n", "list"),
+        ('"value"\n', "str"),
+    ],
+)
+def test_json_source_type_name_reports_parseable_payload_type(
+    tmp_path: Path,
+    source: str,
+    type_name: str,
+) -> None:
+    path = tmp_path / "source.json"
+    path.write_text(source, encoding="utf-8")
+
+    assert json_source_type_name(path) == type_name
+
+
+@pytest.mark.parametrize("source", ["{not-json\n", None])
+def test_json_source_type_name_returns_unknown_for_unreadable_source(
+    tmp_path: Path,
+    source: str | None,
+) -> None:
+    path = tmp_path / "source.json"
+    if source is not None:
+        path.write_text(source, encoding="utf-8")
+
+    assert json_source_type_name(path) == "unknown"
 
 
 def test_read_json_value_returns_non_object_payload(tmp_path: Path) -> None:

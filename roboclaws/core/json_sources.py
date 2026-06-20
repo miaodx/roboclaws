@@ -27,6 +27,14 @@ def read_json_object(path: Path, *, label: str) -> dict[str, Any]:
     return payload
 
 
+def json_source_type_name(path: Path) -> str:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "unknown"
+    return type(payload).__name__
+
+
 def read_jsonl_objects(path: Path, *, label: str) -> list[dict[str, Any]]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} source is missing: {path}")

@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Shared JSON source helpers now own parseable source type-name
+  reporting through `roboclaws.core.json_sources.json_source_type_name`.
+  Live-agent artifact loading and report-performance JSON loading no longer
+  keep duplicate local reparsing helpers just to preserve non-object
+  diagnostics; existing `non-object JSON: list` and `expected object, got
+  list` wording remains covered by focused tests. Owner layer: shared core
+  source-reader utility for Agent Engines And Provider Profiles plus
+  Artifacts, reports, and eval suites. Behavior-change class: internal
+  source-reader consolidation with stable error wording. Metric: touched
+  helper/caller files remain clear; the global ratchet command currently
+  reports 1 unrelated C901 row in no-touch
+  `roboclaws/maps/bundle_validation.py` and 80 oversized modules after
+  concurrent map-validation work appeared in the shared checkout. Proof:
+  focused core JSON-source, live-runtime source, and report-performance source
+  tests, touched-file ruff/format checks, `git diff --check`, and global
+  ratchet run with unrelated no-touch regression noted. Reopen only if callers
+  reintroduce local file reparsing helpers solely to name parseable non-object
+  JSON source types.
+
 - 2026-06-20: Scene-sampler scanner optional preview and product-smoke sidecar
   loading now routes through `roboclaws.core.json_sources.read_json_object`
   while preserving the permissive optional metadata contract: missing,
