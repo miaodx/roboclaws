@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces worker initialization now routes generated-mess
+  manifest and adjacent source scene JSON-object reads through
+  `roboclaws.core.json_sources.read_json_object`. Generated-mess schema
+  validation stays unchanged, malformed or non-object source scene JSON keeps
+  the established worker-init diagnostics, and valid source-room labels remain
+  unchanged. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: source-reader consolidation with stable worker-init
+  diagnostics. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused MolmoSpaces worker-state tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/molmospaces_worker_init.py` regains local raw
+  JSON-object readers for generated-mess manifests or source scene JSON
+  metadata.
+
 - 2026-06-20: Visual-grounding benchmark checker result JSON and prediction
   JSONL reads now route through
   `roboclaws.core.json_sources.read_json_object` and

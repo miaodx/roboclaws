@@ -17,24 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Visual-grounding benchmark checker result JSON and prediction
-JSONL reads now route through the shared JSON-object/JSONL helpers while
-preserving the checker's existing CLI error wording. Malformed or non-object
-benchmark result and prediction rows still fail without tracebacks, but no
-longer use duplicate local parser loops. Focused visual-grounding checker
-source tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
-Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+2026-06-20: MolmoSpaces worker initialization generated-mess manifest and
+adjacent source scene JSON reads now route through the shared JSON-object
+helper while preserving existing schema and source-room diagnostics. Malformed
+or non-object scene JSON still reports the established worker-init error
+wording, and valid scene-room label behavior is unchanged. Focused MolmoSpaces
+worker-state tests, touched-file Ruff/format, `git diff --check`, and ratchet
+passed. Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
-801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
-unrelated no-touch debt. The touched Agibot contract test remains oversized and
-grew to 1112 lines in the prior slice; that remains recorded ratchet pressure,
-not part of this source-reader slice.
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+The touched Agibot contract test remains oversized at 1112 lines in a prior
+slice; that remains recorded ratchet pressure, not part of this source-reader
+slice.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the visual-grounding benchmark checker source-reader slice.
+committing the MolmoSpaces worker-init source-reader slice.
 
 ## Touched Areas
 

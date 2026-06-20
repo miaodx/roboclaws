@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the MolmoSpaces worker state
+- Current shared-checkout note after the MolmoSpaces worker-init
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -220,6 +220,10 @@ Latest quality snapshot from 2026-06-20:
   reads through the shared helper, so missing, malformed, or non-object worker
   state files fail with path-labelled source errors while valid state payloads
   remain unchanged.
+  MolmoSpaces worker initialization now routes generated-mess manifest and
+  adjacent source scene JSON-object reads through the shared helper while
+  preserving existing schema validation and source-room diagnostics for
+  malformed, non-object, wrong-shaped, or label-less scene metadata.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization
