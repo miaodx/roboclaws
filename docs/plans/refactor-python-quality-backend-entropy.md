@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the Isaac worker state
+- Current shared-checkout note after the MolmoSpaces worker state
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -202,6 +202,10 @@ Latest quality snapshot from 2026-06-20:
   shared helper before adding the private `_state_path` runtime field, so
   missing, malformed, or non-object worker state files fail with path-labelled
   source errors while valid state reads preserve worker state semantics.
+  MolmoSpaces subprocess worker state loading now routes required state-file
+  reads through the shared helper, so missing, malformed, or non-object worker
+  state files fail with path-labelled source errors while valid state payloads
+  remain unchanged.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

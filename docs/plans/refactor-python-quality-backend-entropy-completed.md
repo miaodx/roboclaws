@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces subprocess worker state loading now routes required
+  state-file reads through `roboclaws.core.json_sources.read_json_object`.
+  Missing, malformed, and non-object worker state files now fail with
+  path-labelled source errors instead of raw parser/type failures, while valid
+  state payloads remain unchanged. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: required worker source-reader
+  consolidation. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  this slice did not add new complexity in touched files. Proof: focused
+  MolmoSpaces worker state source-error and valid-state tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/molmospaces_worker_protocol.py` regains a local raw
+  JSON-object reader for required state files.
+
 - 2026-06-20: Isaac worker state loading now routes required state-file reads
   through `roboclaws.core.json_sources.read_json_object` before adding the
   private `_state_path` runtime field. Missing, malformed, and non-object
