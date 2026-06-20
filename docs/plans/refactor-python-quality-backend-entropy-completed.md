@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
+  shared JSON-object text helper instead of local `json.loads` / type checks.
+  Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now
+  fail at argparse with source-labelled Isaac worker diagnostics before
+  backend navigation handling can consume wrong-shaped public waypoint
+  payloads. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: internal worker CLI source-reader consolidation with
+  fail-aloud inline payload diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused relative-navigation worker routing tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/isaac_worker_cli.py` regains local JSON object
+  parsing for inline waypoint JSON or malformed Isaac waypoint payloads can
+  again reach backend command handling without source-labelled diagnostics.
+
 - 2026-06-21: MolmoSpaces worker protocol request rows and inline waypoint
   JSON now route through the shared JSON-object text helper instead of local
   `json.loads` / type checks. Malformed or non-object persistent-worker stdin

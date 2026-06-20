@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: MolmoSpaces worker protocol request rows and inline waypoint JSON
+2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
+shared JSON-object text helper instead of a local `json.loads` / type check.
+Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now
+fail at argparse with source-labelled Isaac worker diagnostics before backend
+navigation handling can consume wrong-shaped public waypoint payloads. Focused
+proof passed: relative-navigation worker routing tests, touched-file ruff,
+touched-file format check, dependency sync, and ratchet summary. Current
+ratchet before final slice closeout: 0 Ruff complexity violations, 80
+oversized modules in the shared checkout.
+
+Previous slice: MolmoSpaces worker protocol request rows and inline waypoint JSON
 now route through the shared JSON-object text helper instead of local
 `json.loads` / type checks. Malformed or non-object persistent-worker stdin
 requests now return source-labelled worker error packets before command
@@ -672,6 +682,8 @@ diagnostics.
 - `tests/unit/molmo_cleanup/test_isaac_robot_import_sources.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_worker_state.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
+- `scripts/isaac_lab_cleanup/isaac_worker_cli.py`
+- `tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_generated_mess_scenario_state.py`

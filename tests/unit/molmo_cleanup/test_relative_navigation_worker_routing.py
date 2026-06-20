@@ -282,6 +282,35 @@ def test_isaac_worker_cli_exposes_relative_pose_command() -> None:
     assert "navigate_to_relative_pose" in isaac_lab_backend_worker._STATE_COMMANDS
 
 
+@pytest.mark.parametrize(
+    ("waypoint_json", "expected_message"),
+    [
+        ("{not-json}", "Isaac worker inline JSON source must contain valid JSON object"),
+        ("[]", "Isaac worker inline JSON source must contain a JSON object"),
+    ],
+)
+def test_isaac_worker_cli_rejects_bad_inline_waypoint_json(
+    waypoint_json: str,
+    expected_message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+    with pytest.raises(SystemExit) as exc_info:
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                "state.json",
+                "navigate_to_waypoint",
+                "--waypoint-json",
+                waypoint_json,
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert expected_message in capsys.readouterr().err
+
+
 def test_isaac_worker_cli_rejects_non_positive_render_dimensions() -> None:
     from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
 

@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Isaac worker CLI inline waypoint
+  source slice: `navigate_to_waypoint --waypoint-json` now reuses the shared
+  JSON-object text helper instead of a local `json.loads` / type check, so
+  malformed or non-object public waypoint payloads fail at argparse with
+  source-labelled Isaac worker diagnostics before backend navigation handling.
 - Current shared-checkout note after the MolmoSpaces worker protocol source
   slice: persistent-worker stdin requests and inline waypoint JSON now reuse
   the shared JSON-object text helper instead of local `json.loads` / type
