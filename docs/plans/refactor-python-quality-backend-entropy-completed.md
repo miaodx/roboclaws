@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding benchmark checker result JSON and prediction
+  JSONL reads now route through
+  `roboclaws.core.json_sources.read_json_object` and
+  `read_jsonl_objects` while preserving the checker's existing CLI error
+  wording for malformed or non-object sources. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: checker source-reader consolidation
+  with stable fail-aloud diagnostics. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused visual-grounding checker source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
+  regains local raw JSON/JSONL parser loops for result or prediction sources.
+
 - 2026-06-20: B1 / Map 12 waypoint-pose request builder `--points`
   JSON-array reads now route through
   `roboclaws.core.json_sources.read_json_value` before existing array shape

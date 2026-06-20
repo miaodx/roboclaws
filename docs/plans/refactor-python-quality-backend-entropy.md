@@ -213,6 +213,9 @@ Latest quality snapshot from 2026-06-20:
   B1 / Map 12 waypoint-pose request builder `--points` JSON-array reads now
   route through the shared JSON-value helper before existing array validation,
   preserving current CLI diagnostic categories while removing its local parser.
+  Visual-grounding benchmark checker result JSON and prediction JSONL reads now
+  route through the shared JSON-object/JSONL helpers while preserving existing
+  checker CLI error wording for malformed or non-object sources.
   MolmoSpaces subprocess worker state loading now routes required state-file
   reads through the shared helper, so missing, malformed, or non-object worker
   state files fail with path-labelled source errors while valid state payloads

@@ -17,12 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 / Map 12 waypoint-pose request builder `--points` JSON-array
-reads now route through the shared JSON-value helper before the existing array
-shape validation. Missing, malformed, and non-array point sources keep their
-current CLI diagnostic categories while sharing the canonical parser. Focused
-waypoint-pose request CLI tests, touched-file Ruff/format, `git diff --check`,
-and ratchet passed.
+2026-06-20: Visual-grounding benchmark checker result JSON and prediction
+JSONL reads now route through the shared JSON-object/JSONL helpers while
+preserving the checker's existing CLI error wording. Malformed or non-object
+benchmark result and prediction rows still fail without tracebacks, but no
+longer use duplicate local parser loops. Focused visual-grounding checker
+source tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
@@ -34,7 +34,7 @@ not part of this source-reader slice.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the B1 waypoint-pose points source-reader slice.
+committing the visual-grounding benchmark checker source-reader slice.
 
 ## Touched Areas
 
