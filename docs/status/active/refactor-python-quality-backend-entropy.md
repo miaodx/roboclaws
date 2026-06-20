@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Agibot nav artifact helper reads now fail raw-map gzip JSON and
+2026-06-21: Molmo cleanup trace-preserving skill CLI now validates inline
+`--static-fixture-projection-json` through a skill-local JSON-object source
+parser instead of raw `json.loads`. Malformed or non-object inline fixture
+projection payloads now fail with concise CLI diagnostics before routine-plan
+inspection can derive placement/open-close guidance from corrupt operator
+context. The touched skill contract tests also explicitly opt their synthetic
+scenario MCP servers into synthetic map projection, matching the current Base
+Navigation Map contract. Focused proof passed: Molmo cleanup skill contract
+tests, touched-file ruff, touched-file format check, diff check, and ratchet
+summary. Current ratchet: 0 Ruff complexity violations, 80 oversized modules
+in the shared checkout.
+
+Previous slice: Agibot nav artifact helper reads now fail raw-map gzip JSON and
 candidate JSON sources through source-labelled vendor CLI diagnostics instead
 of raw `json.load` / `json.loads` tracebacks. `prepare_navigation_target.py`,
 `navigate_to_target.py`, and robot-direction overlays now share the same

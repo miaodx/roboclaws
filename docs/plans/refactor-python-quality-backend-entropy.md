@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Molmo cleanup trace-preserving skill
+  inline projection source slice: `--static-fixture-projection-json` now routes
+  through a skill-local JSON-object source parser before routine-plan
+  inspection, so malformed or non-object inline fixture projection payloads
+  fail with concise CLI diagnostics instead of Python JSON tracebacks.
 - Current shared-checkout note after the Agibot nav artifact source slice:
   vendor navigation artifact readers now fail saved raw-map gzip JSON and
   candidate JSON sources with source-labelled `SystemExit` diagnostics instead

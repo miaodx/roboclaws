@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Molmo cleanup trace-preserving skill CLI now validates inline
+  `--static-fixture-projection-json` through a skill-local JSON-object source
+  parser instead of raw `json.loads`. Malformed or non-object inline fixture
+  projection payloads now fail with concise CLI diagnostics before routine-plan
+  inspection can derive placement/open-close guidance from corrupt operator
+  context. The touched skill contract tests also explicitly opt synthetic MCP
+  scenarios into synthetic map projection, matching the current Base Navigation
+  Map contract. Owner layer: Agent Skill. Behavior-change class: internal skill
+  CLI source-reader hardening with fail-aloud diagnostics for inline operator
+  context. Metric: ratchet remains at 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused Molmo
+  cleanup skill contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py` regains
+  raw inline static-fixture projection parsing or malformed inline projection
+  context can again produce tracebacks or valid-looking routine guidance.
+
 - 2026-06-21: Agibot nav artifact helper reads now fail saved raw-map gzip
   JSON and candidate JSON sources through source-labelled vendor CLI
   diagnostics instead of raw `json.load` / `json.loads` tracebacks. Offline

@@ -94,10 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--static-fixture-projection-json", default="")
     args = parser.parse_args(argv)
 
-    static_fixture_projection = (
-        json.loads(args.static_fixture_projection_json)
-        if args.static_fixture_projection_json
-        else None
+    static_fixture_projection = _parse_static_fixture_projection_json(
+        args.static_fixture_projection_json
     )
     payload = {
         "routine": ROUTINE_NAME,
@@ -131,6 +129,24 @@ def main(argv: list[str] | None = None) -> int:
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
+
+
+def _parse_static_fixture_projection_json(text: str) -> dict[str, Any] | None:
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            "static fixture projection JSON source must contain valid JSON object: "
+            f"--static-fixture-projection-json: line {exc.lineno} column {exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(
+            "static fixture projection JSON source must contain a JSON object: "
+            "--static-fixture-projection-json"
+        )
+    return payload
 
 
 if __name__ == "__main__":
