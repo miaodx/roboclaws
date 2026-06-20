@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Camera-control request loading now uses
+  `roboclaws.core.json_sources.read_json_value` for file-backed request
+  payloads. Missing or malformed request files now use canonical
+  path-labelled source wording before camera-control request normalization,
+  while legacy view-list JSON remains accepted by the existing normalizer.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change class:
+  source-reader consolidation / fail-aloud source validation. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  camera-control request loading tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  camera-control request loading regains a local raw JSON file reader or
+  corrupt request files can again reach request-shape normalization as parser
+  tracebacks.
+
 - 2026-06-20: Report-performance comparison manifest loading now uses
   `roboclaws.core.json_sources.read_json_object` for explicit `--manifest`
   artifacts. Missing, malformed, or parseable non-object comparison manifests

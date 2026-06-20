@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Report-performance comparison manifest loading now routes explicit
-`--manifest` artifacts through the shared JSON-object source helper. Missing,
-malformed, or non-object comparison manifests fail with canonical
-path-labelled source wording before comparison-list validation or run-dir
-extraction. Focused comparison manifest source tests, core JSON-source tests,
-touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
-signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Camera-control request loading now routes file-backed payloads
+through the shared JSON-value source helper. Missing or malformed camera-control
+request files fail with canonical path-labelled source wording before request
+normalization; legacy view-list JSON remains accepted by the existing
+normalizer. Focused camera-control tests, core JSON-source tests, touched-file
+Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
+complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -75,6 +75,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/cli/household_agent_server.py`
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
+- `roboclaws/household/camera_control.py`
 - `roboclaws/launch/goals.py`
 - `roboclaws/maps/room_semantics.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
@@ -114,6 +115,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_runtime_map_prior_source_loading.py`
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/unit/core/test_json_sources.py`
+- `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `tests/unit/reports/test_write_pages_index_sources.py`
 - `tests/unit/reports/test_compare_live_report_metrics_sources.py`
@@ -129,6 +131,9 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
   `scripts/dev/cloudml_eval_dry_run.sh`,
   `scripts/dev/stage_cloudml_cleanup_assets.sh`, and
   `tests/unit/evals/test_eval_runner.py`.
+- Do not touch unrelated B1 label/source-of-truth dirty files:
+  `tests/contract/maps/test_b1_map12_label_tool.py` and
+  `scripts/maps/render_b1_map12_base_label_review.py`.
 - Do not touch unrelated `docs/status/active/2026-06-18-sdk-storage-targets.md`.
 - Do not touch unrelated
   `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.

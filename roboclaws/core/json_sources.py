@@ -6,6 +6,15 @@ from pathlib import Path
 from typing import Any
 
 
+def read_json_value(path: Path, *, label: str) -> Any:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} source is missing: {path}")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} source must contain valid JSON: {path}") from exc
+
+
 def read_json_object(path: Path, *, label: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} source is missing: {path}")

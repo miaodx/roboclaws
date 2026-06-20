@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_value
+
 CAMERA_CONTROL_REQUEST_SCHEMA = "roboclaws_camera_control_request_v1"
 CAMERA_CONTROL_API_NAME = "roboclaws.camera_control.render_views"
 ANCHOR_ORBIT_CAMERA_MODEL = "anchor_orbit_lookat_camera_v1"
@@ -278,7 +280,7 @@ def load_camera_control_request(
     width: int | None = None,
     height: int | None = None,
 ) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_value(path, label="camera control request")
     return normalize_camera_control_request(payload, width=width, height=height)
 
 

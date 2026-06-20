@@ -117,6 +117,11 @@ Latest quality snapshot from 2026-06-20:
   `--manifest` artifacts through the shared JSON-object helper, so missing,
   malformed, or non-object comparison manifests fail with path-labelled source
   errors before comparison-list validation or run-dir extraction.
+  Camera-control request loading now routes file-backed payloads through the
+  shared JSON-value source helper, so missing or malformed camera-control
+  request files fail with path-labelled source errors before normalization
+  while legacy view-list JSON remains accepted by the existing request
+  normalizer.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
