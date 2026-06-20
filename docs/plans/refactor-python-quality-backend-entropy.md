@@ -155,7 +155,9 @@ Latest quality snapshot from 2026-06-20:
   of a duplicate local reader.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
-  `correspondence_review_packet.json` or `correspondence_review.html`.
+  `correspondence_review_packet.json` or `correspondence_review.html`, and
+  routes those JSON-object sources through the shared source helper instead of
+  a duplicate local reader.
   B1 map-scene alignment fitting now treats explicit correspondences as
   JSON-object source truth before writing `alignment_residuals.json` or preview
   artifacts.
