@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 digital-twin readiness now treats explicit
+  `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object optional proof
+  artifacts now return concise CLI source-path errors before writing the
+  readiness artifact, instead of surfacing raw parser/type failures or merging
+  plausible readiness evidence from corrupt sources. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 readiness
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules; coverage landed in a small dedicated readiness CLI
+  contract test file. Proof: focused readiness CLI source tests, existing B1
+  digital-twin readiness contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh B1 readiness
+  evidence that explicit alignment or navigation artifacts again load through
+  raw parser/type paths, accept plausible non-object packets, or write
+  readiness artifacts after source-load failure.
+
 - 2026-06-20: B1 manual alignment overlay rendering now treats explicit
   `--scene-topdown-render` and `--alignment-artifact` inputs as JSON-object
   source truth. Missing, malformed, or parseable non-object scene top-down

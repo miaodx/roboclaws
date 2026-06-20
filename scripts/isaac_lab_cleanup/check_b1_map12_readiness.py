@@ -72,22 +72,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    payload = build_readiness_artifact(args.b1_root, args.map12_root)
-    if args.alignment_artifact is not None:
-        alignment_payload = json.loads(args.alignment_artifact.read_text(encoding="utf-8"))
-        payload = readiness_artifact_with_alignment(
-            payload,
-            alignment_payload,
-            alignment_artifact_path=args.alignment_artifact,
-        )
-    navigation_payload: dict[str, Any] | None = None
-    if args.navigation_artifact is not None:
-        navigation_payload = json.loads(args.navigation_artifact.read_text(encoding="utf-8"))
-        payload = readiness_artifact_with_navigation(
-            payload,
-            navigation_payload,
-            navigation_artifact_path=args.navigation_artifact,
-        )
+    try:
+        payload = build_readiness_artifact(args.b1_root, args.map12_root)
+        if args.alignment_artifact is not None:
+            alignment_payload = _read_json_object(
+                args.alignment_artifact,
+                label="alignment artifact",
+            )
+            payload = readiness_artifact_with_alignment(
+                payload,
+                alignment_payload,
+                alignment_artifact_path=args.alignment_artifact,
+            )
+        navigation_payload: dict[str, Any] | None = None
+        if args.navigation_artifact is not None:
+            navigation_payload = _read_json_object(
+                args.navigation_artifact,
+                label="navigation artifact",
+            )
+            payload = readiness_artifact_with_navigation(
+                payload,
+                navigation_payload,
+                navigation_artifact_path=args.navigation_artifact,
+            )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     errors = validate_readiness_artifact(
         payload,
         require_navigation_success=bool(args.require_navigation_success),
@@ -120,6 +130,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0 if not errors else 2
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
