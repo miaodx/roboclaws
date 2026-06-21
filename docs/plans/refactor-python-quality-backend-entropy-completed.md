@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now
+  fail as row-level blocked decision-packet evidence when malformed or
+  non-object. The matrix uses the existing report-performance source boundary
+  for `calibration_path`, preserves decision-packet generation, and leaves
+  quality/speed/reducible-bucket evidence empty for the blocked row instead of
+  letting corrupt calibration evidence escape row status handling. Owner
+  layer: Artifacts, reports, and eval suites / no-provider Agent SDK speedup
+  matrix. Behavior-change class: fail-aloud source validation for explicit
+  calibration evidence. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout; the focused
+  matrix test file stays outside the hard-ceiling frontier. Proof: focused
+  Agent SDK perf-matrix tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if malformed or non-object explicit `calibration_path` artifacts can
+  again abort matrix generation outside row-level blocked decision-packet
+  evidence, or feed normalized speed deltas without a source error.
+
 - 2026-06-21: OpenAI Agents SDK model-input camera-grounded history
   compaction now treats JSON-looking MCP output text wrappers as structured
   sources. Malformed text content, top-level non-object JSON, and

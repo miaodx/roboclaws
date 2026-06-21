@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Agent SDK perf-matrix calibration
+  source slice: explicit `calibration_path` artifacts now fail as row-level
+  blocked decision-packet evidence when malformed or non-object, matching
+  baseline/candidate run-source handling instead of letting a corrupt
+  calibration source abort matrix generation outside the row status surface.
 - Current shared-checkout note after the OpenAI Agents model-input
   camera-grounded output source slice: camera-grounded history compaction now
   treats JSON-looking MCP tool-output text wrappers as structured sources.

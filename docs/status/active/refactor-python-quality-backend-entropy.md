@@ -17,6 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now fail
+as row-level blocked decision-packet evidence when malformed or non-object.
+The matrix uses the existing report-performance source boundary for
+`calibration_path`, preserves decision-packet generation, and leaves
+quality/speed/reducible-bucket evidence empty for the blocked row instead of
+letting corrupt calibration evidence escape row status handling. Focused proof
+passed: Agent SDK perf-matrix tests, touched-file ruff, touched-file format
+check, dependency sync, changed-code cleanup review, diff check, and ratchet
+summary. Current ratchet before final slice closeout: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: OpenAI Agents SDK model-input camera-grounded history compaction
 now treats JSON-looking MCP tool-output text wrappers as structured sources.
 Malformed text content, top-level non-object JSON, and double-encoded
@@ -652,8 +663,12 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the OpenAI Agents SDK model-input camera-grounded output source
-slice. Avoid reopening OpenAI Agents SDK model-input camera-grounded MCP
+committing the Agent SDK perf-matrix calibration source slice. Avoid reopening
+Agent SDK speedup-matrix calibration source handling unless fresh matrix
+evidence shows malformed or non-object explicit `calibration_path` artifacts
+can again abort matrix generation outside row-level blocked decision-packet
+evidence, or feed normalized speed deltas without a source error.
+Avoid reopening OpenAI Agents SDK model-input camera-grounded MCP
 output parsing unless fresh model-input compaction evidence shows malformed or
 non-object JSON-looking camera-grounded tool output can again feed a plausible
 camera-history summary, or plaintext unavailable-body output is no longer
