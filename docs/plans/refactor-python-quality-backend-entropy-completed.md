@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents SDK operator-console readiness now reuses
+  `openai_agents_runtime_settings()` before publishing provider readiness, so
+  console start is blocked by the same provider/model/base-url/key source
+  rules that runtime launch uses. Unknown `ROBOCLAWS_OPENAI_AGENTS_MODEL`
+  values, conflicting SDK/Codex model sources, and route-incompatible SDK model
+  overrides now report resolver diagnostics in the console provider gate; the
+  generic `ROBOCLAWS_CODE_AGENT_MODEL` alias is intentionally ignored as a
+  direct SDK model source. Owner layer: Thin Runtime / Server Adapter using
+  Agent Engines And Provider Profiles. Behavior-change class: fail-aloud
+  readiness/source-truth alignment for OpenAI Agents SDK provider env. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused operator-console launcher
+  tests, provider catalog tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if operator-console OpenAI Agents SDK readiness can again publish
+  ready-looking provider state for unknown, conflicting, or route-incompatible
+  SDK model/provider settings that runtime launch would reject.
+
 - 2026-06-21: Mify Anthropic provider-route base-url resolution now rejects
   conflicting `XM_LLM_ANTHROPIC_BASE_URL` and Anthropic URLs derived from
   `XM_LLM_BASE_URL` before provider readiness or coding-agent launch can

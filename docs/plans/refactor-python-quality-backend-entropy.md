@@ -22,6 +22,14 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents SDK console readiness
+  source-parity slice: operator-console readiness now resolves SDK
+  provider/model/base-url/key settings through `openai_agents_runtime_settings()`
+  before publishing the provider gate, so unknown
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL` values, conflicting SDK/Codex model sources,
+  and route-incompatible SDK model overrides block start with the same
+  launch-time diagnostics. The generic `ROBOCLAWS_CODE_AGENT_MODEL` alias is
+  not a direct SDK model source.
 - Current shared-checkout note after the mify Anthropic base-url conflict
   slice: provider-route base-url resolution now rejects conflicting
   `XM_LLM_ANTHROPIC_BASE_URL` and derived `XM_LLM_BASE_URL` values before

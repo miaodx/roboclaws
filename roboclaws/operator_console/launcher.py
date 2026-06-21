@@ -14,6 +14,7 @@ from typing import Any
 
 from roboclaws.agents.provider_registry import (
     default_provider_profile,
+    openai_agents_runtime_settings,
     provider_readiness,
 )
 from roboclaws.core.dotenv import load_dotenv_file
@@ -670,11 +671,30 @@ def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile(
         "openai-agents-sdk"
     )
-    model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
+    try:
+        settings = openai_agents_runtime_settings(
+            provider_profile=provider,
+            request_provider_profile=None,
+            model=None,
+            request_model=None,
+            base_url=None,
+            api_key=None,
+            env=env_map,
+        )
+    except ValueError as exc:
+        readiness = provider_readiness(
+            agent_engine="openai-agents-sdk",
+            provider_profile=provider,
+            env=env_map,
+        )
+        blocked = dict(readiness)
+        blocked["ok"] = False
+        blocked["message"] = str(exc)
+        return blocked
     return provider_readiness(
         agent_engine="openai-agents-sdk",
-        provider_profile=provider,
-        model=model,
+        provider_profile=settings["provider_profile"],
+        model=settings["model"],
         env=env_map,
     )
 

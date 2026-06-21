@@ -1068,6 +1068,92 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
     assert kimi["provider"]["model"] == "kimi-k2.7-code"
 
 
+def test_provider_gate_blocks_unknown_openai_agents_model_env(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
+
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        env={
+            "CODEX_BASE_URL": "https://codex.example.test/v1",
+            "CODEX_API_KEY": "key",
+            "ROBOCLAWS_OPENAI_AGENTS_MODEL": "not-in-provider-catalog",
+        },
+        overrides={"port": _free_port()},
+    )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "needs_provider"
+    assert readiness["provider"]["ok"] is False
+    assert "OpenAI Agents SDK setting model is unknown" in readiness["blocker"]
+    assert "not-in-provider-catalog" in readiness["blocker"]
+
+
+def test_provider_gate_blocks_conflicting_openai_agents_model_sources(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
+
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        env={
+            "CODEX_BASE_URL": "https://codex.example.test/v1",
+            "CODEX_API_KEY": "key",
+            "ROBOCLAWS_OPENAI_AGENTS_MODEL": "kimi-k2.7-code",
+            "ROBOCLAWS_CODEX_MODEL": "gpt-5.5",
+        },
+        overrides={"port": _free_port()},
+    )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "needs_provider"
+    assert readiness["provider"]["ok"] is False
+    assert "conflicting OpenAI Agents SDK setting model" in readiness["blocker"]
+    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL='kimi-k2.7-code'" in readiness["blocker"]
+    assert "ROBOCLAWS_CODEX_MODEL='gpt-5.5'" in readiness["blocker"]
+
+
+def test_provider_gate_ignores_code_agent_model_alias_for_openai_agents(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
+
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        env={
+            "CODEX_BASE_URL": "https://codex.example.test/v1",
+            "CODEX_API_KEY": "key",
+            "ROBOCLAWS_CODE_AGENT_MODEL": "kimi-k2.7-code",
+        },
+        overrides={"port": _free_port()},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "codex-router-responses"
+    assert readiness["provider"]["model"] == "gpt-5.5"
+
+
+def test_provider_gate_blocks_incompatible_openai_agents_model_env(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
+
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        env={
+            "MM_API_KEY": "key",
+            "ROBOCLAWS_OPENAI_AGENTS_MODEL": "gpt-5.5",
+        },
+        overrides={"port": _free_port(), "provider_profile": "minimax-responses"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
+    )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "needs_provider"
+    assert readiness["provider"]["ok"] is False
+    assert "OpenAI Agents SDK setting model is incompatible" in readiness["blocker"]
+    assert "provider_profile 'minimax-responses'" in readiness["blocker"]
+
+
 def test_provider_gate_requires_mimo_inside_base_url(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
 

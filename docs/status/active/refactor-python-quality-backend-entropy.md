@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: OpenAI Agents SDK operator-console readiness now resolves
+provider/model settings through `openai_agents_runtime_settings()` before
+publishing the provider gate. Unknown `ROBOCLAWS_OPENAI_AGENTS_MODEL` values,
+conflicting SDK/Codex model sources, and route-incompatible SDK model overrides
+now block console start with the same resolver diagnostics that launch would
+hit; `ROBOCLAWS_CODE_AGENT_MODEL` is intentionally not treated as a direct SDK
+model source. Focused proof passed: operator-console launcher tests, provider
+catalog tests, touched-file ruff, touched-file format check, dependency sync,
+changed-code cleanup review, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
 2026-06-21: Mify Anthropic provider route base-url resolution now fails before
 launch readiness when `XM_LLM_ANTHROPIC_BASE_URL` conflicts with the
 Anthropic URL derived from `XM_LLM_BASE_URL`. The Python provider registry owns
@@ -551,7 +563,12 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the mify Anthropic base-url conflict slice. Avoid reopening
+committing the OpenAI Agents SDK operator-console readiness parity slice. Avoid
+reopening OpenAI Agents SDK console readiness provider/model source parity
+unless fresh console or live-launch evidence shows unknown, conflicting, or
+route-incompatible SDK model/provider settings can again produce
+ready-looking operator-console state before runtime failure.
+Avoid reopening
 mify Anthropic provider-route base-url resolution unless fresh provider
 readiness or coding-agent launch evidence shows conflicting
 `XM_LLM_ANTHROPIC_BASE_URL` / `XM_LLM_BASE_URL` values can again produce
@@ -855,7 +872,6 @@ diagnostics.
 - Do not touch unrelated dirty `just` files: `just/agent.just` and
   `just/molmo.just`.
 - Do not touch unrelated operator-console dirty files:
-  `roboclaws/operator_console/launcher.py`,
   `roboclaws/operator_console/server.py`,
   `roboclaws/operator_console/static/app.js`, and
   `roboclaws/operator_console/static/index.html`.
