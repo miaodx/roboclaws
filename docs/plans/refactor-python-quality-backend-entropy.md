@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Nav2 map-bundle source-frame slice:
+  projection now preserves validated `semantics.json frame_ids.map` across
+  metric-map `frame_id`, defaulted inspection-waypoint frames, room
+  source-frame metadata, and initial robot pose. Bundle validation now rejects
+  present room `source_map_frame_id` or waypoint `frame_id` values that drift
+  from `frame_ids.map`, so mixed-frame map artifacts fail before report,
+  route, or cleanup consumers derive confidence from them.
 - Current shared-checkout note after the Agent SDK perf-matrix calibration
   source slice: explicit `calibration_path` artifacts now fail as row-level
   blocked decision-packet evidence when malformed or non-object, matching

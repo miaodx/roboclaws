@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Nav2 map-bundle projection now preserves the declared source
+  map frame from `semantics.json frame_ids.map` instead of hard-coding `map`
+  for projected robot pose or defaulted inspection-waypoint frames. Bundle
+  validation also rejects present room `source_map_frame_id` or waypoint
+  `frame_id` values that drift from the bundle map frame before route,
+  report, or cleanup consumers can derive mixed-frame confidence. Owner
+  layer: Artifacts, reports, and eval suites / map artifact contract.
+  Behavior-change class: source-truth correction plus fail-aloud map-frame
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; touched map modules
+  remain below the hard ceiling. Proof: focused Nav2 map-bundle contract
+  tests, cross-environment semantic-map parity tests, touched-file
+  ruff/format checks, dependency sync, changed-code cleanup review,
+  `git diff --check`, and ratchet. Reopen only if `metric_map_from_bundle`
+  or Nav2 bundle validation again allows `frame_ids.map`, room
+  `source_map_frame_id`, waypoint `frame_id`, and projected robot pose to
+  disagree without explicit validation evidence.
+
 - 2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now
   fail as row-level blocked decision-packet evidence when malformed or
   non-object. The matrix uses the existing report-performance source boundary

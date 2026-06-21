@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Nav2 map-bundle projection now preserves the validated
+`semantics.json frame_ids.map` source frame across projected metric-map
+`frame_id`, defaulted inspection-waypoint frames, room source-frame metadata,
+and initial robot pose. Bundle validation also rejects present room
+`source_map_frame_id` or waypoint `frame_id` values that drift from
+`frame_ids.map`, so a coherent source-map artifact cannot project plausible
+mixed-frame navigation evidence. Focused proof passed: Nav2 map-bundle
+contract tests, cross-environment semantic-map parity tests, touched-file
+ruff, touched-file format check, dependency sync, changed-code cleanup review,
+diff check, and ratchet summary. Current ratchet before final slice closeout:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now fail
 as row-level blocked decision-packet evidence when malformed or non-object.
 The matrix uses the existing report-performance source boundary for

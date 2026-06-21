@@ -256,6 +256,86 @@ def test_nav2_projection_rejects_malformed_semantics(tmp_path: Path) -> None:
         static_landmarks_from_bundle(bundle_dir)
 
 
+def test_nav2_projection_preserves_declared_map_frame(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    for room in semantics["rooms"]:
+        room["source_map_frame_id"] = "operator_map"
+    for waypoint in semantics["inspection_waypoints"]:
+        waypoint.pop("frame_id", None)
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    projected_map = metric_map_from_bundle(bundle_dir)
+
+    assert projected_map["frame_id"] == "operator_map"
+    assert projected_map["robot_pose"]["frame_id"] == "operator_map"
+    assert {room["source_map_frame_id"] for room in projected_map["rooms"]} == {"operator_map"}
+    assert {waypoint["frame_id"] for waypoint in projected_map["inspection_waypoints"]} == {
+        "operator_map"
+    }
+
+
+def test_nav2_validation_rejects_room_source_frame_drift(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    room_id = semantics["rooms"][0]["room_id"]
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert any(
+        f"room source_map_frame_id must match semantics.json frame_ids.map: {room_id}" in error
+        for error in validation.errors
+    )
+
+
+def test_nav2_validation_rejects_waypoint_frame_drift(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    for room in semantics["rooms"]:
+        room["source_map_frame_id"] = "operator_map"
+    semantics["inspection_waypoints"][0]["frame_id"] = "map"
+    waypoint_id = semantics["inspection_waypoints"][0]["waypoint_id"]
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert any(
+        f"inspection waypoint frame_id must match semantics.json frame_ids.map: {waypoint_id}"
+        in error
+        for error in validation.errors
+    )
+
+
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
     exporter = _load_module(EXPORTER_PATH, "export_bundle")
     checker = _load_module(CHECKER_PATH, "check_bundle")
