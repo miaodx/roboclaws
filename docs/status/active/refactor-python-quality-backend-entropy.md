@@ -17,6 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Kimi coding provider-health probe response bodies now parse
+through the shared JSON-object text helper and validate the minimal
+`choices[0].message` shape before extracting visible output. Malformed,
+parseable non-object, or wrong-shaped Kimi direct-probe HTTP bodies now become
+labelled provider-health `FAIL` diagnostics instead of raw indexing/type
+errors or empty-output ambiguity. Focused proof passed: provider-health script
+unit tests, touched-file ruff, touched-file format check, dependency sync,
+diff check, and ratchet summary. Current ratchet before final slice closeout:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: OpenAI-compatible MiMo tool-call argument parsing now recovers
 malformed or parseable non-object model output through the shared provider
 fallback decision instead of raising from `json.loads` before direct provider

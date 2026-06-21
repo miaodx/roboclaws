@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Kimi coding provider-health probe response bodies now parse
+  through the shared JSON-object text helper and validate the minimal
+  `choices[0].message` shape before extracting visible output. Malformed,
+  parseable non-object, or wrong-shaped direct-probe HTTP bodies now become
+  labelled provider-health `FAIL` diagnostics instead of raw indexing/type
+  errors or empty-output ambiguity. Owner layer: Agent Engines And Provider
+  Profiles / dev provider-health harness. Behavior-change class: fail-aloud
+  provider wire-source validation for Kimi direct health probes. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused provider-health script unit
+  tests, touched-file ruff/format checks, dependency sync, `git diff --check`,
+  and ratchet. Reopen only if `check_model_providers.py` again trusts
+  wrong-shaped Kimi coding HTTP JSON before provider-health output extraction.
+
 - 2026-06-21: OpenAI-compatible MiMo tool-call argument parsing now recovers
   malformed or parseable non-object model output through the shared provider
   fallback decision instead of raising from `json.loads` before a direct

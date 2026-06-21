@@ -25,6 +25,7 @@ from roboclaws.agents.provider_registry import (
 )
 from roboclaws.agents.thinking_policy import thinking_request_body_for_wire
 from roboclaws.core.dotenv import update_env_from_dotenv_file
+from roboclaws.core.json_sources import parse_json_object_text
 
 DEFAULT_PROMPT = "Health check. Reply exactly ok."
 DEFAULT_RESPONSES_MAX_OUTPUT_TOKENS = 256
@@ -388,8 +389,27 @@ def _run_kimi_coding_probe(
             json=payload,
         )
         response.raise_for_status()
-        data = response.json()
-    message = data["choices"][0]["message"]
+        data = parse_json_object_text(
+            response.text,
+            label="Kimi coding provider response",
+            source=spec.probe_id,
+        )
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError(
+            f"Kimi coding provider response choices must be a non-empty array: {spec.probe_id}"
+        )
+    first_choice = choices[0]
+    if not isinstance(first_choice, dict):
+        raise RuntimeError(
+            f"Kimi coding provider response choices[0] must be a JSON object: {spec.probe_id}"
+        )
+    message = first_choice.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError(
+            "Kimi coding provider response choices[0].message must be a JSON object: "
+            f"{spec.probe_id}"
+        )
     output = str(message.get("content") or message.get("reasoning_content") or "")
     if not output:
         raise RuntimeError("Kimi coding completion returned empty content")

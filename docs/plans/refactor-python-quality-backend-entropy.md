@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Kimi provider-health response source
+  slice: the direct Kimi coding probe now parses HTTP response text through
+  the shared JSON-object source helper and validates `choices[0].message`
+  before extracting output, so malformed, non-object, or wrong-shaped
+  provider-health wire bodies become labelled FAIL diagnostics.
 - Current shared-checkout note after the MiMo tool-call argument recovery
   slice: OpenAI-compatible direct provider parsing now routes malformed or
   parseable non-object tool-call arguments through the shared provider
