@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: The stdlib-only mify MiMo v2.5 image probe now validates
+  provider HTTP success bodies with a script-local JSON-object source parser
+  before extracting chat/responses output. Malformed or parseable non-object
+  200 bodies now fail as labelled probe response source errors instead of
+  writing `status: ok` with empty or misleading output, and malformed HTTP
+  error bodies retain an explicit `HTTP <code> <reason>` source in the
+  fallback diagnostic. Owner layer: Agent Engines And Provider Profiles / dev
+  provider benchmark harness. Behavior-change class: fail-aloud provider
+  wire-source validation while preserving the standalone stdlib-only
+  reproducer constraint. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused mify image probe source tests, touched-file ruff/format checks,
+  dependency sync, `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/probe_mify_v25_image.py` again accepts malformed or non-object
+  provider HTTP success bodies before output extraction, or loses labelled
+  source diagnostics for bad structured error bodies.
+
 - 2026-06-21: Kimi key validation smoke now validates the model reply as a
   JSON object through the shared JSON-object text helper and requires
   `action == "MoveAhead"` before printing that the key returns parseable JSON.

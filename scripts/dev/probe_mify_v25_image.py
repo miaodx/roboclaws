@@ -333,7 +333,11 @@ def post_json(
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout_s) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return parse_json_object_text(
+            response.read().decode("utf-8"),
+            label="mify image probe response",
+            source=url,
+        )
 
 
 def chat_output_text(payload: dict[str, Any]) -> str:
@@ -375,10 +379,26 @@ def content_to_text(content: Any) -> str:
 
 
 def http_error_payload(exc: urllib.error.HTTPError) -> dict[str, Any]:
+    source = f"HTTP {exc.code} {exc.reason}"
     try:
-        return json.loads(exc.read().decode("utf-8"))
+        return parse_json_object_text(
+            exc.read().decode("utf-8"),
+            label="mify image probe error response",
+            source=source,
+        )
     except Exception:  # noqa: BLE001 - preserve best-effort diagnostic payload
-        return {"error": {"message": exc.reason, "status": exc.code}}
+        return {"error": {"message": exc.reason, "status": exc.code, "source": source}}
+
+
+def parse_json_object_text(text: str, *, label: str, source: str = "") -> dict[str, Any]:
+    source_suffix = f": {source}" if source else ""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} source must contain valid JSON object{source_suffix}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} source must contain a JSON object{source_suffix}")
+    return payload
 
 
 if __name__ == "__main__":

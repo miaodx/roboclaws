@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the mify image probe HTTP source slice:
+  `scripts/dev/probe_mify_v25_image.py` remains stdlib-only but now validates
+  provider HTTP success bodies with a script-local JSON-object source parser
+  before chat/responses output extraction, so malformed or non-object 200
+  bodies fail aloud instead of producing `status: ok` with empty output. Bad
+  HTTP error bodies keep an explicit `HTTP <code> <reason>` source in the
+  fallback diagnostic.
 - Current shared-checkout note after the Kimi key smoke validation slice:
   `scripts/dev/check_kimi_key.py` now validates model output as a JSON object
   through the shared JSON-object source helper and requires

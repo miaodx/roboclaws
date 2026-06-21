@@ -17,6 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: The stdlib-only mify MiMo v2.5 image probe now validates provider
+HTTP success bodies with a script-local JSON-object source parser before
+extracting chat/responses output. Malformed or parseable non-object 200 bodies
+now fail as labelled probe response source errors instead of writing `status:
+ok` with empty or misleading output, and malformed HTTP error bodies retain an
+explicit `HTTP <code> <reason>` source in the fallback diagnostic. Focused
+proof passed: mify image probe source tests, touched-file ruff, touched-file
+format check, dependency sync, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized modules
+in the shared checkout.
+
 2026-06-21: Kimi key validation smoke now validates the model reply as a JSON
 object through the shared JSON-object text helper and requires
 `action == "MoveAhead"` before printing that the key returns parseable JSON.
