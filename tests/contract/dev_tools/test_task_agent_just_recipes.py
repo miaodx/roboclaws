@@ -1795,7 +1795,10 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     assert 'map_bundle="auto"' in text
     assert 'python_bin" -m roboclaws.launch.map_bundles' in text
     assert "--map-bundle-dir" in text
-    assert "--require-map-bundle" in text
+    removed_require_flag = "--require-map-" + "bundle"
+    removed_synthetic_flag = "--allow-synthetic-map-" + "projection"
+    assert removed_require_flag not in text
+    assert removed_synthetic_flag not in text
     assert "using backend-derived public metric map" not in text
     assert "map_bundle=${map_bundle_dir} is not allowed" in text
 

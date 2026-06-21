@@ -200,7 +200,6 @@ class RealWorldCleanupContract:
         runtime_map_prior: dict[str, Any] | None = None,
         evidence_lane: str | None = None,
         public_acceptance_config: dict[str, Any] | None = None,
-        allow_synthetic_map_projection: bool = False,
     ) -> None:
         realworld_contract_init.validate_contract_options(
             static_fixture_projection_mode=static_fixture_projection_mode,
@@ -227,7 +226,6 @@ class RealWorldCleanupContract:
         realworld_contract_init.init_map_projection(
             self,
             map_bundle_dir,
-            allow_synthetic_map_projection=allow_synthetic_map_projection,
         )
         realworld_contract_init.init_public_map_projection(self)
         self._current_waypoint_id = realworld_contract_init.initial_waypoint_id(self)
@@ -1544,13 +1542,6 @@ class RealWorldCleanupContract:
     def _current_room_id(self) -> str:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)
         return str(waypoint["room_id"]) if waypoint is not None else ""
-
-    def _fallback_metric_map_template(self) -> dict[str, Any]:
-        return realworld_contract_projection._fallback_metric_map_template(
-            self,
-            realworld_contract=REALWORLD_CONTRACT,
-            real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-        )
 
     def _current_pose(self) -> dict[str, float]:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)

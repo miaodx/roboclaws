@@ -833,7 +833,7 @@ diagnostics.
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `scripts/maps/compile_b1_map12_runtime_bundle.py`
 - `scripts/maps/check_robot_map12_consistency.py`
-- `scripts/maps/export_bundle.py`
+- retired legacy Agent View bundle exporter
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`

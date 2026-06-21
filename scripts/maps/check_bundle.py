@@ -11,10 +11,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.maps.bundle import (  # noqa: E402
-    validate_base_navigation_map_v1_bundle,
-    validate_nav2_map_bundle,
-)
+from roboclaws.maps.bundle import validate_base_navigation_map_v1_bundle  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -23,22 +20,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("bundle_dir", type=Path)
     parser.add_argument("--json", action="store_true", help="Print machine-readable validation.")
-    parser.add_argument(
-        "--legacy-nav2",
-        action="store_true",
-        help="Validate only the older broad Nav2 bundle contract. Not valid for product launch.",
-    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    result = (
-        validate_nav2_map_bundle(args.bundle_dir)
-        if args.legacy_nav2
-        else validate_base_navigation_map_v1_bundle(args.bundle_dir)
-    )
-    label = "legacy-nav2-map-bundle" if args.legacy_nav2 else "base-navigation-map-v1-bundle"
+    result = validate_base_navigation_map_v1_bundle(args.bundle_dir)
+    label = "base-navigation-map-v1-bundle"
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
     elif result.ok:

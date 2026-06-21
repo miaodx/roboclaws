@@ -133,11 +133,9 @@ def _metric_map(
     real_robot_map_bundle_schema: str,
     assert_no_forbidden_agent_view_keys: Any,
 ) -> dict[str, Any]:
-    source = (
-        copy.deepcopy(contract._bundle_metric_map_template)
-        if contract._bundle_metric_map_template is not None
-        else contract._fallback_metric_map_template()
-    )
+    if contract._bundle_metric_map_template is None:
+        raise AssertionError("product runtime metric_map requires a canonical map bundle")
+    source = copy.deepcopy(contract._bundle_metric_map_template)
     frame_id = str(source.get("frame_id") or "map")
     map_id = str(source.get("map_id") or f"{contract.scenario.scenario_id}_base_navigation_map")
     map_version = str(source.get("map_version") or "base-navigation-map-v1")
@@ -332,56 +330,6 @@ def _first_public_waypoint_by_room(waypoints: list[dict[str, Any]]) -> dict[str,
         if room_id and waypoint_id:
             result.setdefault(room_id, waypoint_id)
     return result
-
-
-def _fallback_metric_map_template(
-    contract: Any,
-    *,
-    realworld_contract: str,
-    real_robot_map_bundle_schema: str,
-) -> dict[str, Any]:
-    frame_id = "map"
-    map_id = f"{contract.scenario.scenario_id}_base_navigation_map"
-    map_version = "base-navigation-map-v1"
-    return {
-        "ok": True,
-        "tool": "metric_map",
-        "status": "ok",
-        "contract": realworld_contract,
-        "schema": real_robot_map_bundle_schema,
-        "frame_id": frame_id,
-        "map_id": map_id,
-        "map_version": map_version,
-        "resolution_m": 0.05,
-        "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-        "width": 240,
-        "height": 180,
-        "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
-        "occupancy_grid_artifact": None,
-        "map_bundle": metric_map_bundle_metadata(
-            environment_id=contract.scenario.scenario_id,
-            map_id=map_id,
-            map_version=map_version,
-        ),
-        "rooms": [_metric_map_room_payload(room) for room in contract._rooms],
-        "driveable_ways": _driveable_ways(contract._rooms),
-        "inspection_waypoints": [
-            {
-                "waypoint_id": item["waypoint_id"],
-                "frame_id": frame_id,
-                "x": item["x"],
-                "y": item["y"],
-                "yaw": item["yaw"],
-                "room_id": item["room_id"],
-                "label": item["label"],
-                "purpose": item["purpose"],
-                "waypoint_source": item["waypoint_source"],
-                "coverage_estimate": item["coverage_estimate"],
-                "fixture_ids": list(item.get("fixture_ids") or []),
-            }
-            for item in contract._waypoints
-        ],
-    }
 
 
 def _public_navigation_waypoints_with_visits(contract: Any) -> list[dict[str, Any]]:
@@ -928,59 +876,6 @@ def _private_waypoint_map_for_public_base_waypoints(
         )
         for public in public_waypoints
     }
-
-
-def _synthetic_exploration_waypoints(
-    metric_map: dict[str, Any],
-    *,
-    fallback_waypoints: list[dict[str, Any]],
-    public_rooms: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    source_waypoints = [
-        item for item in metric_map.get("inspection_waypoints") or [] if isinstance(item, dict)
-    ] or [item for item in fallback_waypoints if isinstance(item, dict)]
-    frame_id = str(metric_map.get("frame_id") or "map")
-    room_labels = _room_label_by_id(public_rooms)
-    generated = []
-    for index, source in enumerate(source_waypoints, start=1):
-        waypoint_id = f"generated_exploration_{index:03d}"
-        room_id = str(source.get("room_id") or "generated_area")
-        room_label = str(room_labels.get(room_id) or source.get("room_label") or "")
-        generated.append(
-            {
-                "waypoint_id": waypoint_id,
-                "frame_id": frame_id,
-                "x": float(source.get("x", 0.0)),
-                "y": float(source.get("y", 0.0)),
-                "yaw": float(source.get("yaw", 0.0)),
-                "room_id": room_id,
-                "room_label": room_label,
-                "label": f"Generated exploration candidate {index}",
-                "purpose": "base_navigation_map_exploration",
-                "waypoint_source": "generated_exploration_candidate",
-                "coverage_estimate": round(1.0 / max(len(source_waypoints), 1), 6),
-                "candidate_provenance": {
-                    "source": "public_occupancy_free_space",
-                    "candidate_index": index,
-                    "source_pose": "free_space_sample",
-                    "source_room_hidden": False,
-                    "source_room_label_available": bool(room_label),
-                    "source_fixtures_hidden": True,
-                    "source_waypoint_hidden": True,
-                },
-            }
-        )
-    return generated
-
-
-def _private_waypoint_map_for_synthetic_exploration(
-    generated_waypoints: list[dict[str, Any]],
-    private_waypoints: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    result = {}
-    for generated, private in zip(generated_waypoints, private_waypoints, strict=False):
-        result[str(generated.get("waypoint_id") or "")] = private
-    return result
 
 
 def _assert_no_forbidden_agent_view_keys(payload: Any) -> None:

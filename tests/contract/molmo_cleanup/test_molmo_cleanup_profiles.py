@@ -14,8 +14,8 @@ from roboclaws.household.profiles import (
     evidence_lane_metadata,
     evidence_lane_metadata_for_run,
     evidence_lane_names,
-    validate_evidence_lane_metadata,
     validate_evidence_lane_camera_labeler,
+    validate_evidence_lane_metadata,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,

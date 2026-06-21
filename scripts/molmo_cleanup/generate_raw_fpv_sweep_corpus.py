@@ -24,6 +24,7 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
     RealWorldCleanupContract,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noqa: E402
 from scripts.molmo_cleanup.generate_raw_fpv_private_labels import (  # noqa: E402
     LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE,
     LABEL_SCOPE_GENERATED_TARGETS,
@@ -126,7 +127,10 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
     contract = RealWorldCleanupContract(
         base_contract,
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=molmospaces_nav2_map_bundle_path(
+            scene_source=str(source_state.get("scene_source") or "procthor-10k-val"),
+            scene_index=int(source_state.get("scene_index") or 0),
+        ),
     )
 
     yaw_offsets = tuple(args.camera_yaw_deg or DEFAULT_CAMERA_YAWS)

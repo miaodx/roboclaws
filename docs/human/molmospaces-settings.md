@@ -457,13 +457,13 @@ lower-level implementation-rig namespace, useful when debugging a specific
 script or checker. The `molmo::*` report recipes below are convenience wrappers
 over the private household cleanup implementation runner; they are not a
 separate public cleanup dispatcher.
-Non-smoke cleanup profiles require a selected prebuilt Nav2 map bundle; the
+All cleanup profiles require a selected prebuilt Base Navigation Map bundle; the
 facade resolves `map_bundle=auto` to
 `assets/maps/molmospaces/<scene_source>/<scene_index>`, and `map_bundle=...`
 accepts either a path or an environment id under `assets/maps`. Generate a scene
-bundle with `scripts/maps/export_bundle.py --molmospaces-scene-source <source>
---molmospaces-scene-index <index>` before launching a new scene; `map_bundle=none`
-is not a valid non-smoke simulator path.
+bundle with
+`scripts/maps/generate_molmospaces_scene_bundles.py --scene <source>/<index> --force`
+before launching a new scene; `map_bundle=none` is not a valid simulator path.
 
 Convenience report recipes:
 

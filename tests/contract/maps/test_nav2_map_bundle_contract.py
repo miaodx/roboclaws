@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -22,20 +20,19 @@ from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
 CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _repo_python() -> str:
-    python_path = Path(os.environ.get("ROBOCLAWS_PYTHON") or REPO_ROOT / ".venv" / "bin" / "python")
+    python_path = REPO_ROOT / ".venv" / "bin" / "python"
     assert python_path.is_file(), f"repo Python missing: {python_path}; run uv sync --extra dev"
     return str(python_path)
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
     agent_view = _agent_view()
-    bundle_dir = tmp_path / "molmo-cleanup-default-7"
+    bundle_dir = tmp_path / "base-navigation-map-bundle"
 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
@@ -326,199 +323,6 @@ def test_nav2_validation_rejects_waypoint_frame_drift(tmp_path: Path) -> None:
     )
 
 
-def test_legacy_agent_view_exporter_requires_explicit_opt_in(tmp_path: Path) -> None:
-    exporter = _load_module(EXPORTER_PATH, "export_bundle")
-    agent_view_path = tmp_path / "agent_view.json"
-    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
-
-    with pytest.raises(SystemExit, match="legacy Agent View exporter"):
-        exporter.main(["--agent-view", str(agent_view_path), "--output-dir", str(tmp_path)])
-
-
-def test_legacy_exporter_and_checker_accept_public_agent_view_with_explicit_flags(
-    tmp_path: Path,
-) -> None:
-    exporter = _load_module(EXPORTER_PATH, "export_bundle")
-    checker = _load_module(CHECKER_PATH, "check_bundle")
-    agent_view_path = tmp_path / "agent_view.json"
-    bundle_dir = tmp_path / "exported"
-    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
-
-    exporter.main(
-        [
-            "--legacy-agent-view-export",
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(bundle_dir),
-        ]
-    )
-    checker.main(["--legacy-nav2", str(bundle_dir)])
-
-    assert (bundle_dir / "map.yaml").is_file()
-    assert (bundle_dir / "semantics.json").is_file()
-
-
-def test_legacy_exporter_writes_legacy_molmospaces_scene_bundle(tmp_path: Path) -> None:
-    exporter = _load_module(EXPORTER_PATH, "export_bundle")
-    checker = _load_module(CHECKER_PATH, "check_bundle")
-    agent_view_path = tmp_path / "agent_view.json"
-    asset_root = tmp_path / "assets" / "maps"
-    bundle_dir = asset_root / "molmospaces" / "procthor-objaverse-val" / "10"
-    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
-
-    exporter.main(
-        [
-            "--legacy-agent-view-export",
-            "--agent-view",
-            str(agent_view_path),
-            "--molmospaces-scene-source",
-            "procthor-objaverse-val",
-            "--molmospaces-scene-index",
-            "10",
-            "--map-asset-root",
-            str(asset_root),
-        ]
-    )
-    checker.main(["--legacy-nav2", str(bundle_dir)])
-
-    assert (bundle_dir / "map.yaml").is_file()
-    assert (bundle_dir / "semantics.json").is_file()
-
-
-def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: Path) -> None:
-    agent_view_path = tmp_path / "agent_view.json"
-    agent_view_path.write_text("{", encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--legacy-agent-view-export",
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "agent view source must contain valid JSON object" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
-    tmp_path: Path,
-) -> None:
-    agent_view_path = tmp_path / "agent_view.json"
-    agent_view_path.write_text('["not", "an", "agent_view"]', encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--legacy-agent-view-export",
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "agent view source must contain a JSON object" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
-
-
-def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Path) -> None:
-    agent_view_path = tmp_path / "missing_agent_view.json"
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--legacy-agent-view-export",
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "agent view source is missing" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
-
-
-def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: Path) -> None:
-    run_result_path = tmp_path / "run_result.json"
-    run_result_path.write_text('["not", "a", "run_result"]', encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--legacy-agent-view-export",
-            "--run-result",
-            str(run_result_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "run result source must contain a JSON object" in result.stderr
-    assert str(run_result_path) in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_exporter_cli_reports_missing_run_result_without_traceback(tmp_path: Path) -> None:
-    run_result_path = tmp_path / "missing_run_result.json"
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--legacy-agent-view-export",
-            "--run-result",
-            str(run_result_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "run result source is missing" in result.stderr
-    assert str(run_result_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
-
-
 def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) -> None:
     invalid_bundle = tmp_path / "missing-scene-bundle"
     invalid_bundle.mkdir()
@@ -669,16 +473,6 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
-def test_realworld_contract_rejects_legacy_rich_prebuilt_bundle() -> None:
-    legacy_bundle = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
-
-    with pytest.raises(AssertionError, match="invalid Base Navigation Map v1 bundle"):
-        RealWorldCleanupContract(
-            CleanupBackendSession(build_cleanup_scenario(seed=7)),
-            map_bundle_dir=legacy_bundle,
-        )
-
-
 def test_realworld_contract_observes_objects_from_selected_base_navigation_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -697,7 +491,7 @@ def test_realworld_contract_observes_objects_from_selected_base_navigation_bundl
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     return {
         "metric_map": contract.metric_map(),
@@ -734,15 +528,6 @@ def _b1_base_navigation_bundle(tmp_path: Path) -> Path:
         output_dir=output_dir,
     )
     return output_dir
-
-
-def _load_module(path: Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
 
 
 def _wide_room_only_agent_view() -> dict:

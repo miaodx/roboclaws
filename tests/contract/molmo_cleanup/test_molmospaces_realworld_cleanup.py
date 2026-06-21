@@ -93,7 +93,6 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
         output_dir=tmp_path,
         seed=7,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
@@ -192,7 +191,6 @@ def test_realworld_cleanup_demo_writes_open_ended_goal_status(
         goal_contract_json=goal_contract.to_json(),
         generated_mess_count=1,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     goal_artifact = json.loads((tmp_path / "goal_contract.json").read_text(encoding="utf-8"))
@@ -222,7 +220,6 @@ def test_realworld_cleanup_product_gate_rejects_legacy_agibot_robot_map_9_bundle
             output_dir=tmp_path / "run",
             seed=7,
             map_bundle_dir=bundle_dir,
-            require_map_bundle=True,
             generated_mess_count=5,
         )
 
@@ -245,11 +242,11 @@ def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: P
     demo = _load_demo_module()
 
     try:
-        demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, require_map_bundle=True)
+        demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     except ValueError as exc:
         assert "map_bundle_dir is required" in str(exc)
     else:  # pragma: no cover - assertion branch
-        raise AssertionError("expected require_map_bundle to fail without a selected bundle")
+        raise AssertionError("expected missing map bundle to fail")
 
 
 def test_realworld_cleanup_live_bundle_gate_rejects_invalid_bundle(tmp_path: Path) -> None:
@@ -262,7 +259,6 @@ def test_realworld_cleanup_live_bundle_gate_rejects_invalid_bundle(tmp_path: Pat
             output_dir=tmp_path / "run",
             seed=7,
             map_bundle_dir=invalid_bundle,
-            require_map_bundle=True,
         )
     except ValueError as exc:
         assert "invalid Base Navigation Map v1 bundle" in str(exc)
@@ -279,7 +275,6 @@ def test_realworld_cleanup_report_separates_agent_view_and_private_eval(
         output_dir=tmp_path,
         seed=7,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
 
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
@@ -312,7 +307,6 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
         seed=7,
         generated_mess_count=5,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
@@ -341,7 +335,6 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
         seed=7,
         perception_mode=RAW_FPV_ONLY_MODE,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
 
@@ -370,7 +363,6 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
         seed=7,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         map_bundle_dir=PREBUILT_BUNDLE,
-        require_map_bundle=True,
     )
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
 

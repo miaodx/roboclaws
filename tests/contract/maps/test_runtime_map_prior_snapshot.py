@@ -140,7 +140,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
@@ -156,7 +156,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_7_inspection"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -182,7 +182,7 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
         runtime_map_prior=snapshot["runtime_metric_map"],
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     public_receptacles = contract.public_receptacles_by_id()
 
@@ -200,7 +200,7 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_7_inspection"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -632,7 +632,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
 def _online_minimal_snapshot() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     return runtime_prior_snapshot_from_runtime_metric_map(
@@ -750,7 +750,16 @@ def _observe_until_anchor(
 ) -> None:
     for waypoint in contract.metric_map()["inspection_waypoints"]:
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-        contract.observe()
+        observation = contract.observe()
+        if contract.perception_mode == RAW_FPV_ONLY_MODE and anchor_category == "fridge":
+            contract.navigate_to_visual_candidate(
+                observation["raw_fpv_observation"]["observation_id"],
+                category="tomato",
+                evidence_note="round produce item on the desk",
+                image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
+                producer_type="test_agent",
+                producer_id="test_agent",
+            )
         anchors = contract.agent_view_payload()["runtime_metric_map"]["public_semantic_anchors"]
         if any(
             item.get("category") == anchor_category and item.get("anchor_type") == anchor_type

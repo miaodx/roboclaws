@@ -50,6 +50,7 @@ from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import semantic_substeps
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 from roboclaws.household.types import CleanupScenario
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path
 
 
 @dataclass(frozen=True)
@@ -210,7 +211,10 @@ def _build_contract_rehearsal_session(
         task_prompt=scenario.task,
         static_fixture_projection_mode="exact_fixtures",
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=molmospaces_nav2_map_bundle_path(
+            scene_source="procthor-10k-val",
+            scene_index=0,
+        ),
     )
     return _ContractRehearsalSession(
         scenario=scenario,

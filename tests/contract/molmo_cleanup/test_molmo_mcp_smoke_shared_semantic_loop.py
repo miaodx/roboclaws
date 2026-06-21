@@ -10,6 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 REALWORLD_SMOKE_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 )
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _load_module(path: Path, name: str) -> Any:
@@ -38,7 +39,7 @@ def test_realworld_mcp_smoke_uses_shared_fixture_style_semantic_loop(
     result = module.run_smoke(
         output_dir=tmp_path,
         seed=7,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
 
     assert calls

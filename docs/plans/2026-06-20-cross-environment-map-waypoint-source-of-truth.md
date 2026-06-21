@@ -194,10 +194,8 @@ Current prebuilt bundle generation:
 
 ```text
 MolmoSpaces scene
-  -> build cleanup backend session
-  -> RealWorldCleanupContract(..., allow_synthetic_map_projection=True)
-  -> synthetic rooms and waypoints from scenario fixtures
-  -> source-map fixture projection
+  -> prepare_molmospaces_base_navigation_map()
+  -> source-map navigation areas and base waypoints
   -> write_nav2_map_bundle()
   -> assets/maps/molmospaces/<scene_source>/<scene_index>/
 ```
@@ -219,18 +217,14 @@ Positive state:
 - Product runtime now requires a generated bundle and fails loudly if it is
   missing.
 - Base waypoints come from the bundle in product runs.
+- Legacy rich Agent View bundle export and no-bundle synthetic runtime map
+  projection paths have been removed.
 
 Remaining complexity:
 
-- Bundle generation still uses `RealWorldCleanupContract`, which is also the
-  runtime Agent View boundary.
-- `allow_synthetic_map_projection=True` remains a special offline/test escape
-  hatch.
-- Source-map semantics and Agent View semantics are both reachable through the
-  same contract object.
-- Current generated sim bundles still include static landmarks to support the
-  current cleanup behavior. This plan is considering a stricter future where
-  Base Navigation Map v1 does not include those fixture semantics.
+- Historical reports and archived plans may still mention richer Nav2 cleanup
+  bundles, but current product runtime accepts only strict Base Navigation Map
+  v1 bundles.
 
 ### Agibot Real Robot
 
@@ -668,8 +662,9 @@ Did the selected Base Navigation Map v1 artifact validate?
 
 Scope:
 
-- remove product-adjacent `allow_synthetic_map_projection` usage;
-- keep synthetic projection only in explicit test helpers, if still needed;
+- product-adjacent synthetic/no-bundle map projection usage is removed;
+- delete synthetic/no-bundle projection helpers instead of keeping test-only
+  escape hatches;
 - ensure runtime base waypoints are direct projections of artifact rows;
 - keep runtime target-inspection candidates separate from base waypoints;
 - keep fixture/object/receptacle semantics out of Base Navigation Map v1 and

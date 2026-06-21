@@ -81,7 +81,8 @@ projection, the active sampler bundle set validates as fixture-free Base
 Navigation Map v1, product runtime copies selected source bundles into run
 artifacts instead of authoring snapshots from Agent View, runtime cleanup
 observes objects from generated sim bundles, and legacy rich Agent View bundle
-exports are explicit opt-in only. The implementation source of truth is
+exports plus no-bundle synthetic map projection paths have been removed. The
+implementation source of truth is
 `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
 
 The implemented non-cleanup eval support plan is
@@ -101,15 +102,14 @@ thin review/runtime contract is
 
 ## Next Action
 
-Review the implemented cross-environment map/waypoint source-of-truth changes
-and keep follow-up cleanup limited to removing stale synthetic/no-bundle test
-helpers or legacy rich bundle surfaces when they are no longer needed.
+Review the implemented cross-environment map/waypoint source-of-truth cleanup
+and keep any remaining follow-up limited to strict Base Navigation Map bundle
+validation or current runtime-map consumers.
 
 ## Current Blocker
 
 No current human blocker for the implemented cross-environment map/waypoint
-source-of-truth plan. A parked cleanup remains for older checker tests and smoke
-helpers that still assume synthetic no-bundle runs; product runtime now fails
+source-of-truth plan. Product runtime, smoke helpers, and current tests now fail
 loudly without a selected Base Navigation Map bundle as intended.
 
 No current implementation blocker for deterministic or open-ended coding-agent

@@ -439,18 +439,14 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
       auto)
-        if [[ "$profile" == "smoke" ]]; then
-          map_bundle_dir=""
-        else
-          map_bundle_dir="$(
-            "$python_bin" -m roboclaws.launch.map_bundles \
-              --scene-source "$scene_source" \
-              --scene-index "$scene_index"
-          )"
-        fi
+        map_bundle_dir="$(
+          "$python_bin" -m roboclaws.launch.map_bundles \
+            --scene-source "$scene_source" \
+            --scene-index "$scene_index"
+        )"
         ;;
     esac
-    if [[ "$profile" != "smoke" && "$map_bundle_dir" =~ ^(none|false|off)$ ]]; then
+    if [[ "$map_bundle_dir" =~ ^(none|false|off)$ ]]; then
       echo "error: ${task_surface}/${task_intent} on backend '${backend:-auto}' requires a selected prebuilt Nav2 map bundle; map_bundle=${map_bundle_dir} is not allowed" >&2
       echo "hint: generate the canonical scene bundle with scripts/maps/generate_molmospaces_scene_bundles.py --scene ${scene_source}/${scene_index} --force" >&2
       exit 1
@@ -501,16 +497,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         fi
       done
     fi
-    if [[ "$profile" != "smoke" ]]; then
-      if [[ -z "$map_bundle_dir" ]]; then
-        echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
-        echo "hint: generate the canonical scene bundle with scripts/maps/generate_molmospaces_scene_bundles.py --scene ${scene_source}/${scene_index} --force" >&2
-        exit 1
-      else
-        map_bundle_args+=(--require-map-bundle)
-      fi
-    else
-      map_bundle_args+=(--allow-synthetic-map-projection)
+    if [[ -z "$map_bundle_dir" ]]; then
+      echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
+      echo "hint: generate the canonical scene bundle with scripts/maps/generate_molmospaces_scene_bundles.py --scene ${scene_source}/${scene_index} --force" >&2
+      exit 1
     fi
 
     stamp="$({{timestamp_cmd}})"

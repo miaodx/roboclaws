@@ -116,8 +116,9 @@ No-touch scope:
 - Existing unrelated live runtime / JSON source / report changes.
 - Existing untracked SDK storage active note.
 
-Parked:
+Cleanup follow-up:
 
-- Optional cleanup remains for stale synthetic/no-bundle test helpers and
-  legacy rich Agent View bundle surfaces once no maintainer rehearsal path
-  still needs them.
+- Stale synthetic/no-bundle test helpers and legacy rich Agent View bundle
+  surfaces are being removed. Product, smoke, and test helpers now select a
+  strict Base Navigation Map bundle instead of authoring map context from Agent
+  View.

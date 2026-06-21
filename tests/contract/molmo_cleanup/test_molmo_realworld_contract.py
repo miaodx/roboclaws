@@ -38,13 +38,15 @@ from roboclaws.household.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEM
 from roboclaws.maps.bundle import static_landmarks_from_fixture_projection
 from roboclaws.maps.route import validate_metric_map_route
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
+
 
 def _contract(
     session: CleanupBackendSession,
     **kwargs: object,
 ) -> RealWorldCleanupContract:
-    if "map_bundle_dir" not in kwargs and "allow_synthetic_map_projection" not in kwargs:
-        kwargs["allow_synthetic_map_projection"] = True
+    kwargs.setdefault("map_bundle_dir", PREBUILT_BUNDLE)
     return RealWorldCleanupContract(session, **kwargs)
 
 
@@ -427,14 +429,14 @@ def _assert_nav2_shaped_metric_map(
 ) -> None:
     assert metric_map["schema"] == REAL_ROBOT_MAP_BUNDLE_SCHEMA
     assert metric_map["frame_id"] == "map"
-    assert metric_map["origin"] == {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    assert metric_map["origin"] == {"x": -0.5, "y": 0.0, "yaw": 0.0}
     assert metric_map["occupancy_values"] == {"unknown": -1, "free": 0, "occupied": 100}
     assert metric_map["map_bundle"]["schema"] == "nav2_map_bundle_v1"
     assert metric_map["map_bundle"]["robot_profile_id"] == "rby1m"
     assert metric_map["map_bundle"]["artifact_paths"]["map_yaml"] == "map_bundle/map.yaml"
     assert metric_map["map_bundle"]["parameter_hash"]
     assert waypoint["frame_id"] == "map"
-    assert waypoint["purpose"] == "base_navigation_map_exploration"
+    assert waypoint["purpose"] == "base_navigation_area_inspection"
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert static_fixture_projection["schema"] == "static_fixture_projection_v1"
     assert static_fixture_projection["contains_runtime_observations"] is False
@@ -516,10 +518,7 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
     )
     session = CleanupBackendSession(scenario)
     session.backend.scenario_source = "isaac_scene_index"
-    contract = _contract(
-        session,
-        allow_synthetic_map_projection=True,
-    )
+    contract = _contract(session)
 
     detection = None
     inspection_waypoints = contract.metric_map()["inspection_waypoints"]
@@ -617,13 +616,10 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
         for waypoint in metric_map["inspection_waypoints"]
     )
     assert all(
-        waypoint["candidate_provenance"]["source_room_hidden"] is False
+        waypoint["generation_policy"] == "base_navigation_area_centroid_clearance_v1"
         for waypoint in metric_map["inspection_waypoints"]
     )
-    assert all(
-        waypoint["candidate_provenance"]["source_room_label_available"] is True
-        for waypoint in metric_map["inspection_waypoints"]
-    )
+    assert all(waypoint["navigation_area_id"] for waypoint in metric_map["inspection_waypoints"])
 
 
 def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals() -> None:
@@ -750,9 +746,10 @@ def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals
         for waypoint in waypoints
     ]
 
-    assert len(waypoints) == 4
+    assert len(waypoints) == len(contract.metric_map()["rooms"])
     assert all(route.ok for route in routes), [route.as_dict() for route in routes]
-    assert (waypoints[1]["x"], waypoints[1]["y"]) != (2.99, 9.216)
+    assert all(waypoint.get("fixture_ids", []) == [] for waypoint in waypoints)
+    assert all(waypoint["navigation_area_id"] for waypoint in waypoints)
     for waypoint in waypoints:
         navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         assert navigation["ok"] is True, navigation
@@ -1192,15 +1189,13 @@ def _assert_base_navigation_static_map_privacy(
     assert metric_map["room_category_hints"]
     assert metric_map["driveable_ways"]
     assert static_fixture_projection["rooms"] == []
-    assert waypoint["waypoint_id"].startswith("generated_")
+    assert str(waypoint["waypoint_id"]).startswith("room_")
+    assert str(waypoint["waypoint_id"]).endswith("_inspection")
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
-    assert waypoint["candidate_provenance"]["source"] == "public_occupancy_free_space"
-    assert waypoint["candidate_provenance"]["source_pose"] == "free_space_sample"
-    assert waypoint["candidate_provenance"]["source_room_hidden"] is False
-    assert waypoint["candidate_provenance"]["source_room_label_available"] is True
-    assert waypoint["candidate_provenance"]["source_fixtures_hidden"] is True
-    assert waypoint["candidate_provenance"]["source_waypoint_hidden"] is True
-    assert "source_waypoint_id" not in waypoint["candidate_provenance"]
+    assert waypoint["generation_policy"] == "base_navigation_area_centroid_clearance_v1"
+    assert waypoint["navigation_area_id"] == waypoint["room_id"]
+    assert "fixture_ids" not in waypoint
+    assert "candidate_provenance" not in waypoint
 
 
 def _assert_base_navigation_runtime_map_candidates(runtime_map: dict, waypoint: dict) -> None:
@@ -1216,8 +1211,8 @@ def _assert_base_navigation_runtime_map_candidates(runtime_map: dict, waypoint: 
         if item["candidate_type"] == "generated_exploration_candidate"
         and item["waypoint_id"] == waypoint["waypoint_id"]
     )
-    assert waypoint_candidate["candidate_id"].startswith(
-        "target_candidate_waypoint_generated_exploration_"
+    assert waypoint_candidate["candidate_id"] == (
+        f"target_candidate_waypoint_{waypoint['waypoint_id']}"
     )
     assert waypoint_candidate["target_actionability_status"] == "actionable"
     assert waypoint_candidate["verified_navigation"] is True
@@ -1245,7 +1240,7 @@ def _assert_base_navigation_runtime_map_public_anchors(runtime_map: dict, waypoi
         if item["anchor_type"] == "observation_waypoint"
         and item["waypoint_id"] == waypoint["waypoint_id"]
     )
-    assert waypoint_anchor["anchor_id"].startswith("anchor_waypoint_generated_")
+    assert waypoint_anchor["anchor_id"] == f"anchor_waypoint_{waypoint['waypoint_id']}"
     assert waypoint_anchor["waypoint_id"] == waypoint["waypoint_id"]
     assert waypoint_anchor["producer_type"] == "generated_exploration_candidate"
     assert waypoint_anchor["promotion_status"] == "run_local"
@@ -1466,7 +1461,7 @@ def test_base_navigation_map_keeps_public_waypoint_after_receptacle_navigation()
     post_nav_map = contract.metric_map()
 
     assert navigation["ok"] is True
-    assert post_nav_map["robot_pose"]["waypoint_id"].startswith("generated_exploration_")
+    assert str(post_nav_map["robot_pose"]["waypoint_id"]).startswith("room_")
     assert post_nav_map["robot_pose"]["room_id"]
     assert post_nav_map["robot_pose"]["room_id"] != "generated_area"
     assert post_nav_map["robot_pose"]["waypoint_id"] in {
@@ -1562,7 +1557,7 @@ def test_base_navigation_map_done_uses_generated_candidate_coverage() -> None:
     assert early_done["next_waypoint_id"] == waypoints[-1]["waypoint_id"]
     assert early_done["observed_waypoint_count"] == len(waypoints) - 1
     assert early_done["total_waypoints"] == len(waypoints)
-    assert all(item.startswith("generated_") for item in early_done["unvisited_waypoint_ids"])
+    assert all(item.endswith("_inspection") for item in early_done["unvisited_waypoint_ids"])
 
     contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
     contract.observe()
@@ -1995,22 +1990,11 @@ def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
     contract = RealWorldCleanupContract(
         CleanupBackendSession(scenario, backend=backend),
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     waypoints = contract.metric_map()["inspection_waypoints"]
     first_waypoint = waypoints[0]
-    second_waypoint = next(
-        waypoint
-        for waypoint in waypoints[1:]
-        if contract._private_waypoint_for_public_waypoint(waypoint).get("fixture_ids")  # noqa: SLF001
-        != contract._private_waypoint_for_public_waypoint(first_waypoint).get("fixture_ids")  # noqa: SLF001
-    )
-    first_fixture_id = contract._private_waypoint_for_public_waypoint(first_waypoint)[  # noqa: SLF001
-        "fixture_ids"
-    ][0]
-    second_fixture_id = contract._private_waypoint_for_public_waypoint(second_waypoint)[  # noqa: SLF001
-        "fixture_ids"
-    ][0]
+    second_waypoint = waypoints[1]
 
     first_nav = contract.navigate_to_waypoint(str(first_waypoint["waypoint_id"]))
     first_observation = contract.observe()
@@ -2038,16 +2022,18 @@ def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
 
     assert first_nav["waypoint_id"] == first_waypoint["waypoint_id"]
     assert second_nav["waypoint_id"] == second_waypoint["waypoint_id"]
-    assert backend.navigation_targets[:2] == [first_fixture_id, second_fixture_id]
-    assert backend.view_poses[0] == {"receptacle_id": first_fixture_id}
-    assert backend.view_poses[1] == {"receptacle_id": second_fixture_id}
+    assert backend.navigation_targets == []
+    assert first_nav["backend_goal_pose"]["waypoint_id"] == first_waypoint["waypoint_id"]
+    assert second_nav["backend_goal_pose"]["waypoint_id"] == second_waypoint["waypoint_id"]
+    assert backend.view_poses[0] == {"receptacle_id": "unknown"}
+    assert backend.view_poses[1] == {"receptacle_id": "unknown"}
     assert first_artifact is not None
     assert second_artifact is not None
     assert first_artifact["image_artifacts"]["fpv"] != second_artifact["image_artifacts"]["fpv"]
     assert first_views["verify"] != second_views["verify"]
     assert first_views["map"] != second_views["map"]
-    assert first_fixture_id in first_artifact["image_artifacts"]["fpv"]
-    assert second_fixture_id in second_artifact["image_artifacts"]["fpv"]
+    assert str(first_raw["observation_id"]) in first_artifact["image_artifacts"]["fpv"]
+    assert str(second_raw["observation_id"]) in second_artifact["image_artifacts"]["fpv"]
 
 
 def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
@@ -2315,7 +2301,7 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_8_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2350,7 +2336,7 @@ def test_realworld_raw_fpv_visual_candidate_requires_reviewable_fpv_bbox() -> No
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_8_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2392,24 +2378,7 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    fridge_waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_003"
-    )
-    contract.navigate_to_waypoint(str(fridge_waypoint["waypoint_id"]))
-    contract.observe()
-    target_anchor_id = next(
-        item["anchor_id"]
-        for item in contract.agent_view_payload()["runtime_metric_map"]["public_semantic_anchors"]
-        if item["anchor_type"] == "receptacle" and item["category"] == "fridge"
-    )
-
-    tomato_waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
-    )
+    tomato_waypoint = contract.metric_map()["inspection_waypoints"][0]
     contract.navigate_to_waypoint(str(tomato_waypoint["waypoint_id"]))
     observation = contract.observe()
     response = contract.navigate_to_visual_candidate(
@@ -2420,16 +2389,16 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
+    target_anchor_id = response["candidate_fixture_id"]
 
     declaration = response["model_declared_observation"]
     assert response["ok"] is True
     assert response["candidate_fixture_id"] == target_anchor_id
     assert response["candidate_fixture_category"] == "fridge"
     assert response["recommended_tool"] == "place_inside"
-    assert declaration["target_fixture_id"] == target_anchor_id
-    assert declaration["target_fixture_category"] == "fridge"
-    assert declaration["target_plausibility"]["status"] == "plausible"
-    assert declaration["target_plausibility"]["expected_fixture_id"] == target_anchor_id
+    assert declaration["target_fixture_id"] == ""
+    assert declaration["target_fixture_category"] == ""
+    assert declaration["target_plausibility"]["status"] == "unknown_fixture"
     worklist = contract.cleanup_worklist_payload()
     worklist_item = next(
         item for item in worklist["objects"] if item["object_id"] == response["object_id"]
@@ -2448,17 +2417,13 @@ def test_minimal_raw_fpv_visual_candidate_requires_public_destination() -> None:
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_001"
-    )
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
-        category="book",
-        evidence_note="book visible on nearby surface",
+        category="plant",
+        evidence_note="plant visible on nearby surface",
         image_region={"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
@@ -2483,7 +2448,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_8_inspection"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2674,7 +2639,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_8_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2706,7 +2671,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_005"
+        if item["waypoint_id"] == "room_6_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2790,14 +2755,7 @@ def test_realworld_raw_fpv_grounding_blocks_same_room_fallback() -> None:
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_001"
-    )
-    internal_waypoint = contract._private_waypoint_for_public_waypoint(waypoint)
-    assert "desk_01" in internal_waypoint["fixture_ids"]
-    assert "shelf_01" not in internal_waypoint["fixture_ids"]
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
 
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2806,6 +2764,7 @@ def test_realworld_raw_fpv_grounding_blocks_same_room_fallback() -> None:
         category="book",
         evidence_note="book visible on a neighboring shelf in the same room",
         image_region={"type": "bbox", "value": [0.62, 0.28, 0.16, 0.18]},
+        source_fixture_id="desk_01",
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -2946,7 +2905,7 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback(
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_005"
+        if item["waypoint_id"] == "room_6_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
@@ -3068,7 +3027,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_005"
+        if item["waypoint_id"] == "room_6_inspection"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
