@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-console camera-angle state now derives from the already
+2026-06-21: Operator-console manual-control MCP tool response text now routes
+JSON-looking payloads through the shared JSON-object text helper instead of
+raw `json.loads` in `control.py`. Malformed or parseable non-object tool
+response text now fails as a source-labelled control-call error, writes an
+error response row, and avoids a valid-looking `response` payload before
+operator intervention state can derive confidence from corrupt MCP text.
+Focused proof passed: operator-console control source tests plus existing
+operator-console endpoint tests, touched-file ruff, touched-file format check,
+dependency sync, changed-code cleanup review, diff check, and ratchet. Current
+ratchet before final slice closeout: 0 Ruff complexity violations, 80
+oversized modules in the shared checkout.
+
+Previous slice: Operator-console camera-angle state now derives from the already
 validated trace JSONL rows collected by `state.py` instead of re-reading
 `trace.jsonl` through a private `read_text`/`json.loads` loop in
 `state_summary.py`. Malformed trace rows keep the existing operator-visible
@@ -507,7 +519,10 @@ complexity violations, 80 oversized modules in the shared checkout.
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
 committing the report-performance JSONL source consolidation. Avoid reopening
-closed visual-slot config, slot-file source readers, Docker mount stop/source
+operator-console MCP tool response parsing unless fresh manual-control
+evidence shows corrupt tool response text can again produce valid-looking
+control response or intervention evidence.
+Avoid reopening closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
 grasp source validation, or Isaac runtime smoke sidecar-source validation
@@ -549,6 +564,7 @@ diagnostics.
 - `tests/unit/core/test_json_sources.py`
 - `roboclaws/operator_console/jsonl_sources.py`
 - `roboclaws/operator_console/control.py`
+- `tests/unit/operator_console/test_control_sources.py`
 - `tests/unit/operator_console/test_history.py`
 - `scripts/molmo_cleanup/openai_agents_budget.py`
 - `tests/unit/agents/test_openai_agents_budget_sources.py`

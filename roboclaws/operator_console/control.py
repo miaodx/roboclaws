@@ -11,7 +11,7 @@ from typing import Any
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import parse_json_object_text, read_json_object
 from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
@@ -180,12 +180,12 @@ def _serialize_tool_result(result: Any) -> dict[str, Any]:
         if isinstance(first, dict):
             text = first.get("text")
             if isinstance(text, str):
-                try:
-                    parsed = json.loads(text)
-                except json.JSONDecodeError:
-                    parsed = None
-                if isinstance(parsed, dict):
-                    return parsed
+                stripped = text.lstrip()
+                if stripped.startswith(("{", "[")):
+                    return parse_json_object_text(
+                        text,
+                        label="operator control MCP tool response",
+                    )
     return payload
 
 

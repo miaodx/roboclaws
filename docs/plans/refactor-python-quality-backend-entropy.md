@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-console MCP control response
+  source slice: manual-control MCP tool response text now routes JSON-looking
+  payloads through the shared JSON-object text helper instead of raw
+  `json.loads`, so malformed or parseable non-object tool text becomes a
+  source-labelled control-call error and persisted error row before operator
+  intervention state can derive confidence from corrupt MCP responses.
 - Current shared-checkout note after the operator-console camera state source
   slice: camera-angle summary now consumes the validated trace JSONL row set
   already collected by operator-console state instead of re-reading

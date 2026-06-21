@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console manual-control MCP tool response text now
+  routes JSON-looking payloads through the shared JSON-object text helper
+  instead of raw `json.loads` in `control.py`. Malformed or parseable
+  non-object tool response text now fails as a source-labelled control-call
+  error, writes an error response row without a valid-looking `response`
+  payload, and prevents operator intervention state from deriving confidence
+  from corrupt MCP text. Owner layer: Thin Runtime / Server Adapter. Behavior-
+  change class: internal MCP response source-reader hardening with existing
+  plain-text SDK fallback preserved for non-JSON responses. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused operator-console control source
+  tests, existing operator-console endpoint tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/control.py` regains raw JSON parsing for MCP
+  tool response text or malformed/non-object JSON-looking tool text can again
+  produce valid-looking control response or intervention evidence.
+
 - 2026-06-21: Operator-console camera-angle state now derives from the
   validated trace JSONL rows already collected by `state.py` instead of
   re-reading `trace.jsonl` through a private `read_text`/`json.loads` loop in
