@@ -11,6 +11,10 @@ from model_matrix_benchmark_catalog import MatrixCase, WireApi
 from roboclaws.agents.thinking_policy import thinking_request_body_for_wire
 
 
+class ModelMatrixStreamSourceError(ValueError):
+    """Raised when a provider stream emits malformed structured data."""
+
+
 def openai_chat_stream_event(raw_line: bytes) -> dict[str, Any] | None:
     line = raw_line.decode("utf-8", errors="replace").strip()
     if not line:
@@ -23,9 +27,16 @@ def openai_chat_stream_event(raw_line: bytes) -> dict[str, Any] | None:
         return None
     try:
         event = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-    return event if isinstance(event, dict) else None
+    except json.JSONDecodeError as exc:
+        raise ModelMatrixStreamSourceError(
+            f"model-matrix provider stream source must contain valid JSON object: {exc.msg}"
+        ) from exc
+    if not isinstance(event, dict):
+        raise ModelMatrixStreamSourceError(
+            "model-matrix provider stream source must contain a JSON object: "
+            f"{type(event).__name__}"
+        )
+    return event
 
 
 def latest_usage_tokens(

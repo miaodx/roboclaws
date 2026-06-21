@@ -117,6 +117,22 @@ logs before choosing the next slice.
   responses can again feed output extraction or route-support summaries without
   source-labelled failure diagnostics.
 
+- 2026-06-21: Model-matrix OpenAI Chat stream `data:` events now fail malformed
+  or parseable non-object JSON as `ModelMatrixStreamSourceError` trial failures
+  instead of silently skipping wrong-shaped structured events before a later
+  valid event can produce a healthy-looking stream result. Blank lines, SSE
+  metadata, comments, non-JSON noise, and `data: [DONE]` remain tolerated.
+  Owner layer: Harness recipes / dev provider benchmark. Behavior-change
+  class: internal streaming provider wire source hardening with fail-aloud
+  diagnostics for malformed structured SSE rows. Metric: ratchet remains at
+  0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused model-matrix benchmark unit tests,
+  touched-file ruff/format checks, changed-code cleanup review, `git diff
+  --check`, and ratchet. Reopen only if
+  `scripts/dev/model_matrix_benchmark_wire.py` regains permissive parsing for
+  malformed/non-object structured stream events or corrupt OpenAI Chat stream
+  `data:` rows can again produce valid-looking benchmark PASS rows.
+
 - 2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
   shared JSON-object text helper instead of local `json.loads` / type checks.
   Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now

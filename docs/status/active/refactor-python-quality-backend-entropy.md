@@ -17,6 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Model-matrix OpenAI Chat stream `data:` events now fail aloud on
+malformed or parseable non-object JSON instead of being silently skipped before
+a later valid event can make the stream trial look healthy. Blank lines, SSE
+metadata, comments, non-JSON noise, and `data: [DONE]` remain tolerated.
+Focused proof passed: model-matrix benchmark unit tests, touched-file ruff,
+touched-file format check, dependency sync, changed-code cleanup review, diff
+check, and ratchet summary. Current ratchet before final slice closeout: 0
+Ruff complexity violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: Operator-console manual-control MCP tool response text now routes
 JSON-looking payloads through the shared JSON-object text helper instead of
 raw `json.loads` in `control.py`. Malformed or parseable non-object tool
@@ -518,7 +527,11 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the report-performance JSONL source consolidation. Avoid reopening
+committing the model-matrix stream source slice. Avoid reopening
+model-matrix OpenAI Chat stream event parsing unless fresh provider-benchmark
+evidence shows malformed or non-object structured `data:` events can again
+produce a valid-looking stream PASS row.
+Avoid reopening
 operator-console MCP tool response parsing unless fresh manual-control
 evidence shows corrupt tool response text can again produce valid-looking
 control response or intervention evidence.
@@ -744,6 +757,7 @@ diagnostics.
 - `tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py`
 - `scripts/dev/benchmark_model_matrix.py`
 - `tests/unit/providers/test_model_matrix_benchmark.py`
+- `scripts/dev/model_matrix_benchmark_wire.py`
 - `scripts/openclaw/tail-openclaw-chat.py`
 - `tests/contract/openclaw/test_tail_openclaw_chat.py`
 - `tests/unit/core/test_json_sources.py`

@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the model-matrix stream source slice:
+  OpenAI Chat streaming `data:` events now fail malformed or parseable
+  non-object JSON as source-labelled trial failures instead of silently
+  skipping wrong-shaped structured events before a later valid event can
+  produce a healthy-looking stream result. Blank lines, SSE metadata, comments,
+  non-JSON noise, and `data: [DONE]` remain tolerated.
 - Current shared-checkout note after the operator-console MCP control response
   source slice: manual-control MCP tool response text now routes JSON-looking
   payloads through the shared JSON-object text helper instead of raw

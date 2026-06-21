@@ -448,6 +448,103 @@ def test_stream_throughput_payload_requests_usage_tail(monkeypatch) -> None:
     assert result.first_content_s is not None
 
 
+def test_stream_trial_rejects_malformed_provider_event_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "text/event-stream"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __iter__(self):
+            return iter(
+                [
+                    b"event: message\n",
+                    b"data: {not-json}\n",
+                    b'data: {"choices":[{"delta":{"content":"ok"}}]}\n',
+                    b"data: [DONE]\n",
+                ]
+            )
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    result = script.run_trial(
+        case,
+        index=1,
+        layer="stream-throughput",
+        prompt="stream",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert result.status == "FAIL"
+    assert result.error_type == "ModelMatrixStreamSourceError"
+    assert "model-matrix provider stream source must contain valid JSON object" in result.error
+
+
+def test_stream_trial_rejects_non_object_provider_event_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "text/event-stream"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __iter__(self):
+            return iter(
+                [
+                    b"data: []\n",
+                    b'data: {"choices":[{"delta":{"content":"ok"}}]}\n',
+                    b"data: [DONE]\n",
+                ]
+            )
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    result = script.run_trial(
+        case,
+        index=1,
+        layer="stream-throughput",
+        prompt="stream",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert result.status == "FAIL"
+    assert result.error_type == "ModelMatrixStreamSourceError"
+    assert "model-matrix provider stream source must contain a JSON object" in result.error
+
+
 def test_non_stream_trial_rejects_bad_provider_response_json(monkeypatch) -> None:
     script = _load_script_module()
     case = script.MatrixCase(
