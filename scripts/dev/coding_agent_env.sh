@@ -95,29 +95,6 @@ roboclaws_code_agent_profile_default_model() {
   roboclaws_provider_registry default-model "$provider"
 }
 
-roboclaws_mify_anthropic_base_url() {
-  local base="${XM_LLM_ANTHROPIC_BASE_URL:-}"
-  if [[ -z "$base" ]]; then
-    base="${XM_LLM_BASE_URL:-}"
-    if [[ -n "$base" ]]; then
-      base="${base%/}"
-      case "$base" in
-        */anthropic)
-          ;;
-        */v1)
-          base="${base%/v1}/anthropic"
-          ;;
-        *)
-          base="${base}/anthropic"
-          ;;
-      esac
-    else
-      base="https://api.llm.mioffice.cn/anthropic"
-    fi
-  fi
-  printf '%s\n' "$base"
-}
-
 roboclaws_code_agent_profile_base_url() {
   local provider="$1"
   if [[ "$provider" == "system" ]]; then

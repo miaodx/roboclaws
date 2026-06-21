@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Mify Anthropic provider-route base-url resolution now rejects
+  conflicting `XM_LLM_ANTHROPIC_BASE_URL` and Anthropic URLs derived from
+  `XM_LLM_BASE_URL` before provider readiness or coding-agent launch can
+  publish a plausible endpoint. `provider_readiness()` now reports the same
+  source-labelled conflict with `ok: false`, and
+  `scripts/dev/coding_agent_env.sh` no longer carries a duplicate mify
+  Anthropic URL derivation helper. Owner layer: Agent Engines And Provider
+  Profiles. Behavior-change class: fail-aloud provider route/env source
+  validation and duplicate shell derivation removal. Metric: ratchet remains
+  at 0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused provider catalog tests, coding-agent env
+  helper contract tests, touched-file ruff/format checks, shell syntax check,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only
+  if mify Anthropic readiness or coding-agent launch can again accept
+  conflicting `XM_LLM_ANTHROPIC_BASE_URL` / `XM_LLM_BASE_URL` values and
+  expose ready-looking provider state or a plausible `ANTHROPIC_BASE_URL`.
+
 - 2026-06-21: Operator-console manual-control MCP tool response text now
   routes JSON-looking payloads through the shared JSON-object text helper
   instead of raw `json.loads` in `control.py`. Malformed or parseable

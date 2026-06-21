@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Mify Anthropic provider route base-url resolution now fails before
+launch readiness when `XM_LLM_ANTHROPIC_BASE_URL` conflicts with the
+Anthropic URL derived from `XM_LLM_BASE_URL`. The Python provider registry owns
+the derivation and conflict check, `provider_readiness()` reports `ok: false`
+with the same source-labelled diagnostic, and the coding-agent shell helper no
+longer carries a duplicate URL derivation path. Focused proof passed:
+provider catalog tests, coding-agent env helper contract tests, touched-file
+ruff, touched-file format check, shell syntax check, changed-code cleanup
+review, diff check, and ratchet summary. Current ratchet before final slice
+closeout: 0 Ruff complexity violations, 80 oversized modules in the shared
+checkout.
+
 2026-06-21: Python quality ratchet baseline reads and Ruff JSON diagnostics
 now fail through labelled source-reader diagnostics instead of raw
 `json.loads` / type errors from the gate itself. Malformed or non-object
@@ -539,7 +551,12 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the python-quality-ratchet source slice. Avoid reopening
+committing the mify Anthropic base-url conflict slice. Avoid reopening
+mify Anthropic provider-route base-url resolution unless fresh provider
+readiness or coding-agent launch evidence shows conflicting
+`XM_LLM_ANTHROPIC_BASE_URL` / `XM_LLM_BASE_URL` values can again produce
+ready-looking provider state or a plausible `ANTHROPIC_BASE_URL`.
+Avoid reopening
 python-quality-ratchet baseline or Ruff diagnostics source parsing unless
 fresh gate evidence shows malformed baseline JSON or wrong-shaped Ruff JSON can
 again produce raw tracebacks or valid-looking ratchet confidence.

@@ -721,6 +721,12 @@ def provider_readiness(
     except ValueError as exc:
         model_spec = None
         message = str(exc)
+    try:
+        route_base_url(route, env=dict(env_map))
+        base_url_ok = True
+    except ValueError as exc:
+        base_url_ok = False
+        message = str(exc)
     return {
         "driver": _driver_for_agent_engine(agent_engine),
         "agent_engine": agent_engine,
@@ -744,7 +750,7 @@ def provider_readiness(
         "missing_env": missing_env,
         "base_url_env": route.base_url_env or "",
         "base_url_default": route.base_url_default,
-        "ok": not missing_env and model_spec is not None,
+        "ok": not missing_env and model_spec is not None and base_url_ok,
         "message": message,
     }
 
@@ -921,18 +927,33 @@ def _explicit_string(value: Any) -> str:
 
 
 def _mify_anthropic_base_url(env_map: dict[str, str]) -> str:
-    base = env_map.get("XM_LLM_ANTHROPIC_BASE_URL") or ""
-    if base:
-        return base
-    base = env_map.get("XM_LLM_BASE_URL") or ""
-    if base:
-        base = base.rstrip("/")
-        if base.endswith("/anthropic"):
-            return base
-        if base.endswith("/v1"):
-            return f"{base[:-3]}/anthropic"
-        return f"{base}/anthropic"
+    anthropic_base = _explicit_string(env_map.get("XM_LLM_ANTHROPIC_BASE_URL"))
+    generic_base = _explicit_string(env_map.get("XM_LLM_BASE_URL"))
+    derived_generic_base = _mify_anthropic_base_url_from_generic(generic_base)
+    if anthropic_base and derived_generic_base:
+        if anthropic_base.rstrip("/") != derived_generic_base.rstrip("/"):
+            raise ValueError(
+                "conflicting provider route base_url for mimo-mify-anthropic: "
+                f"XM_LLM_ANTHROPIC_BASE_URL={anthropic_base!r} and "
+                f"XM_LLM_BASE_URL derives {derived_generic_base!r}"
+            )
+        return anthropic_base
+    if anthropic_base:
+        return anthropic_base
+    if derived_generic_base:
+        return derived_generic_base
     return "https://api.llm.mioffice.cn/anthropic"
+
+
+def _mify_anthropic_base_url_from_generic(base: str) -> str:
+    if not base:
+        return ""
+    base = base.rstrip("/")
+    if base.endswith("/anthropic"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base[:-3]}/anthropic"
+    return f"{base}/anthropic"
 
 
 def _driver_for_agent_engine(agent_engine: str) -> str:
@@ -1007,6 +1028,17 @@ def _provider_route_command_text(command: str, route: ProviderRouteSpec) -> str:
     raise ValueError(f"unsupported provider route command: {command}")
 
 
+def _print_provider_route_command(
+    parser: argparse.ArgumentParser,
+    command: str,
+    route: ProviderRouteSpec,
+) -> None:
+    try:
+        print(_provider_route_command_text(command, route))
+    except ValueError as exc:
+        parser.error(str(exc))
+
+
 def _model_command_text(model_name: str) -> str:
     return resolve_model(model_name).model_id
 
@@ -1061,7 +1093,7 @@ def _main(argv: list[str] | None = None) -> int:
         if not args.agent_engine:
             parser.error("agent_engine is required")
         return _supports_engine_exit_code(route, args.agent_engine)
-    print(_provider_route_command_text(args.command, route))
+    _print_provider_route_command(parser, args.command, route)
     return 0
 
 

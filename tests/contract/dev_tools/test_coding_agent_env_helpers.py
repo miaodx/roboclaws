@@ -99,6 +99,31 @@ def test_profile_summary_rejects_unknown_profile_without_traceback() -> None:
     assert "Traceback" not in result.stderr
 
 
+def test_claude_mify_anthropic_profile_rejects_conflicting_base_urls() -> None:
+    result = run_helper(
+        """
+        set -euo pipefail
+        source "$ROBOCLAWS_HELPER"
+        ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-anthropic
+        XM_LLM_API_KEY=fake-xm-key
+        XM_LLM_BASE_URL=https://api.llm.example/v1
+        XM_LLM_ANTHROPIC_BASE_URL=https://anthropic.example
+        model_args=()
+        env_args=()
+        roboclaws_claude_provider_args model_args env_args
+        printf '%s\n' "${env_args[@]}"
+        """
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "conflicting provider route base_url for mimo-mify-anthropic" in result.stderr
+    assert "XM_LLM_ANTHROPIC_BASE_URL='https://anthropic.example'" in result.stderr
+    assert "XM_LLM_BASE_URL derives 'https://api.llm.example/anthropic'" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "ANTHROPIC_BASE_URL=https://anthropic.example" not in result.stdout
+
+
 def test_python_helper_requires_repo_venv_without_system_fallback() -> None:
     result = subprocess.run(
         [

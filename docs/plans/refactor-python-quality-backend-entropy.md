@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the mify Anthropic base-url conflict
+  slice: provider-route base-url resolution now rejects conflicting
+  `XM_LLM_ANTHROPIC_BASE_URL` and derived `XM_LLM_BASE_URL` values before
+  readiness or coding-agent launch can publish a plausible Anthropic endpoint.
+  The Python provider registry is the single derivation owner; the shell
+  coding-agent helper no longer carries a duplicate URL derivation path.
 - Current shared-checkout note after the python-quality-ratchet source slice:
   ratchet baseline reads and Ruff JSON diagnostics now fail through labelled
   source-reader diagnostics instead of raw `json.loads` / type errors from the
