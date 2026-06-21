@@ -24,29 +24,38 @@ related_context:
 
 ## Status
 
-Status: Approved for implementation.
+Status: Approved for implementation; partially implemented.
 
 Implementation progress:
 
-- Slice 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
+- Checkpoint 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
   B1 / Map 12 generated bundles now pass the strict Base Navigation Map v1
   validator, current MolmoSpaces bundles expose explicit known gaps, and
   targeted negative tests cover missing labels/categories, empty waypoints,
   malformed area bindings, and forbidden fixture/object waypoint fields.
-- Slices 2-5 are not implemented yet. The next slice is the shared
-  area-based `BaseWaypointBuilder`; simulator source-map splitting, Agent View
-  fallback removal, and runtime contract cleanup remain pending.
+- Checkpoint 2 is implemented by the shared area-based
+  `roboclaws.maps.base_waypoints.BaseWaypointBuilder`, with B1 / Map 12 wired
+  through the shared builder and focused tests covering B1 waypoint
+  preservation, irregular or blocked areas, and forbidden fixture/object/private
+  truth inputs.
+- The remaining work is one continuous implementation flow: split MolmoSpaces
+  source-map preparation away from Agent View/runtime projection, remove
+  product Agent View snapshot fallback, clean the runtime contract, and run the
+  full verification ladder.
 
 This document is now the execution plan for reducing map and waypoint
 source-of-truth entropy across simulator, real robot, and Digital Twin paths.
-Implementation should happen in the slices below, not as one unbounded
-refactor.
+Implementation should run as one bounded end-to-end flow. The numbered
+checkpoints below are ordering and acceptance gates, not separate handoff units;
+agents should not stop after an individual checkpoint unless they hit a real
+semantic conflict or verification blocker.
 
 The B1 / Map 12 real-robot and Digital Twin path already satisfies the key
 direction: one Base Navigation Map generator owns map rooms and base waypoints,
 and the Digital Twin proof sidecar does not alter the base map. The remaining
-implementation pressure is mainly simulator bundle preparation and the shared
-waypoint builder/validator.
+implementation pressure is mainly simulator bundle preparation, removing
+fallback source-map authorship from Agent View, and tightening runtime
+consumption around validated Base Navigation Map artifacts.
 
 ## Problem
 
@@ -470,9 +479,14 @@ If one of these later proves necessary, it should be proposed as a uniform
 Base Navigation Map v2 field or, preferably, as Runtime Metric Map evidence
 created through observation.
 
-## Implementation Plan
+## Implementation Flow
 
-### Slice 1: Base Navigation Map V1 Validator
+Execute the remaining work as one flow in the order below. Checkpoints may be
+committed separately if useful for review, but the implementation assignment is
+to continue through all remaining checkpoints and the verification ladder before
+stopping.
+
+### Checkpoint 1: Base Navigation Map V1 Validator
 
 Create a strict validator or extend the existing bundle validation layer so a
 product Base Navigation Map must prove:
@@ -494,7 +508,7 @@ Acceptance:
 
 - B1 / Map 12 generated Base Navigation Map passes this validator.
 - At least one current MolmoSpaces generated bundle fails only for known gaps
-  that Slice 2 or Slice 3 will fix, not because validation is ambiguous.
+  that the remaining flow will fix, not because validation is ambiguous.
 - Missing navigation areas, unlabeled areas, empty waypoints, malformed waypoint
   area bindings, and forbidden fixture/object fields have targeted negative
   tests.
@@ -508,10 +522,10 @@ Evidence:
 - B1 base-map generation and B1 Digital Twin sidecar generation call the strict
   validator before publishing manifests.
 - Current MolmoSpaces bundles intentionally fail the strict validator for known
-  gaps that Slice 2 and Slice 3 will address; the generic Nav2 bundle validator
+  gaps that the remaining flow will address; the generic Nav2 bundle validator
   still covers current runtime compatibility.
 
-### Slice 2: Canonical Area-Based BaseWaypointBuilder
+### Checkpoint 2: Canonical Area-Based BaseWaypointBuilder
 
 Extract a shared builder and validator for sparse area inspection waypoints.
 The first implementation should stay intentionally small:
@@ -546,7 +560,22 @@ Acceptance:
 - Tests prove builder inputs do not include fixtures, objects, receptacles,
   generated mess truth, relocation truth, or Digital Twin object semantics.
 
-### Slice 3: MolmoSpaces Source-Map Builder Split
+Status: Implemented.
+
+Evidence:
+
+- `roboclaws/maps/base_waypoints.py` owns the shared area-based waypoint
+  builder, canonical purpose/source/policy constants, forbidden input checks,
+  and `validate_base_waypoints()`.
+- `scripts/maps/build_b1_map12_base_navigation_map.py` now delegates B1 / Map
+  12 waypoint generation to the shared builder instead of carrying a local
+  centroid/clearance sampler.
+- `tests/contract/maps/test_base_waypoint_builder.py` covers B1 waypoint
+  preservation, deterministic area-only waypoint generation, irregular-area
+  selection, fully occupied-area failure, bad area bindings, occupied waypoint
+  validation, and fixture/object/receptacle/private-truth input rejection.
+
+### Checkpoint 3: MolmoSpaces Source-Map Builder Split
 
 Split simulator bundle preparation away from `RealWorldCleanupContract` and
 Agent View projection. The simulator preparation flow may still instantiate the
@@ -580,7 +609,9 @@ Acceptance:
 - Existing product runtime still consumes selected bundles and does not know
   whether the bundle came from MolmoSpaces, Agibot, or B1.
 
-### Slice 4: Remove Agent View Snapshot Fallback
+Status: Remaining; continue as part of the same implementation flow.
+
+### Checkpoint 4: Remove Agent View Snapshot Fallback
 
 Remove the product branch that writes Nav2 bundle snapshots from
 `run_result["agent_view"]` when no `source_bundle_dir` is supplied.
@@ -602,7 +633,9 @@ Acceptance:
 - Tests that genuinely need synthetic map projection name that test-only
   contract explicitly.
 
-### Slice 5: Runtime Contract Cleanup
+Status: Remaining; continue as part of the same implementation flow.
+
+### Checkpoint 5: Runtime Contract Cleanup
 
 After the artifact builders and validators are strict, clean runtime contracts
 so product code has one question:
@@ -628,6 +661,9 @@ Acceptance:
   are hidden.
 - Cleanup still observes at least one object in the deterministic direct-runner
   MolmoSpaces route.
+
+Status: Remaining; close this plan only after the flow-level acceptance
+criteria and verification ladder pass.
 
 ## Non-Goals
 
@@ -755,14 +791,19 @@ just run::surface \
 
 ## Next Implementation
 
-No additional design discussion is required before starting Slice 2.
+No additional design discussion is required before continuing implementation.
+Do not run the remaining work as separate slices. The intended execution shape
+is one flow that completes Checkpoints 3-5, then runs the verification ladder
+and updates this plan status again.
 
 Recommended next implementation command:
 
 ```text
-Implement Slice 2 from docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md:
-extract the canonical area-based BaseWaypointBuilder and validator for sparse
-area inspection waypoints, without changing simulator generation yet.
+Continue docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md
+as one implementation flow: split MolmoSpaces source-map preparation away from
+Agent View/runtime projection, remove product Agent View snapshot fallback,
+clean runtime consumption around validated Base Navigation Map artifacts, and
+run the full verification ladder before stopping.
 ```
 
 Stop before implementation if any change would:
