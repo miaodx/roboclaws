@@ -58,6 +58,23 @@ model-matrix-benchmark *overrides:
     fi
     exec "$python_bin" scripts/dev/benchmark_model_matrix.py "$@"
 
+worktree-preflight *flags:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python_bin=".venv/bin/python"
+    if [[ ! -x "$python_bin" && -n "${ROBOCLAWS_BASELINE_REPO:-}" ]]; then
+      python_bin="${ROBOCLAWS_BASELINE_REPO%/}/.venv/bin/python"
+    fi
+    if [[ ! -x "$python_bin" ]]; then
+      echo "error: missing repo Python at .venv/bin/python; run 'uv sync --extra dev'" >&2
+      echo "       or run: ROBOCLAWS_BASELINE_REPO=/path/to/main just dev::worktree-bootstrap" >&2
+      exit 1
+    fi
+    "$python_bin" scripts/dev/check_worktree_readiness.py "$@"
+
+worktree-bootstrap *flags:
+    @scripts/dev/bootstrap_worktree_env.sh "$@"
+
 install-hooks:
     @git config core.hooksPath .githooks
     @echo "==> git hooks installed (core.hooksPath = .githooks)"

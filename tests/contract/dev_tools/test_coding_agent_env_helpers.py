@@ -97,3 +97,31 @@ def test_profile_summary_rejects_unknown_profile_without_traceback() -> None:
     assert result.stdout == ""
     assert "unsupported provider profile 'not-a-provider-route'" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_python_helper_requires_repo_venv_without_system_fallback() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            unset ROBOCLAWS_PYTHON
+            roboclaws_python
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={"PATH": "/usr/bin:/bin", "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if (REPO_ROOT / ".venv" / "bin" / "python").is_file():
+        assert result.returncode == 0
+        assert result.stdout.strip() == ".venv/bin/python"
+    else:
+        assert result.returncode == 2
+        assert "missing repo Python at .venv/bin/python" in result.stderr
+    assert "python3" not in result.stdout
