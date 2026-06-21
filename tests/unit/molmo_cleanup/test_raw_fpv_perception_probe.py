@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -971,6 +972,117 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
     assert len(predictions[frames[0].frame_id]["labels"]) == 1
     assert len(predictions[frames[1].frame_id]["labels"]) == 1
     assert predictions[frames[2].frame_id]["labels"] == []
+
+
+class _FakeHTTPResponse:
+    def __init__(self, payload: bytes) -> None:
+        self._payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def close(self) -> None:
+        return None
+
+
+def test_raw_fpv_visual_labeler_provider_rejects_malformed_success_response(
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+
+    monkeypatch.setattr(
+        probe.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: _FakeHTTPResponse(b"{not-json}\n"),
+    )
+
+    with pytest.raises(ValueError, match="RAW-FPV Responses API response source"):
+        probe._call_responses_api(
+            base_url="https://codex.example.test/v1",
+            api_key="test-key",
+            model="gpt-5.5",
+            prompt="label this",
+            timeout_s=1.0,
+        )
+
+
+def test_raw_fpv_visual_labeler_provider_rejects_non_object_success_response(
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+
+    monkeypatch.setattr(
+        probe.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: _FakeHTTPResponse(b"[]\n"),
+    )
+
+    with pytest.raises(ValueError, match="RAW-FPV Responses API response source"):
+        probe._call_responses_api(
+            base_url="https://codex.example.test/v1",
+            api_key="test-key",
+            model="gpt-5.5",
+            prompt="label this",
+            timeout_s=1.0,
+        )
+
+
+def test_raw_fpv_visual_labeler_provider_rejects_non_utf8_success_response(
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+
+    monkeypatch.setattr(
+        probe.urllib.request,
+        "urlopen",
+        lambda *args, **kwargs: _FakeHTTPResponse(b"\xff"),
+    )
+
+    with pytest.raises(ValueError, match="RAW-FPV Responses API response source"):
+        probe._call_responses_api(
+            base_url="https://codex.example.test/v1",
+            api_key="test-key",
+            model="gpt-5.5",
+            prompt="label this",
+            timeout_s=1.0,
+        )
+
+
+def test_raw_fpv_visual_labeler_provider_reports_malformed_error_response(
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+
+    def raise_http_error(*args, **kwargs):
+        raise urllib.error.HTTPError(
+            "https://codex.example.test/v1/responses",
+            502,
+            "Bad Gateway",
+            {},
+            _FakeHTTPResponse(b"{not-json}\n"),
+        )
+
+    monkeypatch.setattr(probe.urllib.request, "urlopen", raise_http_error)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        probe._call_responses_api(
+            base_url="https://codex.example.test/v1",
+            api_key="test-key",
+            model="gpt-5.5",
+            prompt="label this",
+            timeout_s=1.0,
+        )
+
+    assert "responses API returned HTTP 502" in str(exc_info.value)
+    assert "RAW-FPV Responses API error response source must contain valid JSON object" in str(
+        exc_info.value
+    )
 
 
 def test_raw_fpv_visual_labeler_rejects_unknown_provider_model(

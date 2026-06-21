@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: RAW-FPV visual-labeler Responses API success and error bodies
+  now route through a UTF-8 check plus the shared JSON-object text helper
+  instead of raw `json.loads`. Malformed, non-UTF-8, or parseable non-object
+  provider HTTP success bodies now fail with labelled RAW-FPV Responses API
+  response source errors, and malformed or wrong-shaped HTTP error bodies are
+  included in provider error rows before visual-labeler predictions can derive
+  confidence from corrupt wire data. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud provider wire-source validation
+  for RAW-FPV visual-labeler evidence. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused RAW-FPV perception probe tests and source tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `run_raw_fpv_perception_probe.py` again accepts malformed, non-UTF-8, or
+  non-object provider Responses API bodies before provider predictions or
+  provider error rows are assembled.
+
 - 2026-06-21: OpenAI Agents SDK live-timing compact metric summaries now treat
   JSON-looking terminal `detail` strings as structured evidence sources.
   Valid JSON object details still populate compact RAW-FPV budget counters,

@@ -29,7 +29,11 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
-from roboclaws.core.json_sources import read_json_object, read_jsonl_object_rows  # noqa: E402
+from roboclaws.core.json_sources import (  # noqa: E402
+    parse_json_object_text,
+    read_json_object,
+    read_jsonl_object_rows,
+)
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -1680,14 +1684,30 @@ def _call_responses_api(
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return _parse_responses_api_json_object(
+                response.read(),
+                label="RAW-FPV Responses API response",
+                source=base_url.rstrip("/") + "/responses",
+            )
     except urllib.error.HTTPError as exc:
         try:
-            payload = json.loads(exc.read().decode("utf-8"))
+            payload = _parse_responses_api_json_object(
+                exc.read(),
+                label="RAW-FPV Responses API error response",
+                source=base_url.rstrip("/") + "/responses",
+            )
             message = str((payload.get("error") or {}).get("message") or exc.reason)
-        except Exception:
-            message = str(exc.reason)
+        except ValueError as parse_exc:
+            message = f"{exc.reason}; {parse_exc}"
         raise RuntimeError(f"responses API returned HTTP {exc.code}: {message}") from exc
+
+
+def _parse_responses_api_json_object(body: bytes, *, label: str, source: str) -> dict[str, Any]:
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{label} source must contain UTF-8 JSON object: {source}") from exc
+    return parse_json_object_text(text, label=label, source=source)
 
 
 def _provider_config(provider: str, *, model: str) -> dict[str, Any]:

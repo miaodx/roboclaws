@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the RAW-FPV visual-labeler provider HTTP
+  source slice: provider Responses API success and error bodies now route
+  through a UTF-8 check plus the shared JSON-object text helper, so malformed,
+  non-UTF-8, or parseable non-object wire bodies surface labelled RAW-FPV
+  Responses API source errors before visual-labeler predictions can derive
+  confidence from corrupt provider HTTP payloads.
 - Current shared-checkout note after the OpenAI Agents compact metric detail
   source slice: live-timing compact metric summaries now parse JSON-looking
   terminal `detail` values as structured sources, preserve valid RAW-FPV

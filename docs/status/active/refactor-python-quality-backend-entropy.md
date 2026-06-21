@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: RAW-FPV visual-labeler Responses API success and error bodies now
+route through the shared JSON-object text helper after a UTF-8 source check.
+Malformed, non-UTF-8, or parseable non-object provider HTTP success bodies now
+fail as labelled RAW-FPV Responses API response source errors, and malformed
+or wrong-shaped HTTP error bodies are included in the provider error row
+message before visual-labeler predictions can derive confidence from corrupt
+wire data. Focused proof passed: RAW-FPV perception probe tests and source
+tests, touched-file ruff, touched-file format check, dependency sync,
+changed-code cleanup review, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
 2026-06-21: OpenAI Agents SDK live-timing compact metric summaries now treat
 JSON-looking terminal `detail` strings as structured evidence sources. Valid
 JSON object details still populate compact RAW-FPV budget counters, plaintext
