@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the B1 Base Navigation Map label-frame
+  source slice: the shared real-robot / Digital Twin map builder now requires
+  a top-level `source_map_frame_id` in the accepted label source and rejects
+  any label row whose declared `source_map_frame_id` is missing or drifts from
+  that top-level frame before writing bundle artifacts. Generated semantics,
+  rooms, waypoints, and the spatial contract now carry the declared label
+  frame without falling back to `map`.
 - Current shared-checkout note after the Runtime Map Prior Snapshot
   source-frame slice: runtime-prior conversion now preserves declared
   runtime-map and Nav2 bundle map frames, defaults only missing

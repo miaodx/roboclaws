@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: B1 Base Navigation Map generation now requires accepted label
+  sources to declare a top-level `source_map_frame_id` and rejects any label row
+  whose `source_map_frame_id` is missing or drifts from that source frame before
+  writing shared real-robot / Digital Twin map artifacts. Generated
+  `semantics.json` frame ids, spatial contract, rooms, and generated
+  inspection waypoints now carry the declared label frame instead of defaulting
+  absent metadata to `map`. Owner layer: Artifacts, reports, and eval suites /
+  Base Navigation Map artifact contract. Behavior-change class: fail-aloud
+  source-frame validation for accepted B1 label sources. Metric: ratchet
+  remains at 0 Ruff complexity rows and 80 oversized modules in the current
+  shared checkout. Proof: focused B1 base-navigation map contract tests, Nav2
+  map-bundle contract tests, cross-environment semantic-map parity tests, B1
+  base-navigation sidecar tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if `build_b1_map12_base_navigation_map.py` again derives bundle frame
+  metadata from missing or mixed label-source frame fields, or writes
+  room/waypoint/spatial-contract evidence before accepted label frame
+  validation runs.
+
 - 2026-06-21: Runtime Map Prior Snapshot conversion now preserves declared
   runtime-map and Nav2 bundle map frames instead of defaulting source-derived
   waypoint, room, and source-navigation metadata to `map`. Online runtime-map

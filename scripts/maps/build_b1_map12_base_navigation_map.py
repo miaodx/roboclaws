@@ -108,6 +108,7 @@ def build_base_navigation_map_bundle(
     )
     if errors:
         raise ValueError("invalid B1 / Map 12 base navigation labels: " + "; ".join(errors))
+    frame_id = _labels_source_map_frame_id(labels)
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -117,7 +118,7 @@ def build_base_navigation_map_bundle(
         labels,
         room_semantics=room_semantics,
         grid=grid,
-        frame_id=str(labels.get("source_map_frame_id") or "map"),
+        frame_id=frame_id,
     )
     semantics = _semantics_payload(
         map_bundle=map_bundle,
@@ -184,6 +185,7 @@ def validate_base_navigation_labels(
             labels,
             room_reference_by_partition=room_reference_by_partition,
             grid=grid,
+            expected_frame_id=str(payload.get("source_map_frame_id") or ""),
         )
     )
     return errors
@@ -204,6 +206,8 @@ def _base_navigation_source_errors(
         errors.append("source_map_mutated must be false")
     if _resolve_repo_path(str(payload.get("map_bundle") or "")) != Path(map_bundle).resolve():
         errors.append("map_bundle must match --map-bundle")
+    if not str(payload.get("source_map_frame_id") or ""):
+        errors.append("source_map_frame_id must be set")
     if not Path(labels_path).is_file():
         errors.append(f"labels missing: {labels_path}")
     return errors
@@ -214,6 +218,7 @@ def _navigation_label_rows_errors(
     *,
     room_reference_by_partition: dict[str, dict[str, Any]],
     grid: OccupancyGrid,
+    expected_frame_id: str,
 ) -> list[str]:
     errors: list[str] = []
     seen_area_ids: set[str] = set()
@@ -225,6 +230,13 @@ def _navigation_label_rows_errors(
             _navigation_area_id_errors(label, label_id=label_id, seen_area_ids=seen_area_ids)
         )
         errors.extend(_label_contract_errors(label, label_id=label_id))
+        errors.extend(
+            _label_source_frame_errors(
+                label,
+                label_id=label_id,
+                expected_frame_id=expected_frame_id,
+            )
+        )
         errors.extend(
             _dt_reference_binding_errors(
                 label,
@@ -242,6 +254,25 @@ def _navigation_label_rows_errors(
     if navigation_area_count == 0:
         errors.append("at least one label must have polygon_usage.navigation=true")
     return errors
+
+
+def _label_source_frame_errors(
+    label: dict[str, Any],
+    *,
+    label_id: str,
+    expected_frame_id: str,
+) -> list[str]:
+    frame_id = str(label.get("source_map_frame_id") or "")
+    if not frame_id:
+        return [f"label {label_id} missing source_map_frame_id"]
+    if not expected_frame_id:
+        return []
+    if frame_id != expected_frame_id:
+        return [
+            f"label {label_id} source_map_frame_id must match top-level "
+            f"source_map_frame_id: {expected_frame_id}"
+        ]
+    return []
 
 
 def _navigation_area_id_errors(
@@ -509,7 +540,7 @@ def _semantics_payload(
     rooms: list[dict[str, Any]],
     waypoints: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    frame_id = str(labels.get("source_map_frame_id") or "map")
+    frame_id = _labels_source_map_frame_id(labels)
     navigation_rooms = [room for room in rooms if room["polygon_usage"]["navigation"]]
     return {
         "schema": "nav2_cleanup_semantics_v1",
@@ -568,6 +599,13 @@ def _semantics_payload(
             "uses_navigation_memory_as_waypoint_source": False,
         },
     }
+
+
+def _labels_source_map_frame_id(labels: dict[str, Any]) -> str:
+    frame_id = str(labels.get("source_map_frame_id") or "")
+    if not frame_id:
+        raise ValueError("source_map_frame_id must be set")
+    return frame_id
 
 
 def _manifest_payload(

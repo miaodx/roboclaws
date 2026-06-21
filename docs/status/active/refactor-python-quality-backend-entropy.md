@@ -17,6 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: B1 Base Navigation Map generation now requires accepted label
+sources to declare a top-level `source_map_frame_id` and rejects label rows
+whose declared source frame is missing or drifts from that top-level frame
+before writing shared real-robot / Digital Twin map artifacts. Generated
+`semantics.json` frame ids, source-frame spatial contract, rooms, and
+inspection waypoints now carry the declared label frame without falling back to
+`map`. Focused proof passed: B1 base-navigation map contract tests, Nav2
+map-bundle contract tests, cross-environment semantic-map parity tests, B1
+base-navigation sidecar tests, touched-file ruff, touched-file format check,
+dependency sync, changed-code cleanup review, diff check, and ratchet summary.
+Current ratchet before final slice closeout: 0 Ruff complexity violations,
+80 oversized modules in the shared checkout.
+
 2026-06-21: Runtime Map Prior Snapshot conversion now preserves declared
 runtime-map and Nav2 bundle map frames instead of defaulting source-derived
 waypoint, room, and source-navigation metadata to `map`. Online runtime-map
