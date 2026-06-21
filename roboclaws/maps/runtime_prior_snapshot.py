@@ -20,6 +20,7 @@ from roboclaws.maps.spatial_contract import (
     GEOMETRY_SOURCE_RUNTIME_OBSERVATION,
     POLYGON_ROLE_NAVIGATION_AREA,
     normalize_spatial_room,
+    require_source_frame_spatial_contract,
 )
 
 RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA = "runtime_map_prior_snapshot_v1"
@@ -261,9 +262,11 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         raise ValueError(
             "compiled cleanup bundle semantics must use schema nav2_cleanup_semantics_v1"
         )
-    rooms = copy.deepcopy(semantics.get("rooms") or [])
+    map_frame_id = _bundle_frame_id(semantics)
+    rooms = _bundle_rooms(semantics, map_frame_id=map_frame_id)
     inspection_waypoints = [
-        _bundle_waypoint(waypoint) for waypoint in _nav2_cleanup_waypoint_sources(semantics)
+        _bundle_waypoint(waypoint, map_frame_id=map_frame_id)
+        for waypoint in _nav2_cleanup_waypoint_sources(semantics)
     ]
     anchors = [
         _anchor_from_bundle_waypoint(waypoint, index=index)
@@ -283,7 +286,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
             "contains_private_scoring_truth": bool(
                 (semantics.get("provenance") or {}).get("contains_private_scoring_truth")
             ),
-            "map_frame": _bundle_frame_id(semantics),
+            "map_frame": map_frame_id,
             "map_id": str(semantics.get("map_id") or bundle_dir.name),
             "artifact_paths": {
                 "nav2_yaml": "map.yaml",
@@ -332,6 +335,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
             "map_id": str(semantics.get("map_id") or bundle_dir.name),
             "source_type": "nav2_cleanup_bundle",
             "source_root": str(bundle_dir),
+            "map_frame": map_frame_id,
             "nav2_yaml": "map.yaml",
             "occupancy_grid_artifact": "map.pgm",
             "semantics": "semantics.json",
@@ -576,15 +580,38 @@ def _anchor_from_navigation_memory_item(
     }
 
 
-def _bundle_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
+def _bundle_rooms(semantics: dict[str, Any], *, map_frame_id: str) -> list[dict[str, Any]]:
+    rooms: list[dict[str, Any]] = []
+    for index, room in enumerate(semantics.get("rooms") or []):
+        if not isinstance(room, dict):
+            raise ValueError(f"Nav2 cleanup room {index + 1} must be a JSON object")
+        room_id = str(room.get("room_id") or f"rooms[{index}]")
+        source_map_frame_id = str(room.get("source_map_frame_id") or "")
+        if source_map_frame_id and source_map_frame_id != map_frame_id:
+            raise ValueError(
+                "Nav2 cleanup room source_map_frame_id must match "
+                f"semantics.json frame_ids.map: {room_id}"
+            )
+        item = copy.deepcopy(room)
+        item.setdefault("source_map_frame_id", map_frame_id)
+        rooms.append(item)
+    return rooms
+
+
+def _bundle_waypoint(waypoint: dict[str, Any], *, map_frame_id: str) -> dict[str, Any]:
     waypoint_id = str(waypoint.get("waypoint_id") or waypoint.get("id") or "")
     pose = required_xy_yaw_pose_source(
         waypoint,
         label=f"Nav2 cleanup waypoint {waypoint_id}",
     )
+    frame_id = str(waypoint.get("frame_id") or map_frame_id)
+    if frame_id != map_frame_id:
+        raise ValueError(
+            f"Nav2 cleanup waypoint frame_id must match semantics.json frame_ids.map: {waypoint_id}"
+        )
     return {
         "waypoint_id": waypoint_id,
-        "frame_id": str(waypoint.get("frame_id") or "map"),
+        "frame_id": frame_id,
         **pose,
         "room_id": str(waypoint.get("room_id") or ""),
         "label": str(waypoint.get("label") or waypoint_id),
@@ -651,7 +678,16 @@ def _bundle_waypoint_actionability(waypoint: dict[str, Any]) -> str:
 
 def _bundle_frame_id(semantics: dict[str, Any]) -> str:
     frame_ids = semantics.get("frame_ids") if isinstance(semantics.get("frame_ids"), dict) else {}
-    return str(frame_ids.get("map") or "map")
+    map_frame_id = str(frame_ids.get("map") or "")
+    if not map_frame_id:
+        raise ValueError("Nav2 cleanup semantics must contain frame_ids.map")
+    errors: list[str] = []
+    require_source_frame_spatial_contract(semantics, errors)
+    if errors:
+        raise ValueError(
+            "Nav2 cleanup semantics source-frame contract invalid: " + "; ".join(errors)
+        )
+    return map_frame_id
 
 
 def _waypoint_from_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
@@ -717,6 +753,7 @@ def _materialized_waypoints_from_runtime_map(
     runtime_metric_map: dict[str, Any],
 ) -> list[dict[str, Any]]:
     anchors = runtime_metric_map.get("public_semantic_anchors") or []
+    frame_id = _runtime_metric_map_frame_id(runtime_metric_map)
     waypoints: list[dict[str, Any]] = []
     seen: set[str] = set()
     for anchor in anchors:
@@ -725,13 +762,19 @@ def _materialized_waypoints_from_runtime_map(
         waypoint_id = str(anchor.get("waypoint_id") or "")
         if not waypoint_id or waypoint_id in seen:
             continue
+        anchor_id = str(anchor.get("anchor_id") or "")
+        _reject_frame_drift(
+            anchor,
+            expected_frame_id=frame_id,
+            label=f"runtime metric map anchor {anchor_id or waypoint_id}",
+        )
         pose = _pose_dict(anchor.get("pose") or {})
         waypoints.append(
             {
                 "waypoint_id": waypoint_id,
-                "frame_id": "map",
+                "frame_id": frame_id,
                 **pose,
-                "anchor_id": str(anchor.get("anchor_id") or ""),
+                "anchor_id": anchor_id,
                 "anchor_type": str(anchor.get("anchor_type") or ""),
                 "label": str(anchor.get("label") or waypoint_id),
                 "waypoint_source": "runtime_metric_map_public_semantic_anchor",
@@ -745,6 +788,12 @@ def _materialized_waypoints_from_runtime_map(
         waypoint_id = str(waypoint.get("waypoint_id") or "")
         if waypoint_id and waypoint_id not in seen:
             item = copy.deepcopy(waypoint)
+            _reject_frame_drift(
+                item,
+                expected_frame_id=frame_id,
+                label=f"runtime metric map generated waypoint {waypoint_id}",
+            )
+            item.setdefault("frame_id", frame_id)
             item.setdefault("actionability", "actionable")
             waypoints.append(item)
             seen.add(waypoint_id)
@@ -1087,10 +1136,60 @@ def _source_navigation_map_reference(source: dict[str, Any]) -> dict[str, Any]:
         "schema": "source_navigation_map_reference_v1",
         "source_type": "minimal_navigation_map_artifact",
         "map_id": str(source.get("map_id") or source.get("environment_id") or ""),
-        "map_frame": str(source.get("frame_id") or "map"),
+        "map_frame": _source_navigation_map_frame_id(source),
         "source_schema": str(source.get("schema") or ""),
         "source_map_mutated": False,
     }
+
+
+def _runtime_metric_map_frame_id(runtime_metric_map: dict[str, Any]) -> str:
+    static_map = (
+        runtime_metric_map.get("static_map")
+        if isinstance(runtime_metric_map.get("static_map"), dict)
+        else {}
+    )
+    runtime_frame_id = str(
+        runtime_metric_map.get("frame_id") or runtime_metric_map.get("map_frame") or ""
+    )
+    static_frame_id = str(static_map.get("frame_id") or static_map.get("map_frame") or "")
+    if runtime_frame_id and static_frame_id and runtime_frame_id != static_frame_id:
+        raise ValueError(
+            "runtime metric map frame_id must match static_map frame, "
+            f"got {runtime_frame_id!r} and {static_frame_id!r}"
+        )
+    return runtime_frame_id or static_frame_id or "map"
+
+
+def _source_navigation_map_frame_id(source: dict[str, Any]) -> str:
+    frame_id = str(source.get("frame_id") or source.get("map_frame") or "")
+    return frame_id or "map"
+
+
+def _reject_frame_drift(
+    payload: dict[str, Any],
+    *,
+    expected_frame_id: str,
+    label: str,
+) -> None:
+    frame_ids = _declared_frame_ids(payload)
+    mismatches = sorted(frame_id for frame_id in frame_ids if frame_id != expected_frame_id)
+    if mismatches:
+        raise ValueError(
+            f"{label} frame_id must match runtime metric map frame {expected_frame_id!r}, "
+            f"got {mismatches[0]!r}"
+        )
+
+
+def _declared_frame_ids(payload: dict[str, Any]) -> set[str]:
+    frame_ids = set()
+    frame_id = str(payload.get("frame_id") or "")
+    if frame_id:
+        frame_ids.add(frame_id)
+    pose = payload.get("pose") if isinstance(payload.get("pose"), dict) else {}
+    pose_frame_id = str(pose.get("frame_id") or "")
+    if pose_frame_id:
+        frame_ids.add(pose_frame_id)
+    return frame_ids
 
 
 def _source_hashes(*paths: Path) -> dict[str, str]:

@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Runtime Map Prior Snapshot
+  source-frame slice: runtime-prior conversion now preserves declared
+  runtime-map and Nav2 bundle map frames, defaults only missing
+  waypoint/room frame metadata to that source frame, and rejects declared
+  static-map, anchor, generated-waypoint, room, waypoint, or spatial-contract
+  frame drift before downstream cleanup consumers can derive mixed-frame
+  confidence.
 - Current shared-checkout note after the Nav2 map-bundle source-frame slice:
   projection now preserves validated `semantics.json frame_ids.map` across
   metric-map `frame_id`, defaulted inspection-waypoint frames, room

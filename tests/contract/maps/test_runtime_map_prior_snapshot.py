@@ -22,6 +22,7 @@ from roboclaws.maps.runtime_prior_snapshot import (
     runtime_prior_snapshot_from_nav2_cleanup_bundle,
     runtime_prior_snapshot_from_runtime_metric_map,
 )
+from roboclaws.maps.spatial_contract import source_frame_spatial_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
@@ -82,7 +83,7 @@ def test_agibot_navigation_memory_converts_to_runtime_prior_snapshot_shape() -> 
     assert rooms["kitchen_center"]["room_label"] == "厨房/吧台区域"
     assert rooms["kitchen_center"]["category"] == "kitchen"
     assert snapshot["runtime_metric_map"]["room_category_hints"][0]["label"] == "厨房/吧台区域"
-    assert snapshot["source_navigation_map"]["room_category_hints"][0]["label"] == ("厨房/吧台区域")
+    assert snapshot["source_navigation_map"]["room_category_hints"][0]["label"] == "厨房/吧台区域"
     assert anchors["stone_book_decor_1"]["anchor_type"] == "landmark"
     assert anchors["stone_book_decor_1"]["actionability"] == "needs_review"
 
@@ -546,12 +547,10 @@ def test_nav2_cleanup_bundle_converts_to_runtime_prior_snapshot_shape(tmp_path: 
     assert snapshot["producer"]["type"] == "offline_nav2_cleanup_bundle_conversion"
     assert snapshot["source_navigation_map"]["source_type"] == "nav2_cleanup_bundle"
     assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
-    assert (
-        snapshot["runtime_metric_map"]["digital_twin_capabilities"]["robot_consumption_proof"][
-            "robot_navigation_supported"
-        ]
-        is True
-    )
+    robot_proof = snapshot["runtime_metric_map"]["digital_twin_capabilities"][
+        "robot_consumption_proof"
+    ]
+    assert robot_proof["robot_navigation_supported"] is True
     assert snapshot["contract"]["online_offline_equivalent_shape"] is True
     assert snapshot["contract"]["private_truth_included"] is False
     assert targets["actionable_waypoint_ids"] == ["room_a_center"]
@@ -672,6 +671,8 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
         "environment_id": "test-b1-map12",
         "map_id": "test-b1-map12_base_navigation_map",
         "frame_ids": {"map": "map", "base": "base_link", "camera": "camera"},
+        "spatial_contract": source_frame_spatial_contract(frame_id="map"),
+        "display_frame": None,
         "rooms": [
             {
                 "room_id": "room_a",

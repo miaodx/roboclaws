@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Runtime Map Prior Snapshot conversion now preserves declared
+  runtime-map and Nav2 bundle map frames instead of defaulting source-derived
+  waypoint, room, and source-navigation metadata to `map`. Online runtime-map
+  snapshots reject top-level/static-map frame drift plus anchor or generated
+  waypoint frame drift, and direct Nav2 bundle conversion now requires the
+  source-frame spatial contract, rejects non-object room rows, rejects room or
+  waypoint frame drift, and publishes the declared map frame in the source
+  navigation map. Owner layer: Artifacts, reports, and eval suites / Runtime
+  Map Prior Snapshot artifact contract. Behavior-change class: source-truth
+  correction plus fail-aloud source-frame validation. Metric: ratchet remains
+  at 0 Ruff complexity rows and 80 oversized modules after splitting the new
+  focused frame regressions out of the existing near-ceiling snapshot test
+  file. Proof: focused runtime-prior frame/source tests, runtime-prior
+  snapshot tests, B1 base-navigation sidecar tests, cross-environment semantic
+  map parity tests, touched-file ruff/format checks, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `runtime_prior_snapshot.py` again substitutes `map` for declared
+  source-frame metadata or accepts mismatched declared runtime-map/Nav2 frame
+  evidence before materializing cleanup targets.
+
 - 2026-06-21: Nav2 map-bundle projection now preserves the declared source
   map frame from `semantics.json frame_ids.map` instead of hard-coding `map`
   for projected robot pose or defaulted inspection-waypoint frames. Bundle

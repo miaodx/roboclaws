@@ -17,6 +17,20 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Runtime Map Prior Snapshot conversion now preserves declared
+runtime-map and Nav2 bundle map frames instead of defaulting source-derived
+waypoint, room, and source-navigation metadata to `map`. Online runtime-map
+snapshots reject top-level/static-map frame drift plus anchor or generated
+waypoint frame drift; direct Nav2 bundle conversion now requires the
+source-frame spatial contract, rejects non-object room rows, rejects room or
+waypoint frame drift, and publishes the declared map frame in
+`source_navigation_map`. Focused proof passed: runtime-prior frame/source
+tests, runtime-prior snapshot tests, B1 base-navigation sidecar tests,
+cross-environment semantic-map parity tests, touched-file ruff, touched-file
+format check, dependency sync, changed-code cleanup review, diff check, and
+ratchet summary. Current ratchet before final slice closeout: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: Nav2 map-bundle projection now preserves the validated
 `semantics.json frame_ids.map` source frame across projected metric-map
 `frame_id`, defaulted inspection-waypoint frames, room source-frame metadata,
