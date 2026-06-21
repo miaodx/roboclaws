@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -480,10 +481,12 @@ def test_kimi_coding_get_action_uses_shared_decision_fallback(monkeypatch):
 
     response = MagicMock()
     response.raise_for_status.return_value = None
-    response.json.return_value = {
-        "choices": [{"message": {"content": "not json", "reasoning_content": ""}}],
-        "usage": {},
-    }
+    response.text = json.dumps(
+        {
+            "choices": [{"message": {"content": "not json", "reasoning_content": ""}}],
+            "usage": {},
+        }
+    )
     provider._client = MagicMock()
     provider._client.post.return_value = response
 
@@ -491,6 +494,36 @@ def test_kimi_coding_get_action_uses_shared_decision_fallback(monkeypatch):
 
     assert result["action"] == SAFE_FALLBACK_ACTION
     assert "not json" in result["reasoning"]
+
+
+@pytest.mark.parametrize(
+    ("response_text", "expected_error"),
+    [
+        ("{not-json", "Kimi coding provider response source must contain valid JSON object"),
+        ("[]", "Kimi coding provider response source must contain a JSON object"),
+    ],
+)
+def test_kimi_coding_get_action_rejects_bad_provider_response_source(
+    monkeypatch,
+    response_text: str,
+    expected_error: str,
+) -> None:
+    monkeypatch.setenv("KIMI_API_KEY", "test-key")
+    provider = KimiCodingProvider(api_key="test-key", retry_attempts=1)
+
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.text = response_text
+    provider._client = MagicMock()
+    provider._client.post.return_value = response
+
+    with pytest.raises(ValueError, match=expected_error):
+        provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    status = provider.get_status()
+    assert status["failed_calls"] == 1
+    assert status["last_error_kind"] == "ValueError"
+    assert expected_error in status["last_error"]
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Direct `KimiCodingProvider` HTTP success bodies now parse through
+the shared JSON-object text helper before action parsing and usage accounting.
+Malformed or parseable non-object provider response bodies now fail as
+source-labelled provider errors, update provider failure status, and avoid
+deriving fallback actions or cost evidence from corrupt wire data. Focused
+proof passed: provider VLM unit tests, touched-file ruff, touched-file format
+check, dependency sync, changed-code cleanup review, diff check, and ratchet
+summary. Current ratchet before final slice closeout: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
+
 2026-06-21: Kimi coding provider-health probe response bodies now parse
 through the shared JSON-object text helper and validate the minimal
 `choices[0].message` shape before extracting visible output. Malformed,

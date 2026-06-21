@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the direct Kimi provider response source
+  slice: `KimiCodingProvider` HTTP success bodies now parse through the shared
+  JSON-object text helper before action parsing and usage accounting, so
+  malformed or non-object provider response bodies fail as source-labelled
+  provider errors instead of producing fallback actions or cost evidence from
+  corrupt wire data.
 - Current shared-checkout note after the Kimi provider-health response source
   slice: the direct Kimi coding probe now parses HTTP response text through
   the shared JSON-object source helper and validates `choices[0].message`

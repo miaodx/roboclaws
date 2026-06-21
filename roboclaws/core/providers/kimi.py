@@ -5,6 +5,7 @@ import os
 import time
 from typing import Any
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.core.provider_runtime import (
     _COST_PER_M,
     NAVIGATION_ACTIONS,
@@ -307,7 +308,11 @@ class KimiCodingProvider:
             try:
                 resp = self._client.post("/v1/chat/completions", json=payload)
                 resp.raise_for_status()
-                body = resp.json()
+                body = parse_json_object_text(
+                    resp.text,
+                    label="Kimi coding provider response",
+                    source=self._provider_name,
+                )
                 result = self._parse_response(body)
                 self._record_usage(body.get("usage") or {})
                 _record_call_success(

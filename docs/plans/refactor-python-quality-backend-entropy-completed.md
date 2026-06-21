@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Direct `KimiCodingProvider` HTTP success bodies now parse
+  through the shared JSON-object text helper before action parsing and usage
+  accounting. Malformed or parseable non-object provider response bodies now
+  fail as source-labelled provider errors, update provider failure status, and
+  avoid deriving fallback actions or cost evidence from corrupt wire data.
+  Owner layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud direct provider wire-source validation with existing retry and
+  model-output fallback policy preserved. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused provider VLM unit tests, touched-file ruff/format
+  checks, dependency sync, changed-code cleanup review, `git diff --check`,
+  and ratchet. Reopen only if `KimiCodingProvider` again trusts wrong-shaped
+  HTTP success JSON before action parsing or usage accounting.
+
 - 2026-06-21: Kimi coding provider-health probe response bodies now parse
   through the shared JSON-object text helper and validate the minimal
   `choices[0].message` shape before extracting visible output. Malformed,
