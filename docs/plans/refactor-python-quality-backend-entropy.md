@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents compact metric detail
+  source slice: live-timing compact metric summaries now parse JSON-looking
+  terminal `detail` values as structured sources, preserve valid RAW-FPV
+  budget extraction, tolerate plaintext provider detail, and surface
+  `detail_source_error` / `detail_source_error_kind` when malformed or
+  non-object structured detail would otherwise be silently dropped from timing
+  attribution.
 - Current shared-checkout note after the OpenAI Agents SDK console readiness
   source-parity slice: operator-console readiness now resolves SDK
   provider/model/base-url/key settings through `openai_agents_runtime_settings()`

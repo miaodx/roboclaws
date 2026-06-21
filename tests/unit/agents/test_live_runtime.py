@@ -5746,3 +5746,114 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "tool_response_bytes_total": 1000,
         "continuation_attempt_count": 1,
     }
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected_error", "expected_kind"),
+    [
+        (
+            '{"schema":',
+            "detail must contain a valid JSON object: Expecting value",
+            "invalid_json",
+        ),
+        (
+            '["wrong-shape"]',
+            "detail must contain a JSON object, got list",
+            "non_object",
+        ),
+    ],
+)
+def test_openai_agents_live_timing_compact_metrics_surface_structured_detail_errors(
+    detail: str,
+    expected_error: str,
+    expected_kind: str,
+) -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "raw_fpv_candidate_budget_exhausted",
+                "detail": detail,
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "raw_fpv_candidate_budget_exhausted",
+        "detail_source_error": expected_error,
+        "detail_source_error_kind": expected_kind,
+    }
+
+
+def test_openai_agents_live_timing_compact_metrics_tolerates_plaintext_detail() -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "provider_transient_failure",
+                "provider_reason": "rate_limit",
+                "detail": "429 Too Many Requests",
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "provider_transient_failure",
+        "provider_reason": "rate_limit",
+    }
+
+
+def test_openai_agents_live_timing_compact_metrics_extracts_valid_budget_detail() -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "raw_fpv_candidate_budget_exhausted",
+                "detail": json.dumps(
+                    {
+                        "schema": "openai_agents_raw_fpv_budget_failure_v1",
+                        "raw_fpv_candidate_budget": 2,
+                        "raw_fpv_repeated_failure_limit": 3,
+                        "max_observe_per_waypoint": 1,
+                        "candidate_attempt_count": 2,
+                        "repeated_failure_fingerprints": ["a", "b"],
+                        "repeated_failure_limit_hits": ["a"],
+                        "observe_count_by_waypoint": {"wp-a": 1, "wp-b": 2},
+                    }
+                ),
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "raw_fpv_candidate_budget_exhausted",
+        "detail_schema": "openai_agents_raw_fpv_budget_failure_v1",
+        "raw_fpv_candidate_budget": 2,
+        "raw_fpv_repeated_failure_limit": 3,
+        "max_observe_per_waypoint": 1,
+        "candidate_attempt_count": 2,
+        "repeated_failure_count": 2,
+        "repeated_failure_limit_hit_count": 1,
+        "observe_waypoint_count": 2,
+    }

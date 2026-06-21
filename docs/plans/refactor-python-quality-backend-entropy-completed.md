@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents SDK live-timing compact metric summaries now treat
+  JSON-looking terminal `detail` strings as structured evidence sources.
+  Valid JSON object details still populate compact RAW-FPV budget counters,
+  plaintext provider details remain tolerated and redacted from compact
+  metrics, and malformed or parseable non-object structured details now emit
+  `detail_source_error` plus `detail_source_error_kind` before report timing
+  attribution can look complete from corrupt terminal detail. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  evidence-summary hardening for compact live timing metrics. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused live runtime unit tests, touched-file
+  ruff/format checks, dependency sync, changed-code cleanup review,
+  `git diff --check`, and ratchet. Reopen only if
+  `run_live_openai_agents_cleanup.py` again silently drops malformed or
+  non-object JSON-looking terminal metric detail before compact timing
+  attribution.
+
 - 2026-06-21: OpenAI Agents SDK operator-console readiness now reuses
   `openai_agents_runtime_settings()` before publishing provider readiness, so
   console start is blocked by the same provider/model/base-url/key source

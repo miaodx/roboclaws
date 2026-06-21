@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: OpenAI Agents SDK live-timing compact metric summaries now treat
+JSON-looking terminal `detail` strings as structured evidence sources. Valid
+JSON object details still populate compact RAW-FPV budget counters, plaintext
+provider detail remains tolerated and redacted from compact metrics, and
+malformed or non-object structured details now emit `detail_source_error` plus
+`detail_source_error_kind` before report timing attribution can look complete
+from corrupt terminal detail. Focused proof passed: full live runtime unit
+file, touched-file ruff, touched-file format check, dependency sync,
+changed-code cleanup review, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
 2026-06-21: OpenAI Agents SDK operator-console readiness now resolves
 provider/model settings through `openai_agents_runtime_settings()` before
 publishing the provider gate. Unknown `ROBOCLAWS_OPENAI_AGENTS_MODEL` values,
