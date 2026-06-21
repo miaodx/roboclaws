@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "dev" / "check_python_quality_ratchet.py"
 
@@ -49,6 +51,77 @@ def test_ratchet_allows_debt_at_or_below_baseline() -> None:
     current = baseline_state()
 
     assert module.compare_to_baseline(current, baseline_state()) == []
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json",
+            "python quality baseline source must contain valid JSON object",
+        ),
+        (
+            "[]\n",
+            "python quality baseline source must contain a JSON object",
+        ),
+    ],
+)
+def test_read_quality_baseline_rejects_bad_source(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    module = load_module()
+    baseline = tmp_path / "python_quality_baseline.json"
+    baseline.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        module.read_quality_baseline(baseline)
+
+
+def test_main_reports_bad_baseline_source_without_traceback(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module()
+    baseline = tmp_path / "python_quality_baseline.json"
+    baseline.write_text("{not-json", encoding="utf-8")
+    monkeypatch.setattr(module, "collect_quality_state", baseline_state)
+
+    assert module.main(["--baseline", str(baseline)]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "python-quality-ratchet: python quality baseline source" in captured.err
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json",
+            "Ruff complexity diagnostics source must contain valid JSON array",
+        ),
+        (
+            "{}\n",
+            "Ruff complexity diagnostics source must contain a JSON array",
+        ),
+        (
+            "[1]\n",
+            "Ruff complexity diagnostics source row must contain a JSON object: row 1",
+        ),
+    ],
+)
+def test_ruff_diagnostics_source_rejects_bad_json(
+    source_text: str,
+    expected_error: str,
+) -> None:
+    module = load_module()
+
+    with pytest.raises(ValueError, match=expected_error):
+        module._parse_ruff_diagnostics(source_text)
 
 
 def test_ratchet_rejects_new_complexity_violation() -> None:

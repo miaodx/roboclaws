@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Python quality ratchet baseline reads and Ruff JSON diagnostics
+now fail through labelled source-reader diagnostics instead of raw
+`json.loads` / type errors from the gate itself. Malformed or non-object
+`python_quality_baseline.json` sources return clean `python-quality-ratchet:`
+CLI failures, and malformed, non-array, or non-object Ruff JSON output fails
+before comparison logic can derive ratchet confidence from a wrong-shaped
+diagnostic source. Focused proof passed: python-quality-ratchet unit tests,
+touched-file ruff, touched-file format check, direct ratchet summary command,
+changed-code cleanup review, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
 2026-06-21: Model-matrix OpenAI Chat stream `data:` events now fail aloud on
 malformed or parseable non-object JSON instead of being silently skipped before
 a later valid event can make the stream trial look healthy. Blank lines, SSE
@@ -527,7 +539,11 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the model-matrix stream source slice. Avoid reopening
+committing the python-quality-ratchet source slice. Avoid reopening
+python-quality-ratchet baseline or Ruff diagnostics source parsing unless
+fresh gate evidence shows malformed baseline JSON or wrong-shaped Ruff JSON can
+again produce raw tracebacks or valid-looking ratchet confidence.
+Avoid reopening
 model-matrix OpenAI Chat stream event parsing unless fresh provider-benchmark
 evidence shows malformed or non-object structured `data:` events can again
 produce a valid-looking stream PASS row.
@@ -758,6 +774,8 @@ diagnostics.
 - `scripts/dev/benchmark_model_matrix.py`
 - `tests/unit/providers/test_model_matrix_benchmark.py`
 - `scripts/dev/model_matrix_benchmark_wire.py`
+- `scripts/dev/check_python_quality_ratchet.py`
+- `tests/unit/scripts/test_python_quality_ratchet.py`
 - `scripts/openclaw/tail-openclaw-chat.py`
 - `tests/contract/openclaw/test_tail_openclaw_chat.py`
 - `tests/unit/core/test_json_sources.py`

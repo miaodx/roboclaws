@@ -133,6 +133,23 @@ logs before choosing the next slice.
   malformed/non-object structured stream events or corrupt OpenAI Chat stream
   `data:` rows can again produce valid-looking benchmark PASS rows.
 
+- 2026-06-21: Python quality ratchet baseline reads and Ruff JSON diagnostics
+  now fail through labelled source-reader diagnostics instead of raw
+  `json.loads` / type errors from the gate itself. Malformed or non-object
+  `python_quality_baseline.json` sources return clean `python-quality-ratchet:`
+  CLI failures, and malformed, non-array, or non-object Ruff JSON output fails
+  before comparison logic can derive ratchet confidence from a wrong-shaped
+  diagnostic source. Owner layer: Harness recipes / dev quality gate.
+  Behavior-change class: internal gate source-reader hardening with fail-aloud
+  diagnostics for explicit baseline and tool-output JSON sources. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused python-quality-ratchet unit
+  tests, touched-file ruff/format checks, direct ratchet summary command,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/check_python_quality_ratchet.py` regains raw baseline or Ruff
+  diagnostics JSON parsing that can produce tracebacks or valid-looking
+  ratchet confidence from malformed/wrong-shaped source data.
+
 - 2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
   shared JSON-object text helper instead of local `json.loads` / type checks.
   Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now

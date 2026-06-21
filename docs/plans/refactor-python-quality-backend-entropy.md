@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the python-quality-ratchet source slice:
+  ratchet baseline reads and Ruff JSON diagnostics now fail through labelled
+  source-reader diagnostics instead of raw `json.loads` / type errors from the
+  gate itself, so malformed or wrong-shaped gate inputs cannot produce raw
+  tracebacks or valid-looking ratchet confidence.
 - Current shared-checkout note after the model-matrix stream source slice:
   OpenAI Chat streaming `data:` events now fail malformed or parseable
   non-object JSON as source-labelled trial failures instead of silently
