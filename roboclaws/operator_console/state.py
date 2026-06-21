@@ -108,7 +108,7 @@ def derive_operator_state(
         *trace_source_errors,
     )
     latest_trace = _last_robot_tool_jsonl(trace_rows) or _last_jsonl(trace_rows)
-    camera_state = _camera_angle_summary(trace_path)
+    camera_state = _camera_angle_summary(trace_rows)
     phase = str(
         live_status.get("phase")
         or launch_failure.get("phase")
@@ -440,8 +440,8 @@ def _last_robot_tool_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
-def _camera_angle_summary(path: Path) -> dict[str, Any]:
-    return camera_angle_summary(path)
+def _camera_angle_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return camera_angle_summary(rows)
 
 
 def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:

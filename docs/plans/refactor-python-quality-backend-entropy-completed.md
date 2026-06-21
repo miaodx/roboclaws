@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console camera-angle state now derives from the
+  validated trace JSONL rows already collected by `state.py` instead of
+  re-reading `trace.jsonl` through a private `read_text`/`json.loads` loop in
+  `state_summary.py`. Malformed trace rows keep the existing operator-visible
+  Trace source errors, while camera summary state is computed from the same
+  valid row set used by latest-action state. Owner layer: Thin Runtime /
+  Server Adapter. Behavior-change class: internal duplicate source-reader
+  removal and source-owner consolidation with existing fail-aloud trace
+  diagnostics preserved. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  operator-console state tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/state_summary.py` regains direct trace file
+  reading or raw JSONL parsing for camera state, or if camera state can again
+  silently disagree with operator-console Trace source errors.
+
 - 2026-06-21: Visual-grounding HTTP sidecar request bodies and client response
   bodies now route through the shared JSON-object text helper instead of local
   `json.loads`. Malformed, non-UTF-8, or parseable non-object request bodies

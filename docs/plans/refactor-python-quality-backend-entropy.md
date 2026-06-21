@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the operator-console camera state source
+  slice: camera-angle summary now consumes the validated trace JSONL row set
+  already collected by operator-console state instead of re-reading
+  `trace.jsonl` through a private raw JSON loop, so malformed trace rows keep
+  the canonical Trace source-error surface while camera state and latest-action
+  evidence share one source owner.
 - Current shared-checkout note after the visual-grounding HTTP source slice:
   sidecar request bodies and client response bodies now reuse the shared
   JSON-object text helper instead of local `json.loads`, so malformed,
