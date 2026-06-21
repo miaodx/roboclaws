@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI-compatible MiMo tool-call argument parsing now recovers
+  malformed or parseable non-object model output through the shared provider
+  fallback decision instead of raising from `json.loads` before a direct
+  provider run can choose a safe action. Valid tool-call dictionaries still
+  use the existing action/reasoning validator, missing tool-call reasoning can
+  still fall back to `reasoning_content`, and invalid declared actions still
+  map to the safe fallback action. Owner layer: Agent Engines And Provider
+  Profiles. Behavior-change class: robust model-output parsing with safe
+  recovery for direct OpenAI-compatible VLM providers. Metric: ratchet remains
+  at 0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused provider VLM tests plus Nvidia provider
+  tests, touched-file ruff/format checks, dependency sync, changed-code
+  cleanup review, `git diff --check`, and ratchet. Reopen only if
+  `_parse_mimo_message()` can again crash on malformed or non-object tool-call
+  arguments instead of returning the provider fallback action.
+
 - 2026-06-21: RAW-FPV visual-labeler Responses API success and error bodies
   now route through a UTF-8 check plus the shared JSON-object text helper
   instead of raw `json.loads`. Malformed, non-UTF-8, or parseable non-object

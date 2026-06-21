@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MiMo tool-call argument recovery
+  slice: OpenAI-compatible direct provider parsing now routes malformed or
+  parseable non-object tool-call arguments through the shared provider
+  fallback decision instead of raising from `json.loads`, while valid
+  dictionaries keep the existing action/reasoning validation and
+  `reasoning_content` fallback.
 - Current shared-checkout note after the RAW-FPV visual-labeler provider HTTP
   source slice: provider Responses API success and error bodies now route
   through a UTF-8 check plus the shared JSON-object text helper, so malformed,

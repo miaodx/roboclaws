@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: OpenAI-compatible MiMo tool-call argument parsing now recovers
+malformed or parseable non-object model output through the shared provider
+fallback decision instead of raising from `json.loads` before direct provider
+runs can choose a safe action. Valid tool-call dictionaries still use the
+existing action/reasoning validator, missing tool-call reasoning can still
+fall back to `reasoning_content`, and invalid declared actions still map to
+the safe fallback action. Focused proof passed: provider VLM tests plus Nvidia
+provider tests, touched-file ruff, touched-file format check, dependency sync,
+changed-code cleanup review, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
 2026-06-21: RAW-FPV visual-labeler Responses API success and error bodies now
 route through the shared JSON-object text helper after a UTF-8 source check.
 Malformed, non-UTF-8, or parseable non-object provider HTTP success bodies now
