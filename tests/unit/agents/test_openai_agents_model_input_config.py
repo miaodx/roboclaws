@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 from argparse import Namespace
 from pathlib import Path
 
 import pytest
 
-from roboclaws.agents.drivers.openai_agents_model_input import _input_compaction_config
+from roboclaws.agents.drivers.openai_agents_model_input import (
+    _compact_model_input_items,
+    _input_compaction_config,
+)
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from scripts.molmo_cleanup.openai_agents_perf_profile import resolve_agent_sdk_perf_profile
 
@@ -126,3 +130,192 @@ def test_perf_profile_rejects_invalid_compaction_min_chars(
         resolve_agent_sdk_perf_profile(
             _perf_profile_args(model_input_compaction_min_chars=direct_value)
         )
+
+
+def test_model_input_camera_history_fails_aloud_on_malformed_mcp_text_content() -> None:
+    items = [
+        {
+            "type": "mcp_call",
+            "id": "mcp_1",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": {"content": [{"type": "text", "text": '{"ok": true'}]},
+            "status": "completed",
+        }
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents model-input camera-grounded output text content "
+            "source must contain valid JSON object"
+        ),
+    ):
+        _compact_model_input_items(
+            items,
+            min_chars=999_999,
+            public_tool_output_summary=False,
+            repeated_metric_map_delta=False,
+            camera_grounded_history={
+                "enabled": True,
+                "mode": "retain_latest_actionable_outputs",
+                "retained_recent_outputs": 1,
+            },
+        )
+
+
+def test_model_input_camera_history_fails_aloud_on_non_object_json_mcp_output() -> None:
+    items = [
+        {
+            "type": "mcp_call",
+            "id": "mcp_1",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": json.dumps([{"ok": True}]),
+            "status": "completed",
+        }
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents model-input camera-grounded output source must contain a JSON object"
+        ),
+    ):
+        _compact_model_input_items(
+            items,
+            min_chars=999_999,
+            public_tool_output_summary=False,
+            repeated_metric_map_delta=False,
+            camera_grounded_history={
+                "enabled": True,
+                "mode": "retain_latest_actionable_outputs",
+                "retained_recent_outputs": 1,
+            },
+        )
+
+
+def test_model_input_camera_history_fails_aloud_on_double_encoded_non_object_output() -> None:
+    items = [
+        {
+            "type": "mcp_call",
+            "id": "mcp_1",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": json.dumps(json.dumps([{"ok": True}])),
+            "status": "completed",
+        }
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents model-input camera-grounded output source must contain a JSON object"
+        ),
+    ):
+        _compact_model_input_items(
+            items,
+            min_chars=999_999,
+            public_tool_output_summary=False,
+            repeated_metric_map_delta=False,
+            camera_grounded_history={
+                "enabled": True,
+                "mode": "retain_latest_actionable_outputs",
+                "retained_recent_outputs": 1,
+            },
+        )
+
+
+def test_model_input_camera_history_accepts_double_encoded_mcp_text_wrapper() -> None:
+    output = json.dumps(
+        {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "ok": True,
+                            "tool": "observe_camera_grounded_candidates",
+                            "observation_id": "raw_fpv_001",
+                            "camera_model_candidates": [
+                                {
+                                    "object_id": "cup_1",
+                                    "actionability_status": "actionable",
+                                    "large_public_camera_payload": "x" * 5000,
+                                }
+                            ],
+                        }
+                    ),
+                }
+            ]
+        }
+    )
+    items = [
+        {
+            "type": "mcp_call",
+            "id": f"mcp_{idx}",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": json.dumps(output),
+            "status": "completed",
+        }
+        for idx in range(1, 3)
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        camera_grounded_history={
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 1,
+        },
+    )
+
+    replacement = json.loads(filtered[0]["output"])
+    assert replacement["schema"] == "roboclaws_camera_grounded_history_summary_v1"
+    assert replacement["observation_id"] == "raw_fpv_001"
+    assert replacement["candidate_count"] == 1
+    assert replacement["actionable_candidate_count"] == 1
+    assert metrics["camera_grounded_history_compacted_count"] == 1
+    assert metrics["camera_grounded_history_retained_count"] == 1
+
+
+def test_model_input_camera_history_still_tolerates_plaintext_mcp_output() -> None:
+    items = [
+        {
+            "type": "mcp_call",
+            "id": f"mcp_{idx}",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": "MCP tool output body unavailable in structured JSON. " + ("x" * 5000),
+            "status": "completed",
+        }
+        for idx in range(1, 3)
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        camera_grounded_history={
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 1,
+        },
+    )
+
+    first_replacement = json.loads(filtered[0]["output"])
+    assert first_replacement["schema"] == "roboclaws_camera_grounded_history_summary_v1"
+    assert first_replacement["candidate_count"] == 0
+    assert metrics["camera_grounded_history_item_count"] == 2
+    assert metrics["camera_grounded_history_retained_count"] == 1
+    assert metrics["camera_grounded_history_compacted_count"] == 1

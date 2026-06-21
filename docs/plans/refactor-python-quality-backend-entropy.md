@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents model-input
+  camera-grounded output source slice: camera-grounded history compaction now
+  treats JSON-looking MCP tool-output text wrappers as structured sources.
+  Malformed, non-object, or double-encoded non-object structured camera output
+  fails with source-labelled diagnostics before compaction can summarize it as
+  a plausible zero-candidate camera-grounded result. Plaintext unavailable-body
+  messages remain the explicit tolerated fallback.
 - Current shared-checkout note after the mify image probe HTTP source slice:
   `scripts/dev/probe_mify_v25_image.py` remains stdlib-only but now validates
   provider HTTP success bodies with a script-local JSON-object source parser

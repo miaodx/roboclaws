@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents SDK model-input camera-grounded history
+  compaction now treats JSON-looking MCP output text wrappers as structured
+  sources. Malformed text content, top-level non-object JSON, and
+  double-encoded non-object structured camera output fail with source-labelled
+  diagnostics before compaction can turn corrupt camera evidence into a
+  plausible zero-candidate summary; explicit plaintext unavailable-body output
+  remains tolerated. Owner layer: Agent Engines And Provider Profiles /
+  OpenAI Agents SDK model-input compaction. Behavior-change class:
+  fail-aloud source validation for model-facing compaction evidence. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout; `openai_agents_model_input.py` is now
+  1043 lines. Proof: focused OpenAI Agents model-input config/source tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `openai_agents_model_input.py` again lets malformed or non-object
+  JSON-looking camera-grounded MCP output feed camera-history summaries, or
+  stops preserving plaintext unavailable-body output as an explicit fallback.
+
 - 2026-06-21: The stdlib-only mify MiMo v2.5 image probe now validates
   provider HTTP success bodies with a script-local JSON-object source parser
   before extracting chat/responses output. Malformed or parseable non-object

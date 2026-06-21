@@ -17,6 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: OpenAI Agents SDK model-input camera-grounded history compaction
+now treats JSON-looking MCP tool-output text wrappers as structured sources.
+Malformed text content, top-level non-object JSON, and double-encoded
+non-object structured camera output fail with source-labelled diagnostics
+before compaction can summarize corrupt camera evidence as a plausible
+zero-candidate camera-grounded result; explicit plaintext unavailable-body
+output remains tolerated. Focused proof passed: OpenAI Agents model-input
+config/source tests, touched-file ruff, touched-file format check, dependency
+sync, changed-code cleanup review, diff check, and ratchet summary. Current
+ratchet before final slice closeout: 0 Ruff complexity violations, 80
+oversized modules in the shared checkout.
+
 2026-06-21: The stdlib-only mify MiMo v2.5 image probe now validates provider
 HTTP success bodies with a script-local JSON-object source parser before
 extracting chat/responses output. Malformed or parseable non-object 200 bodies
@@ -640,8 +652,13 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the OpenAI Agents SDK operator-console readiness parity slice. Avoid
-reopening OpenAI Agents SDK console readiness provider/model source parity
+committing the OpenAI Agents SDK model-input camera-grounded output source
+slice. Avoid reopening OpenAI Agents SDK model-input camera-grounded MCP
+output parsing unless fresh model-input compaction evidence shows malformed or
+non-object JSON-looking camera-grounded tool output can again feed a plausible
+camera-history summary, or plaintext unavailable-body output is no longer
+preserved as the explicit fallback.
+Avoid reopening OpenAI Agents SDK console readiness provider/model source parity
 unless fresh console or live-launch evidence shows unknown, conflicting, or
 route-incompatible SDK model/provider settings can again produce
 ready-looking operator-console state before runtime failure.
