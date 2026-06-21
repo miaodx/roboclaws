@@ -9,8 +9,6 @@ import pytest
 
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import (
-    DEFAULT_AGIBOT_CONFIDENCE_LAYER,
-    DEFAULT_AGIBOT_CONTEXT_JSON,
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
 from roboclaws.household.isaac_lab_backend import (
@@ -41,11 +39,10 @@ CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_
 AGIBOT_SEMANTIC_ACTIONS_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_agibot_robot_map_9_semantic_actions.py"
 )
-PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
 ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 ROBOT_MAP_12_ARTIFACT = DEFAULT_AGIBOT_MAP_ARTIFACT_DIR
-ROBOT_MAP_12_CONTEXT = DEFAULT_AGIBOT_CONTEXT_JSON
 
 
 def _require_robot_map_9_artifact() -> None:
@@ -54,14 +51,6 @@ def _require_robot_map_9_artifact() -> None:
         or (ROBOT_MAP_9_ARTIFACT / "agibot" / "source.json").is_file()
     ):
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
-
-
-def _require_robot_map_12_artifact() -> None:
-    if not (
-        (ROBOT_MAP_12_ARTIFACT / "source.json").is_file()
-        or (ROBOT_MAP_12_ARTIFACT / "agibot" / "source.json").is_file()
-    ):
-        pytest.skip("Agibot robot_map_12 artifact is unavailable in this checkout")
 
 
 def _load_demo_module():
@@ -149,7 +138,7 @@ def _assert_cleanup_result_contract(
     assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
     assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(PREBUILT_BUNDLE)
     assert run_result["agent_view"]["metric_map"]["map_bundle"]["environment_id"] == (
-        "molmo-cleanup-default-7"
+        "molmospaces-procthor-10k-val-0"
     )
     assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
     assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
@@ -216,7 +205,7 @@ def test_realworld_cleanup_demo_writes_open_ended_goal_status(
     assert result["cleanup_status_role"] == "advisory"
 
 
-def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
+def test_realworld_cleanup_product_gate_rejects_legacy_agibot_robot_map_9_bundle(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()
@@ -228,89 +217,28 @@ def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
         bundle_dir=bundle_dir,
     )
 
-    result = demo.run_realworld_cleanup(
-        output_dir=tmp_path / "run",
-        seed=7,
-        map_bundle_dir=bundle_dir,
-        require_map_bundle=True,
-        generated_mess_count=5,
-    )
-
-    run_dir = tmp_path / "run"
-    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
-    trace_lines = (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
-    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
-
-    assert result["cleanup_status"] == "success"
-    assert run_result["agent_view"]["metric_map"]["map_bundle"]["environment_id"] == (
-        "agibot-robot-map-9"
-    )
-    assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(bundle_dir)
-    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
-    assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
-    assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
-    assert (run_dir / "map_bundle" / "preview.png").is_file()
-    assert not (run_dir / "map_bundle" / "report_static_navigation_map.png").exists()
-    assert "agibot-robot-map-9" in report_text
-    assert "Nav2 Map Bundle" in report_text
-    assert any('"tool": "navigate_to_waypoint"' in line for line in trace_lines)
-    assert any('"route_validation"' in line and '"ok": true' in line for line in trace_lines)
+    with pytest.raises(ValueError, match="invalid Base Navigation Map v1 bundle"):
+        demo.run_realworld_cleanup(
+            output_dir=tmp_path / "run",
+            seed=7,
+            map_bundle_dir=bundle_dir,
+            require_map_bundle=True,
+            generated_mess_count=5,
+        )
 
 
-def test_agibot_semantic_actions_rehearsal_defaults_to_robot_map_12(tmp_path: Path) -> None:
-    _require_robot_map_12_artifact()
-    rehearsal = _load_agibot_semantic_actions_module()
-
-    result = rehearsal.run_agibot_robot_map_9_semantic_actions(
-        run_dir=tmp_path / "run",
-    )
-
-    run_dir = tmp_path / "run"
-    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
-    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
-    layer = run_result["agibot_robot_map_9_semantic_actions"]
-
-    assert result["confidence_layer"] == DEFAULT_AGIBOT_CONFIDENCE_LAYER
-    assert run_result["report_title"] == DEFAULT_AGIBOT_CONFIDENCE_LAYER
-    assert run_result["backend"] == "api_semantic_synthetic"
-    assert run_result["primitive_provenance"] == "api_semantic"
-    assert run_result["semantic_substeps"]
-    assert layer["semantic_substep_count"] == len(run_result["semantic_substeps"])
-    assert layer["agibot_map_artifact_dir"] == str(ROBOT_MAP_12_ARTIFACT)
-    assert layer["context_json"] == str(ROBOT_MAP_12_CONTEXT)
-    assert layer["map_environment_id"] == "agibot-robot-map-12"
-    assert layer["map_source_provenance"] == "agibot_gdk_map_artifact"
-    assert layer["physical_robot"] is False
-    assert layer["sdk_runner_execution"] is False
-    assert layer["gdk_navigation_executed"] is False
-    assert layer["molmospaces_contract_rehearsal"] is False
-    assert run_result["next_confidence_layer"] == "MolmoSpaces Agibot Contract Rehearsal"
-    assert "agibot_gdk_normal_navi" not in json.dumps(run_result)
-    assert DEFAULT_AGIBOT_CONFIDENCE_LAYER in report_text
-    assert "Next confidence layer: MolmoSpaces Agibot Contract Rehearsal" in report_text
-    assert "Semantic Substeps" in report_text
-    assert "No semantic cleanup actions recorded" not in report_text
-    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
-
-
-def test_agibot_semantic_actions_rehearsal_accepts_robot_map_9_override(
+def test_agibot_semantic_actions_rehearsal_uses_legacy_rich_bundle_and_is_not_product_runtime(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()
     rehearsal = _load_agibot_semantic_actions_module()
 
-    result = rehearsal.run_agibot_robot_map_9_semantic_actions(
-        run_dir=tmp_path / "run",
-        context_json=ROBOT_MAP_9_CONTEXT,
-        agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
-    )
-
-    run_result = json.loads((tmp_path / "run" / "run_result.json").read_text(encoding="utf-8"))
-    layer = run_result["agibot_robot_map_9_semantic_actions"]
-
-    assert result["cleanup_status"] == "success"
-    assert layer["agibot_map_artifact_dir"] == str(ROBOT_MAP_9_ARTIFACT)
-    assert layer["map_environment_id"] == "agibot-robot-map-9"
+    with pytest.raises(ValueError, match="invalid Base Navigation Map v1 bundle"):
+        rehearsal.run_agibot_robot_map_9_semantic_actions(
+            run_dir=tmp_path / "run",
+            context_json=ROBOT_MAP_9_CONTEXT,
+            agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
+        )
 
 
 def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: Path) -> None:
@@ -337,7 +265,7 @@ def test_realworld_cleanup_live_bundle_gate_rejects_invalid_bundle(tmp_path: Pat
             require_map_bundle=True,
         )
     except ValueError as exc:
-        assert "invalid Nav2 map bundle" in str(exc)
+        assert "invalid Base Navigation Map v1 bundle" in str(exc)
     else:  # pragma: no cover - assertion branch
         raise AssertionError("expected invalid selected bundle to fail before cleanup")
 
@@ -477,7 +405,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         record_robot_views=True,
         generated_mess_count=1,
         evidence_lane="world-public-labels",
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))

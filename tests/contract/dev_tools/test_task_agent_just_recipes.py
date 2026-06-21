@@ -1247,7 +1247,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_household_cleanup_run(
         "codex",
         "world-public-labels",
-        "map_bundle=molmo-cleanup-default-7",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
     )
 
     assert route[:10] == [
@@ -1262,7 +1262,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "127.0.0.1",
         "18788",
     ]
-    assert route[10] == "molmo-cleanup-default-7"
+    assert route[10] == "assets/maps/molmospaces/procthor-10k-val/0"
 
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:

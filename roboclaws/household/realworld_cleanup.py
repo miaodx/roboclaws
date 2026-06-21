@@ -751,7 +751,11 @@ def _maybe_clean_visible_object(
     live_detection = contract.inspect_visible_object(handle)
     if live_detection.get("ok") and isinstance(live_detection.get("detection"), dict):
         detection = dict(live_detection["detection"])
-    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
+    target_fixture = contract.target_fixture_for_detection(
+        detection,
+        static_fixture_projection,
+        include_runtime_backend_fixtures=True,
+    )
     if target_fixture is None:
         agent_scratchpad["failed_attempts"].append(
             {"object_id": handle, "reason": "no_public_fixture_match"}
@@ -911,7 +915,11 @@ def _confirm_visual_scan_candidate(
         )
         return None, view_index
     detection = dict(confirmed)
-    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
+    target_fixture = contract.target_fixture_for_detection(
+        detection,
+        static_fixture_projection,
+        include_runtime_backend_fixtures=True,
+    )
     if target_fixture is None:
         agent_scratchpad["failed_attempts"].append(
             {"object_id": handle, "reason": "no_public_fixture_match_after_visual_scan"}

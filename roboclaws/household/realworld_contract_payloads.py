@@ -559,6 +559,7 @@ def cleanup_worklist_payload(
             contract,
             detection,
             public_fixtures,
+            include_runtime_backend_fixtures=True,
         )
         candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
         source_fixture_id = str(support.get("fixture_id") or "")

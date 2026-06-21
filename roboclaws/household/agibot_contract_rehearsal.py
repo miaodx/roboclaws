@@ -1216,7 +1216,11 @@ def _cleanup_action_target(
     waypoint_id: str,
 ) -> dict[str, Any] | None:
     handle = str(detection.get("object_id") or "")
-    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
+    target_fixture = contract.target_fixture_for_detection(
+        detection,
+        static_fixture_projection,
+        include_runtime_backend_fixtures=True,
+    )
     if target_fixture is None:
         return None
     target_fixture_id = str(target_fixture.get("fixture_id") or "")

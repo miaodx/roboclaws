@@ -56,7 +56,7 @@ def _open_ended_goal_contract(prompt: str):
 
 
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
-PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def make_molmo_realworld_cleanup_mcp(*args: Any, **kwargs: Any) -> Any:
@@ -340,7 +340,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
-    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
+    assert metric_map["map_bundle"]["environment_id"] == "molmospaces-procthor-10k-val-0"
     assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
     assert observation["visible_object_detections"]
@@ -1151,7 +1151,15 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
         assert server.call_tool("pick", object_id=candidate["object_id"])["ok"] is True
         fixture_id = candidate["candidate_fixture_id"]
         assert server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)["ok"] is True
-        assert server.call_tool("place_inside", fixture_id=fixture_id)["ok"] is True
+        placed = server.call_tool("place_inside", fixture_id=fixture_id)
+        if (
+            not placed.get("ok")
+            and placed.get("error_reason") == "semantic_order"
+            and placed.get("required_tool") == "open_receptacle"
+        ):
+            assert server.call_tool("open_receptacle", fixture_id=fixture_id)["ok"] is True
+            placed = server.call_tool("place_inside", fixture_id=fixture_id)
+        assert placed["ok"] is True
         observation_blocks = server._mcp_observe_response()
     finally:
         server.close()

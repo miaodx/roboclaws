@@ -452,7 +452,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     esac
     if [[ "$profile" != "smoke" && "$map_bundle_dir" =~ ^(none|false|off)$ ]]; then
       echo "error: ${task_surface}/${task_intent} on backend '${backend:-auto}' requires a selected prebuilt Nav2 map bundle; map_bundle=${map_bundle_dir} is not allowed" >&2
-      echo "hint: generate the canonical scene bundle with scripts/maps/export_bundle.py --molmospaces-scene-source ${scene_source} --molmospaces-scene-index ${scene_index}" >&2
+      echo "hint: generate the canonical scene bundle with scripts/maps/generate_molmospaces_scene_bundles.py --scene ${scene_source}/${scene_index} --force" >&2
       exit 1
     fi
     if [[ -n "$map_bundle_dir" && "$map_bundle_dir" != */* && -d "assets/maps/${map_bundle_dir}" ]]; then
@@ -504,7 +504,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     if [[ "$profile" != "smoke" ]]; then
       if [[ -z "$map_bundle_dir" ]]; then
         echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
-        echo "hint: generate the canonical scene bundle with scripts/maps/export_bundle.py --molmospaces-scene-source ${scene_source} --molmospaces-scene-index ${scene_index}" >&2
+        echo "hint: generate the canonical scene bundle with scripts/maps/generate_molmospaces_scene_bundles.py --scene ${scene_source}/${scene_index} --force" >&2
         exit 1
       else
         map_bundle_args+=(--require-map-bundle)

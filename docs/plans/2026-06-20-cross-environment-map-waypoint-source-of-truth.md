@@ -30,7 +30,7 @@ Implementation progress:
 
 - Checkpoint 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
   B1 / Map 12 generated bundles now pass the strict Base Navigation Map v1
-  validator, current MolmoSpaces bundles expose explicit known gaps, and
+  validator, active MolmoSpaces sampler bundles pass the same strict validator, and
   targeted negative tests cover missing labels/categories, empty waypoints,
   malformed area bindings, and forbidden fixture/object waypoint fields.
 - Checkpoint 2 is implemented by the shared area-based
@@ -40,9 +40,10 @@ Implementation progress:
   truth inputs.
 - Checkpoints 3-5 are implemented by the MolmoSpaces preparation split, product
   Agent View snapshot fallback removal, and runtime consumption cleanup. The
-  active MolmoSpaces scene bundle validates as Base Navigation Map v1, product
-  runtime copies the selected source bundle into run artifacts, and the
-  deterministic direct-runner route observes objects from the generated bundle.
+  active MolmoSpaces sampler bundle set validates as Base Navigation Map v1,
+  product runtime copies the selected source bundle into run artifacts, rich
+  Agent View bundle export/checking is legacy opt-in, and the deterministic
+  direct-runner route observes objects from generated bundles.
 
 This document records the implemented execution plan for reducing map and
 waypoint source-of-truth entropy across simulator, real robot, and Digital Twin
@@ -615,9 +616,11 @@ Evidence:
 - `scripts/maps/generate_molmospaces_scene_bundles.py` uses the simulator
   preparation path instead of `RealWorldCleanupContract`, `agent_view_payload()`,
   or fixture projections.
-- `assets/maps/molmospaces/procthor-10k-val/0` was regenerated as a strict
-  Base Navigation Map v1 bundle with 7 rooms, 7 base inspection waypoints, and
-  0 static landmarks.
+- The 16 active MolmoSpaces sampler bundles were regenerated as strict Base
+  Navigation Map v1 bundles. Generation manifest validation reports
+  `ok=true` for every target and `static_landmark_count=0`.
+- `assets/maps/molmospaces/procthor-10k-val/0` remains the product proof scene
+  with 7 rooms, 7 base inspection waypoints, and 0 static landmarks.
 - `tests/contract/maps/test_generate_molmospaces_scene_bundles.py` covers the
   split and validates the regenerated fixture-free contract.
 
@@ -775,6 +778,8 @@ Acceptance evidence:
   `assets/maps/molmospaces/procthor-10k-val/0`.
 - The copied `semantics.json` contains 7 rooms, 7 canonical base inspection
   waypoints, and 0 `static_landmarks`.
+- The active sampler bundle refresh generated and strict-validated 16
+  MolmoSpaces bundles with 0 static landmarks each.
 - Runtime observed object count is 5 and runtime static-map fixture count is 0.
 - Focused contract tests cover Agent View privacy, fixture-free waypoint
   validation, B1/Digital Twin map consumers, and selected-bundle product

@@ -286,6 +286,7 @@ class RealWorldCleanupContract:
             str(item["fixture_id"]): dict(item)
             for item in realworld_runtime_map_targets.public_runtime_fixture_candidates(
                 self,
+                include_runtime_backend_fixtures=True,
                 assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
             )
         }
@@ -1183,11 +1184,14 @@ class RealWorldCleanupContract:
         self,
         detection: dict[str, Any],
         static_fixture_projection: dict[str, Any],
+        *,
+        include_runtime_backend_fixtures: bool = False,
     ) -> dict[str, Any] | None:
         return realworld_runtime_map_targets.target_fixture_for_detection(
             self,
             detection,
             static_fixture_projection,
+            include_runtime_backend_fixtures=include_runtime_backend_fixtures,
         )
 
     def attach_raw_fpv_observation_artifact(
@@ -1332,7 +1336,11 @@ class RealWorldCleanupContract:
         )
 
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]:
-        candidate = self.target_fixture_for_detection(detection, self.static_fixture_projection())
+        candidate = self.target_fixture_for_detection(
+            detection,
+            self.static_fixture_projection(),
+            include_runtime_backend_fixtures=True,
+        )
         if candidate is None:
             return {
                 "candidate_fixture_id": "",

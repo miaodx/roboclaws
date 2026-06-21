@@ -24,7 +24,6 @@ from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
-PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
@@ -327,21 +326,40 @@ def test_nav2_validation_rejects_waypoint_frame_drift(tmp_path: Path) -> None:
     )
 
 
-def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
+def test_legacy_agent_view_exporter_requires_explicit_opt_in(tmp_path: Path) -> None:
+    exporter = _load_module(EXPORTER_PATH, "export_bundle")
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="legacy Agent View exporter"):
+        exporter.main(["--agent-view", str(agent_view_path), "--output-dir", str(tmp_path)])
+
+
+def test_legacy_exporter_and_checker_accept_public_agent_view_with_explicit_flags(
+    tmp_path: Path,
+) -> None:
     exporter = _load_module(EXPORTER_PATH, "export_bundle")
     checker = _load_module(CHECKER_PATH, "check_bundle")
     agent_view_path = tmp_path / "agent_view.json"
     bundle_dir = tmp_path / "exported"
     agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
 
-    exporter.main(["--agent-view", str(agent_view_path), "--output-dir", str(bundle_dir)])
-    checker.main([str(bundle_dir)])
+    exporter.main(
+        [
+            "--legacy-agent-view-export",
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(bundle_dir),
+        ]
+    )
+    checker.main(["--legacy-nav2", str(bundle_dir)])
 
     assert (bundle_dir / "map.yaml").is_file()
     assert (bundle_dir / "semantics.json").is_file()
 
 
-def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> None:
+def test_legacy_exporter_writes_legacy_molmospaces_scene_bundle(tmp_path: Path) -> None:
     exporter = _load_module(EXPORTER_PATH, "export_bundle")
     checker = _load_module(CHECKER_PATH, "check_bundle")
     agent_view_path = tmp_path / "agent_view.json"
@@ -351,6 +369,7 @@ def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> N
 
     exporter.main(
         [
+            "--legacy-agent-view-export",
             "--agent-view",
             str(agent_view_path),
             "--molmospaces-scene-source",
@@ -361,7 +380,7 @@ def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> N
             str(asset_root),
         ]
     )
-    checker.main([str(bundle_dir)])
+    checker.main(["--legacy-nav2", str(bundle_dir)])
 
     assert (bundle_dir / "map.yaml").is_file()
     assert (bundle_dir / "semantics.json").is_file()
@@ -375,6 +394,7 @@ def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: P
         [
             _repo_python(),
             str(EXPORTER_PATH),
+            "--legacy-agent-view-export",
             "--agent-view",
             str(agent_view_path),
             "--output-dir",
@@ -402,6 +422,7 @@ def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
         [
             _repo_python(),
             str(EXPORTER_PATH),
+            "--legacy-agent-view-export",
             "--agent-view",
             str(agent_view_path),
             "--output-dir",
@@ -427,6 +448,7 @@ def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Pat
         [
             _repo_python(),
             str(EXPORTER_PATH),
+            "--legacy-agent-view-export",
             "--agent-view",
             str(agent_view_path),
             "--output-dir",
@@ -453,6 +475,7 @@ def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: 
         [
             _repo_python(),
             str(EXPORTER_PATH),
+            "--legacy-agent-view-export",
             "--run-result",
             str(run_result_path),
             "--output-dir",
@@ -477,6 +500,7 @@ def test_exporter_cli_reports_missing_run_result_without_traceback(tmp_path: Pat
         [
             _repo_python(),
             str(EXPORTER_PATH),
+            "--legacy-agent-view-export",
             "--run-result",
             str(run_result_path),
             "--output-dir",
@@ -508,7 +532,7 @@ def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) ->
     )
 
     assert result.returncode == 1
-    assert "nav2-map-bundle invalid" in result.stderr
+    assert "base-navigation-map-v1-bundle invalid" in result.stderr
     assert "missing required artifact: map.yaml" in result.stderr
     assert "Traceback" not in result.stderr
 
@@ -645,17 +669,27 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
-def test_realworld_contract_observes_objects_from_selected_prebuilt_bundle() -> None:
+def test_realworld_contract_rejects_legacy_rich_prebuilt_bundle() -> None:
+    legacy_bundle = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+
+    with pytest.raises(AssertionError, match="invalid Base Navigation Map v1 bundle"):
+        RealWorldCleanupContract(
+            CleanupBackendSession(build_cleanup_scenario(seed=7)),
+            map_bundle_dir=legacy_bundle,
+        )
+
+
+def test_realworld_contract_observes_objects_from_selected_base_navigation_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_bundle_dir=PREBUILT_BUNDLE,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     observation = _first_non_empty_observation(contract)
     metric_map = contract.metric_map()
-    semantics = json.loads((PREBUILT_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+    semantics = json.loads((CANONICAL_SCENE_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
 
-    assert semantics["static_landmarks"]
+    assert semantics["static_landmarks"] == []
     assert observation["visible_object_detections"]
     assert metric_map["runtime_metric_map"]["observed_objects"]
 

@@ -77,11 +77,11 @@ The cross-environment map/waypoint source-of-truth flow is implemented.
 Simulator, real robot, and Digital Twin product map paths now share strict Base
 Navigation Map v1 validation and canonical area-based base waypoints.
 MolmoSpaces product bundle generation is split away from Agent View/runtime
-projection, the active `procthor-10k-val/0` bundle validates as fixture-free
-Base Navigation Map v1, product runtime copies selected source bundles into run
-artifacts instead of authoring snapshots from Agent View, and runtime cleanup
-observed objects from the generated sim bundle. The implementation source of
-truth is
+projection, the active sampler bundle set validates as fixture-free Base
+Navigation Map v1, product runtime copies selected source bundles into run
+artifacts instead of authoring snapshots from Agent View, runtime cleanup
+observes objects from generated sim bundles, and legacy rich Agent View bundle
+exports are explicit opt-in only. The implementation source of truth is
 `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
 
 The implemented non-cleanup eval support plan is
@@ -101,10 +101,9 @@ thin review/runtime contract is
 
 ## Next Action
 
-Review the implemented
-`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`
-changes and decide whether to broaden MolmoSpaces scene-bundle regeneration
-beyond the active checked-in `procthor-10k-val/0` scene.
+Review the implemented cross-environment map/waypoint source-of-truth changes
+and keep follow-up cleanup limited to removing stale synthetic/no-bundle test
+helpers or legacy rich bundle surfaces when they are no longer needed.
 
 ## Current Blocker
 

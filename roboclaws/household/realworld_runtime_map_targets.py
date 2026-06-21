@@ -426,9 +426,11 @@ def seed_public_fixture_anchor_ids_for_waypoint(
 def public_runtime_fixture_candidates(
     contract: RuntimeMapTargetContract,
     *,
+    include_runtime_backend_fixtures: bool = False,
     assert_no_forbidden_agent_view_keys: Any = None,
 ) -> list[dict[str, Any]]:
     candidates = []
+    seen: set[str] = set()
     for anchor in runtime_public_semantic_anchors(contract):
         if not _is_place_anchor(anchor):
             continue
@@ -471,23 +473,72 @@ def public_runtime_fixture_candidates(
         if assert_no_forbidden_agent_view_keys is not None:
             assert_no_forbidden_agent_view_keys(item)
         candidates.append(item)
+        seen.add(anchor_id)
+    if not include_runtime_backend_fixtures:
+        return candidates
+    for fixture_id in sorted(contract._fixtures):
+        fixture = contract._fixtures[fixture_id]
+        anchor_id = public_anchor_id_for_fixture(contract, fixture_id)
+        if not anchor_id or anchor_id in seen:
+            continue
+        item = _public_runtime_fixture_candidate_from_fixture(
+            contract,
+            fixture_id=fixture_id,
+            fixture=fixture,
+            anchor_id=anchor_id,
+        )
+        if assert_no_forbidden_agent_view_keys is not None:
+            assert_no_forbidden_agent_view_keys(item)
+        candidates.append(item)
+        seen.add(anchor_id)
     return candidates
+
+
+def _public_runtime_fixture_candidate_from_fixture(
+    contract: RuntimeMapTargetContract,
+    *,
+    fixture_id: str,
+    fixture: dict[str, Any],
+    anchor_id: str,
+) -> dict[str, Any]:
+    waypoint_id = public_waypoint_id_for_private_fixture(contract, fixture_id)
+    waypoint = contract._waypoint_by_id(waypoint_id) or {}
+    pose = contract._waypoint_pose(waypoint)
+    category = str(fixture.get("category") or fixture.get("name") or fixture_id)
+    name = str(fixture.get("name") or category or fixture_id)
+    return {
+        "fixture_id": anchor_id,
+        "receptacle_id": anchor_id,
+        "category": category,
+        "name": name,
+        "room_id": str(waypoint.get("room_id") or fixture.get("room_id") or ""),
+        "affordances": _anchor_affordances_for_fixture(fixture),
+        "pose": {"frame_id": "map", **pose},
+        "preferred_inspection_waypoint_id": waypoint_id,
+        "preferred_manipulation_waypoint_id": waypoint_id,
+        "public_fixture_source": "runtime_backend_fixture_overlay",
+    }
 
 
 def target_fixture_for_detection(
     contract: RuntimeMapTargetContract,
     detection: dict[str, Any],
     static_fixture_projection: dict[str, Any],
+    *,
+    include_runtime_backend_fixtures: bool = False,
 ) -> dict[str, Any] | None:
     return runtime_anchor_target_fixture_for_detection(
         contract,
         detection,
+        include_runtime_backend_fixtures=include_runtime_backend_fixtures,
     )
 
 
 def resolve_runtime_anchor_target_fixture_id(
     contract: RuntimeMapTargetContract,
     category: str,
+    *,
+    include_runtime_backend_fixtures: bool = False,
 ) -> str:
     pseudo_detection = {
         "category": category,
@@ -497,6 +548,7 @@ def resolve_runtime_anchor_target_fixture_id(
     target = runtime_anchor_target_fixture_for_detection(
         contract,
         pseudo_detection,
+        include_runtime_backend_fixtures=include_runtime_backend_fixtures,
     )
     return str((target or {}).get("fixture_id") or "")
 
@@ -669,8 +721,13 @@ def best_internal_fixture_for_anchor(
 def runtime_anchor_target_fixture_for_detection(
     contract: RuntimeMapTargetContract,
     detection: dict[str, Any],
+    *,
+    include_runtime_backend_fixtures: bool = False,
 ) -> dict[str, Any] | None:
-    public_runtime_fixtures = public_runtime_fixture_candidates(contract)
+    public_runtime_fixtures = public_runtime_fixture_candidates(
+        contract,
+        include_runtime_backend_fixtures=include_runtime_backend_fixtures,
+    )
     public_hints = {
         "rooms": [
             {

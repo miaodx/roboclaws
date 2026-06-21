@@ -33,6 +33,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="agent_view.json with metric_map and static fixture artifact payload.",
     )
+    parser.add_argument(
+        "--legacy-agent-view-export",
+        action="store_true",
+        help=(
+            "Allow the legacy Agent View -> rich Nav2 bundle export path. "
+            "Product MolmoSpaces bundles must use generate_molmospaces_scene_bundles.py."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
         "--molmospaces-scene-source",
@@ -60,6 +68,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    if not args.legacy_agent_view_export:
+        raise SystemExit(
+            "export_bundle.py is a legacy Agent View exporter. Use "
+            "scripts/maps/generate_molmospaces_scene_bundles.py for product "
+            "Base Navigation Map v1 bundles, or pass --legacy-agent-view-export "
+            "for explicit legacy Nav2 export tests."
+        )
     if bool(args.run_result) == bool(args.agent_view):
         raise SystemExit("provide exactly one of --run-result or --agent-view")
     output_dir = _output_dir(args)
