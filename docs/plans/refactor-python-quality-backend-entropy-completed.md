@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Visual-grounding HTTP sidecar request bodies and client response
+  bodies now route through the shared JSON-object text helper instead of local
+  `json.loads`. Malformed, non-UTF-8, or parseable non-object request bodies
+  return source-labelled `bad_request` failure packets before adapter
+  dispatch, and wrong-shaped HTTP responses raise source-labelled
+  `VisualGroundingContractError` before benchmark prediction scoring or
+  cleanup visual evidence can derive candidates from corrupt sidecar wire data.
+  Owner layer: Thin Runtime / Server Adapter plus external visual-grounding
+  capability contract. Behavior-change class: sidecar HTTP ingress/egress
+  source-reader hardening with fail-aloud diagnostics for malformed or
+  wrong-shaped wire packets. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused visual-grounding unit tests, configurable sidecar contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/visual_grounding/serve_visual_grounding_service.py` or
+  `roboclaws/household/visual_grounding.py` regains raw HTTP JSON parsing, or
+  malformed/non-object sidecar wire packets can again reach adapter dispatch or
+  candidate consumers without source-labelled diagnostics.
+
 - 2026-06-21: OpenClaw chat transcript tailing now treats parseable non-object
   Gateway session JSONL rows as flagged invalid row evidence instead of
   raising `AttributeError` while pretty-printing the session stream. Malformed

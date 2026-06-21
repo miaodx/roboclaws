@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the visual-grounding HTTP source slice:
+  sidecar request bodies and client response bodies now reuse the shared
+  JSON-object text helper instead of local `json.loads`, so malformed,
+  non-UTF-8, or parseable non-object request/response wire packets produce
+  source-labelled sidecar/client diagnostics before adapter dispatch,
+  benchmark prediction scoring, or cleanup visual evidence can derive
+  confidence from wrong-shaped HTTP data.
 - Current shared-checkout note after the OpenClaw chat tail source slice:
   parseable non-object Gateway session JSONL rows now render as flagged invalid
   row evidence instead of crashing the host-side transcript tailer, while

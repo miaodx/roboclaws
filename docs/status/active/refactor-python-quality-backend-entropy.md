@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: OpenClaw chat transcript tailing now treats parseable non-object
+2026-06-21: Visual-grounding HTTP sidecar request bodies and client response
+bodies now route through the shared JSON-object text helper instead of local
+`json.loads`. Malformed, non-UTF-8, or parseable non-object sidecar request
+bodies return source-labelled `bad_request` failure packets before adapter
+dispatch, and wrong-shaped HTTP response bodies fail as
+`VisualGroundingContractError` source evidence before benchmark or cleanup
+consumers can derive candidates from corrupt sidecar wire data. Focused proof
+passed: visual-grounding unit and sidecar contract tests, touched-file ruff,
+touched-file format check, dependency sync, changed-code cleanup review, diff
+check, and ratchet. Current ratchet before final slice closeout: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: OpenClaw chat transcript tailing now treats parseable non-object
 session rows as flagged invalid row evidence instead of raising `AttributeError`
 while pretty-printing the Gateway session JSONL stream. Malformed JSON keeps
 the existing `?? invalid json` output, while non-object JSON now prints
