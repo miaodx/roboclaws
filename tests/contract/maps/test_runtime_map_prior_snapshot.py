@@ -26,6 +26,7 @@ from roboclaws.maps.spatial_contract import source_frame_spatial_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
+CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_agibot_navigation_memory.py"
 NAV2_BUNDLE_CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_nav2_cleanup_bundle.py"
 FORBIDDEN_PRIVATE_KEYS = {
@@ -609,7 +610,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
         output_dir=tmp_path / "cleanup",
         seed=7,
         runtime_map_prior_path=prior_path,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     prior_rows = [

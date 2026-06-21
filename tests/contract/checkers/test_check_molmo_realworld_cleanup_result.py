@@ -3515,6 +3515,34 @@ def test_checker_allows_weak_fpv_when_verify_view_is_grounded(tmp_path: Path) ->
     )
 
 
+def test_checker_allows_weak_place_view_when_surface_evidence_is_grounded(
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    checker._assert_focused_robot_step(
+        {
+            "action": "place observed_001",
+            "semantic_phase": "place",
+            "focus": {
+                "has_focus": True,
+                "object_id": "observed_001",
+                "object_location_relation": "on",
+                "receptacle_id": "table_01",
+                "fpv_visibility": {
+                    "status": "weak_object_visibility",
+                    "object_pixels": 0,
+                    "receptacle_pixels": 100,
+                },
+                "visibility": {
+                    "status": "weak_object_visibility",
+                    "object_pixels": 0,
+                    "receptacle_pixels": 100,
+                },
+            },
+        }
+    )
+
+
 def test_checker_allows_segmentation_unavailable_focused_surface_action(tmp_path: Path) -> None:
     smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

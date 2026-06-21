@@ -166,9 +166,18 @@ def _init_bundle_map_projection(target: Any) -> None:
     target._fixtures = realworld_contract_projection._fixtures_from_bundle_static_landmarks(
         target._bundle_static_landmarks_template
     )
+    if not target._fixtures:
+        target._fixtures = realworld_contract_projection._fixtures_from_runtime_scenario(
+            target.scenario,
+            waypoints=target._bundle_metric_map_template.get("inspection_waypoints") or [],
+        )
     target._rooms = realworld_contract_projection._rooms_from_bundle_projection(
         target._bundle_metric_map_template,
         target._bundle_static_landmarks_template,
+    )
+    realworld_contract_projection._attach_runtime_fixture_ids_to_rooms(
+        target._rooms,
+        target._fixtures,
     )
     target._waypoints = realworld_contract_projection._inspection_waypoints_from_bundle_projection(
         target._bundle_metric_map_template,

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import (
@@ -107,24 +108,14 @@ def test_base_navigation_map_v1_validation_accepts_b1_bundle(tmp_path: Path) -> 
     assert validation.metadata["waypoint_count"] == 5
 
 
-def test_base_navigation_map_v1_validation_reports_current_molmospaces_gaps() -> None:
+def test_base_navigation_map_v1_validation_accepts_canonical_molmospaces_bundle() -> None:
     validation = validate_base_navigation_map_v1_bundle(CANONICAL_SCENE_BUNDLE)
 
-    assert validation.ok is False
-    errors = "\n".join(validation.errors)
-    assert (
-        "semantics.json must contain base_navigation_map_contract.schema=base_navigation_map_v1"
-        in errors
-    )
-    assert "Base Navigation Map v1 must not contain static_landmarks" in errors
-    assert "semantic category 'room_area'" in errors
-    assert "Base Navigation Map waypoint generated_exploration_001 missing navigation_area_id" in (
-        errors
-    )
-    assert "Base Navigation Map waypoint generated_exploration_001 missing generation_policy" in (
-        errors
-    )
-    assert validation.metadata["base_navigation_map_v1_ready"] is False
+    assert validation.ok, validation.as_dict()
+    assert validation.metadata["base_navigation_map_schema"] == "base_navigation_map_v1"
+    assert validation.metadata["base_navigation_map_v1_ready"] is True
+    assert validation.metadata["static_landmark_count"] == 0
+    assert validation.metadata["waypoint_count"] > 0
 
 
 @pytest.mark.parametrize(
@@ -610,6 +601,16 @@ def test_nav2_bundle_writer_rejects_missing_metric_map_height(tmp_path: Path) ->
             metric_map=metric_map,
             static_landmarks=_static_landmarks(agent_view),
         )
+
+
+def test_attach_nav2_bundle_snapshot_refuses_agent_view_authoring(tmp_path: Path) -> None:
+    run_result = {"agent_view": _agent_view(), "artifacts": {}}
+
+    with pytest.raises(ValueError, match="source_bundle_dir is required"):
+        attach_nav2_map_bundle_snapshot(run_result=run_result, run_dir=tmp_path)
+
+    assert "nav2_map_bundle" not in run_result
+    assert not (tmp_path / "map_bundle").exists()
 
 
 def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:

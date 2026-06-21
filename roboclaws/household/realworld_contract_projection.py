@@ -432,6 +432,61 @@ def _fixtures_from_bundle_static_landmarks(
     return fixtures
 
 
+def _fixtures_from_runtime_scenario(
+    scenario: CleanupScenario,
+    *,
+    waypoints: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Build internal runtime fixture handles without adding them to Base Navigation Map."""
+
+    waypoint_by_room: dict[str, str] = {}
+    fallback_waypoint_id = _first_waypoint_id(waypoints)
+    for waypoint in waypoints:
+        room_id = str(waypoint.get("room_id") or "")
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if room_id and waypoint_id:
+            waypoint_by_room.setdefault(room_id, waypoint_id)
+    fixtures: dict[str, dict[str, Any]] = {}
+    for receptacle in scenario.receptacles:
+        fixture_id = str(receptacle.receptacle_id)
+        if not fixture_id:
+            continue
+        room_id = _room_id(str(receptacle.room_area or "runtime_area"))
+        preferred_waypoint_id = waypoint_by_room.get(room_id) or fallback_waypoint_id
+        fixtures[fixture_id] = {
+            "fixture_id": fixture_id,
+            "receptacle_id": fixture_id,
+            "room_id": room_id,
+            "room_area": room_id,
+            "kind": receptacle.kind,
+            "name": receptacle.name,
+            "category": str(receptacle.category or receptacle.name or fixture_id),
+            "preferred_inspection_waypoint_id": preferred_waypoint_id,
+            "preferred_manipulation_waypoint_id": preferred_waypoint_id,
+            "position_detail": "runtime_backend_fixture",
+            "public_fixture_source": "runtime_observation_backend",
+        }
+    return fixtures
+
+
+def _attach_runtime_fixture_ids_to_rooms(
+    rooms: list[dict[str, Any]],
+    fixtures: dict[str, dict[str, Any]],
+) -> None:
+    fixture_ids_by_room: dict[str, list[str]] = defaultdict(list)
+    for fixture_id, fixture in fixtures.items():
+        room_id = str(fixture.get("room_id") or "")
+        if room_id:
+            fixture_ids_by_room[room_id].append(fixture_id)
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
+        if not room_id:
+            continue
+        room["fixture_ids"] = sorted(
+            set(room.get("fixture_ids") or []) | set(fixture_ids_by_room.get(room_id, []))
+        )
+
+
 def _scene_index_public_fixture_overlay(
     *,
     backend: Any,

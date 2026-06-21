@@ -73,10 +73,16 @@ render/observation readiness, and blocked `B1_floor2_slow` default visual-route
 status through agent-visible MCP/runtime map context. Room/object semantic
 projection and public navigation extensions are follow-ups in
 `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
-The cross-environment map/waypoint source-of-truth flow has completed its first
-two checkpoints: strict Base Navigation Map v1 validation and the shared
-area-based `BaseWaypointBuilder` used by B1 / Map 12. Remaining work should
-continue as one flow, not as separate slice handoffs.
+The cross-environment map/waypoint source-of-truth flow is implemented.
+Simulator, real robot, and Digital Twin product map paths now share strict Base
+Navigation Map v1 validation and canonical area-based base waypoints.
+MolmoSpaces product bundle generation is split away from Agent View/runtime
+projection, the active `procthor-10k-val/0` bundle validates as fixture-free
+Base Navigation Map v1, product runtime copies selected source bundles into run
+artifacts instead of authoring snapshots from Agent View, and runtime cleanup
+observed objects from the generated sim bundle. The implementation source of
+truth is
+`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -95,20 +101,17 @@ thin review/runtime contract is
 
 ## Next Action
 
-Continue
-`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md` as one
-implementation flow: split MolmoSpaces source-map preparation away from Agent
-View/runtime projection, remove product Agent View snapshot fallback, clean
-runtime consumption around validated Base Navigation Map artifacts, and run the
-full verification ladder before stopping.
+Review the implemented
+`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`
+changes and decide whether to broaden MolmoSpaces scene-bundle regeneration
+beyond the active checked-in `procthor-10k-val/0` scene.
 
 ## Current Blocker
 
-No current human blocker for the approved cross-environment map/waypoint
-source-of-truth plan. Strict Base Navigation Map v1 validation and the canonical
-area-based waypoint builder are implemented; the next implementation pressure
-is completing the remaining simulator source-map preparation, Agent View
-fallback removal, and runtime contract cleanup as one flow.
+No current human blocker for the implemented cross-environment map/waypoint
+source-of-truth plan. A parked cleanup remains for older checker tests and smoke
+helpers that still assume synthetic no-bundle runs; product runtime now fails
+loudly without a selected Base Navigation Map bundle as intended.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on

@@ -94,7 +94,7 @@ def test_canonical_scene_metric_map_identity_does_not_include_seed() -> None:
     assert canonical["map_bundle"]["parameter_hash"] != "seed-specific"
 
 
-def test_generation_uses_source_map_static_fixtures_not_agent_view_projection(
+def test_generation_uses_preparation_evidence_not_agent_view_projection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,6 +102,8 @@ def test_generation_uses_source_map_static_fixtures_not_agent_view_projection(
     captured: dict[str, object] = {}
 
     class FakeSession:
+        backend = object()
+
         def close(self) -> None:
             captured["closed"] = True
 
@@ -114,51 +116,6 @@ def test_generation_uses_source_map_static_fixtures_not_agent_view_projection(
 
         def as_dict(self) -> dict[str, object]:
             return {"ok": True, "root": self.root.as_posix()}
-
-    class FakeContract:
-        def __init__(self, *_args: object, **_kwargs: object) -> None:
-            pass
-
-        def agent_view_payload(self) -> dict[str, object]:
-            return {
-                "metric_map": _minimal_metric_map(),
-                "static_fixture_projection": {
-                    "schema": "static_fixture_projection_v1",
-                    "rooms": [],
-                },
-            }
-
-        def source_map_static_fixture_projection(self) -> dict[str, object]:
-            return {
-                "schema": "static_fixture_projection_v1",
-                "rooms": [
-                    {
-                        "room_id": "room_1",
-                        "fixtures": [
-                            {
-                                "fixture_id": "sink_01",
-                                "category": "sink",
-                                "name": "sink",
-                                "room_id": "room_1",
-                                "affordances": ["place"],
-                                "footprint": {
-                                    "shape": "rectangle",
-                                    "width_m": 0.5,
-                                    "depth_m": 0.4,
-                                },
-                                "pose": {
-                                    "frame_id": "map",
-                                    "x": 0.3,
-                                    "y": 0.3,
-                                    "yaw": 0.0,
-                                },
-                                "preferred_inspection_waypoint_id": "wp_1",
-                                "preferred_manipulation_waypoint_id": "wp_1",
-                            }
-                        ],
-                    }
-                ],
-            }
 
     def fake_write_nav2_map_bundle(
         bundle_dir: Path,
@@ -176,9 +133,29 @@ def test_generation_uses_source_map_static_fixtures_not_agent_view_projection(
         }
 
     monkeypatch.setattr(generator, "build_cleanup_backend_session", lambda **_kwargs: FakeSession())
-    monkeypatch.setattr(generator, "RealWorldCleanupContract", FakeContract)
+    monkeypatch.setattr(
+        generator,
+        "_backend_state_payload",
+        lambda _session: {"scene_xml": "scene.xml", "room_outlines": [{"room_id": "room_1"}]},
+    )
+    monkeypatch.setattr(
+        generator,
+        "prepare_molmospaces_base_navigation_map",
+        lambda **kwargs: {
+            **_minimal_metric_map(),
+            "map_id": kwargs["map_id"],
+            "map_bundle": {"environment_id": kwargs["environment_id"]},
+            "base_navigation_map_contract": {"schema": "base_navigation_map_v1"},
+            "provenance": {"contains_static_fixtures": False},
+        },
+    )
     monkeypatch.setattr(generator, "write_nav2_map_bundle", fake_write_nav2_map_bundle)
     monkeypatch.setattr(generator, "validate_nav2_map_bundle", lambda path: FakeValidation(path))
+    monkeypatch.setattr(
+        generator,
+        "validate_base_navigation_map_v1_bundle",
+        lambda path: FakeValidation(path),
+    )
     monkeypatch.setattr(generator.shutil, "move", lambda source, destination: None)
 
     result = generator._generate_scene_bundle(
@@ -191,21 +168,12 @@ def test_generation_uses_source_map_static_fixtures_not_agent_view_projection(
     )
 
     assert result["validation"]["ok"] is True
+    assert result["base_navigation_validation"]["ok"] is True
     assert captured["closed"] is True
-    assert captured["static_landmarks"] == [
-        {
-            "fixture_id": "sink_01",
-            "category": "sink",
-            "name": "sink",
-            "room_id": "room_1",
-            "affordances": ["place"],
-            "footprint": {"shape": "rectangle", "width_m": 0.5, "depth_m": 0.4},
-            "pose": {"frame_id": "map", "x": 0.3, "y": 0.3, "yaw": 0.0},
-            "preferred_inspection_waypoint_id": "wp_1",
-            "preferred_manipulation_waypoint_id": "wp_1",
-            "landmark_id": "sink_01",
-        }
-    ]
+    assert captured["static_landmarks"] == []
+    metric_map = captured["metric_map"]
+    assert isinstance(metric_map, dict)
+    assert metric_map["base_navigation_map_contract"]["schema"] == "base_navigation_map_v1"
 
 
 def _minimal_metric_map() -> dict[str, object]:
