@@ -17,6 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
+2026-06-21: Kimi key validation smoke now validates the model reply as a JSON
+object through the shared JSON-object text helper and requires
+`action == "MoveAhead"` before printing that the key returns parseable JSON.
+Prefix/suffix prose, arrays, missing actions, or wrong actions now fail as
+source-labelled validation errors instead of producing a false-green key smoke.
+Focused proof passed: Kimi key smoke unit tests, touched-file ruff, touched-file
+format check, dependency sync, diff check, and ratchet summary. Current ratchet
+before final slice closeout: 0 Ruff complexity violations, 80 oversized modules
+in the shared checkout.
+
 2026-06-21: Direct `KimiCodingProvider` HTTP success bodies now parse through
 the shared JSON-object text helper before action parsing and usage accounting.
 Malformed or parseable non-object provider response bodies now fail as

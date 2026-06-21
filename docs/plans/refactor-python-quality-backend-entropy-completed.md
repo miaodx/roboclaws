@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Kimi key validation smoke now validates the model reply as a
+  JSON object through the shared JSON-object text helper and requires
+  `action == "MoveAhead"` before printing that the key returns parseable JSON.
+  Prefix/suffix prose, arrays, missing actions, or wrong actions now fail as
+  source-labelled validation errors instead of producing a false-green key
+  smoke. Owner layer: Agent Engines And Provider Profiles / dev
+  provider-health harness. Behavior-change class: fail-aloud model-output
+  validation for provider key smoke checks with SDK retry policy preserved.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused Kimi key smoke unit
+  tests, touched-file ruff/format checks, dependency sync,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/check_kimi_key.py` again claims parseable JSON from substring
+  checks, non-object replies, or wrong-action model output.
+
 - 2026-06-21: Direct `KimiCodingProvider` HTTP success bodies now parse
   through the shared JSON-object text helper before action parsing and usage
   accounting. Malformed or parseable non-object provider response bodies now

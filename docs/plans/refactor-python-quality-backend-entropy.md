@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Kimi key smoke validation slice:
+  `scripts/dev/check_kimi_key.py` now validates model output as a JSON object
+  through the shared JSON-object source helper and requires
+  `action == "MoveAhead"` before reporting that the key returns parseable JSON,
+  so prose-wrapped, non-object, missing-action, or wrong-action replies fail
+  aloud instead of creating a false-green key smoke.
 - Current shared-checkout note after the direct Kimi provider response source
   slice: `KimiCodingProvider` HTTP success bodies now parse through the shared
   JSON-object text helper before action parsing and usage accounting, so
