@@ -34,6 +34,634 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Goal-contract file loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  `--goal-contract` artifacts. This removes the launch goal reader's raw
+  `json.loads(Path(...).read_text())` path for file-backed contracts and
+  preserves file absence, malformed JSON, and parseable non-object failures as
+  path-labelled source errors before household launch/runtime consumers
+  normalize the payload. Owner layer: Runnable Surfaces And Presets, with
+  handoff into Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused launch
+  goal-contract source tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `goal_contract_from_file()` stops routing explicit goal-contract file
+  artifacts through the shared source helper or if inline goal-contract JSON
+  needs its own accepted source-diagnostic slice.
+
+- 2026-06-20: B1 semantic-anchor review packet and semantic projection CLI
+  source loading now use the shared
+  `roboclaws.core.json_sources.read_json_object` reader for review-manifest,
+  alignment-artifact, and correspondence-manifest inputs. This removes both
+  CLIs' duplicate local JSON-object readers while preserving concise CLI source
+  errors for missing, malformed, or parseable non-object artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the CLIs dropped to 220 and 235 lines, and the
+  verified-alignment test stayed at its 2000-line ceiling without growth.
+  Proof: focused B1 verified-alignment source CLI tests, core JSON-source
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only if either B1 semantic CLI regains a local JSON-object source
+  reader or stops routing explicit source artifacts through the shared source
+  helper.
+
+- 2026-06-20: Robot-camera visual parity summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for comparison,
+  visual-sample, RAW-FPV run-result, prepared-USD, calibration, paired
+  baseline/probe, and Isaac state artifacts. This removes the summarizer's
+  duplicate local JSON-object reader while preserving concise CLI source
+  errors for missing, malformed, or parseable non-object artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; `summarize_robot_camera_visual_parity.py` dropped to 1977
+  lines. Proof: focused robot-camera visual parity source tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the summarizer regains a local JSON-object source
+  reader or stops routing parity summary artifacts through the shared source
+  helper.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for Agibot
+  `source.json` and Nav2 cleanup `semantics.json` artifacts. This removes the
+  runtime prior owner's duplicate local JSON-object reader while preserving
+  fail-aloud path-labelled source errors for missing, malformed, or parseable
+  non-object artifacts under the canonical helper wording. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; `runtime_prior_snapshot.py`
+  dropped to 1162 lines. Proof: focused Runtime Map Prior contract tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if Runtime Map Prior Snapshot conversion regains a local
+  JSON-object source reader or stops routing Agibot source and Nav2 semantics
+  artifacts through the shared source helper.
+
+- 2026-06-20: B1 runtime bundle compilation now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for review-manifest,
+  alignment-artifact, navigation-artifact, and semantic-projection artifacts.
+  This removes the compiler's duplicate local JSON-object reader while
+  preserving fail-aloud path-labelled source errors for missing, malformed, or
+  parseable non-object artifacts under the canonical helper wording. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation / fail-aloud behavior preservation. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  compiler dropped to 1563 lines. Proof: focused B1 runtime bundle tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the compiler regains a local JSON-object source
+  reader or stops routing review/alignment/navigation/semantic-projection
+  artifacts through the shared source helper.
+
+- 2026-06-20: Codex cleanup apple-to-apple summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for cleanup
+  run-result and sidecar agent-view artifacts. This removes the summary
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused Codex
+  cleanup apple-to-apple summary tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if the
+  summary script regains a local JSON-object source reader or stops routing
+  run-result and agent-view artifacts through the shared source helper.
+
+- 2026-06-20: B1 map-scene alignment fitting now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  correspondence manifests. This removes the fitter's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object correspondence artifacts
+  under the canonical helper wording. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused B1 alignment fit
+  CLI tests, core JSON-source tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if the fitter regains a local
+  JSON-object source reader or stops routing correspondence artifacts through
+  the shared source helper.
+
+- 2026-06-20: Semantic map spatial-contract normalization now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for bundle
+  `semantics.json` artifacts. This removes the normalizer's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object semantics artifacts under
+  the canonical helper wording. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  behavior preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules. Proof: focused cross-environment semantic map parity
+  tests, core JSON-source tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if the normalizer regains a local
+  JSON-object source reader or stops routing bundle semantics artifacts
+  through the shared source helper.
+
+- 2026-06-20: B1 Gaussian scene topdown capture source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for hidden
+  `--camera-request` artifacts. This removes the renderer's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object camera-request artifacts
+  under the canonical helper wording. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused B1 Gaussian
+  topdown tests, core JSON-source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the renderer regains a
+  local JSON-object source reader or stops routing hidden camera-request
+  artifacts through the shared source helper.
+
+- 2026-06-20: B1 manual-anchor semantic suggestion source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for explicit
+  draft, review-manifest, and scene-diagnostic artifacts. This removes the
+  CLI's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused B1
+  manual-anchor semantic CLI tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if the CLI
+  regains a local JSON-object source reader or stops routing draft,
+  review-manifest, and scene-diagnostic artifacts through the shared source
+  helper.
+
+- 2026-06-20: B1 correspondence review source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  correspondence manifests and required scene topdown render packets. This
+  removes the renderer's duplicate local JSON-object reader while preserving
+  fail-aloud path-labelled source errors for missing, malformed, or parseable
+  non-object artifacts under the canonical helper wording. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the renderer dropped from
+  948 to 937 lines. Proof: focused B1 correspondence review tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the renderer regains a local JSON-object source
+  reader or stops routing correspondence/scene-topdown artifacts through the
+  shared source helper.
+
+- 2026-06-20: B1 waypoint pose request source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for required alignment
+  artifacts. This removes the builder's duplicate local JSON-object reader
+  while preserving fail-aloud path-labelled source errors for missing,
+  malformed, or parseable non-object alignment artifacts under the canonical
+  helper wording. The `--points` JSON-array reader stays local because the
+  shared helper intentionally covers JSON-object and JSONL sources. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation / fail-aloud behavior preservation. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  builder dropped from 359 to 348 lines. Proof: focused B1 waypoint pose
+  request tests, core JSON-source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the builder regains a local
+  JSON-object source reader for alignment artifacts or stops routing alignment
+  artifacts through the shared source helper.
+
+- 2026-06-20: B1 navigation report source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for the required
+  navigation artifact plus explicit optional readiness and waypoint pose
+  request artifacts. This removes the report renderer's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the report renderer dropped from 644 to 633 lines.
+  Proof: focused B1 navigation report tests, core JSON-source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if the report renderer regains a local JSON-object source reader or
+  stops routing navigation/readiness/waypoint request artifacts through the
+  shared source helper.
+
+- 2026-06-20: B1 digital-twin readiness source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit alignment
+  artifacts and navigation smoke artifacts. This removes the readiness
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the readiness script
+  dropped from 1335 to 1324 lines. Proof: focused B1 readiness tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the readiness script regains a local JSON-object
+  source reader or stops routing explicit alignment/navigation artifacts
+  through the shared source helper.
+
+- 2026-06-20: B1 navigation smoke source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit readiness
+  artifacts and waypoint pose request artifacts. This removes the smoke
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the navigation smoke script
+  dropped from 466 to 455 lines. Proof: focused B1 navigation smoke tests,
+  core JSON-source tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only if the smoke script regains a local JSON-object
+  source reader or stops routing explicit readiness/waypoint request artifacts
+  through the shared source helper.
+
+- 2026-06-20: B1 asset visual comparison source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  baseline/candidate navigation artifacts. This removes the comparison
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  navigation artifacts under the canonical helper wording. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the comparison script
+  dropped from 463 to 451 lines. Proof: focused B1 asset visual comparison
+  tests, core JSON-source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the comparison script
+  regains a local JSON-object source reader or stops routing explicit
+  baseline/candidate navigation artifacts through the shared source helper.
+
+- 2026-06-20: Visual-grounding benchmark run source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for declared
+  corpus and matrix JSON-object artifacts. This removes the runner's duplicate
+  local JSON-object parser while preserving no-traceback CLI behavior for
+  missing, malformed, or parseable non-object corpus/matrix inputs under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the runner stayed at 1291 lines because the parser became
+  a tiny CLI-boundary wrapper. Proof: focused visual-grounding benchmark
+  source tests, visual-grounding benchmark contract tests, core JSON-source
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only if the runner regains a local JSON parser or stops routing
+  declared corpus/matrix JSON-object artifacts through the shared source
+  helper.
+
+- 2026-06-20: Visual-grounding cleanup-run corpus source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for declared
+  cleanup `run_result.json` artifacts. This removes the corpus builder's
+  duplicate local JSON-object reader while preserving fail-aloud no-traceback
+  CLI behavior for malformed or parseable non-object run-result artifacts
+  under the canonical helper wording. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; the builder dropped from 367 to
+  359 lines. Proof: focused visual-grounding corpus-builder tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if the builder regains a local JSON-object source
+  reader or stops routing declared cleanup run-result artifacts through the
+  shared source helper.
+
+- 2026-06-20: Prepared semantic USD summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for the
+  explicit summary artifact. This removes the checker's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for malformed, missing, or parseable non-object summary artifacts under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the checker dropped from 68 to 55 lines. Proof: focused
+  prepared-summary tests, core JSON-source tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if the checker regains
+  a local JSON-object source reader or stops routing the explicit summary
+  artifact through the shared source helper.
+
+- 2026-06-20: MolmoSpaces apple-to-apple grid source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for existing
+  `apple2apple_test_grid.json` manifests and detached live `live_status.json`
+  polling. This removes the runner's duplicate local JSON-object reader while
+  preserving fail-aloud path-labelled source errors for malformed or parseable
+  non-object artifacts and preserving the small retry window for transient
+  live-status partial writes. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  behavior preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules; the grid runner dropped from 371 to 356 lines. Proof:
+  focused apple-to-apple grid tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the runner regains a local
+  JSON-object source reader or stops routing explicit JSON-object artifacts
+  through the shared source helper.
+
+- 2026-06-20: Planner-proof bundle source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for cleanup
+  `run_result.json`, declared `planner_proof_requests.json`, prior
+  `proof_bundle_run_manifest.json`, and standalone prior probe
+  `run_result.json` inputs. This removes the runner's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for malformed or parseable non-object artifacts. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the planner-proof bundle
+  runner dropped from 876 to 866 lines. Proof: focused planner-proof source
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet. Reopen only if the runner regains a local JSON-object
+  source reader or stops routing explicit JSON-object artifacts through the
+  shared source helper.
+
+- 2026-06-20: Planner-proof bundle prior inputs now treat explicit prior
+  `proof_bundle_run_manifest.json` files and standalone prior probe
+  `run_result.json` files as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object prior artifacts now fail with path-labelled source errors before
+  prior-memory merge or proof-request selection, instead of surfacing raw
+  parser/type failures or being folded into misleading empty prior evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud planner-proof prior-source validation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused source coverage
+  landed in a small new test file instead of growing the 1900-line runner test.
+  Proof: focused prior-source tests, existing prior-manifest success tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh planner-proof bundle evidence that
+  malformed or non-object prior proof-bundle manifests or standalone prior
+  probe run results again reach prior-memory merge or selection as plausible
+  prior evidence.
+
+- 2026-06-20: Cleanup checker trace JSONL loading now treats `trace.jsonl`
+  rows as object-typed source truth through
+  `roboclaws.core.json_sources.read_jsonl_objects`. Malformed or parseable
+  non-object trace rows now fail with path-and-line-labelled source errors
+  before public-trace privacy checks or duplicate post-place navigation checks
+  can use partial trace evidence. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud cleanup-checker trace source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the checker dropped from 2005 to 2000 lines while focused
+  trace-source coverage landed in a small source-test file. Proof: focused
+  core JSON-source tests, focused checker trace-source tests, existing
+  duplicate-navigation trace tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  cleanup-checker evidence that malformed or non-object `trace.jsonl` rows
+  again surface raw parser/type failures or allow partial trace evidence into
+  privacy or duplicate-navigation validation.
+
+- 2026-06-20: Cleanup checker Isaac scene-index map-context semantics loading
+  now treats declared `semantics_json` evidence as JSON-object source truth
+  through `roboclaws.core.json_sources.read_json_object`. Missing, malformed,
+  or parseable non-object scene-index Nav2 semantics artifacts now fail with
+  path-labelled source errors before map-context validation, instead of
+  surfacing raw assertion/parser/type failures or wrong-shaped semantics
+  packets. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud cleanup-checker scene-index semantics source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the checker dropped by another line while focused scene-index source
+  coverage landed in a small source-test file. Proof: focused scene-index
+  source tests, existing scene-index map-context tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh cleanup-checker evidence that missing, malformed, or
+  non-object scene-index Nav2 semantics artifacts again produce raw
+  assertion/parser/type failures or reach map-context validation as plausible
+  semantics evidence.
+
+- 2026-06-20: Cleanup checker B1 robot-consumption semantics loading now
+  treats declared `semantics_json` evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object B1 Nav2 semantics artifacts now fail with path-labelled
+  source errors before robot-consumption proof validation, instead of
+  surfacing raw assertion/parser/type failures or wrong-shaped semantics
+  packets. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud cleanup-checker B1 semantics source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules; the checker
+  dropped by another line while focused B1 source coverage stayed in the small
+  source-test file. Proof: focused B1 source tests, affected B1 checker tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh cleanup-checker evidence that missing,
+  malformed, or non-object B1 Nav2 semantics artifacts again produce raw
+  assertion/parser/type failures or reach robot-consumption proof validation
+  as plausible semantics evidence.
+
+- 2026-06-20: Cleanup checker B1 robot-consumption manifest loading now treats
+  `b1_robot_consumption_manifest.json` as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object manifests now fail with path-labelled source errors
+  before readiness validation, instead of surfacing raw file-read or
+  parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker B1 manifest source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the checker dropped by another line while focused B1 source coverage landed
+  in a small source-test file. The existing oversized checker contract test
+  grew only to update the affected missing-manifest expectation to the new
+  source-error behavior. Proof: focused B1 manifest source tests, affected B1
+  checker tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh cleanup-checker
+  evidence that malformed or missing B1 robot-consumption manifests again
+  produce raw file/parser/type failures or reach readiness validation as
+  plausible manifest evidence.
+
+- 2026-06-20: Cleanup checker advisory-scoring artifact loading now treats
+  declared advisory-evaluation evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object advisory artifacts now fail with path-labelled source
+  errors before advisory validation, instead of surfacing raw file-read or
+  parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker advisory artifact source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the checker dropped by another line while focused coverage stayed
+  in the small checker source-test file. Proof: focused checker source tests,
+  adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed declared advisory artifacts
+  again produce raw file/parser/type failures or reach advisory validation as
+  plausible artifact evidence.
+
+- 2026-06-20: Cleanup checker goal-contract artifact loading now treats
+  declared `goal_contract.json` evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object goal-contract artifacts now fail with path-labelled
+  source errors before contract comparison, instead of surfacing raw file-read
+  or parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker goal-contract artifact
+  source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the checker dropped by one line while focused coverage
+  stayed in the small checker source-test file. Proof: focused checker source
+  tests, adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed declared goal-contract
+  artifacts again produce raw file/parser/type failures or reach contract
+  comparison as plausible artifact evidence.
+
+- 2026-06-20: Cleanup checker top-level `run_result.json` loading now treats
+  single-file inputs, `seed-*` directories, and run-directory fallback inputs
+  as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object run-result sources now fail with path-labelled source errors
+  before checker assertions, instead of surfacing raw parser tracebacks or
+  allowing wrong-shaped packets into downstream validation. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  cleanup-checker run-result source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; focused coverage landed in a new
+  small checker source-test file instead of growing the already oversized
+  checker contract module. Proof: focused checker run-result source tests,
+  adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed top-level run-result sources
+  again produce raw parser/type failures or enter checker assertions as
+  plausible result evidence.
+
+- 2026-06-20: Scene-sampler room-label manifest loading now treats the
+  prepared label manifest as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object` before schema/admission
+  validation. Malformed or parseable non-object manifests now fail with
+  path-labelled source errors instead of parser tracebacks or wrong-layer
+  shape errors. Owner layer: Runnable Surfaces And Presets plus Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud scene-sampler
+  admission source truth. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules. Proof: focused scene sampler tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh scene-sampler evidence that malformed room-label
+  manifests again surface raw parser/type errors or pass into schema/admission
+  validation as plausible label evidence.
+
+- 2026-06-20: Codex operator-handoff terminal-phase polling now treats present
+  `live_status.json` as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object status sources now fail aloud instead of collapsing to an empty
+  phase and allowing generic operator-handoff failure handling to overwrite or
+  hide corrupt live-status context. Owner layer: Agent Engines And Provider
+  Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud Codex live-status source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused Codex live report
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh operator-handoff
+  evidence that malformed present `live_status.json` again becomes an empty
+  phase or a generic missing-run-result failure.
+
+- 2026-06-20: Codex live timing now treats present `run_result.json` as
+  JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object` before deriving MCP timing.
+  Malformed or parseable non-object run-result timing sources now fail the
+  final `live_timing.json` packet with `live_timing_source_error` instead of
+  silently falling back to trace-derived MCP timing evidence. Owner layer:
+  Agent Engines And Provider Profiles plus Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud Codex live timing source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules.
+  Proof: focused Codex live report tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh Codex live timing evidence that malformed present `run_result.json`
+  again falls back to trace timing or writes a passing final timing packet.
+
+- 2026-06-20: B1 operator-console scene previews now treat existing
+  `b1-map12-preview.json` metadata and declared camera artifacts as
+  JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object skip-existing metadata now returns a concise
+  `metadata_unreadable` result without rewriting metadata or deleting
+  companion preview images, and malformed or non-object camera artifacts now
+  surface `artifact_unreadable` inside the existing
+  `camera_preview_unavailable` packet instead of returning raw parser/type
+  failures or silently substituting an empty preview packet. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  operator-console B1 preview source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; focused coverage landed in a new
+  small source-test file instead of growing the already oversized preview test
+  module. Proof: focused B1 preview source tests, existing preview behavior
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh B1 preview evidence
+  that corrupt existing metadata is overwritten/deletes previews, or malformed
+  camera artifacts again produce raw parser/type failures or plausible current
+  preview evidence.
+
+- 2026-06-20: The cleanup checker now treats declared planner-proof request
+  artifacts as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object declared request manifests now fail with concise
+  path-labelled source errors before report/checker validation, instead of
+  surfacing raw parser tracebacks or generic assertion failures. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  cleanup-checker planner-proof request source truth. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 79 oversized modules; the already-over-limit
+  checker did not move up the oversized list because the JSON-object source
+  guard lives in a shared core helper. Proof: focused cleanup-checker source
+  tests, shared JSON-source helper tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh cleanup-checker
+  evidence that corrupt or missing declared planner-proof request manifests
+  again produce raw JSON/type/assertion failures or pass into report validation
+  as plausible request evidence.
+
+- 2026-06-20: Planner-proof bundle generation now treats cleanup
+  `run_result.json`, inline `planner_proof_requests`, the cleanup `artifacts`
+  envelope, and declared `planner_proof_requests.json` artifacts as explicit
+  source truth. Malformed or parseable non-object cleanup run results, inline
+  request packets, artifact envelopes, and declared request artifacts now fail
+  before bundle generation, and declared-but-missing request artifacts raise
+  source-path errors instead of disappearing into generic missing-request
+  behavior. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud planner-proof bundle request source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  planner-proof bundle tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only with fresh planner-proof bundle evidence
+  that malformed cleanup run results, wrong-shaped inline/artifact request
+  sources, or missing declared request artifacts again produce raw
+  parser/type/assertion failures, write bundle outputs after source-load
+  failure, or hide declared request-source errors as generic missing-request
+  packets.
+
+- 2026-06-20: Agent SDK speedup matrix manifests now require a non-empty
+  `rows` array whose entries are JSON objects. Missing, empty, non-array, or
+  wrong-shaped row sources now fail at manifest load before dry-run or
+  offline-preflight packet generation, instead of producing successful zero-row
+  matrix evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Agent SDK speedup-matrix manifest source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused Agent SDK perf-matrix tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh speedup-matrix evidence that wrong-shaped manifest
+  rows again produce a successful dry-run/preflight packet or hide missing
+  decision-row evidence as an intentional zero-row matrix.
+
+- 2026-06-20: Codex cleanup apple-to-apple summaries now treat declared
+  `run_result.json`, present `agent_view.json`, and embedded
+  `run_result.agent_view` packets as object-typed source truth. Malformed or
+  parseable non-object source packets now raise concise path-labelled errors
+  before comparison manifest/report writes, instead of surfacing raw
+  parser/type failures or turning wrong-shaped embedded agent views into empty
+  worklists. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Codex cleanup apple-to-apple source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused Codex cleanup apple-to-apple summary tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh Codex cleanup apple-to-apple evidence
+  that malformed or non-object run-result/agent-view sources again produce
+  tracebacks, write comparison outputs after source-load failure, or fabricate
+  empty agent-view/worklist evidence from wrong-shaped source packets.
+
+- 2026-06-20: Visual-grounding cleanup-run corpus building now treats the
+  declared `run_result.json` as object-typed source truth. Malformed or
+  parseable non-object cleanup run-result sources now return concise builder
+  errors before corpus artifact writes, instead of surfacing raw parser/type
+  tracebacks. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-grounding corpus-builder source
+  truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused visual-grounding corpus-builder contract
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only with fresh corpus-builder evidence that malformed or non-object
+  declared cleanup `run_result.json` inputs again produce tracebacks or write
+  corpus outputs after source-load failure.
+
+- 2026-06-20: Visual-grounding benchmark runs now treat declared `--corpus`
+  and `--matrix` inputs as source truth. Missing, malformed, or parseable
+  non-object corpus/matrix JSON and wrong-shaped matrix row sources now return
+  concise runner source errors before benchmark artifact writes, instead of
+  surfacing raw file/parser/type tracebacks. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud visual-grounding
+  benchmark input source truth. Metric: staged/add-N ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated runner-source contract test file instead of expanding the existing
+  visual-grounding benchmark contract file. Proof: focused visual-grounding
+  benchmark runner/contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only with fresh benchmark-runner evidence that
+  malformed or wrong-shaped declared corpus/matrix inputs again produce
+  tracebacks or write benchmark outputs after source-load failure.
+
+- 2026-06-20: Visual-grounding benchmark result checks now treat
+  `visual_grounding_benchmark_result.json` and
+  `visual_grounding_predictions.jsonl` as object-typed source truth.
+  Malformed or parseable non-object result JSON and prediction JSONL rows now
+  return concise checker source errors instead of surfacing raw parser/type
+  tracebacks. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-grounding benchmark artifact source
+  truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; coverage landed in a small dedicated checker-source
+  contract test file instead of expanding the existing visual-grounding
+  benchmark contract test toward the oversized threshold. Proof: focused
+  visual-grounding benchmark checker/contract tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only with fresh
+  visual-grounding checker evidence that malformed or non-object declared
+  result/prediction artifacts again produce tracebacks or pass into deeper
+  validation as plausible benchmark evidence.
+
 - 2026-06-20: Nav2 map-bundle export now treats missing explicit
   `--agent-view` and `--run-result` sources as source-path errors before
   bundle writes. This extends the existing malformed/non-object exporter

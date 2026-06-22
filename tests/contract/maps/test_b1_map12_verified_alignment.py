@@ -1206,22 +1206,22 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
         (
             "--review-manifest",
             "{not-json\n",
-            "review manifest must contain valid JSON object",
+            "review manifest source must contain valid JSON object",
         ),
         (
             "--review-manifest",
             "[]\n",
-            "review manifest must contain a JSON object",
+            "review manifest source must contain a JSON object",
         ),
         (
             "--alignment-artifact",
             "{not-json\n",
-            "alignment artifact must contain valid JSON object",
+            "alignment artifact source must contain valid JSON object",
         ),
         (
             "--alignment-artifact",
             "[]\n",
-            "alignment artifact must contain a JSON object",
+            "alignment artifact source must contain a JSON object",
         ),
     ],
 )
@@ -1305,22 +1305,22 @@ def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
         (
             "--correspondences",
             "{not-json\n",
-            "correspondence manifest must contain valid JSON object",
+            "correspondence manifest source must contain valid JSON object",
         ),
         (
             "--correspondences",
             "[]\n",
-            "correspondence manifest must contain a JSON object",
+            "correspondence manifest source must contain a JSON object",
         ),
         (
             "--review-manifest",
             "{not-json\n",
-            "review manifest must contain valid JSON object",
+            "review manifest source must contain valid JSON object",
         ),
         (
             "--review-manifest",
             "[]\n",
-            "review manifest must contain a JSON object",
+            "review manifest source must contain a JSON object",
         ),
     ],
 )

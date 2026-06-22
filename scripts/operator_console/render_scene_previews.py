@@ -20,6 +20,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.household.camera_control import canonical_scene_camera_control_request  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
@@ -343,12 +344,7 @@ def render_b1_map12_preview(
     metadata_path = output_dir / f"{slug}-preview.json"
     stale_map_path = output_dir / f"{slug}-map.png"
     stale_topdown_path = output_dir / f"{slug}-topdown.png"
-    removed_stale = _remove_stale_b1_camera_previews(
-        camera_artifact=camera_artifact,
-        fpv_path=fpv_path,
-        chase_path=chase_path,
-    )
-    removed_stale.extend(_unlink_existing_paths(stale_map_path, stale_topdown_path))
+    removed_stale: list[str] = []
     skip_result = (
         _b1_preview_skip_result(
             camera_artifact=camera_artifact,
@@ -361,7 +357,26 @@ def render_b1_map12_preview(
         else None
     )
     if skip_result is not None:
+        if skip_result.get("status") == "metadata_unreadable":
+            return skip_result
+        removed_stale.extend(
+            _remove_stale_b1_camera_previews(
+                camera_artifact=camera_artifact,
+                fpv_path=fpv_path,
+                chase_path=chase_path,
+            )
+        )
+        removed_stale.extend(_unlink_existing_paths(stale_map_path, stale_topdown_path))
+        skip_result["removed_stale"] = removed_stale
         return skip_result
+    removed_stale.extend(
+        _remove_stale_b1_camera_previews(
+            camera_artifact=camera_artifact,
+            fpv_path=fpv_path,
+            chase_path=chase_path,
+        )
+    )
+    removed_stale.extend(_unlink_existing_paths(stale_map_path, stale_topdown_path))
 
     metadata = _b1_map12_preview_metadata(width=width, height=height)
     camera_result: dict[str, Any] | None = None
@@ -445,17 +460,26 @@ def _b1_preview_skip_result(
 ) -> dict[str, Any] | None:
     if not metadata_path.exists():
         return None
-    if camera_artifact is None:
-        can_skip = _b1_metadata_has_no_camera_previews(metadata_path)
-    else:
-        can_skip = (
-            fpv_path.exists()
-            and chase_path.exists()
-            and _b1_metadata_has_real_camera_previews(
+    try:
+        if camera_artifact is None:
+            can_skip = _b1_metadata_has_no_camera_previews(metadata_path)
+        else:
+            metadata_has_real_camera_previews = _b1_metadata_has_real_camera_previews(
                 metadata_path,
                 camera_artifact=camera_artifact,
             )
-        )
+            can_skip = (
+                fpv_path.exists() and chase_path.exists() and metadata_has_real_camera_previews
+            )
+    except (OSError, ValueError) as exc:
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "metadata_unreadable",
+            "metadata": str(metadata_path),
+            "reason": str(exc),
+            "removed_stale": removed_stale,
+        }
     if not can_skip:
         return None
     return {
@@ -469,10 +493,7 @@ def _b1_preview_skip_result(
 
 
 def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
+    payload = read_json_object(path, label="B1 preview metadata")
     views = payload.get("views")
     if not isinstance(views, dict):
         return False
@@ -484,10 +505,7 @@ def _b1_metadata_has_real_camera_previews(
     *,
     camera_artifact: Path | None = None,
 ) -> bool:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
+    payload = read_json_object(path, label="B1 preview metadata")
     if camera_artifact is not None and not _b1_metadata_camera_artifact_matches(
         payload,
         camera_artifact=camera_artifact,
@@ -568,8 +586,8 @@ def _promote_b1_camera_previews(
             "artifact_path": str(camera_artifact),
         }
     try:
-        payload = json.loads(camera_artifact.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        payload = read_json_object(camera_artifact, label="B1 camera preview artifact")
+    except (OSError, ValueError) as exc:
         return {
             "status": "artifact_unreadable",
             "artifact_path": str(camera_artifact),

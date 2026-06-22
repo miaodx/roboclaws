@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
     ALIGNMENT_RESIDUALS_SCHEMA,
     residual_backed_waypoint_from_nav_goal,
@@ -44,12 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         packet = build_semantic_anchor_review_packet(
-            review_manifest=_read_json_object(args.review_manifest, label="review manifest"),
-            alignment=_read_json_object(args.alignment_artifact, label="alignment artifact"),
+            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
+            alignment=read_json_object(args.alignment_artifact, label="alignment artifact"),
             review_manifest_path=args.review_manifest,
             alignment_artifact_path=args.alignment_artifact,
         )
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -213,18 +214,6 @@ def polygon_center(label: dict[str, Any]) -> tuple[float, float]:
         sum(float(point["x"]) for point in points) / len(points),
         sum(float(point["y"]) for point in points) / len(points),
     )
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 if __name__ == "__main__":

@@ -14,8 +14,8 @@ SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "run_b1_map12_navigation_
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "readiness artifact must contain valid JSON object"),
-        ("[]\n", "readiness artifact must contain a JSON object"),
+        ("{not-json\n", "readiness artifact source must contain valid JSON object"),
+        ("[]\n", "readiness artifact source must contain a JSON object"),
     ),
 )
 def test_navigation_smoke_cli_rejects_malformed_readiness_source(
@@ -53,15 +53,18 @@ def test_navigation_smoke_cli_rejects_missing_readiness_source(tmp_path: Path) -
     )
 
     assert completed.returncode != 0
-    assert "readiness artifact missing:" in completed.stderr
+    assert "readiness artifact source is missing:" in completed.stderr
     assert not (output_dir / "navigation_smoke.json").exists()
 
 
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "waypoint pose request artifact must contain valid JSON object"),
-        ("[]\n", "waypoint pose request artifact must contain a JSON object"),
+        (
+            "{not-json\n",
+            "waypoint pose request artifact source must contain valid JSON object",
+        ),
+        ("[]\n", "waypoint pose request artifact source must contain a JSON object"),
     ),
 )
 def test_navigation_smoke_cli_rejects_malformed_waypoint_request_source(
@@ -99,7 +102,7 @@ def test_navigation_smoke_cli_rejects_missing_waypoint_request_source(tmp_path: 
     )
 
     assert completed.returncode != 0
-    assert "waypoint pose request artifact missing:" in completed.stderr
+    assert "waypoint pose request artifact source is missing:" in completed.stderr
     assert not (output_dir / "navigation_smoke.json").exists()
 
 

@@ -345,7 +345,7 @@ def test_agibot_navigation_memory_rejects_malformed_source_json(tmp_path: Path) 
 
     with pytest.raises(
         ValueError,
-        match=r"Agibot map source must contain valid JSON object at .*source\.json",
+        match=r"Agibot map source must contain valid JSON object: .*source\.json",
     ):
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
@@ -356,7 +356,7 @@ def test_nav2_cleanup_bundle_rejects_non_object_semantics(tmp_path: Path) -> Non
 
     with pytest.raises(
         ValueError,
-        match=r"Nav2 cleanup semantics must contain a JSON object at .*semantics\.json",
+        match=r"Nav2 cleanup semantics source must contain a JSON object: .*semantics\.json",
     ):
         runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
 

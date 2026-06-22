@@ -24,12 +24,12 @@ VENDOR_MAP12_BUNDLE = (
         (
             "scene_correspondences.json",
             "{not-json\n",
-            "correspondence manifest must contain valid JSON object",
+            "correspondence manifest source must contain valid JSON object",
         ),
         (
             "scene_correspondences.json",
             "[]\n",
-            "correspondence manifest must contain a JSON object",
+            "correspondence manifest source must contain a JSON object",
         ),
     ),
 )
@@ -71,7 +71,7 @@ def test_correspondence_review_cli_rejects_missing_correspondence_manifest(
     )
 
     assert completed.returncode == 2
-    assert "correspondence manifest missing" in completed.stderr
+    assert "correspondence manifest source is missing" in completed.stderr
     assert str(manifest_path) in completed.stderr
     assert not (output_dir / "correspondence_review_packet.json").exists()
     assert not (output_dir / "correspondence_review.html").exists()
@@ -83,12 +83,12 @@ def test_correspondence_review_cli_rejects_missing_correspondence_manifest(
         (
             "scene_gaussian_topdown.json",
             "{not-json\n",
-            "scene top-down render must contain valid JSON object",
+            "scene top-down render source must contain valid JSON object",
         ),
         (
             "scene_gaussian_topdown.json",
             "[]\n",
-            "scene top-down render must contain a JSON object",
+            "scene top-down render source must contain a JSON object",
         ),
     ),
 )
@@ -132,7 +132,7 @@ def test_correspondence_review_cli_rejects_missing_scene_topdown_render(
     )
 
     assert completed.returncode == 2
-    assert "scene top-down render missing" in completed.stderr
+    assert "scene top-down render source is missing" in completed.stderr
     assert str(render_path) in completed.stderr
     assert not (output_dir / "correspondence_review_packet.json").exists()
     assert not (output_dir / "correspondence_review.html").exists()

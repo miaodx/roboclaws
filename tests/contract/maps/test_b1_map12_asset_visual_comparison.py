@@ -58,8 +58,8 @@ def test_asset_visual_comparison_accepts_custom_scene_same_pose_evidence(
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "navigation artifact must contain valid JSON object"),
-        ("[]\n", "navigation artifact must contain a JSON object"),
+        ("{not-json\n", "navigation artifact source must contain valid JSON object"),
+        ("[]\n", "navigation artifact source must contain a JSON object"),
     ),
 )
 def test_asset_visual_comparison_cli_rejects_bad_baseline_navigation_source(
@@ -90,8 +90,8 @@ def test_asset_visual_comparison_cli_rejects_bad_baseline_navigation_source(
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "navigation artifact must contain valid JSON object"),
-        ("[]\n", "navigation artifact must contain a JSON object"),
+        ("{not-json\n", "navigation artifact source must contain valid JSON object"),
+        ("[]\n", "navigation artifact source must contain a JSON object"),
     ),
 )
 def test_asset_visual_comparison_cli_rejects_bad_candidate_navigation_source(
@@ -136,7 +136,7 @@ def test_asset_visual_comparison_cli_rejects_missing_navigation_source(
     )
 
     assert completed.returncode == 2
-    assert "navigation artifact missing" in completed.stderr
+    assert "navigation artifact source is missing" in completed.stderr
     assert str(baseline_path) in completed.stderr
     assert not output_path.exists()
 

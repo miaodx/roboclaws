@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     ALIGNMENT_RESIDUALS_SCHEMA,
     SEMANTIC_SOURCE,
@@ -171,7 +172,7 @@ def build_pose_request_artifact(
 
 
 def load_alignment_for_requests(path: Path) -> tuple[dict[str, Any], list[str]]:
-    payload = _read_json_object(path, label="alignment artifact")
+    payload = read_json_object(path, label="alignment artifact")
     if payload.get("schema") != ALIGNMENT_RESIDUALS_SCHEMA:
         return payload, [f"unexpected alignment artifact schema: {payload.get('schema')!r}"]
     errors = validate_alignment_residual_artifact(payload)
@@ -209,18 +210,6 @@ def load_points(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.yaw_deg is not None:
         point["yaw_deg"] = float(args.yaw_deg)
     return [point]
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def _read_json_array(path: Path, *, label: str) -> list[Any]:

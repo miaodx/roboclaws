@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     NAVIGATION_SMOKE_SCHEMA,
     READINESS_SCHEMA,
@@ -45,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     output_path = Path(args.output or run_dir / "report.html")
 
-    navigation = _read_json_object(navigation_path, label="navigation artifact")
+    navigation = read_json_object(navigation_path, label="navigation artifact")
     _require_schema(
         navigation,
         path=navigation_path,
@@ -412,20 +413,8 @@ def _read_optional_json_object(
     explicit: bool,
 ) -> dict[str, Any] | None:
     if explicit or path.is_file():
-        return _read_json_object(path, label=label)
+        return read_json_object(path, label=label)
     return None
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def _require_schema(

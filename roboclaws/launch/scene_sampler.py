@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.launch.scene_sampler_prefilter import (
     scene_only_prefilter_report as _scene_only_prefilter_report,
 )
@@ -1086,7 +1087,7 @@ def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
 
     manifest_path = path or _LABEL_MANIFEST_PATH
     try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        payload = read_json_object(manifest_path, label="room label manifest")
     except FileNotFoundError as exc:
         raise ValueError(f"room label manifest missing: {manifest_path}") from exc
     if payload.get("schema") != SAMPLER_LABEL_MANIFEST_SCHEMA:

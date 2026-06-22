@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object as read_source_json_object  # noqa: E402
 from roboclaws.household.planner_proof_requests import (  # noqa: E402
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_cleanup_rerun_command,
@@ -179,7 +180,7 @@ def run_from_cleanup_result(
 ) -> dict[str, Any]:
     cleanup_run_result = cleanup_run_result.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    source_run = json.loads(cleanup_run_result.read_text(encoding="utf-8"))
+    source_run = read_source_json_object(cleanup_run_result, label="cleanup run result")
     requests = _load_proof_requests(source_run, cleanup_run_result.parent)
     prior_summary = _load_prior_proof_result_summary(
         prior_proof_bundle_manifest,
@@ -408,16 +409,48 @@ def _local_runtime_preflight_blocked(preflight: dict[str, Any]) -> bool:
 
 
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:
-    inline = source_run.get("planner_proof_requests")
-    if isinstance(inline, dict) and inline.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA:
+    if "planner_proof_requests" in source_run:
+        inline = source_run.get("planner_proof_requests")
+        if not isinstance(inline, dict):
+            source_path = base / "run_result.json"
+            raise ValueError(
+                f"inline planner proof requests must contain a JSON object: {source_path}"
+            )
+        if inline.get("schema") != PLANNER_PROOF_REQUESTS_SCHEMA:
+            raise ValueError(
+                f"inline planner proof requests use unsupported schema: {base / 'run_result.json'}"
+            )
         return _with_source_planner_scene(inline, source_run)
-    artifacts = source_run.get("artifacts") or {}
-    request_path = _resolve_path(base, str(artifacts.get("planner_proof_requests") or ""))
+    if "artifacts" not in source_run:
+        artifacts: dict[str, Any] = {}
+    elif not isinstance(source_run["artifacts"], dict):
+        raise ValueError(
+            f"cleanup run result artifacts must contain a JSON object: {base / 'run_result.json'}"
+        )
+    else:
+        artifacts = source_run["artifacts"]
+    declared_request_path = _declared_planner_proof_request_path(artifacts, base)
+    request_path = _resolve_path(base, declared_request_path)
     if request_path.is_file():
-        data = json.loads(request_path.read_text(encoding="utf-8"))
-        assert data.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, data
+        data = read_source_json_object(request_path, label="planner proof requests")
+        if data.get("schema") != PLANNER_PROOF_REQUESTS_SCHEMA:
+            raise ValueError(f"planner proof requests use unsupported schema: {request_path}")
         return _with_source_planner_scene(data, source_run)
+    if declared_request_path:
+        raise FileNotFoundError(f"planner proof requests artifact is missing: {request_path}")
     raise ValueError("cleanup run_result does not include planner proof requests")
+
+
+def _declared_planner_proof_request_path(artifacts: dict[str, Any], base: Path) -> str:
+    if "planner_proof_requests" not in artifacts:
+        return ""
+    declared_request_source = artifacts["planner_proof_requests"]
+    if not isinstance(declared_request_source, str) or not declared_request_source.strip():
+        raise ValueError(
+            "planner proof requests artifact path must be a non-empty string: "
+            f"{base / 'run_result.json'}"
+        )
+    return declared_request_source.strip()
 
 
 def _with_source_planner_scene(
@@ -471,7 +504,7 @@ def _prior_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
 
 def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data = read_source_json_object(manifest_path, label="prior proof bundle manifest")
     selection = data.get("proof_request_selection") or {}
     summaries = []
     nested_prior = data.get("prior_proof_result_summary")
@@ -519,8 +552,11 @@ def _load_standalone_probe_result_summary(run_result_paths: list[Path]) -> dict[
 
 
 def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, Any]:
-    data = json.loads(run_result_path.read_text(encoding="utf-8"))
-    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    data = read_source_json_object(
+        run_result_path,
+        label="standalone planner probe run result",
+    )
+    evidence = data.get("manipulation_evidence")
     evidence = evidence if isinstance(evidence, dict) else {}
     requested_binding = evidence.get("requested_cleanup_primitive_binding")
     requested_binding = requested_binding if isinstance(requested_binding, dict) else {}
@@ -529,16 +565,16 @@ def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, An
     object_id = _first_nonempty_str(
         requested_binding.get("object_id"),
         cleanup_binding.get("object_id"),
-        data.get("object_id") if isinstance(data, dict) else "",
+        data.get("object_id"),
     )
     target_receptacle_id = _first_nonempty_str(
         requested_binding.get("target_receptacle_id"),
         cleanup_binding.get("target_receptacle_id"),
-        data.get("target_receptacle_id") if isinstance(data, dict) else "",
+        data.get("target_receptacle_id"),
     )
     return {
         "request_id": _standalone_probe_request_id(
-            data=data if isinstance(data, dict) else {},
+            data=data,
             evidence=evidence,
             requested_binding=requested_binding,
             run_result_path=run_result_path,

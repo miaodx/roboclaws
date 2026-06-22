@@ -56,8 +56,8 @@ def test_prepared_semantic_usd_summary_rejects_incomplete_evidence(
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "prepared semantic USD summary must contain valid JSON object"),
-        ("[]\n", "prepared semantic USD summary must contain a JSON object"),
+        ("{not-json\n", "prepared semantic USD summary source must contain valid JSON object"),
+        ("[]\n", "prepared semantic USD summary source must contain a JSON object"),
     ),
 )
 def test_prepared_semantic_usd_summary_cli_rejects_bad_source(
@@ -81,7 +81,7 @@ def test_prepared_semantic_usd_summary_cli_rejects_missing_source(tmp_path: Path
     completed = _run_checker(summary_path)
 
     assert completed.returncode == 2
-    assert "prepared semantic USD summary missing" in completed.stderr
+    assert "prepared semantic USD summary source is missing" in completed.stderr
     assert str(summary_path) in completed.stderr
 
 

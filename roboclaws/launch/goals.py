@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.launch.intents import (
     GOAL_SCOPE_AGENT_DECLARED,
     GOAL_SCOPE_PROMPT_SCOPED,
@@ -89,7 +90,7 @@ def goal_contract_from_file(path: str | Path | None) -> GoalContract | None:
 
     if path is None or str(path) == "":
         return None
-    return goal_contract_from_payload(json.loads(Path(path).read_text(encoding="utf-8")))
+    return goal_contract_from_payload(read_json_object(Path(path), label="goal contract"))
 
 
 def goal_contract_from_payload(payload: dict[str, Any]) -> GoalContract:

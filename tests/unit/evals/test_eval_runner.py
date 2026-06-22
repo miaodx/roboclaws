@@ -70,6 +70,51 @@ def test_eval_runner_classifies_missing_product_artifacts(tmp_path: Path) -> Non
     assert "report" in result["grader_outputs"]["artifacts"]["missing"]
 
 
+def test_focused_eval_passes_real_molmospaces_map_bundle_to_product_runner(
+    tmp_path: Path,
+) -> None:
+    captured_kwargs: dict[str, Any] = {}
+
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        captured_kwargs.update(kwargs)
+        return _passing_product_runner(**kwargs)
+
+    run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="focused-real-backend",
+        budget="focused",
+        product_runner=product_runner,
+    )
+
+    assert captured_kwargs["backend"] == "molmospaces_subprocess"
+    assert captured_kwargs["evidence_lane"] == "world-public-labels"
+    assert captured_kwargs["map_bundle_dir"] == "assets/maps/molmospaces/procthor-10k-val/0"
+    assert captured_kwargs["require_map_bundle"] is True
+
+
+def test_smoke_eval_keeps_synthetic_backend_without_map_bundle(
+    tmp_path: Path,
+) -> None:
+    captured_kwargs: dict[str, Any] = {}
+
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        captured_kwargs.update(kwargs)
+        return _passing_product_runner(**kwargs)
+
+    run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="smoke-synthetic",
+        product_runner=product_runner,
+    )
+
+    assert captured_kwargs["backend"] == "api_semantic_synthetic"
+    assert captured_kwargs["evidence_lane"] == "smoke"
+    assert "map_bundle_dir" not in captured_kwargs
+    assert "require_map_bundle" not in captured_kwargs
+
+
 @pytest.mark.parametrize(
     ("artifact_name", "file_name"),
     [

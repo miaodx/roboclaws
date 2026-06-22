@@ -22,6 +22,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     DEFAULT_VISUAL_GROUNDING_BASE_URL,
     DEFAULT_VISUAL_GROUNDING_TIMEOUT_S,
@@ -195,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _load_corpus(path: Path) -> dict[str, Any]:
-    corpus = json.loads(path.read_text(encoding="utf-8"))
+    corpus = _read_source_json_object(path, label="visual grounding benchmark corpus")
     if corpus.get("schema") != CORPUS_SCHEMA:
         raise SystemExit(f"unsupported corpus schema in {path}")
     observations = corpus.get("observations")
@@ -210,10 +211,13 @@ def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
         pipeline_ids = _pipeline_ids(args.pipeline)
         return [_default_benchmark_row(pipeline_id) for pipeline_id in pipeline_ids]
 
-    matrix = json.loads(args.matrix.read_text(encoding="utf-8"))
+    matrix = _read_source_json_object(args.matrix, label="visual grounding benchmark matrix")
     if matrix.get("schema") != "visual_grounding_benchmark_matrix_v1":
         raise SystemExit(f"unsupported benchmark matrix schema in {args.matrix}")
-    rows = [_normalize_benchmark_row(row) for row in matrix.get("rows") or []]
+    raw_rows = matrix.get("rows")
+    if not isinstance(raw_rows, list):
+        raise SystemExit(f"benchmark matrix rows must be a list: {args.matrix}")
+    rows = [_normalize_benchmark_row(row, source=args.matrix) for row in raw_rows]
     if not rows:
         raise SystemExit(f"benchmark matrix has no rows: {args.matrix}")
     if filters:
@@ -227,6 +231,13 @@ def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     if not rows:
         raise SystemExit(f"benchmark matrix filters selected no rows: {sorted(filters)}")
     return rows
+
+
+def _read_source_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        return read_json_object(path, label=label)
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _default_benchmark_row(pipeline_id: str) -> dict[str, Any]:
@@ -243,7 +254,9 @@ def _default_benchmark_row(pipeline_id: str) -> dict[str, Any]:
     }
 
 
-def _normalize_benchmark_row(row: dict[str, Any]) -> dict[str, Any]:
+def _normalize_benchmark_row(row: Any, *, source: Path) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        raise SystemExit(f"benchmark matrix rows must contain JSON objects: {source}")
     pipeline_id = str(row.get("pipeline_id") or "").strip()
     if not pipeline_id:
         raise SystemExit(f"benchmark matrix row missing pipeline_id: {row}")
