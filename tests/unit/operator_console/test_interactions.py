@@ -264,3 +264,35 @@ def test_operator_message_state_surfaces_non_object_source_errors(tmp_path: Path
     assert messages["messages"] == []
     assert seen["ok"] is False
     assert seen["message_count"] == 0
+
+
+def test_operator_messages_keep_valid_rows_with_source_errors(tmp_path: Path) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    (run_dir / "operator_messages.jsonl").write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_message_v1",
+                "message_id": "msg-1",
+                "command_type": "steer",
+                "status": "queued",
+                "body": "Observe the desk",
+            }
+        )
+        + "\n{bad-json}\n",
+        encoding="utf-8",
+    )
+
+    messages = list_operator_messages(tmp_path, "run-a")
+    state = operator_message_state(tmp_path, run_dir)
+    seen = check_operator_messages_for_mcp(run_dir)
+
+    assert messages["source_error"] is True
+    assert messages["source_errors"][0]["line"] == 2
+    assert messages["source_errors"][0]["message"] == (
+        "invalid JSON: Expecting property name enclosed in double quotes"
+    )
+    assert messages["messages"][0]["message_id"] == "msg-1"
+    assert state["source_error"] is True
+    assert state["pending_steer_count"] == 1
+    assert seen["ok"] is False
+    assert seen["message_count"] == 0

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.agents.live_runtime import LiveAgentRequest
+from roboclaws.core.json_sources import parse_json_object_text
 
 DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
@@ -28,16 +29,17 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
         config = {}
     enabled = _bool_setting(config.get("enabled"), "model_input_compaction.enabled", default=False)
     mode = str(config.get("mode") or ("public_tool_result_summary_v1" if enabled else "off"))
-    min_chars = _non_negative_int(
+    min_chars = _positive_int_from_value_or_env(
         config.get("min_chars"),
         env_name=MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
         default=DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS,
+        setting_name="model_input_compaction.min_chars",
     )
     payload = {
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": enabled,
         "mode": mode,
-        "min_chars": max(1, min_chars),
+        "min_chars": min_chars,
         "private_artifact_policy": (
             "filter is model-facing only; MCP traces, reports, and run artifacts remain complete"
         ),
@@ -69,16 +71,25 @@ def _bool_setting(value: Any, setting_name: str, *, default: bool) -> bool:
     )
 
 
-def _positive_int(value: Any, *, default: int, setting_name: str) -> int:
+def _positive_int(
+    value: Any,
+    *,
+    default: int,
+    setting_name: str,
+    env_name: str | None = None,
+) -> int:
+    source_name = env_name or f"OpenAI Agents SDK setting {setting_name}"
     if value is None or value == "":
         return default
+    if isinstance(value, bool):
+        raise ValueError(f"{source_name} must be a positive integer, got {value!r}")
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
-        ) from exc
-    return max(1, parsed)
+        raise ValueError(f"{source_name} must be a positive integer, got {value!r}") from exc
+    if parsed < 1:
+        raise ValueError(f"{source_name} must be a positive integer, got {value!r}")
+    return parsed
 
 
 def _model_input_compaction_filter(
@@ -538,7 +549,10 @@ def _camera_grounded_history_info(
     output = payload.get("output") if "output" in payload else payload.get("content")
     if output is None:
         return None
-    decoded = _decode_tool_output_payload(output)
+    decoded = _decode_tool_output_payload(
+        output,
+        source_label="OpenAI Agents model-input camera-grounded output",
+    )
     decoded = decoded if isinstance(decoded, dict) else {}
     if not tool:
         tool = _normalize_mcp_tool_name(decoded.get("tool") or "")
@@ -757,45 +771,70 @@ def _is_metric_map_tool_output(item: Any) -> bool:
     return False
 
 
-def _decode_tool_output_payload(output: Any) -> Any:
+def _decode_tool_output_payload(output: Any, *, source_label: str = "") -> Any:
     if isinstance(output, str):
         try:
             decoded = json.loads(output)
         except json.JSONDecodeError:
+            if source_label and _looks_like_json_text(output):
+                parse_json_object_text(output, label=source_label)
             return None
         if isinstance(decoded, str):
             try:
-                return _unwrap_mcp_text_content_payload(json.loads(decoded))
-            except json.JSONDecodeError:
+                unwrapped = _unwrap_mcp_text_content_payload(
+                    json.loads(decoded),
+                    source_label=source_label,
+                )
+            except json.JSONDecodeError as exc:
+                if source_label and _looks_like_json_text(decoded):
+                    raise ValueError(
+                        f"{source_label} source must contain valid JSON object"
+                    ) from exc
                 return decoded
-        return _unwrap_mcp_text_content_payload(decoded)
-    return _unwrap_mcp_text_content_payload(output)
+            if source_label and _looks_like_json_text(decoded) and not isinstance(unwrapped, dict):
+                raise ValueError(f"{source_label} source must contain a JSON object")
+            return unwrapped
+        unwrapped = _unwrap_mcp_text_content_payload(decoded, source_label=source_label)
+        if source_label and _looks_like_json_text(output) and not isinstance(unwrapped, dict):
+            raise ValueError(f"{source_label} source must contain a JSON object")
+        return unwrapped
+    return _unwrap_mcp_text_content_payload(output, source_label=source_label)
 
 
-def _unwrap_mcp_text_content_payload(decoded: Any) -> Any:
+def _looks_like_json_text(text: str) -> bool:
+    stripped = text.strip()
+    return bool(stripped) and stripped[0] in "[{"
+
+
+def _unwrap_mcp_text_content_payload(decoded: Any, *, source_label: str = "") -> Any:
     if isinstance(decoded, dict):
-        return _unwrap_mcp_text_content_dict(decoded)
+        return _unwrap_mcp_text_content_dict(decoded, source_label=source_label)
     if isinstance(decoded, list):
-        return _unwrap_mcp_text_content_list(decoded)
+        return _unwrap_mcp_text_content_list(decoded, source_label=source_label)
     return decoded
 
 
-def _unwrap_mcp_text_content_dict(decoded: dict[str, Any]) -> Any:
+def _unwrap_mcp_text_content_dict(decoded: dict[str, Any], *, source_label: str = "") -> Any:
     content = decoded.get("content")
     if isinstance(content, list):
-        unwrapped = _unwrap_mcp_text_content_payload(content)
+        unwrapped = _unwrap_mcp_text_content_payload(content, source_label=source_label)
         if unwrapped is not content:
             return unwrapped
     text = decoded.get("text")
     if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
+        if source_label and _looks_like_json_text(text):
+            return _unwrap_mcp_text_content_payload(
+                parse_json_object_text(text, label=f"{source_label} text content"),
+                source_label=source_label,
+            )
         try:
-            return _unwrap_mcp_text_content_payload(json.loads(text))
+            return _unwrap_mcp_text_content_payload(json.loads(text), source_label=source_label)
         except json.JSONDecodeError:
             return decoded
     return decoded
 
 
-def _unwrap_mcp_text_content_list(decoded: list[Any]) -> Any:
+def _unwrap_mcp_text_content_list(decoded: list[Any], *, source_label: str = "") -> Any:
     for item in decoded:
         if not isinstance(item, dict):
             continue
@@ -804,8 +843,13 @@ def _unwrap_mcp_text_content_list(decoded: list[Any]) -> Any:
         text = item.get("text")
         if not isinstance(text, str):
             continue
+        if source_label and _looks_like_json_text(text):
+            return _unwrap_mcp_text_content_payload(
+                parse_json_object_text(text, label=f"{source_label} text content"),
+                source_label=source_label,
+            )
         try:
-            return _unwrap_mcp_text_content_payload(json.loads(text))
+            return _unwrap_mcp_text_content_payload(json.loads(text), source_label=source_label)
         except json.JSONDecodeError:
             continue
     return decoded
@@ -940,17 +984,26 @@ def _append_event(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
-def _non_negative_int(value: Any, *, env_name: str, default: int) -> int:
+def _positive_int_from_value_or_env(
+    value: Any,
+    *,
+    env_name: str,
+    default: int,
+    setting_name: str,
+) -> int:
     if value is None:
         raw_env = os.environ.get(env_name)
-        value = raw_env if raw_env not in {None, ""} else default
+        if raw_env not in {None, ""}:
+            return _positive_int(
+                raw_env,
+                default=default,
+                setting_name=setting_name,
+                env_name=env_name,
+            )
+        value = default
     if value == "":
         value = default
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{env_name} must be a non-negative integer, got {value!r}") from exc
-    return max(0, parsed)
+    return _positive_int(value, default=default, setting_name=setting_name)
 
 
 def _drop_empty(payload: dict[str, Any]) -> dict[str, Any]:

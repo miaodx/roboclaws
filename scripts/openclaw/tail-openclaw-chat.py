@@ -185,6 +185,8 @@ def _render_line(raw: str) -> list[str]:
         entry = json.loads(raw)
     except json.JSONDecodeError:
         return [f"?? invalid json: {raw[:120]}"]
+    if not isinstance(entry, dict):
+        return [f"?? invalid json object: {type(entry).__name__}"]
     etype = entry.get("type", "?")
     if etype != "message":
         # Surface session lifecycle events tersely (session/model_change/...).

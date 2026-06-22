@@ -34,6 +34,824 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now
+  fail as row-level blocked decision-packet evidence when malformed or
+  non-object. The matrix uses the existing report-performance source boundary
+  for `calibration_path`, preserves decision-packet generation, and leaves
+  quality/speed/reducible-bucket evidence empty for the blocked row instead of
+  letting corrupt calibration evidence escape row status handling. Owner
+  layer: Artifacts, reports, and eval suites / no-provider Agent SDK speedup
+  matrix. Behavior-change class: fail-aloud source validation for explicit
+  calibration evidence. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout; the focused
+  matrix test file stays outside the hard-ceiling frontier. Proof: focused
+  Agent SDK perf-matrix tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if malformed or non-object explicit `calibration_path` artifacts can
+  again abort matrix generation outside row-level blocked decision-packet
+  evidence, or feed normalized speed deltas without a source error.
+
+- 2026-06-21: OpenAI Agents SDK model-input camera-grounded history
+  compaction now treats JSON-looking MCP output text wrappers as structured
+  sources. Malformed text content, top-level non-object JSON, and
+  double-encoded non-object structured camera output fail with source-labelled
+  diagnostics before compaction can turn corrupt camera evidence into a
+  plausible zero-candidate summary; explicit plaintext unavailable-body output
+  remains tolerated. Owner layer: Agent Engines And Provider Profiles /
+  OpenAI Agents SDK model-input compaction. Behavior-change class:
+  fail-aloud source validation for model-facing compaction evidence. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout; `openai_agents_model_input.py` is now
+  1043 lines. Proof: focused OpenAI Agents model-input config/source tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `openai_agents_model_input.py` again lets malformed or non-object
+  JSON-looking camera-grounded MCP output feed camera-history summaries, or
+  stops preserving plaintext unavailable-body output as an explicit fallback.
+
+- 2026-06-21: The stdlib-only mify MiMo v2.5 image probe now validates
+  provider HTTP success bodies with a script-local JSON-object source parser
+  before extracting chat/responses output. Malformed or parseable non-object
+  200 bodies now fail as labelled probe response source errors instead of
+  writing `status: ok` with empty or misleading output, and malformed HTTP
+  error bodies retain an explicit `HTTP <code> <reason>` source in the
+  fallback diagnostic. Owner layer: Agent Engines And Provider Profiles / dev
+  provider benchmark harness. Behavior-change class: fail-aloud provider
+  wire-source validation while preserving the standalone stdlib-only
+  reproducer constraint. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused mify image probe source tests, touched-file ruff/format checks,
+  dependency sync, `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/probe_mify_v25_image.py` again accepts malformed or non-object
+  provider HTTP success bodies before output extraction, or loses labelled
+  source diagnostics for bad structured error bodies.
+
+- 2026-06-21: Kimi key validation smoke now validates the model reply as a
+  JSON object through the shared JSON-object text helper and requires
+  `action == "MoveAhead"` before printing that the key returns parseable JSON.
+  Prefix/suffix prose, arrays, missing actions, or wrong actions now fail as
+  source-labelled validation errors instead of producing a false-green key
+  smoke. Owner layer: Agent Engines And Provider Profiles / dev
+  provider-health harness. Behavior-change class: fail-aloud model-output
+  validation for provider key smoke checks with SDK retry policy preserved.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused Kimi key smoke unit
+  tests, touched-file ruff/format checks, dependency sync,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/check_kimi_key.py` again claims parseable JSON from substring
+  checks, non-object replies, or wrong-action model output.
+
+- 2026-06-21: Direct `KimiCodingProvider` HTTP success bodies now parse
+  through the shared JSON-object text helper before action parsing and usage
+  accounting. Malformed or parseable non-object provider response bodies now
+  fail as source-labelled provider errors, update provider failure status, and
+  avoid deriving fallback actions or cost evidence from corrupt wire data.
+  Owner layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud direct provider wire-source validation with existing retry and
+  model-output fallback policy preserved. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused provider VLM unit tests, touched-file ruff/format
+  checks, dependency sync, changed-code cleanup review, `git diff --check`,
+  and ratchet. Reopen only if `KimiCodingProvider` again trusts wrong-shaped
+  HTTP success JSON before action parsing or usage accounting.
+
+- 2026-06-21: Kimi coding provider-health probe response bodies now parse
+  through the shared JSON-object text helper and validate the minimal
+  `choices[0].message` shape before extracting visible output. Malformed,
+  parseable non-object, or wrong-shaped direct-probe HTTP bodies now become
+  labelled provider-health `FAIL` diagnostics instead of raw indexing/type
+  errors or empty-output ambiguity. Owner layer: Agent Engines And Provider
+  Profiles / dev provider-health harness. Behavior-change class: fail-aloud
+  provider wire-source validation for Kimi direct health probes. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused provider-health script unit
+  tests, touched-file ruff/format checks, dependency sync, `git diff --check`,
+  and ratchet. Reopen only if `check_model_providers.py` again trusts
+  wrong-shaped Kimi coding HTTP JSON before provider-health output extraction.
+
+- 2026-06-21: OpenAI-compatible MiMo tool-call argument parsing now recovers
+  malformed or parseable non-object model output through the shared provider
+  fallback decision instead of raising from `json.loads` before a direct
+  provider run can choose a safe action. Valid tool-call dictionaries still
+  use the existing action/reasoning validator, missing tool-call reasoning can
+  still fall back to `reasoning_content`, and invalid declared actions still
+  map to the safe fallback action. Owner layer: Agent Engines And Provider
+  Profiles. Behavior-change class: robust model-output parsing with safe
+  recovery for direct OpenAI-compatible VLM providers. Metric: ratchet remains
+  at 0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused provider VLM tests plus Nvidia provider
+  tests, touched-file ruff/format checks, dependency sync, changed-code
+  cleanup review, `git diff --check`, and ratchet. Reopen only if
+  `_parse_mimo_message()` can again crash on malformed or non-object tool-call
+  arguments instead of returning the provider fallback action.
+
+- 2026-06-21: RAW-FPV visual-labeler Responses API success and error bodies
+  now route through a UTF-8 check plus the shared JSON-object text helper
+  instead of raw `json.loads`. Malformed, non-UTF-8, or parseable non-object
+  provider HTTP success bodies now fail with labelled RAW-FPV Responses API
+  response source errors, and malformed or wrong-shaped HTTP error bodies are
+  included in provider error rows before visual-labeler predictions can derive
+  confidence from corrupt wire data. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud provider wire-source validation
+  for RAW-FPV visual-labeler evidence. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused RAW-FPV perception probe tests and source tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `run_raw_fpv_perception_probe.py` again accepts malformed, non-UTF-8, or
+  non-object provider Responses API bodies before provider predictions or
+  provider error rows are assembled.
+
+- 2026-06-21: OpenAI Agents SDK live-timing compact metric summaries now treat
+  JSON-looking terminal `detail` strings as structured evidence sources.
+  Valid JSON object details still populate compact RAW-FPV budget counters,
+  plaintext provider details remain tolerated and redacted from compact
+  metrics, and malformed or parseable non-object structured details now emit
+  `detail_source_error` plus `detail_source_error_kind` before report timing
+  attribution can look complete from corrupt terminal detail. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  evidence-summary hardening for compact live timing metrics. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused live runtime unit tests, touched-file
+  ruff/format checks, dependency sync, changed-code cleanup review,
+  `git diff --check`, and ratchet. Reopen only if
+  `run_live_openai_agents_cleanup.py` again silently drops malformed or
+  non-object JSON-looking terminal metric detail before compact timing
+  attribution.
+
+- 2026-06-21: OpenAI Agents SDK operator-console readiness now reuses
+  `openai_agents_runtime_settings()` before publishing provider readiness, so
+  console start is blocked by the same provider/model/base-url/key source
+  rules that runtime launch uses. Unknown `ROBOCLAWS_OPENAI_AGENTS_MODEL`
+  values, conflicting SDK/Codex model sources, and route-incompatible SDK model
+  overrides now report resolver diagnostics in the console provider gate; the
+  generic `ROBOCLAWS_CODE_AGENT_MODEL` alias is intentionally ignored as a
+  direct SDK model source. Owner layer: Thin Runtime / Server Adapter using
+  Agent Engines And Provider Profiles. Behavior-change class: fail-aloud
+  readiness/source-truth alignment for OpenAI Agents SDK provider env. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused operator-console launcher
+  tests, provider catalog tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if operator-console OpenAI Agents SDK readiness can again publish
+  ready-looking provider state for unknown, conflicting, or route-incompatible
+  SDK model/provider settings that runtime launch would reject.
+
+- 2026-06-21: Mify Anthropic provider-route base-url resolution now rejects
+  conflicting `XM_LLM_ANTHROPIC_BASE_URL` and Anthropic URLs derived from
+  `XM_LLM_BASE_URL` before provider readiness or coding-agent launch can
+  publish a plausible endpoint. `provider_readiness()` now reports the same
+  source-labelled conflict with `ok: false`, and
+  `scripts/dev/coding_agent_env.sh` no longer carries a duplicate mify
+  Anthropic URL derivation helper. Owner layer: Agent Engines And Provider
+  Profiles. Behavior-change class: fail-aloud provider route/env source
+  validation and duplicate shell derivation removal. Metric: ratchet remains
+  at 0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused provider catalog tests, coding-agent env
+  helper contract tests, touched-file ruff/format checks, shell syntax check,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only
+  if mify Anthropic readiness or coding-agent launch can again accept
+  conflicting `XM_LLM_ANTHROPIC_BASE_URL` / `XM_LLM_BASE_URL` values and
+  expose ready-looking provider state or a plausible `ANTHROPIC_BASE_URL`.
+
+- 2026-06-21: Operator-console manual-control MCP tool response text now
+  routes JSON-looking payloads through the shared JSON-object text helper
+  instead of raw `json.loads` in `control.py`. Malformed or parseable
+  non-object tool response text now fails as a source-labelled control-call
+  error, writes an error response row without a valid-looking `response`
+  payload, and prevents operator intervention state from deriving confidence
+  from corrupt MCP text. Owner layer: Thin Runtime / Server Adapter. Behavior-
+  change class: internal MCP response source-reader hardening with existing
+  plain-text SDK fallback preserved for non-JSON responses. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused operator-console control source
+  tests, existing operator-console endpoint tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/control.py` regains raw JSON parsing for MCP
+  tool response text or malformed/non-object JSON-looking tool text can again
+  produce valid-looking control response or intervention evidence.
+
+- 2026-06-21: Operator-console camera-angle state now derives from the
+  validated trace JSONL rows already collected by `state.py` instead of
+  re-reading `trace.jsonl` through a private `read_text`/`json.loads` loop in
+  `state_summary.py`. Malformed trace rows keep the existing operator-visible
+  Trace source errors, while camera summary state is computed from the same
+  valid row set used by latest-action state. Owner layer: Thin Runtime /
+  Server Adapter. Behavior-change class: internal duplicate source-reader
+  removal and source-owner consolidation with existing fail-aloud trace
+  diagnostics preserved. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  operator-console state tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/state_summary.py` regains direct trace file
+  reading or raw JSONL parsing for camera state, or if camera state can again
+  silently disagree with operator-console Trace source errors.
+
+- 2026-06-21: Visual-grounding HTTP sidecar request bodies and client response
+  bodies now route through the shared JSON-object text helper instead of local
+  `json.loads`. Malformed, non-UTF-8, or parseable non-object request bodies
+  return source-labelled `bad_request` failure packets before adapter
+  dispatch, and wrong-shaped HTTP responses raise source-labelled
+  `VisualGroundingContractError` before benchmark prediction scoring or
+  cleanup visual evidence can derive candidates from corrupt sidecar wire data.
+  Owner layer: Thin Runtime / Server Adapter plus external visual-grounding
+  capability contract. Behavior-change class: sidecar HTTP ingress/egress
+  source-reader hardening with fail-aloud diagnostics for malformed or
+  wrong-shaped wire packets. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused visual-grounding unit tests, configurable sidecar contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/visual_grounding/serve_visual_grounding_service.py` or
+  `roboclaws/household/visual_grounding.py` regains raw HTTP JSON parsing, or
+  malformed/non-object sidecar wire packets can again reach adapter dispatch or
+  candidate consumers without source-labelled diagnostics.
+
+- 2026-06-21: OpenClaw chat transcript tailing now treats parseable non-object
+  Gateway session JSONL rows as flagged invalid row evidence instead of
+  raising `AttributeError` while pretty-printing the session stream. Malformed
+  JSON keeps the existing `?? invalid json` output, while non-object JSON now
+  prints `?? invalid json object: <type>` and tailing continues. Owner layer:
+  Harness recipes / OpenClaw transcript evidence. Behavior-change class:
+  internal evidence-tailer source-reader hardening with fail-aloud non-object
+  row diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  OpenClaw tailer contract tests, touched-file ruff/format checks,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only
+  if `scripts/openclaw/tail-openclaw-chat.py` can again crash on parseable
+  non-object Gateway session JSONL rows or silently omit malformed transcript
+  row evidence.
+
+- 2026-06-21: Model-matrix benchmark non-stream provider responses now route
+  through the shared JSON-object text helper instead of raw `json.loads`.
+  Malformed or non-object HTTP JSON responses now become source-labelled FAIL
+  rows tied to the case id and benchmark layer before output extraction, token
+  usage, or route-support summaries can derive confidence from corrupt
+  provider wire data. Owner layer: Harness recipes / dev provider benchmark.
+  Behavior-change class: internal dev-harness source-reader consolidation with
+  fail-aloud provider wire diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused model-matrix benchmark unit tests, touched-file
+  ruff/format checks, changed-code cleanup review, `git diff --check`, and
+  ratchet. Reopen only if `scripts/dev/benchmark_model_matrix.py` regains raw
+  non-stream provider response parsing or malformed/non-object provider
+  responses can again feed output extraction or route-support summaries without
+  source-labelled failure diagnostics.
+
+- 2026-06-21: Model-matrix OpenAI Chat stream `data:` events now fail malformed
+  or parseable non-object JSON as `ModelMatrixStreamSourceError` trial failures
+  instead of silently skipping wrong-shaped structured events before a later
+  valid event can produce a healthy-looking stream result. Blank lines, SSE
+  metadata, comments, non-JSON noise, and `data: [DONE]` remain tolerated.
+  Owner layer: Harness recipes / dev provider benchmark. Behavior-change
+  class: internal streaming provider wire source hardening with fail-aloud
+  diagnostics for malformed structured SSE rows. Metric: ratchet remains at
+  0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused model-matrix benchmark unit tests,
+  touched-file ruff/format checks, changed-code cleanup review, `git diff
+  --check`, and ratchet. Reopen only if
+  `scripts/dev/model_matrix_benchmark_wire.py` regains permissive parsing for
+  malformed/non-object structured stream events or corrupt OpenAI Chat stream
+  `data:` rows can again produce valid-looking benchmark PASS rows.
+
+- 2026-06-21: Python quality ratchet baseline reads and Ruff JSON diagnostics
+  now fail through labelled source-reader diagnostics instead of raw
+  `json.loads` / type errors from the gate itself. Malformed or non-object
+  `python_quality_baseline.json` sources return clean `python-quality-ratchet:`
+  CLI failures, and malformed, non-array, or non-object Ruff JSON output fails
+  before comparison logic can derive ratchet confidence from a wrong-shaped
+  diagnostic source. Owner layer: Harness recipes / dev quality gate.
+  Behavior-change class: internal gate source-reader hardening with fail-aloud
+  diagnostics for explicit baseline and tool-output JSON sources. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused python-quality-ratchet unit
+  tests, touched-file ruff/format checks, direct ratchet summary command,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only if
+  `scripts/dev/check_python_quality_ratchet.py` regains raw baseline or Ruff
+  diagnostics JSON parsing that can produce tracebacks or valid-looking
+  ratchet confidence from malformed/wrong-shaped source data.
+
+- 2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
+  shared JSON-object text helper instead of local `json.loads` / type checks.
+  Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now
+  fail at argparse with source-labelled Isaac worker diagnostics before
+  backend navigation handling can consume wrong-shaped public waypoint
+  payloads. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: internal worker CLI source-reader consolidation with
+  fail-aloud inline payload diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused relative-navigation worker routing tests,
+  touched-file ruff/format checks, dependency sync, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/isaac_worker_cli.py` regains local JSON object
+  parsing for inline waypoint JSON or malformed Isaac waypoint payloads can
+  again reach backend command handling without source-labelled diagnostics.
+
+- 2026-06-21: MolmoSpaces worker protocol request rows and inline waypoint
+  JSON now route through the shared JSON-object text helper instead of local
+  `json.loads` / type checks. Malformed or non-object persistent-worker stdin
+  requests now return source-labelled worker error packets before command
+  dispatch, and malformed inline waypoint JSON uses the same worker source
+  diagnostics before navigation handling can consume wrong-shaped payloads.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change
+  class: internal worker protocol source-reader consolidation with fail-aloud
+  command-row diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused relative-navigation worker routing tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/molmospaces_worker_protocol.py` regains local JSON
+  object parsing for stdin requests or inline waypoint JSON, or malformed
+  worker command payloads can again reach command dispatch without
+  source-labelled diagnostics.
+
+- 2026-06-21: Operator-console HTTP POST bodies now route through the shared
+  JSON-object source helper instead of raw `json.loads` in the server request
+  handler. Malformed or non-object browser/operator payloads now return stable
+  400 JSON diagnostics labelled by HTTP method/path before launch, steer,
+  next-goal, control, pause, or stop handlers can mutate run state. The
+  control-endpoint tests also assert corrupt request bodies do not append
+  operator-control rows. Owner layer: Thin Runtime / Server Adapter.
+  Behavior-change class: public local-operator HTTP ingress source-reader
+  hardening with fail-aloud diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused operator-console control-endpoint tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `roboclaws/operator_console/server.py` regains raw POST-body JSON
+  parsing or malformed browser/operator request bodies can again reach launch
+  or control handlers before source-labelled diagnostics.
+
+- 2026-06-21: Launch goal-contract inline JSON now routes through the shared
+  JSON-object source helper instead of raw `json.loads`. Malformed or
+  non-object `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` payloads
+  now fail with source-labelled launch diagnostics before prompt rendering,
+  MCP server startup, or cleanup setup can derive task intent from corrupt
+  inline operator context. Owner layer: Runnable Surface / Thin Runtime launch
+  boundary. Behavior-change class: public launch source-reader hardening with
+  fail-aloud diagnostics for explicit inline operator context. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout. Proof: focused launch goal-contract source tests,
+  touched-file ruff/format checks, dependency sync, `git diff --check`, and
+  ratchet. Reopen only if `roboclaws/launch/goals.py` regains raw inline
+  goal-contract JSON parsing or malformed inline goal context can again
+  produce raw tracebacks or valid-looking launch intent.
+
+- 2026-06-21: Molmo cleanup trace-preserving skill CLI now validates inline
+  `--static-fixture-projection-json` through a skill-local JSON-object source
+  parser instead of raw `json.loads`. Malformed or non-object inline fixture
+  projection payloads now fail with concise CLI diagnostics before routine-plan
+  inspection can derive placement/open-close guidance from corrupt operator
+  context. The touched skill contract tests also explicitly opt synthetic MCP
+  scenarios into synthetic map projection, matching the current Base Navigation
+  Map contract. Owner layer: Agent Skill. Behavior-change class: internal skill
+  CLI source-reader hardening with fail-aloud diagnostics for inline operator
+  context. Metric: ratchet remains at 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused Molmo
+  cleanup skill contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py` regains
+  raw inline static-fixture projection parsing or malformed inline projection
+  context can again produce tracebacks or valid-looking routine guidance.
+
+- 2026-06-21: Agibot nav artifact helper reads now fail saved raw-map gzip
+  JSON and candidate JSON sources through source-labelled vendor CLI
+  diagnostics instead of raw `json.load` / `json.loads` tracebacks. Offline
+  target preparation, candidate navigation submission, and robot-direction
+  overlays now share the same standalone vendor source boundary for malformed,
+  non-object, missing, or non-gzip saved artifacts before deriving map
+  validation or live heading evidence. Owner layer: Backend Runtime /
+  Environment Primitive plus Artifacts, reports, and eval suites.
+  Behavior-change class: internal vendor artifact source-reader hardening with
+  fail-aloud diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused Agibot map-context source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `vendors/agibot_sdk/tools/agibot_nav_artifacts.py` regains raw local JSON
+  parsing for saved raw-map or candidate artifacts, or corrupt Agibot nav
+  artifacts can again produce Python tracebacks or valid-looking map evidence.
+
+- 2026-06-21: Eval-harness required JSON artifact reads now reuse the shared
+  JSON-object source owner instead of carrying a local duplicate parser and a
+  stale optional JSON loader in `run_eval_harness.py`. Malformed,
+  non-object, or missing `eval_results.json` and detached `live_status.json`
+  sources now use canonical source diagnostics before eval aggregate
+  classification or detached live-row polling can derive confidence from
+  corrupt artifacts. Owner layer: Eval harness. Behavior-change class:
+  internal harness source-reader consolidation with fail-aloud diagnostics for
+  required row artifacts. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused eval-harness manifest tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if
+  `skills/eval-harness/scripts/run_eval_harness.py` regains duplicate
+  required JSON-object artifact parsing or malformed eval/live-status sources
+  can again produce non-canonical source diagnostics.
+
+- 2026-06-21: Visual result showcase rendering now routes required
+  `run_result.json` and present `trace.jsonl` evidence through the shared
+  JSON-object/JSONL source owners instead of raw local JSON parsing. Malformed
+  or non-object run artifacts now fail with concise showcase source
+  diagnostics before GIF/contact-sheet rendering can derive visible proof from
+  corrupt result or trace evidence. Owner layer: Agent Skill plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal skill report
+  source-reader hardening with fail-aloud diagnostics for completed-run
+  artifacts. Metric: ratchet remains at 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused visual
+  result showcase skill contract tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if
+  `skills/visual-result-showcase/scripts/render_household_cleanup_showcase.py`
+  regains raw run-result or trace JSON parsing or malformed showcase sources
+  can again produce tracebacks or valid-looking visual evidence.
+
+- 2026-06-21: Molmo cleanup target-query recovery helper now routes explicit
+  `runtime_metric_map.json` artifact reads through the shared JSON-object
+  source owner instead of raw `json.loads(path.read_text(...))`. Malformed,
+  missing, or non-object Runtime Metric Map sources now fail with concise CLI
+  source diagnostics before offline target recovery can derive confidence from
+  corrupt public map evidence. Owner layer: Agent Skill plus Runtime Metric Map
+  artifact contract. Behavior-change class: internal skill CLI source-reader
+  hardening with fail-aloud diagnostics for public map artifacts. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 80 oversized modules
+  in the current shared checkout. Proof: focused Molmo cleanup target-query
+  skill-script contract tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/target_query_recovery.py` regains raw
+  Runtime Metric Map file parsing or malformed target-query sources can again
+  produce tracebacks or valid-looking recovery output.
+
+- 2026-06-21: Molmo cleanup skill scratchpad CLI now routes present
+  `cleanup_scratch.json` files and inline `--result-json` payloads through one
+  script-local JSON-object source parser instead of raw `json.loads` calls.
+  Malformed or non-object scratchpad/result sources now fail with concise CLI
+  source diagnostics before local agent memory can be validated or updated.
+  Owner layer: Agent Skill. Behavior-change class: internal skill CLI
+  source-reader hardening with fail-aloud diagnostics for non-authoritative
+  agent memory inputs. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  Molmo cleanup scratchpad skill-script contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `skills/molmo-realworld-cleanup/scripts/scratchpad.py` regains raw
+  scratchpad/result JSON parsing or malformed scratchpad sources can again
+  produce tracebacks or update local memory as wrong-shaped payloads.
+
+- 2026-06-21: Scene-Gaussian alignment evidence summarizer now routes required
+  readiness artifacts, explicit navigation artifacts, and explicit
+  evidence-summary artifacts through one source-labelled JSON-object helper
+  before writing alignment summaries or manifests. Malformed, missing, or
+  non-object proof artifacts now fail with concise CLI source diagnostics
+  instead of raw JSON tracebacks. Owner layer: Agent Skill plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal skill CLI
+  source-truth hardening with fail-aloud diagnostics for handoff artifacts.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused scene-Gaussian skill
+  contract tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if
+  `skills/scene-gaussian-map-alignment/scripts/summarize_alignment_evidence.py`
+  regains raw JSON artifact loading or malformed readiness/navigation/summary
+  inputs can again write alignment evidence or produce Python tracebacks.
+
+- 2026-06-21: Agibot SDK cleanup backend explicit JSON inputs now fail through
+  source-labelled CLI diagnostics instead of raw `json.loads` tracebacks in
+  the vendor runner. `--context-json`, `--agent-view-json`, live-navigation
+  `--context-json`, and attached map artifact `source.json` all route through
+  one runner-local JSON-object source helper, preserving the standalone
+  `vendors/agibot_sdk` execution context. Owner layer: Backend Runtime /
+  Environment Primitive. Behavior-change class: internal CLI source-reader
+  hardening with fail-aloud diagnostics for malformed, missing, or non-object
+  explicit JSON sources. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  Agibot map-context script contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the Agibot SDK cleanup
+  runner regains raw local `json.loads(path.read_text(...))` parsing for
+  explicit JSON input files or malformed source files can again produce Python
+  tracebacks instead of source-labelled CLI errors.
+
+- 2026-06-21: Persistent MolmoSpaces worker ready and command-response stdout
+  packets now delegate to the shared worker JSON-object source helper instead
+  of keeping local `json.loads` calls in
+  `roboclaws/household/subprocess_backend.py`. Malformed or non-object
+  persistent ready/response packets now fail with
+  `MolmoSpaces persistent worker ...` source diagnostics before worker
+  readiness, response-id validation, or command result handling can derive
+  confidence from a wrong-shaped structured packet. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: internal
+  persistent-worker source-reader consolidation with fail-aloud packet
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  worker-runner parser tests, MolmoSpaces persistent packet/source tests,
+  touched-file ruff/format checks, changed-code cleanup review, and ratchet.
+  Reopen only if persistent MolmoSpaces ready/response handling regains local
+  JSON packet parsing or wrong-shaped structured stdout can again reach
+  readiness/result handling without worker source diagnostics.
+
+- 2026-06-21: Repo-local dotenv parsing now has a shared core owner in
+  `roboclaws/core/dotenv.py` instead of duplicate local parsers in provider
+  dev scripts and operator-console launch code. `load_repo_dotenv()` remains
+  the operator-console root `.env` facade, while
+  `scripts/dev/check_model_providers.py` and
+  `scripts/dev/benchmark_model_matrix.py` preserve explicit `--dotenv <path>`
+  loading and process-env side effects through the shared helper. Owner layer:
+  Thin Runtime / Server Adapters plus Harness recipes / dev provider
+  benchmark. Behavior-change class: internal parser consolidation with stable
+  no-overwrite, quote-cleaning, blank/comment skipping, and `export `
+  value-prefix behavior. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused core dotenv tests, provider-script dotenv wrapper tests, existing
+  operator-console repo-dotenv test, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  repo-local dotenv parsing regains separate parser loops or provider
+  `--dotenv` paths and operator-console `.env` loading diverge again.
+
+- 2026-06-21: Shared one-shot subprocess worker stdout result parsing now
+  delegates JSON-looking rows to the core JSON-object text helper instead of
+  keeping a local `json.loads` loop in
+  `roboclaws/household/worker_runner.py`. MolmoSpaces and Isaac backend
+  workers still tolerate ordinary stdout noise and bracketed log rows such as
+  `[INFO]`, while malformed object-shaped rows or parseable non-object rows now
+  fail with line-labelled `<worker> worker stdout row` source diagnostics
+  before backend callers can use missing or stale structured worker packets.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change class:
+  internal worker stdout source-reader consolidation with fail-aloud
+  structured-row diagnostics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused worker-runner parser/subprocess tests, MolmoSpaces parser alias test,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if `worker_runner.py` regains a local JSON
+  stdout parser or malformed object-shaped/non-object worker result rows can
+  again be skipped into a generic missing-result path after a previous valid
+  worker packet.
+
+- 2026-06-21: Eval-runner tolerant `trace.jsonl` reading now delegates to a
+  core JSONL row collector instead of keeping a local
+  `read_text` / `splitlines` / `json.loads` loop in
+  `roboclaws/evals/runner.py`. The shared collector returns valid partial rows
+  plus row-level issues for consumers that intentionally grade from partial
+  trace evidence, while eval trajectory graders preserve the existing
+  `trace_json_invalid` violation and `line N: invalid_json...` /
+  `invalid_json_object` parse-error wording. Owner layer: Eval Suites plus
+  Artifacts, reports, and eval suites. Behavior-change class: internal
+  source-reader consolidation with stable partial-trace grading diagnostics.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout. Proof: focused core JSON source
+  tests, eval-runner trace-source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `roboclaws/evals/runner.py` regains a local `trace.jsonl` parser or corrupt
+  present eval trace rows can again affect trajectory/open-ended grading
+  outside the core JSONL row-source owner.
+
+- 2026-06-21: Operator-message inbox JSONL reading now delegates to the
+  console-owned row collector used by other operator-console JSONL sources.
+  `interactions.py` no longer has a separate `read_text` / `splitlines` /
+  `json.loads` loop for `operator_messages.jsonl`; valid partial rows remain
+  visible in list/state views while malformed or non-object present rows keep
+  the existing operator-message source-error payload, and MCP
+  `check_operator_messages` still fails closed before returning queued
+  steering. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: internal source-reader consolidation with stable operator-visible
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  operator-console interaction source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `roboclaws/operator_console/interactions.py` regains a local
+  `operator_messages.jsonl` parser or corrupt present operator-message rows
+  can again feed MCP steering without source diagnostics.
+
+- 2026-06-21: OpenAI Agents metrics JSONL reads now delegate to the shared
+  JSONL source owner through the existing metrics helper. Missing
+  `openai-agents-events*.jsonl`, `openai-agents-spans*.jsonl`, and
+  `trace.jsonl` files remain intentional empty evidence, while malformed or
+  non-object present rows now use canonical `OpenAI Agents metrics` or
+  `OpenAI Agents live` row-source diagnostics before event, span,
+  context-growth, or live-timing metrics can derive confidence from partial
+  artifacts. Owner layer: Agent Engines And Provider Profiles plus Artifacts,
+  reports, and eval suites. Behavior-change class: internal source-reader
+  consolidation with stable optional-missing semantics and canonical row-source
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; the metrics helper
+  drops below the 800-line oversized threshold. Proof: focused OpenAI Agents
+  metrics source tests, existing live-runtime metrics source tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/openai_agents_metrics.py` regains a local JSONL row
+  parser or corrupt present OpenAI Agents metrics/live trace rows can again
+  feed metrics or live timing without canonical row-source diagnostics.
+
+- 2026-06-21: RAW-FPV perception probe Codex event JSONL reads now delegate to
+  the shared JSONL source owner, including a new line-numbered row helper for
+  consumers that need row-local secondary parsing. Present malformed or
+  non-object `codex-events*.jsonl` rows now use canonical `RAW-FPV Codex event`
+  row-source diagnostics before observation frames can be collected from
+  partial event evidence, while embedded MCP observe-result parse errors still
+  point at the original event line. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: internal source-reader consolidation with
+  canonical row-source diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused core JSON-source and RAW-FPV perception probe
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py` regains a local
+  Codex-event JSONL row parser or corrupt present `codex-events*.jsonl` rows
+  can again feed RAW-FPV observation-frame collection without canonical
+  row-source diagnostics.
+
+- 2026-06-21: Operator-console JSONL row reading now has one console-owned
+  source collector for trace/event state display, run-history attachment, and
+  operator-control append preflight. State and history paths preserve their
+  partial valid-row display behavior while surfacing malformed or non-object
+  present rows as source errors, and operator control remains fail-fast before
+  adding a new command row. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: internal source-reader consolidation with stable
+  operator-visible diagnostics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout; three
+  local JSONL parsers became one console helper. Proof: focused
+  operator-console state/history/control endpoint tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if console state/history/control regains duplicate row
+  parsers or corrupt present JSONL rows can again feed operator-visible status
+  or append new operator-control rows without source diagnostics.
+
+- 2026-06-21: OpenAI Agents RAW-FPV budget guard trace parsing now delegates to
+  the shared JSONL source helper for present `trace.jsonl` rows. Missing trace
+  files remain the deliberate no-budget-evidence path, while malformed or
+  non-object present rows now use canonical `OpenAI Agents budget trace`
+  `path:row` source wording before candidate-attempt, repeated-failure, or
+  observe-per-waypoint budget decisions can derive confidence from partial
+  trace history. Owner layer: Agent Engines And Provider Profiles plus
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation with stable missing-source budget semantics and canonical
+  row-source diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout; new
+  source-reader regressions live in a focused OpenAI Agents budget-source test
+  file instead of growing the largest live-runtime test module. Proof: focused
+  OpenAI Agents budget source/behavior tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/openai_agents_budget.py` regains a local JSONL row
+  parser or corrupt present `trace.jsonl` rows can again feed RAW-FPV budget
+  decisions without canonical row-source diagnostics.
+
+- 2026-06-21: Model-latency calibration JSONL source parsing now delegates to
+  the shared JSONL source helper for present `model_call_metrics.jsonl` rows.
+  Missing metric files remain the deliberate empty-source path that produces
+  insufficient-sample diagnostics, while malformed or non-object present rows
+  now use canonical `model-call metrics` `path:row` source wording before
+  calibration fitting, holdout validation, sample counts, or coefficient sets
+  can derive confidence from partial telemetry. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader consolidation
+  with stable missing-source calibration semantics and canonical row-source
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; calibration tests now
+  live in a focused report test file instead of keeping them in the larger
+  live-performance test module. Proof: focused calibration/report-performance
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/reports/calibrate_model_latency.py` regains a local JSONL row
+  parser or corrupt present `model_call_metrics.jsonl` rows can again feed
+  fitting or holdout validation without canonical row-source diagnostics.
+
+- 2026-06-21: MolmoSpaces grasp initial-contact diagnostics now validate
+  explicit candidate grasp JSON in the parent process before launching the
+  child probe. Present malformed or non-object candidate files fail with
+  path-labelled `candidate grasp JSON` source errors, valid candidate files
+  still launch the probe, and missing candidate files keep the existing
+  blocked-result path. Owner layer: Backend Runtime / Environment Primitive
+  plus artifact diagnostics. Behavior-change class: fail-aloud explicit
+  artifact source validation. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused initial-contact diagnostics tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if corrupt initial-contact
+  candidate grasp JSON can again reach the child probe and be reported as a
+  generic probe blocker instead of a candidate source error.
+
+- 2026-06-21: Generated-mess placement seeding now treats manifest
+  `relation` and `placement_index` as canonical source truth in both
+  MolmoSpaces and Isaac scenario-state helpers. The generated-mess contract
+  owner exposes shared validators used by initial manifest materialization and
+  later worker-state placement seeding, so persisted or hand-built worker
+  state with malformed placement fields fails before backend fallbacks can
+  emit plausible `inside`/loop-index placement diagnostics. Non-manifest
+  generated-mess seeding keeps its backend fallback behavior. Owner layer:
+  Backend Runtime / Environment Primitive plus the Generated Mess Set
+  manifest contract. Behavior-change class: fail-aloud runtime manifest field
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  generated-mess scenario-state tests, existing generated-mess manifest and
+  MolmoSpaces/Isaac worker tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if manifest-backed
+  generated-mess placement can again default invalid `relation` or
+  `placement_index` values during backend seeding.
+
+- 2026-06-21: Camera-control request normalization now rejects malformed or
+  missing explicit render-pose vectors and non-object view rows before
+  renderers can emit valid-looking camera artifacts from fallback origin/default
+  pose data. Canonical eye/target views require finite 3-number `eye`,
+  `target`/`lookat`, and `up` vectors; anchor-orbit views require finite
+  `target`/`lookat`; MolmoSpaces and Isaac camera-view spec helpers reuse the
+  shared strict vector parser for direct calls; and Isaac USD-bound target
+  derivation remains an explicit covered backend path. Owner layer: Backend
+  Runtime / Environment Primitive plus the public household camera-control
+  contract. Behavior-change class: fail-aloud camera-control source/vector
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  camera-control, MolmoSpaces camera-view, Isaac camera-view, and scene-camera
+  color-profile tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if malformed
+  camera-control `target`/`lookat`/`eye` rows can again become origin/default
+  render poses or disappear from the view list without a source error.
+
+- 2026-06-21: Operator-console runtime inventory now rejects corrupt
+  successful Docker mount metadata before deciding whether a running container
+  is repo-relevant. Missing Docker and nonzero `docker inspect` stay optional
+  host-probe paths, valid repo-mounted containers still appear as running
+  Docker tasks, and malformed, non-array, or non-object successful mount JSON
+  now becomes a blocking `source_error` task instead of disappearing as "no
+  repo-relevant mount." Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud inventory source validation for
+  task-container discovery evidence. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused operator-console runtime-inventory tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if corrupt present Docker mount metadata
+  can again remove a running container from operator-console inventory or
+  blockers.
+
+- 2026-06-21: Operator-console stop handling now rejects corrupt successful
+  Docker mount metadata before deciding whether a task container is attached
+  to the run workspace. Missing Docker and nonzero `docker inspect` remain
+  optional cleanup paths, while malformed, non-array, or non-object successful
+  mount JSON now raises an operator stop source error before live-status or
+  operator-state rewrite and before backend-lock release. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud stop-source
+  validation for task-container cleanup evidence. Metric: ratchet remains at
+  0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused operator-console launcher tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if corrupt present Docker mount metadata
+  can again disappear into "no mounted container" during operator stop
+  handling.
+
+- 2026-06-21: MolmoSpaces visual backend slot capacity config now rejects
+  invalid `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots`
+  values before live launch or operator-console inventory can report a
+  plausible one-slot backend. Unset or blank env still uses the documented
+  single-slot default, normal slot contention still reports active slot
+  evidence, live household launch now names invalid slot config separately
+  from contention, and runtime inventory emits a blocking `source_error` task
+  for bad slot config. Owner layer: Backend Runtime / Environment Primitive
+  plus Thin Runtime / Server Adapters. Behavior-change class: fail-aloud
+  runtime capacity config validation. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused visual-slot, household live-driver, and
+  operator-console runtime-inventory tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only
+  if invalid MolmoSpaces visual backend slot capacity config again silently
+  falls back to a valid-looking slot count or disappears from console
+  readiness/inventory evidence.
+
+- 2026-06-21: RAW-FPV perception probe runtime-prior loading now distinguishes
+  explicit operator input from the default optional prior. User-supplied
+  `--runtime-map-prior` paths, including both split and equals CLI spellings,
+  fail aloud when missing instead of silently producing prior-free prompt
+  inputs; the missing default prior remains the deliberate no-prior
+  convenience. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud explicit artifact source validation.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout; the extra regression lives in a
+  focused RAW-FPV source test file instead of growing the oversized main
+  RAW-FPV test module. Proof: focused RAW-FPV perception probe tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if explicit runtime-prior CLI input can
+  again disappear into empty prior context without a source error.
+
+- 2026-06-21: OpenAI Agents model-input compaction threshold parsing now
+  rejects boolean and non-positive values before live runtime or performance
+  profile metadata can report plausible compaction thresholds. The live
+  runtime path rejects bad `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS`
+  env values and direct `model_input_compaction.min_chars` metadata, and the
+  perf-profile producer rejects bad `model_input_compaction_min_chars` inputs
+  instead of normalizing `0`, negatives, or booleans to `1`/`1200`. Owner
+  layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud env/direct config validation for model-facing evidence policy.
+  Metric: ratchet remains at 0 Ruff complexity rows and reports 80 oversized
+  modules in the current shared checkout; the extra regression cases live in a
+  focused config test file instead of growing the largest live-runtime test
+  module. Proof: focused OpenAI Agents runtime/config tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if OpenAI Agents model-input compaction or perf-profile
+  threshold parsing again accepts booleans or non-positive values as valid
+  thresholds.
+
+- 2026-06-21: MolmoSpaces rigid grasp-cache generation preflight now treats
+  successful runtime probes with malformed, non-object, or path-less stdout as
+  blocked readiness evidence. The runtime probe parses stdout through the
+  shared JSON-object text helper, preserves normal subprocess-failure blocking,
+  and no longer reports `python_ready=True` with blank MolmoSpaces root/assets
+  evidence. Owner layer: Backend Runtime / Environment Primitive plus
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  runtime readiness source validation. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused planner task feasibility tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if grasp-cache generation preflight again treats
+  malformed/non-object runtime-probe stdout or missing runtime paths as ready
+  MolmoSpaces evidence.
+
 - 2026-06-21: Scene-camera comparison MolmoSpaces source provenance now
   separates missing packages from installed packages with absent, malformed,
   or non-object `direct_url.json` metadata. Valid installed metadata still
@@ -6251,6 +7069,127 @@ logs before choosing the next slice.
   B1 readiness contract tests, ruff, format check, diff check, and ratchet.
   Reopen only if `check_b1_map12_readiness.py` regains direct
   `json.loads(read_text(...))` parsing for navigation-memory artifacts.
+- Isaac Lab runtime smoke checker sidecar loading now reserves stdout-last-JSON
+  tolerance for the child-process `--init-result` source only. Explicit
+  `--state-path` and `--robot-views-result` artifacts route through the shared
+  JSON-object source helper, so prefixed log text, malformed JSON, or
+  non-object sidecars fail with path-labelled source errors before state
+  consistency or robot-view evidence can produce valid-looking confidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source validation. Metric: ratchet remains at 0 Ruff complexity
+  rows and 80 oversized modules. Proof: focused runtime-smoke checker tests,
+  ruff, format check, diff check, changed-code cleanup review, and ratchet.
+  Reopen only if `check_isaac_lab_runtime_smoke_result.py` applies
+  stdout-last-JSON tolerance to explicit sidecar artifacts again or accepts
+  non-object sidecar evidence.
+- Agibot map-build checker trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `Agibot map-build trace` source errors before
+  public-trace privacy checks or duplicate-navigation checks can pass from
+  partial trace evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused Agibot and cleanup trace-source checker tests, ruff, format check,
+  diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `realworld_agibot_map_build_checker.py` regains local raw JSONL trace
+  parsing or accepts malformed/non-object trace rows.
+- Isaac semantic-pose checker trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `Isaac semantic-pose trace` source errors before
+  semantic-pose pick/place provenance checks can pass from partial trace
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused semantic-pose and cleanup trace-source checker tests, ruff, format
+  check, diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `isaac_semantic_pose_checker.py` regains local raw JSONL trace parsing or
+  accepts malformed/non-object trace rows.
+- RAW-FPV private-label trace JSONL loading now routes through the shared JSONL
+  source helper instead of a local parser. Malformed or non-object trace rows
+  fail with row-labelled `RAW-FPV private-label trace` source errors before
+  first-sweep observation extraction can pass from partial trace evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet remains at 0 Ruff
+  complexity rows and 80 oversized modules. Proof: focused RAW-FPV perception
+  probe tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if `generate_raw_fpv_private_labels.py` regains local
+  raw JSONL trace parsing or accepts malformed/non-object trace rows.
+- Cleanup artifact-report trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `cleanup report trace` source errors before
+  stale cleanup report re-rendering can pass semantic timeline evidence from
+  partial trace data into report generation. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud source-reader
+  consolidation. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: focused artifact-report contract tests, ruff,
+  format check, diff check, changed-code cleanup review, and ratchet. Reopen
+  only if `artifact_report.py` regains local raw JSONL trace parsing or accepts
+  malformed/non-object trace rows.
+- Planner manipulation probe stdout parsing now fails malformed or non-object
+  JSON-looking worker rows aloud instead of silently skipping them before
+  runtime diagnostics, CUDA snapshots, worker stage events, or blocked/proven
+  manipulation evidence are assembled. Ordinary non-JSON log lines remain
+  tolerated. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud structured stdout source validation.
+  Metric: ratchet remains at 0 Ruff complexity rows and 80 oversized modules.
+  Proof: focused planner manipulation checker tests, ruff, format check, diff
+  check, changed-code cleanup review, and ratchet. Reopen only if
+  `planner_manipulation_probe_result.py` again silently skips malformed or
+  non-object JSON-looking worker stdout rows.
+- Household cleanup and Agibot map-build MCP server self-trace loading now
+  routes `trace.jsonl` through the shared JSONL source helper instead of local
+  ad hoc readers. Malformed or non-object trace rows surface as
+  server-labelled source errors at the `done` boundary before readiness,
+  policy trace, raw-FPV observation, or run-result evidence can pass from a
+  partial MCP trace. Owner layer: MCP Capability Contract And Tools plus Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud source-reader
+  consolidation. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: focused cleanup and Agibot MCP server contract
+  tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if `realworld_mcp_server.py` or
+  `agibot_map_build_mcp_server.py` regains local permissive/self-trace parsing
+  or accepts malformed/non-object `trace.jsonl` rows before done evidence.
+- Isaac runtime checker no longer carries the unused `_trace_events_from_path`
+  helper. Current cleanup trace and Isaac semantic-pose trace source
+  validation live in the cleanup-result and semantic-pose checker owners, so
+  the stale raw JSONL reader is deleted instead of hardened. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: no-caller stale
+  raw-reader deletion. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: exact no-reference search for
+  `scripts/molmo_cleanup/isaac_runtime_checker.py`
+  `_trace_events_from_path`, focused cleanup-result checker import/contract
+  tests, ruff, format check, diff check, changed-code cleanup review, and
+  ratchet. Reopen only if a real caller needs Isaac-runtime-specific trace
+  parsing instead of the existing cleanup or semantic-pose checker trace
+  owners.
+- Codex and Claude live cleanup timing trace readers now route present
+  `trace.jsonl` and Codex event JSONL rows through the shared JSONL source
+  helper instead of duplicate local row parsers. Missing trace sidecars remain
+  optional, while malformed or non-object present rows keep route-labelled
+  source errors before live timing can derive MCP timing confidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet remains at 0 Ruff
+  complexity rows and 80 oversized modules. Proof: focused Codex/Claude live
+  timing trace-source tests, Codex event-summary source test, ruff, format
+  check, diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `run_live_codex_cleanup.py` or `run_live_claude_cleanup.py` regains local
+  raw JSONL row parsing or accepts malformed/non-object present live trace
+  rows before route timing/status confidence.
+- Report-performance JSONL reads now route through the shared JSONL source
+  helper instead of a local row parser, while preserving the
+  `ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
+  Codex/Claude event, and provider-request metrics consumers. Malformed and
+  non-object present rows now use canonical `path:row` source wording before
+  metrics or comparison rows can derive confidence from partial JSONL
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused report-performance trace/span/provider JSONL source tests,
+  provider-request happy-path test, ruff, format check, diff check,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `live_performance.py` regains local raw JSONL row parsing or accepts
+  malformed/non-object present report-performance JSONL rows before metrics
+  confidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

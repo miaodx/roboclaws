@@ -74,6 +74,10 @@ def acquire_household_live_run_lease(
                 owner=owner,
             )
         except VisualBackendSlotError as exc:
+            if not str(exc).startswith("all "):
+                raise RuntimeError(
+                    f"invalid MolmoSpaces visual backend slot config: {exc}"
+                ) from exc
             detail = f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
             raise RuntimeError(
                 "no MolmoSpaces visual backend slot is available"

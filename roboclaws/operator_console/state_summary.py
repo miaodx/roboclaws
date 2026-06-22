@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 
@@ -16,22 +14,13 @@ class _CameraTraceState:
     current_waypoint_id: str = ""
 
 
-def camera_angle_summary(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-
+def camera_angle_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     state = _CameraTraceState(
         offset={"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
         latest_adjust={},
     )
-    for line in lines:
-        payload = _json_line_payload(line)
-        if isinstance(payload, dict):
-            _apply_camera_trace_payload(state, payload)
+    for payload in rows:
+        _apply_camera_trace_payload(state, payload)
 
     if not state.latest_adjust and state.offset == {
         "yaw_delta_deg": 0.0,
@@ -47,15 +36,6 @@ def camera_angle_summary(path: Path) -> dict[str, Any]:
         "reset_on_navigation": True,
         "summary": _camera_angle_label(state.offset, active=active),
     }
-
-
-def _json_line_payload(line: str) -> Any:
-    if not line.strip():
-        return None
-    try:
-        return json.loads(line)
-    except json.JSONDecodeError:
-        return None
 
 
 def _apply_camera_trace_payload(state: _CameraTraceState, payload: dict[str, Any]) -> None:

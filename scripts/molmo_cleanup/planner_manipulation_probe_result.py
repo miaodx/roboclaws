@@ -294,14 +294,22 @@ def _cuda_memory_snapshots(worker_events: list[dict[str, Any]]) -> list[Any]:
 
 def _parse_stdout_json_objects(stdout: str) -> list[dict[str, Any]]:
     objects = []
-    for line in stdout.splitlines():
+    for line_number, line in enumerate(stdout.splitlines(), start=1):
         line = line.strip()
-        if not line.startswith("{"):
+        if not line.startswith(("{", "[")):
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"planner manipulation probe stdout row must contain valid JSON object: "
+                f"stdout:{line_number}: {exc.msg}"
+            ) from exc
         if isinstance(payload, dict):
             objects.append(payload)
+        else:
+            raise ValueError(
+                "planner manipulation probe stdout row must contain a JSON object: "
+                f"stdout:{line_number}"
+            )
     return objects

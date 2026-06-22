@@ -8,6 +8,7 @@ from roboclaws.core.json_sources import read_json_value
 from roboclaws.household.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CANONICAL_CAMERA_MODEL,
+    camera_pose_vec3,
     load_camera_control_request,
     normalize_camera_control_request,
 )
@@ -55,20 +56,18 @@ def isaac_scene_camera_view_spec(
     )
     usd_bounds_target = usd_bounds.get("target") if isinstance(usd_bounds, dict) else None
     target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
+    target_field = "target" if raw_spec.get("target") is not None else "lookat"
     if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
-        target = camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target = camera_vec3(raw_spec.get(target_field), field_name=target_field)
         target_source = "canonical_explicit_target"
     elif usd_bounds_target is not None:
         target = usd_bounds_target
     else:
-        target = camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target = camera_vec3(raw_spec.get(target_field), field_name=target_field)
         target_source = "explicit_target_or_default"
     backend_transform = backend_transform_for_lane(raw_spec, "isaaclab-prepared-usd")
     if "eye" in raw_spec and raw_spec.get("eye") is not None:
-        eye = camera_vec3(
-            raw_spec.get("eye"),
-            default=[target[0], target[1] - 4.0, target[2] + 2.0],
-        )
+        eye = camera_vec3(raw_spec.get("eye"), field_name="eye")
         if backend_transform:
             eye = apply_scene_transform_to_point(eye, backend_transform)
             target = apply_scene_transform_to_point(target, backend_transform)
@@ -205,10 +204,8 @@ def eye_from_lookat_spec(
     ]
 
 
-def camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return [float(default[0]), float(default[1]), float(default[2])]
-    return [float(value[0]), float(value[1]), float(value[2])]
+def camera_vec3(value: Any, *, field_name: str = "camera vector") -> list[float]:
+    return camera_pose_vec3(value, field_name=field_name)
 
 
 def image_has_variance(array: Any, *, np: Any) -> bool:

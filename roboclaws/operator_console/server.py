@@ -12,6 +12,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.operator_console.control import (
     OperatorControlError,
     read_operator_state_for_control,
@@ -215,7 +216,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         try:
-            payload = self._read_payload()
+            payload = self._read_payload(source=f"POST {parsed.path}")
             if self._handle_exact_post(parsed.path, payload):
                 return
             if self._handle_run_action_post(parsed.path, payload):
@@ -533,15 +534,16 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         del payload
         self._json(stop_console_run(self.repo_root, run_id, emergency=True))
 
-    def _read_payload(self) -> dict[str, object]:
+    def _read_payload(self, *, source: str) -> dict[str, object]:
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
             return {}
         data = self.rfile.read(length)
-        payload = json.loads(data.decode("utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError("expected JSON object")
-        return payload
+        return parse_json_object_text(
+            data.decode("utf-8"),
+            label="operator console request body",
+            source=source,
+        )
 
     def _json(self, payload: object, *, status: int = 200) -> None:
         data = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")

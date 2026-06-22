@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_jsonl_objects
+
 MODEL_SERVICE_FALLBACK_SCHEMA = "openai_agents_model_service_fallback_v1"
 MODEL_RACING_OBSERVABILITY_SCHEMA = "openai_agents_model_racing_observability_v1"
 MODEL_INPUT_FILTER_SCHEMA = "openai_agents_model_input_filter_v1"
@@ -732,22 +734,8 @@ def read_openai_agents_jsonl_source(
 ) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    events: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        source = f"{path}:{line_number}"
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"{source_label} {source}: invalid JSON: {exc.msg}") from exc
-        if not isinstance(item, dict):
-            kind = type(item).__name__
-            raise ValueError(f"{source_label} {source}: non-object JSON: {kind}")
-        events.append(item)
-    return events
+    label = source_label.removesuffix(" source")
+    return read_jsonl_objects(path, label=label)
 
 
 def _unavailable_metrics(source: str, limitation: str) -> dict[str, Any]:

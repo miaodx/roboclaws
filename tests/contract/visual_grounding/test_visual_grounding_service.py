@@ -6,6 +6,8 @@ import json
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -496,6 +498,35 @@ def test_configurable_service_rejects_pipeline_mismatch() -> None:
     assert response["status"] == "failed"
     assert response["error"]["reason"] == "pipeline_mismatch"
     assert response["candidates"] == []
+
+
+def test_configurable_service_rejects_non_object_request_before_dispatch() -> None:
+    server = _start_service(pipeline_id="grounding-dino", adapter_mode="auto")
+    try:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/v1/visual-grounding/candidates",
+            data=b"[]",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            payload = response.read()
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 400
+        payload = exc.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    response = json.loads(payload.decode("utf-8"))
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "bad_request"
+    assert response["candidates"] == []
+    assert (
+        response["error"]["message"]
+        == "visual grounding HTTP request source must contain a JSON object: "
+        "POST /v1/visual-grounding/candidates"
+    )
 
 
 def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> None:

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
 from roboclaws.household.report import render_cleanup_report
 from roboclaws.household.types import (
     CleanupObject,
@@ -100,7 +99,7 @@ def is_cleanup_run_result_artifact(path: Path) -> bool:
         return False
     try:
         run_result = _read_json(run_result_path)
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, ValueError):
         return False
     return is_cleanup_run_result(run_result)
 
@@ -168,14 +167,7 @@ def load_cleanup_scenario_artifact(scenario_path: Path) -> CleanupScenario:
 
 
 def load_trace_events(trace_path: Path) -> list[dict[str, Any]]:
-    trace_events: list[dict[str, Any]] = []
-    for line in Path(trace_path).read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        event = json.loads(line)
-        if isinstance(event, dict):
-            trace_events.append(event)
-    return trace_events
+    return read_jsonl_objects(Path(trace_path), label="cleanup report trace")
 
 
 def _cleanup_object_from_dict(data: dict[str, Any]) -> CleanupObject:

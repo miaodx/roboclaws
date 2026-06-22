@@ -200,6 +200,52 @@ def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
     )
 
 
+def test_mify_anthropic_route_rejects_conflicting_base_url_envs() -> None:
+    route = provider_route_spec("mimo-mify-anthropic")
+
+    assert (
+        route_base_url(
+            route,
+            env={
+                "XM_LLM_BASE_URL": "https://api.llm.example/v1",
+                "XM_LLM_ANTHROPIC_BASE_URL": "https://api.llm.example/anthropic",
+            },
+        )
+        == "https://api.llm.example/anthropic"
+    )
+    with pytest.raises(
+        ValueError,
+        match="conflicting provider route base_url for mimo-mify-anthropic",
+    ) as exc_info:
+        route_base_url(
+            route,
+            env={
+                "XM_LLM_BASE_URL": "https://api.llm.example/v1",
+                "XM_LLM_ANTHROPIC_BASE_URL": "https://anthropic.example",
+            },
+        )
+    assert "XM_LLM_ANTHROPIC_BASE_URL='https://anthropic.example'" in str(exc_info.value)
+    assert "XM_LLM_BASE_URL derives 'https://api.llm.example/anthropic'" in str(exc_info.value)
+
+
+def test_mify_anthropic_readiness_rejects_conflicting_base_url_envs() -> None:
+    readiness = provider_readiness(
+        agent_engine="claude-code",
+        provider_profile="mimo-mify-anthropic",
+        env={
+            "XM_LLM_API_KEY": "key",
+            "XM_LLM_BASE_URL": "https://api.llm.example/v1",
+            "XM_LLM_ANTHROPIC_BASE_URL": "https://anthropic.example",
+        },
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["missing_env"] == []
+    assert "conflicting provider route base_url for mimo-mify-anthropic" in readiness["message"]
+    assert "XM_LLM_ANTHROPIC_BASE_URL='https://anthropic.example'" in readiness["message"]
+    assert "XM_LLM_BASE_URL derives 'https://api.llm.example/anthropic'" in readiness["message"]
+
+
 def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None:
     route = provider_route_spec("minimax-responses")
     model = resolve_model("MiniMax-M3")

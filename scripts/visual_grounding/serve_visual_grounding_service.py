@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import parse_json_object_text  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     validate_visual_grounding_request,
     visual_grounding_failure_response,
@@ -98,7 +99,10 @@ def make_handler(
 
             length = int(self.headers.get("Content-Length") or 0)
             try:
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                payload = _read_request_json_object(
+                    self.rfile.read(length),
+                    source=f"POST {self.path}",
+                )
                 validate_visual_grounding_request(payload)
             except Exception as exc:
                 self._write_json(
@@ -137,6 +141,16 @@ def make_handler(
             self.wfile.write(body)
 
     return Handler
+
+
+def _read_request_json_object(body: bytes, *, source: str) -> dict[str, Any]:
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"visual grounding HTTP request source must contain UTF-8 JSON object: {source}"
+        ) from exc
+    return parse_json_object_text(text, label="visual grounding HTTP request", source=source)
 
 
 def main(argv: list[str] | None = None) -> int:

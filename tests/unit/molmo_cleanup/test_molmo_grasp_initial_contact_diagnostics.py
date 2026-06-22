@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household import grasp_initial_contact_diagnostics as diagnostics
 from roboclaws.household.grasp_initial_contact_diagnostics import (
     run_grasp_initial_contact_diagnostics,
@@ -183,6 +185,36 @@ def test_initial_contact_diagnostics_rejects_non_object_probe_result(
         assert "initial_contact_probe_result.json" in str(exc)
     else:  # pragma: no cover - wrong-shaped child probe result should fail aloud
         raise AssertionError("expected non-object initial-contact probe result to fail aloud")
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("{not-json\n", "candidate grasp JSON source must contain valid JSON object"),
+        ("[]\n", "candidate grasp JSON source must contain a JSON object"),
+    ],
+)
+def test_initial_contact_diagnostics_rejects_malformed_candidate_grasp_source(
+    tmp_path: Path,
+    monkeypatch,
+    content: str,
+    message: str,
+) -> None:
+    candidate = tmp_path / "Bread_1_grasps.json"
+    candidate.write_text(content, encoding="utf-8")
+
+    def fail_run(*_args, **_kwargs):
+        raise AssertionError("child probe should not run for malformed candidate input")
+
+    monkeypatch.setattr(diagnostics, "run_molmospaces_probe_command", fail_run)
+
+    with pytest.raises(ValueError, match=message):
+        run_grasp_initial_contact_diagnostics(
+            generation_preflight=_generation_preflight(tmp_path),
+            output_dir=tmp_path / "out",
+            candidate_grasps_path=candidate,
+            molmospaces_python=Path("/tmp/molmo/.venv/bin/python"),
+        )
 
 
 def _generation_preflight(tmp_path: Path) -> dict:

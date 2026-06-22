@@ -21,14 +21,6 @@ from scripts.molmo_cleanup.isaac_semantic_pose_checker import (
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 
 
-def _trace_events_from_path(trace_path: Path) -> list[dict[str, Any]]:
-    events = []
-    for line in trace_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            events.append(json.loads(line))
-    return events
-
-
 def _resolve_path(base: Path, value: str) -> Path:
     path = Path(value)
     if path.is_absolute() or path.exists():

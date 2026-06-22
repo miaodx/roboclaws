@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.process_status import pid_is_active
 from roboclaws.operator_console.redaction import redact_text
@@ -107,7 +108,7 @@ def derive_operator_state(
         *trace_source_errors,
     )
     latest_trace = _last_robot_tool_jsonl(trace_rows) or _last_jsonl(trace_rows)
-    camera_state = _camera_angle_summary(trace_path)
+    camera_state = _camera_angle_summary(trace_rows)
     phase = str(
         live_status.get("phase")
         or launch_failure.get("phase")
@@ -424,39 +425,11 @@ def _read_jsonl_source(
     *,
     label: str,
 ) -> tuple[list[dict[str, Any]], tuple[JsonSourceError, ...]]:
-    if not path.exists():
-        return [], ()
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as exc:
-        return [], (JsonSourceError(path=path.resolve(), label=label, reason=str(exc)),)
-    rows: list[dict[str, Any]] = []
-    source_errors: list[JsonSourceError] = []
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            source_errors.append(
-                JsonSourceError(
-                    path=path.resolve(),
-                    label=label,
-                    reason=f"invalid JSON at line {line_number} column {exc.colno}",
-                )
-            )
-            continue
-        if not isinstance(payload, dict):
-            source_errors.append(
-                JsonSourceError(
-                    path=path.resolve(),
-                    label=label,
-                    reason=f"expected JSON object at line {line_number}",
-                )
-            )
-            continue
-        rows.append(payload)
-    return rows, tuple(source_errors)
+    rows, issues = collect_jsonl_objects(path, label=label)
+    return rows, tuple(
+        JsonSourceError(path=issue.path, label=issue.label, reason=issue.state_reason())
+        for issue in issues
+    )
 
 
 def _last_robot_tool_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -467,8 +440,8 @@ def _last_robot_tool_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
-def _camera_angle_summary(path: Path) -> dict[str, Any]:
-    return camera_angle_summary(path)
+def _camera_angle_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return camera_angle_summary(rows)
 
 
 def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:

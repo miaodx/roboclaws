@@ -346,16 +346,13 @@ def run_grasp_initial_contact_diagnostics(
                 }
             ],
         )
-    if not candidate_grasps_path.is_file() and not dry_run:
-        return _blocked_result(
-            output_dir=output_dir,
-            blockers=[
-                {
-                    "code": "candidate_grasps_missing",
-                    "message": f"Candidate grasp JSON is missing: {candidate_grasps_path}",
-                }
-            ],
-        )
+    candidate_blocked = _candidate_grasps_source_blocker(
+        candidate_grasps_path,
+        output_dir=output_dir,
+        dry_run=dry_run,
+    )
+    if candidate_blocked is not None:
+        return candidate_blocked
 
     target_object = objects[0]
     object_name = str(target_object["name"])
@@ -542,6 +539,28 @@ def _blocked_result(*, output_dir: Path, blockers: list[dict[str, Any]]) -> dict
         "blockers": blockers,
         "blocker_count": len(blockers),
     }
+
+
+def _candidate_grasps_source_blocker(
+    path: Path,
+    *,
+    output_dir: Path,
+    dry_run: bool,
+) -> dict[str, Any] | None:
+    if dry_run:
+        return None
+    if not path.is_file():
+        return _blocked_result(
+            output_dir=output_dir,
+            blockers=[
+                {
+                    "code": "candidate_grasps_missing",
+                    "message": f"Candidate grasp JSON is missing: {path}",
+                }
+            ],
+        )
+    read_json_object(path, label="candidate grasp JSON")
+    return None
 
 
 def run_molmospaces_probe_command(

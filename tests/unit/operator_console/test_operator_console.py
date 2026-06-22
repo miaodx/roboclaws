@@ -1041,6 +1041,24 @@ def _blocked_operator_control_payload(
     return json.loads(exc_info.value.read().decode("utf-8"))
 
 
+def _blocked_raw_operator_control_payload(
+    host: str,
+    port: int,
+    run_id: str,
+    body: str,
+) -> dict[str, object]:
+    request = urllib.request.Request(
+        f"http://{host}:{port}/api/runs/{run_id}/control",
+        method="POST",
+        data=body.encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+    assert exc_info.value.code == 400
+    return json.loads(exc_info.value.read().decode("utf-8"))
+
+
 @contextmanager
 def _console_server(root: Path):
     handler = partial(ConsoleRequestHandler, root=root)
@@ -1158,6 +1176,40 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
 
     _assert_allowlisted_operator_control_response(payload, blocked_payload, large_payload)
     _assert_operator_control_artifacts(tmp_path, run_dir, route)
+
+
+def test_operator_console_control_endpoint_rejects_malformed_request_body(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-control-body-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_raw_operator_control_payload(host, port, run_id, "{not-json")
+
+    assert (
+        payload["error"] == "operator console request body source must contain valid JSON object: "
+        "POST /api/runs/malformed-control-body-run/control"
+    )
+    assert not (run_dir / "operator_control.jsonl").exists()
+
+
+def test_operator_console_control_endpoint_rejects_non_object_request_body(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-control-body-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_raw_operator_control_payload(host, port, run_id, "[]")
+
+    assert (
+        payload["error"] == "operator console request body source must contain a JSON object: "
+        "POST /api/runs/non-object-control-body-run/control"
+    )
+    assert not (run_dir / "operator_control.jsonl").exists()
 
 
 def test_operator_console_control_endpoint_rejects_malformed_control_source(

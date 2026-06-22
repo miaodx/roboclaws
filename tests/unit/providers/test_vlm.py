@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,7 +17,7 @@ from roboclaws.core.provider_runtime import (
 from roboclaws.core.providers.anthropic import AnthropicProvider
 from roboclaws.core.providers.kimi import KimiCodingProvider, KimiProvider
 from roboclaws.core.providers.mock import MockProvider
-from roboclaws.core.providers.openai import OpenAIProvider
+from roboclaws.core.providers.openai import OpenAIProvider, _parse_mimo_message
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -249,6 +251,74 @@ def test_openai_missing_api_key_raises(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# MimoProvider response parsing
+# ---------------------------------------------------------------------------
+
+
+def _mimo_message(arguments: str, reasoning_content: str = "") -> SimpleNamespace:
+    return SimpleNamespace(
+        content="",
+        reasoning_content=reasoning_content,
+        tool_calls=[
+            SimpleNamespace(function=SimpleNamespace(arguments=arguments)),
+        ],
+    )
+
+
+def test_parse_mimo_message_uses_tool_call_arguments():
+    message = _mimo_message('{"reasoning": "turn toward target", "action": "RotateLeft"}')
+
+    result = _parse_mimo_message(message)
+
+    assert result == {"reasoning": "turn toward target", "action": "RotateLeft"}
+
+
+def test_parse_mimo_message_uses_reasoning_content_when_tool_reasoning_missing():
+    message = _mimo_message('{"action": "MoveAhead"}', reasoning_content="fallback reasoning")
+
+    result = _parse_mimo_message(message)
+
+    assert result == {"reasoning": "fallback reasoning", "action": "MoveAhead"}
+
+
+def test_parse_mimo_message_recovers_malformed_tool_call_arguments():
+    message = _mimo_message('{"reasoning": "partial", "action":')
+
+    result = _parse_mimo_message(message)
+
+    assert result["action"] == SAFE_FALLBACK_ACTION
+    assert "partial" in result["reasoning"]
+
+
+def test_parse_mimo_message_recovers_non_object_tool_call_arguments():
+    message = _mimo_message('["MoveAhead"]')
+
+    result = _parse_mimo_message(message)
+
+    assert result == {"reasoning": '["MoveAhead"]', "action": SAFE_FALLBACK_ACTION}
+
+
+def test_parse_mimo_message_recovers_missing_tool_call_arguments():
+    message = SimpleNamespace(
+        content="",
+        reasoning_content="",
+        tool_calls=[SimpleNamespace(function=SimpleNamespace())],
+    )
+
+    result = _parse_mimo_message(message)
+
+    assert result == {"reasoning": "", "action": SAFE_FALLBACK_ACTION}
+
+
+def test_parse_mimo_message_validates_tool_call_action():
+    message = _mimo_message('{"reasoning": "bad action", "action": "WalkIntoWall"}')
+
+    result = _parse_mimo_message(message)
+
+    assert result == {"reasoning": "bad action", "action": SAFE_FALLBACK_ACTION}
+
+
+# ---------------------------------------------------------------------------
 # KimiProvider (mocked)
 # ---------------------------------------------------------------------------
 
@@ -411,10 +481,12 @@ def test_kimi_coding_get_action_uses_shared_decision_fallback(monkeypatch):
 
     response = MagicMock()
     response.raise_for_status.return_value = None
-    response.json.return_value = {
-        "choices": [{"message": {"content": "not json", "reasoning_content": ""}}],
-        "usage": {},
-    }
+    response.text = json.dumps(
+        {
+            "choices": [{"message": {"content": "not json", "reasoning_content": ""}}],
+            "usage": {},
+        }
+    )
     provider._client = MagicMock()
     provider._client.post.return_value = response
 
@@ -422,6 +494,36 @@ def test_kimi_coding_get_action_uses_shared_decision_fallback(monkeypatch):
 
     assert result["action"] == SAFE_FALLBACK_ACTION
     assert "not json" in result["reasoning"]
+
+
+@pytest.mark.parametrize(
+    ("response_text", "expected_error"),
+    [
+        ("{not-json", "Kimi coding provider response source must contain valid JSON object"),
+        ("[]", "Kimi coding provider response source must contain a JSON object"),
+    ],
+)
+def test_kimi_coding_get_action_rejects_bad_provider_response_source(
+    monkeypatch,
+    response_text: str,
+    expected_error: str,
+) -> None:
+    monkeypatch.setenv("KIMI_API_KEY", "test-key")
+    provider = KimiCodingProvider(api_key="test-key", retry_attempts=1)
+
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.text = response_text
+    provider._client = MagicMock()
+    provider._client.post.return_value = response
+
+    with pytest.raises(ValueError, match=expected_error):
+        provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    status = provider.get_status()
+    assert status["failed_calls"] == 1
+    assert status["last_error_kind"] == "ValueError"
+    assert expected_error in status["last_error"]
 
 
 # ---------------------------------------------------------------------------

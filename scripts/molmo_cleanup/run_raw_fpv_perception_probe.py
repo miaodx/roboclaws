@@ -29,7 +29,11 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
-from roboclaws.core.json_sources import read_json_object  # noqa: E402
+from roboclaws.core.json_sources import (  # noqa: E402
+    parse_json_object_text,
+    read_json_object,
+    read_jsonl_object_rows,
+)
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -184,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description=(
             "Run a perception-only RAW-FPV probe over fixed cleanup frames. The probe "
@@ -234,7 +239,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-candidates", type=_candidate_limit_arg, default=3)
     parser.add_argument("--timeout-s", type=_positive_float_arg, default=120.0)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
-    return parser.parse_args(argv)
+    args = parser.parse_args(raw_argv)
+    args.runtime_map_prior_explicit = _runtime_map_prior_arg_is_explicit(raw_argv)
+    return args
 
 
 def run_probe(args: argparse.Namespace) -> dict[str, Any]:
@@ -248,9 +255,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         contrast_run_dirs=contrast_run_dirs,
         max_frames_per_source=int(args.max_frames_per_source),
     )
-    runtime_map_prior = _load_json_if_exists(
+    runtime_map_prior = _load_runtime_map_prior(
         args.runtime_map_prior,
-        label="RAW-FPV runtime map prior",
+        explicit=bool(args.runtime_map_prior_explicit),
     )
     public_inputs = build_public_inputs(
         frames,
@@ -1223,34 +1230,24 @@ def _raw_observations_from_json_artifacts(run_dir: Path) -> list[dict[str, Any]]
 def _raw_observations_from_codex_events(run_dir: Path) -> list[dict[str, Any]]:
     observations = []
     for path in sorted(run_dir.glob("codex-events*.jsonl")):
-        with path.open(encoding="utf-8") as handle:
-            for line_number, line in enumerate(handle, start=1):
-                if not line.strip():
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(
-                        "RAW-FPV Codex event source contains invalid JSON "
-                        f"at {path}:{line_number}: {exc.msg}"
-                    ) from exc
-                if not isinstance(event, dict):
-                    raise ValueError(
-                        f"RAW-FPV Codex event source row must be an object at {path}:{line_number}"
-                    )
-                item = event.get("item") or {}
-                if item.get("type") != "mcp_tool_call" or item.get("tool") != "observe":
-                    continue
-                if event.get("type") != "item.completed":
-                    continue
-                payload = _mcp_text_result_json(
-                    item.get("result") or {},
-                    source=f"{path}:{line_number}",
-                )
-                raw = (payload.get("raw_fpv_observation") or {}) if payload else {}
-                if raw.get("observation_id"):
-                    observations.append(raw)
+        for line_number, event in _load_codex_event_rows(path):
+            item = event.get("item") or {}
+            if item.get("type") != "mcp_tool_call" or item.get("tool") != "observe":
+                continue
+            if event.get("type") != "item.completed":
+                continue
+            payload = _mcp_text_result_json(
+                item.get("result") or {},
+                source=f"{path}:{line_number}",
+            )
+            raw = (payload.get("raw_fpv_observation") or {}) if payload else {}
+            if raw.get("observation_id"):
+                observations.append(raw)
     return observations
+
+
+def _load_codex_event_rows(path: Path) -> list[tuple[int, dict[str, Any]]]:
+    return read_jsonl_object_rows(path, label="RAW-FPV Codex event")
 
 
 def _raw_observations_from_robot_view_files(run_dir: Path) -> list[dict[str, Any]]:
@@ -1687,14 +1684,30 @@ def _call_responses_api(
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return _parse_responses_api_json_object(
+                response.read(),
+                label="RAW-FPV Responses API response",
+                source=base_url.rstrip("/") + "/responses",
+            )
     except urllib.error.HTTPError as exc:
         try:
-            payload = json.loads(exc.read().decode("utf-8"))
+            payload = _parse_responses_api_json_object(
+                exc.read(),
+                label="RAW-FPV Responses API error response",
+                source=base_url.rstrip("/") + "/responses",
+            )
             message = str((payload.get("error") or {}).get("message") or exc.reason)
-        except Exception:
-            message = str(exc.reason)
+        except ValueError as parse_exc:
+            message = f"{exc.reason}; {parse_exc}"
         raise RuntimeError(f"responses API returned HTTP {exc.code}: {message}") from exc
+
+
+def _parse_responses_api_json_object(body: bytes, *, label: str, source: str) -> dict[str, Any]:
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{label} source must contain UTF-8 JSON object: {source}") from exc
+    return parse_json_object_text(text, label=label, source=source)
 
 
 def _provider_config(provider: str, *, model: str) -> dict[str, Any]:
@@ -1905,8 +1918,20 @@ def _safe_filename(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_") or "item"
 
 
+def _runtime_map_prior_arg_is_explicit(argv: list[str]) -> bool:
+    return any(
+        arg == "--runtime-map-prior" or arg.startswith("--runtime-map-prior=") for arg in argv
+    )
+
+
 def _load_json(path: Path, *, label: str) -> dict[str, Any]:
     return read_json_object(path, label=label)
+
+
+def _load_runtime_map_prior(path: Path, *, explicit: bool) -> dict[str, Any]:
+    if explicit and not path.is_file():
+        raise FileNotFoundError(f"RAW-FPV runtime map prior does not exist: {path}")
+    return _load_json_if_exists(path, label="RAW-FPV runtime map prior")
 
 
 def _load_json_if_exists(path: Path, *, label: str) -> dict[str, Any]:

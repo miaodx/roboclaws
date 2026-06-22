@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -147,17 +148,17 @@ def scene_probe_camera_control_request(
     lens_payload = _camera_lens(lens)
     lighting = _lighting_profile(lighting_profile)
     color = _color_profile(color_profile)
+    request_defaults = {
+        "camera_model": ANCHOR_ORBIT_CAMERA_MODEL,
+        "coordinate_convention": WORLD_Z_UP_ORBIT_CONVENTION,
+        "camera_orbit": orbit,
+        "lens": lens_payload,
+        "calibration_status": calibration_status,
+    }
     normalized_views = []
     for index, raw_view in enumerate(views, start=1):
-        view = dict(raw_view)
-        view.setdefault("view_id", f"view_{index:02d}")
-        view.setdefault("label", str(view["view_id"]))
-        view.setdefault("camera_model", ANCHOR_ORBIT_CAMERA_MODEL)
-        view.setdefault("camera_orbit", dict(orbit))
-        view.setdefault("lens", dict(lens_payload))
-        view.setdefault("calibration_status", calibration_status)
-        view.setdefault("coordinate_convention", WORLD_Z_UP_ORBIT_CONVENTION)
-        normalized_views.append(view)
+        view = _view_object(raw_view, index=index)
+        normalized_views.append(_normalize_view(view, index=index, request=request_defaults))
     return {
         "schema": CAMERA_CONTROL_REQUEST_SCHEMA,
         "api_name": CAMERA_CONTROL_API_NAME,
@@ -192,18 +193,18 @@ def canonical_scene_camera_control_request(
     lens_payload = _camera_lens(lens)
     lighting = _lighting_profile(lighting_profile)
     color = _color_profile(color_profile)
+    request_defaults = {
+        "camera_model": CANONICAL_CAMERA_MODEL,
+        "coordinate_frame": scene_frame,
+        "coordinate_convention": scene_frame,
+        "lens": lens_payload,
+        "calibration_status": calibration_status,
+    }
     normalized_views = []
     for index, raw_view in enumerate(views, start=1):
-        view = dict(raw_view)
-        view.setdefault("view_id", f"view_{index:02d}")
-        view.setdefault("label", str(view["view_id"]))
+        view = _view_object(raw_view, index=index)
         view["camera_model"] = CANONICAL_CAMERA_MODEL
-        view["coordinate_frame"] = scene_frame
-        view["coordinate_convention"] = scene_frame
-        view.setdefault("up", [0.0, 0.0, 1.0])
-        view.setdefault("lens", dict(lens_payload))
-        view.setdefault("calibration_status", calibration_status)
-        normalized_views.append(view)
+        normalized_views.append(_normalize_view(view, index=index, request=request_defaults))
     return {
         "schema": CAMERA_CONTROL_REQUEST_SCHEMA,
         "api_name": CAMERA_CONTROL_API_NAME,
@@ -232,7 +233,7 @@ def normalize_camera_control_request(
 
     if isinstance(payload, list):
         return scene_probe_camera_control_request(
-            [dict(item) for item in payload if isinstance(item, dict)],
+            payload,
             width=_positive_int(width, field_name="render_resolution.width"),
             height=_positive_int(height, field_name="render_resolution.height"),
         )
@@ -267,9 +268,8 @@ def normalize_camera_control_request(
     calibration_status = str(request.get("calibration_status") or default_calibration)
     request["calibration_status"] = calibration_status
     request["views"] = [
-        _normalize_view(item, index=index, request=request)
+        _normalize_view(_view_object(item, index=index), index=index, request=request)
         for index, item in enumerate(raw_views, start=1)
-        if isinstance(item, dict)
     ]
     return request
 
@@ -338,18 +338,88 @@ def _normalize_view(
     view.setdefault("view_id", f"view_{index:02d}")
     view.setdefault("label", str(view["view_id"]))
     view.setdefault("camera_model", request.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL)
+    field_prefix = f"camera control request views[{index}]"
     if view.get("camera_model") == CANONICAL_CAMERA_MODEL:
         view.setdefault(
             "coordinate_frame",
             request.get("coordinate_frame") or MOLMOSPACES_SCENE_FRAME,
         )
-        view.setdefault("up", [0.0, 0.0, 1.0])
+        _normalize_view_target(view, field_prefix=field_prefix)
+        view["eye"] = camera_pose_vec3(
+            _required_view_field(view, "eye", field_prefix=field_prefix),
+            field_name=f"{field_prefix}.eye",
+        )
+        view["up"] = camera_pose_vec3(
+            view.get("up", [0.0, 0.0, 1.0]),
+            field_name=f"{field_prefix}.up",
+        )
     else:
         view.setdefault("camera_orbit", dict(request["camera_orbit"]))
+        if _view_has_target(view):
+            _normalize_view_target(view, field_prefix=field_prefix)
+        elif not _can_derive_view_target(view):
+            raise ValueError(f"{field_prefix} must include target or lookat")
+        if view.get("eye") is not None:
+            view["eye"] = camera_pose_vec3(view["eye"], field_name=f"{field_prefix}.eye")
     view.setdefault("lens", dict(request["lens"]))
     view.setdefault("calibration_status", request["calibration_status"])
     view.setdefault("coordinate_convention", request["coordinate_convention"])
     return view
+
+
+def _view_object(value: Any, *, index: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"camera control request views[{index}] must be an object")
+    return dict(value)
+
+
+def camera_pose_vec3(value: Any, *, field_name: str = "camera vector") -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise ValueError(f"{field_name} must be a 3-number vector; got {value!r}")
+    parsed = []
+    for index, item in enumerate(value):
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise ValueError(f"{field_name}[{index}] must be a finite number; got {item!r}")
+        number = float(item)
+        if not math.isfinite(number):
+            raise ValueError(f"{field_name}[{index}] must be a finite number; got {item!r}")
+        parsed.append(number)
+    return parsed
+
+
+def _normalize_view_target(view: dict[str, Any], *, field_prefix: str) -> None:
+    parsed_target: list[float] | None = None
+    for field_name in ("target", "lookat"):
+        if view.get(field_name) is None:
+            continue
+        parsed = camera_pose_vec3(view[field_name], field_name=f"{field_prefix}.{field_name}")
+        view[field_name] = parsed
+        if parsed_target is None:
+            parsed_target = parsed
+    if parsed_target is None:
+        value = _required_view_field(view, "target", field_prefix=field_prefix)
+        parsed_target = camera_pose_vec3(value, field_name=f"{field_prefix}.target")
+        view["target"] = parsed_target
+    view.setdefault("target", list(parsed_target))
+
+
+def _required_view_field(view: dict[str, Any], field_name: str, *, field_prefix: str) -> Any:
+    value = view.get(field_name)
+    if value is None:
+        raise ValueError(f"{field_prefix} must include {field_name}")
+    return value
+
+
+def _view_has_target(view: dict[str, Any]) -> bool:
+    return view.get("target") is not None or view.get("lookat") is not None
+
+
+def _can_derive_view_target(view: dict[str, Any]) -> bool:
+    return (
+        view.get("camera_mode") == "focus_receptacle"
+        and view.get("camera_model") != ANCHOR_ORBIT_CAMERA_MODEL
+        and bool(view.get("focus_receptacle_id") or view.get("anchor_id"))
+    )
 
 
 def _camera_orbit(value: Any) -> dict[str, float]:

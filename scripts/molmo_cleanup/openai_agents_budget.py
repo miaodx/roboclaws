@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.core.json_sources import read_jsonl_objects
 
 
 def raw_fpv_budget_failure(
@@ -235,23 +236,7 @@ def _region_fingerprint(value: Any) -> str:
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    events: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        source = f"{path}:{line_number}"
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"OpenAI Agents budget {source}: invalid JSON: {exc.msg}") from exc
-        if not isinstance(item, dict):
-            raise ValueError(
-                f"OpenAI Agents budget source {source}: non-object JSON: {type(item).__name__}"
-            )
-        events.append(item)
-    return events
+    return read_jsonl_objects(path, label="OpenAI Agents budget trace")
 
 
 def _int_or_none(value: Any) -> int | None:

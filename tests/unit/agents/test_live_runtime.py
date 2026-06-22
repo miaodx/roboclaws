@@ -1351,7 +1351,7 @@ def test_model_input_compaction_rejects_invalid_min_chars_env(tmp_path: Path, mo
     payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
     assert payload["reason"] == "provider_config_failure"
     assert "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS" in payload["detail"]
-    assert "must be a non-negative integer" in payload["detail"]
+    assert "must be a positive integer" in payload["detail"]
 
 
 @pytest.mark.parametrize(
@@ -2801,7 +2801,7 @@ def _assert_openai_agents_timeline_and_checker(
         (
             "trace.jsonl",
             json.dumps({"event": "request", "tool": "done"}) + "\n[]\n",
-            "trace.jsonl:2: non-object JSON: list",
+            "OpenAI Agents live source row must contain a JSON object",
         ),
     ],
 )
@@ -4177,52 +4177,6 @@ def test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures(
     assert "image_region" not in json.dumps(detail)
 
 
-def test_openai_agents_budget_guard_fails_aloud_on_malformed_trace_source(
-    tmp_path: Path,
-) -> None:
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    (run_dir / "trace.jsonl").write_text(
-        '{"event":"request","tool":"navigate_to_visual_candidate"}\n{bad-json}\n',
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
-        _budget_failure_from_run_state(
-            run_dir,
-            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
-            {
-                "profile_id": "raw_fpv_budgeted_v1",
-                "context_hard_limit_tokens": None,
-                "raw_fpv_candidate_budget": 1,
-                "max_observe_per_waypoint": None,
-            },
-        )
-
-
-def test_openai_agents_budget_guard_fails_aloud_on_non_object_trace_source(
-    tmp_path: Path,
-) -> None:
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    (run_dir / "trace.jsonl").write_text(
-        json.dumps(["not", "a", "trace-event"]) + "\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match=r"trace\.jsonl:1.*non-object JSON"):
-        _budget_failure_from_run_state(
-            run_dir,
-            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
-            {
-                "profile_id": "raw_fpv_budgeted_v1",
-                "context_hard_limit_tokens": None,
-                "raw_fpv_candidate_budget": 1,
-                "max_observe_per_waypoint": None,
-            },
-        )
-
-
 def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -5010,7 +4964,11 @@ def test_openai_agents_event_metrics_fail_aloud_on_malformed_event_source(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"openai-agents-events\.jsonl:2.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain valid JSON object: "
+        r".*openai-agents-events\.jsonl:2",
+    ):
         _openai_agents_event_metrics(run_dir)
 
 
@@ -5212,7 +5170,11 @@ def test_openai_agents_span_metrics_fail_aloud_on_non_object_span_source(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"openai-agents-spans\.jsonl:1.*non-object JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain a JSON object: "
+        r".*openai-agents-spans\.jsonl:1",
+    ):
         _openai_agents_span_metrics(run_dir)
 
 
@@ -5333,7 +5295,10 @@ def test_openai_agents_context_growth_metrics_fail_aloud_on_malformed_trace_sour
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"OpenAI Agents metrics source row must contain valid JSON object: .*trace\.jsonl:2",
+    ):
         _context_growth_metrics(run_dir, {})
 
 
@@ -5780,4 +5745,115 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "raw_fpv_observation_count": 0,
         "tool_response_bytes_total": 1000,
         "continuation_attempt_count": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected_error", "expected_kind"),
+    [
+        (
+            '{"schema":',
+            "detail must contain a valid JSON object: Expecting value",
+            "invalid_json",
+        ),
+        (
+            '["wrong-shape"]',
+            "detail must contain a JSON object, got list",
+            "non_object",
+        ),
+    ],
+)
+def test_openai_agents_live_timing_compact_metrics_surface_structured_detail_errors(
+    detail: str,
+    expected_error: str,
+    expected_kind: str,
+) -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "raw_fpv_candidate_budget_exhausted",
+                "detail": detail,
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "raw_fpv_candidate_budget_exhausted",
+        "detail_source_error": expected_error,
+        "detail_source_error_kind": expected_kind,
+    }
+
+
+def test_openai_agents_live_timing_compact_metrics_tolerates_plaintext_detail() -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "provider_transient_failure",
+                "provider_reason": "rate_limit",
+                "detail": "429 Too Many Requests",
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "provider_transient_failure",
+        "provider_reason": "rate_limit",
+    }
+
+
+def test_openai_agents_live_timing_compact_metrics_extracts_valid_budget_detail() -> None:
+    timeline = _live_timing_timeline(
+        {
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-router-responses",
+            "wire_api": "responses",
+            "model": "gpt-5.5",
+            "runner_timing": {},
+            "agent_sdk_budget_terminal": {
+                "available": True,
+                "reason": "raw_fpv_candidate_budget_exhausted",
+                "detail": json.dumps(
+                    {
+                        "schema": "openai_agents_raw_fpv_budget_failure_v1",
+                        "raw_fpv_candidate_budget": 2,
+                        "raw_fpv_repeated_failure_limit": 3,
+                        "max_observe_per_waypoint": 1,
+                        "candidate_attempt_count": 2,
+                        "repeated_failure_fingerprints": ["a", "b"],
+                        "repeated_failure_limit_hits": ["a"],
+                        "observe_count_by_waypoint": {"wp-a": 1, "wp-b": 2},
+                    }
+                ),
+            },
+        }
+    )
+
+    metrics = timeline["latency_attribution"]["agent_sdk_budget_terminal"]
+    assert metrics == {
+        "available": True,
+        "reason": "raw_fpv_candidate_budget_exhausted",
+        "detail_schema": "openai_agents_raw_fpv_budget_failure_v1",
+        "raw_fpv_candidate_budget": 2,
+        "raw_fpv_repeated_failure_limit": 3,
+        "max_observe_per_waypoint": 1,
+        "candidate_attempt_count": 2,
+        "repeated_failure_count": 2,
+        "repeated_failure_limit_hit_count": 1,
+        "observe_waypoint_count": 2,
     }

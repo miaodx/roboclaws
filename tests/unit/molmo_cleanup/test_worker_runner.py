@@ -38,6 +38,37 @@ def test_parse_last_json_object_tolerates_worker_stdout_noise() -> None:
     assert payload == {"ok": True, "tool": "init"}
 
 
+def test_parse_last_json_object_tolerates_bracketed_worker_logs() -> None:
+    payload = worker_runner.parse_last_json_object(
+        'loading assets...\n{"ok": true, "tool": "init"}\n[2026-06-21 10:00:00] finished\n',
+        worker_name="Test",
+    )
+
+    assert payload == {"ok": True, "tool": "init"}
+
+
+def test_parse_last_json_object_rejects_malformed_structured_stdout_row() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match=r"Test worker stdout row source must contain valid JSON object: stdout:3",
+    ):
+        worker_runner.parse_last_json_object(
+            'loading assets...\n{"ok": true}\n{bad json\n',
+            worker_name="Test",
+        )
+
+
+def test_parse_last_json_object_rejects_non_object_structured_stdout_row() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match=r"Test worker stdout row source must contain a JSON object: stdout:2",
+    ):
+        worker_runner.parse_last_json_object(
+            'loading assets...\n["not", "a", "worker", "packet"]\n',
+            worker_name="Test",
+        )
+
+
 def test_run_json_worker_once_reports_missing_runtime(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="Test Python runtime is missing"):
         worker_runner.run_json_worker_once(

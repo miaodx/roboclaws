@@ -6,6 +6,11 @@ from typing import Any, Callable
 
 import mujoco
 
+from roboclaws.household.generated_mess import (
+    valid_generated_mess_placement_index,
+    valid_generated_mess_relation,
+)
+
 HELD_LOCATION_ID = "held_by_agent"
 
 
@@ -245,19 +250,16 @@ def target_relation(
     hooks: MolmoScenarioHooks,
 ) -> str:
     if manifest_target:
-        relation = str(manifest_target.get("relation") or "")
-        if relation in {"on", "inside"}:
-            return relation
+        object_id = str(manifest_target.get("object_id") or "")
+        return valid_generated_mess_relation(manifest_target, object_id=object_id)
     return "inside" if hooks.receptacle_prefers_inside(receptacle) else "on"
 
 
 def target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
     if not manifest_target:
         return index
-    try:
-        return int(manifest_target.get("placement_index"))
-    except (TypeError, ValueError):
-        return index
+    object_id = str(manifest_target.get("object_id") or "")
+    return valid_generated_mess_placement_index(manifest_target, object_id=object_id)
 
 
 def public_scenario(

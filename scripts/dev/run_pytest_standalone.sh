@@ -13,16 +13,16 @@ REPO_ROOT="$(cd "$(dirname "$SOURCE")/../.." && pwd)"
 PYTEST_BIN="${PYTEST_BIN:-$REPO_ROOT/.venv/bin/pytest}"
 
 if [[ ! -x "$PYTEST_BIN" ]]; then
-    if ! command -v pytest >/dev/null 2>&1; then
-        echo "run_pytest_standalone: pytest not found; install deps with uv pip install -e '.[dev]'" >&2
-        exit 1
-    fi
-    PYTEST_BIN="$(command -v pytest)"
+    echo "run_pytest_standalone: missing repo pytest at $PYTEST_BIN" >&2
+    echo "run_pytest_standalone: run 'uv sync --extra dev' in this checkout" >&2
+    exit 1
 fi
 PYTEST_BIN_DIR="$(cd "$(dirname "$PYTEST_BIN")" && pwd)"
-ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON:-}"
-if [[ -z "$ROBOCLAWS_PYTHON" && -x "$PYTEST_BIN_DIR/python" ]]; then
-    ROBOCLAWS_PYTHON="$PYTEST_BIN_DIR/python"
+ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON:-$REPO_ROOT/.venv/bin/python}"
+if [[ ! -x "$ROBOCLAWS_PYTHON" ]]; then
+    echo "run_pytest_standalone: missing repo Python at $ROBOCLAWS_PYTHON" >&2
+    echo "run_pytest_standalone: run 'uv sync --extra dev' in this checkout" >&2
+    exit 1
 fi
 
 if [[ "${ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV:-}" == "1" ]]; then

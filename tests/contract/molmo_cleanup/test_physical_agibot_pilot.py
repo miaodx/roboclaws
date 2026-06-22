@@ -450,6 +450,34 @@ def test_agibot_map_build_mcp_records_agent_driven_public_trace(
     _assert_agibot_map_build_artifacts(run_result, trace_events, report_text)
 
 
+def test_agibot_map_build_mcp_done_surfaces_corrupt_trace_source(
+    tmp_path: Path,
+) -> None:
+    _require_agibot_sdk_runner()
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    run_dir = tmp_path / "run"
+    server = make_agibot_map_build_mcp(
+        run_dir=run_dir,
+        context_json=context_path,
+        evidence_lane="camera-grounded-labels",
+    )
+
+    try:
+        with (run_dir / "trace.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write("[]\n")
+
+        response = server.call_tool("done", reason="source validation probe")
+    finally:
+        server.close()
+
+    assert response["ok"] is False
+    assert response["status"] == "error"
+    assert response["error_reason"] == "exception"
+    assert "Agibot map-build MCP trace source row must contain a JSON object" in response["error"]
+    assert "trace.jsonl:2" in response["error"]
+
+
 def test_agibot_map_build_camera_labels_call_external_grounding(
     tmp_path: Path,
 ) -> None:

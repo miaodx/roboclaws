@@ -115,7 +115,7 @@ def test_eval_harness_row_fails_aloud_for_malformed_eval_results_json(
 
     assert row["outcome"] == "failed"
     assert row["failure_class"] == "harness_bug_unclassified"
-    assert "eval_results.json JSON parse error" in row["eval_results_error"]
+    assert "eval_results.json source must contain valid JSON object" in row["eval_results_error"]
 
 
 def test_eval_harness_row_fails_aloud_for_non_object_eval_results_json(
@@ -134,7 +134,18 @@ def test_eval_harness_row_fails_aloud_for_non_object_eval_results_json(
 
     assert row["outcome"] == "failed"
     assert row["failure_class"] == "harness_bug_unclassified"
-    assert "expected object, got list" in row["eval_results_error"]
+    assert "eval_results.json source must contain a JSON object" in row["eval_results_error"]
+
+
+def test_eval_harness_live_status_source_reports_malformed_json(tmp_path: Path) -> None:
+    live_status = tmp_path / "live_status.json"
+    live_status.write_text("{not json", encoding="utf-8")
+
+    status, source_error = runner._load_live_status_source(live_status)
+
+    assert status == {}
+    assert "live_status source must contain valid JSON object" in source_error
+    assert str(live_status) in source_error
 
 
 def test_eval_harness_exit_fails_for_failed_eval_outcome() -> None:

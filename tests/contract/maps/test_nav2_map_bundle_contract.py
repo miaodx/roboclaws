@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -24,6 +25,12 @@ EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
+
+
+def _repo_python() -> str:
+    python_path = Path(os.environ.get("ROBOCLAWS_PYTHON") or REPO_ROOT / ".venv" / "bin" / "python")
+    assert python_path.is_file(), f"repo Python missing: {python_path}; run uv sync --extra dev"
+    return str(python_path)
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
@@ -128,9 +135,7 @@ def test_base_navigation_map_v1_validation_reports_current_molmospaces_gaps() ->
             "navigation area meeting_room_b missing semantic category",
         ),
         (
-            lambda semantics: semantics["rooms"][1].update(
-                {"category": "unknown_review_required"}
-            ),
+            lambda semantics: semantics["rooms"][1].update({"category": "unknown_review_required"}),
             "unknown_review_required",
         ),
         (
@@ -297,7 +302,7 @@ def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: P
 
     result = subprocess.run(
         [
-            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            _repo_python(),
             str(EXPORTER_PATH),
             "--agent-view",
             str(agent_view_path),
@@ -324,7 +329,7 @@ def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
 
     result = subprocess.run(
         [
-            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            _repo_python(),
             str(EXPORTER_PATH),
             "--agent-view",
             str(agent_view_path),
@@ -349,7 +354,7 @@ def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Pat
 
     result = subprocess.run(
         [
-            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            _repo_python(),
             str(EXPORTER_PATH),
             "--agent-view",
             str(agent_view_path),
@@ -375,7 +380,7 @@ def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: 
 
     result = subprocess.run(
         [
-            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            _repo_python(),
             str(EXPORTER_PATH),
             "--run-result",
             str(run_result_path),
@@ -399,7 +404,7 @@ def test_exporter_cli_reports_missing_run_result_without_traceback(tmp_path: Pat
 
     result = subprocess.run(
         [
-            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            _repo_python(),
             str(EXPORTER_PATH),
             "--run-result",
             str(run_result_path),
@@ -424,7 +429,7 @@ def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) ->
     invalid_bundle.mkdir()
 
     result = subprocess.run(
-        [str(REPO_ROOT / ".venv" / "bin" / "python"), str(CHECKER_PATH), str(invalid_bundle)],
+        [_repo_python(), str(CHECKER_PATH), str(invalid_bundle)],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,

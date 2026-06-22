@@ -1541,7 +1541,7 @@ def test_scene_camera_shadow_parity_probe_reports_visual_gate_failure() -> None:
 
 def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None:
     request = scene_probe_camera_control_request(
-        [{"view_id": "room_01"}],
+        [{"view_id": "room_01", "target": [0.0, 0.0, 0.0]}],
         width=64,
         height=48,
         color_profile={
