@@ -56,8 +56,8 @@ Agent engines:
 - `direct-runner`
 
 Provider profiles are selected only for agent engines that need a model/key
-route. Examples include `codex-router-responses`, `mimo-mify-responses`, `kimi-anthropic`,
-`mimo-tp-anthropic`, and `mimo-mify-anthropic`. Deterministic engines such as
+route. Examples include `codex-router-responses`, `mimo-mify-responses`,
+`kimi-openai-chat`, `mimo-tp-anthropic`, and `mimo-mify-anthropic`. Deterministic engines such as
 `direct-runner` do not accept `provider_profile`.
 
 Validation-required maintainer engines stay out of the normal public engine
@@ -138,7 +138,7 @@ behavior.
 ```bash
 cp .env.example .env
 # Fill CODEX_BASE_URL and CODEX_API_KEY for the default Codex router Responses route.
-# Fill MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY for Claude Code routes.
+# Fill MIMO_TP_KEY or XM_LLM_API_KEY for Claude Code routes.
 # Optional: set ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses explicitly to use XM_LLM_API_KEY for Codex.
 # Optional: set ROBOCLAWS_PROVIDER_PROFILE=minimax-responses explicitly to use MM_API_KEY for Codex.
 # Optional: fill MIMO_BASE_URL and MIMO_API_KEY for MiMo inside benchmark/SDK probes.

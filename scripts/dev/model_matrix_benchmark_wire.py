@@ -83,7 +83,7 @@ def payload_for_case(case: MatrixCase, *, prompt: str, max_tokens: int) -> dict[
             "max_tokens": max_tokens,
             "stream": False,
         }
-        if case.provider_id == "kimi" and case.model == "kimi-k2.7-code":
+        if case.provider_id == "kimi" and case.model.startswith("kimi-k2.7-code"):
             payload.update(
                 thinking_request_body_for_wire(
                     provider_profile="kimi-openai-chat",

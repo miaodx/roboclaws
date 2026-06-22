@@ -27,16 +27,16 @@ from roboclaws.agents.provider_registry import (
     route_capabilities_for_engine,
 )
 from roboclaws.core.provider_factory import create_provider
-from roboclaws.core.providers.kimi import KimiProvider
+from roboclaws.core.providers.kimi import KimiCodingProvider
 from roboclaws.core.providers.openai import MimoProvider, NvidiaProvider
 
 
 def test_resolve_model_records_alias_env_and_capabilities() -> None:
     meta = resolve_model("kimi")
 
-    assert meta.model_id == "kimi-k2.6"
+    assert meta.model_id == "kimi-k2.7-code"
     assert meta.family == "kimi"
-    assert meta.direct_provider_adapter == "kimi"
+    assert meta.direct_provider_adapter == "kimi-coding"
     assert meta.direct_required_env_keys == ("KIMI_API_KEY",)
     assert meta.supports_image_input is True
 
@@ -64,8 +64,8 @@ def test_provider_factory_routes_through_catalog(monkeypatch) -> None:
     monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
     monkeypatch.setenv("MIMO_TP_KEY", "test-key")
 
-    with patch("roboclaws.core.provider_factory.KimiProvider.__init__", return_value=None):
-        assert isinstance(create_provider("kimi"), KimiProvider)
+    with patch("roboclaws.core.provider_factory.KimiCodingProvider.__init__", return_value=None):
+        assert isinstance(create_provider("kimi"), KimiCodingProvider)
     with patch("roboclaws.core.provider_factory.NvidiaProvider.__init__", return_value=None):
         assert isinstance(create_provider("nvidia"), NvidiaProvider)
     with patch("roboclaws.core.provider_factory.MimoProvider.__init__", return_value=None):
@@ -81,7 +81,7 @@ def test_catalog_reports_all_real_models_image_capable() -> None:
 
 def test_catalog_returns_openclaw_model_identifier() -> None:
     assert openclaw_model_id("mimo-v2.5") == "mimo_openai/mimo-v2.5"
-    assert openclaw_model_id("kimi-k2.6") == "anthropic_kimi/k2.6"
+    assert openclaw_model_id("kimi-k2-5") == "anthropic_kimi/k2p5"
 
 
 def test_registry_marks_mify_codex_degraded_but_supported() -> None:
@@ -101,9 +101,9 @@ def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_EXPERIMENTAL
     assert route.default_use is True
     assert model.default_use is True
-    assert "Thinking On" in route.default_use_note
-    assert "model_thinking_mode" in route.default_use_note
-    assert "provider-specific" in model.default_use_note
+    assert "thinking-only" in route.default_use_note
+    assert "canonical" in route.default_use_note
+    assert "arbitrary K2.7 suffixes" in model.default_use_note
 
 
 def test_default_enabled_routes_include_requested_api_sources() -> None:
@@ -137,6 +137,7 @@ def test_default_enabled_routes_include_requested_api_sources() -> None:
         "kimi-k2.7-code",
     } <= model_ids
     assert "MiniMax-M2.7-highspeed" not in model_ids
+    assert "kimi-k2.7-code-highspeed" not in model_ids
 
 
 def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
@@ -189,14 +190,6 @@ def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
             env={"MIMO_ANTHROPIC_BASE_URL": "https://mimo.example/anthropic"},
         )
         == "https://mimo.example/anthropic"
-    )
-    assert provider_route_spec("kimi-anthropic").base_url_env == "KIMI_ANTHROPIC_BASE_URL"
-    assert (
-        route_base_url(
-            provider_route_spec("kimi-anthropic"),
-            env={"KIMI_ANTHROPIC_BASE_URL": "https://kimi.example/coding/"},
-        )
-        == "https://kimi.example/coding/"
     )
 
 
@@ -304,13 +297,12 @@ def test_provider_readiness_rejects_route_incompatible_model_override() -> None:
         "model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"
         in (readiness["message"])
     )
-    assert "expected one of MiniMax-M3, MiniMax-M2.7-highspeed" in readiness["message"]
+    assert "expected one of MiniMax-M3" in readiness["message"]
 
 
-def test_provider_route_model_allows_route_compatible_explicit_variant() -> None:
-    resolved = resolve_route_model("minimax-responses", "MiniMax-M2.7-highspeed")
-
-    assert resolved.model_id == "MiniMax-M2.7-highspeed"
+def test_provider_route_model_rejects_kimi_non_catalog_suffix() -> None:
+    with pytest.raises(KeyError):
+        resolve_route_model("kimi-openai-chat", "kimi-k2.7-code-highspeed")
 
 
 def test_provider_route_model_rejects_same_family_wrong_route_model() -> None:
@@ -383,10 +375,12 @@ def test_provider_registry_cli_dispatches_route_and_json_commands(
     assert "codex-router-responses" in output.read_text(encoding="utf-8")
     assert _main(["default-model", "minimax-responses"]) == 0
     assert capsys.readouterr().out.strip() == "MiniMax-M3"
-    assert _main(["model-id", "minimax-highspeed"]) == 0
-    assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
-    assert _main(["provider-model-id", "minimax-responses", "minimax-highspeed"]) == 0
-    assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
+    with pytest.raises(SystemExit):
+        _main(["model-id", "kimi-code-highspeed"])
+    assert "unknown model" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        _main(["provider-model-id", "kimi-openai-chat", "kimi-k2.7-code-highspeed"])
+    assert "unknown provider/model id 'kimi-k2.7-code-highspeed'" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         _main(["provider-model-id", "minimax-responses", "gpt-5.5"])
     assert "incompatible with provider_profile 'minimax-responses'" in capsys.readouterr().err

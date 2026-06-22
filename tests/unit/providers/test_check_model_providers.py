@@ -24,12 +24,11 @@ def test_provider_health_defaults_leave_room_for_reasoning_tokens() -> None:
     assert script.DEFAULT_CHAT_MAX_TOKENS >= 128
 
 
-def test_provider_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> None:
+def test_provider_probe_defaults_cover_kimi_and_payload() -> None:
     script = _load_script_module()
 
     probes = {probe.probe_id: probe for probe in script.build_provider_probes()}
 
-    assert probes["provider:minimax-responses-m27"].max_tokens >= 256
     assert probes["provider:mimo-tp-openai-chat"].max_tokens >= 128
     assert probes["provider:mimo-inside-openai-chat"].model == "mimo-1000"
     assert probes["provider:mimo-inside-openai-chat"].max_tokens >= 128
@@ -41,7 +40,7 @@ def test_provider_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> N
     )
     assert payload["max_tokens"] >= 128
     assert payload["stream"] is False
-    assert payload["thinking"] == {"type": "enabled", "keep": "all"}
+    assert "thinking" not in payload
     assert "temperature" not in payload
 
 
@@ -204,9 +203,7 @@ def test_kimi_agents_sdk_probe_uses_coding_agent_user_agent_header(
     assert result.ok is True
     assert captured["model"] == "kimi-k2.7-code"
     assert captured["model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
-    assert captured["model_settings"]["extra_body"] == {
-        "thinking": {"type": "enabled", "keep": "all"}
-    }
+    assert "extra_body" not in captured["model_settings"]
 
 
 def _install_fake_httpx(monkeypatch, *, response_text: str, status_error: Exception | None = None):
@@ -298,7 +295,6 @@ def test_select_probe_can_limit_by_route_or_probe_id() -> None:
     assert {probe.probe_id for probe in selected} == {
         "agents-sdk:minimax-responses",
         "provider:minimax-responses-m3",
-        "provider:minimax-responses-m27",
     }
 
 

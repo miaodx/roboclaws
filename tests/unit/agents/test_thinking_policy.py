@@ -22,9 +22,24 @@ def test_default_thinking_policy_maps_by_wire_api() -> None:
         wire_api="chat-completions",
         mode="default",
     )
+    kimi_chat = apply_model_thinking_policy(
+        {"include_usage": True},
+        provider_profile="kimi-openai-chat",
+        wire_api="chat-completions",
+        mode="default",
+    )
 
     assert responses["reasoning"] == {"effort": "medium"}
     assert chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
+    assert "extra_body" not in kimi_chat
+    assert (
+        thinking_request_body_for_wire(
+            provider_profile="kimi-openai-chat",
+            wire_api="chat-completions",
+            mode="default",
+        )
+        == {}
+    )
     assert thinking_request_body_for_wire(
         provider_profile="mimo-inside-openai-chat",
         wire_api="chat-completions",
@@ -43,11 +58,12 @@ def test_disabled_thinking_policy_maps_by_wire_api() -> None:
         wire_api="responses",
         mode="disabled",
     ) == {"reasoning": {"effort": "none"}}
-    assert thinking_request_body_for_wire(
-        provider_profile="kimi-openai-chat",
-        wire_api="chat-completions",
-        mode="disabled",
-    ) == {"thinking": {"type": "disabled"}}
+    with pytest.raises(ValueError, match="thinking-only"):
+        thinking_request_body_for_wire(
+            provider_profile="kimi-openai-chat",
+            wire_api="chat-completions",
+            mode="disabled",
+        )
 
 
 def test_thinking_policy_rejects_unknown_wire_api() -> None:

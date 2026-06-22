@@ -91,7 +91,7 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, or OpenClaw integration/local verification gates. Do not run
 system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
-contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. Codex recipes
+contains a supported MiMo or MiMo mify Anthropic key route. Codex recipes
 default to `codex-router-responses` and may run there when `CODEX_BASE_URL` and
 `CODEX_API_KEY` are configured; mimo-mify-responses and MiniMax are available only as explicit
 `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` overrides with `XM_LLM_API_KEY` or

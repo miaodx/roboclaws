@@ -1179,7 +1179,7 @@ claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收�
     just molmo::household-world-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
-ci-rehearsal entry="kimi-k2.6" dry_run="":
+ci-rehearsal entry="agents-sdk-kimi-k2.7-code" dry_run="":
     #!/usr/bin/env bash
     set -euo pipefail
     entry="{{entry}}"

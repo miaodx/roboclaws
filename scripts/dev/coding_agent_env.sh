@@ -45,7 +45,6 @@ roboclaws_provider_registry() {
   MIMO_ANTHROPIC_BASE_URL="${MIMO_ANTHROPIC_BASE_URL:-}" \
   MIMO_TP_KEY="${MIMO_TP_KEY:-}" \
   KIMI_OPENAI_BASE_URL="${KIMI_OPENAI_BASE_URL:-}" \
-  KIMI_ANTHROPIC_BASE_URL="${KIMI_ANTHROPIC_BASE_URL:-}" \
   KIMI_API_KEY="${KIMI_API_KEY:-}" \
   $python_cmd -m roboclaws.agents.provider_registry "$@"
 }
@@ -65,8 +64,6 @@ roboclaws_code_agent_provider() {
     if [[ "$provider" == "auto-claude" ]]; then
       if [[ -n "${MIMO_TP_KEY:-}" ]]; then
         provider="mimo-tp-anthropic"
-      elif [[ -n "${KIMI_API_KEY:-}" ]]; then
-        provider="kimi-anthropic"
       elif [[ -n "${XM_LLM_API_KEY:-}" ]]; then
         provider="mimo-mify-anthropic"
       else
@@ -199,10 +196,6 @@ roboclaws_code_agent_prepare_mcp_env() {
     export MODEL="$model"
   fi
 
-  if [[ "$provider" == "kimi-anthropic" ]]; then
-    echo "==> Kimi coding profile note: Kimi is image-capable, but long skill context + raw observe images can intermittently return upstream server errors." >&2
-    echo "    Prefer structured public observations for routine household runs; use raw FPV image reasoning only when the selected evidence lane requires it." >&2
-  fi
 }
 
 roboclaws_code_agent_require_key() {
@@ -296,10 +289,10 @@ roboclaws_claude_provider_args() {
   out_env_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var" "auto-claude")" || return
   case "$provider" in
-    system|kimi-anthropic|mimo-mify-anthropic|mimo-tp-anthropic)
+    system|mimo-mify-anthropic|mimo-tp-anthropic)
       ;;
     *)
-      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, mimo-mify-anthropic, or mimo-tp-anthropic" >&2
+      echo "error: unsupported Claude provider '${provider}'; expected system, mimo-mify-anthropic, or mimo-tp-anthropic" >&2
       return 2
       ;;
   esac
@@ -327,10 +320,10 @@ roboclaws_assert_claude_code_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE "auto-claude")" || return
   case "$provider" in
-    system|kimi-anthropic|mimo-mify-anthropic|mimo-tp-anthropic)
+    system|mimo-mify-anthropic|mimo-tp-anthropic)
       ;;
     *)
-      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, mimo-mify-anthropic, or mimo-tp-anthropic" >&2
+      echo "error: unsupported Claude provider '${provider}'; expected system, mimo-mify-anthropic, or mimo-tp-anthropic" >&2
       return 2
       ;;
   esac
@@ -346,7 +339,7 @@ roboclaws_assert_claude_code_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Claude Code provider." >&2
-        echo "       Configure MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY in the repo-local .env, or switch off the work network." >&2
+        echo "       Configure MIMO_TP_KEY or XM_LLM_API_KEY in the repo-local .env, or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with repo-local Claude provider (${provider})" >&2

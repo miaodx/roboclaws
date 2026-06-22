@@ -987,7 +987,7 @@ def _write_manifest(
         },
         {
             "row_id": "unsupported_provider",
-            "provider_profile": "kimi-anthropic",
+            "provider_profile": "unsupported-provider-route",
             "model": "kimi",
             "evidence_lane": lane,
             "candidate_group": "group0_foundation",

@@ -58,10 +58,9 @@ def apply_model_thinking_policy(
         return settings
     if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
         if wire_api != WIRE_CHAT_COMPLETIONS:
-            raise ValueError("Kimi thinking mode is only supported on the OpenAI Chat route")
-        extra_body = dict(settings.get("extra_body") or {})
-        extra_body["thinking"] = _kimi_thinking_payload(normalized)
-        settings["extra_body"] = extra_body
+            raise ValueError("Kimi K2.7 Code thinking policy is only supported on OpenAI Chat")
+        if normalized == THINKING_MODE_DISABLED:
+            raise ValueError("Kimi K2.7 Code is thinking-only and cannot disable thinking mode")
         return settings
     if wire_api == WIRE_CHAT_COMPLETIONS:
         extra_body = dict(settings.get("extra_body") or {})
@@ -95,8 +94,10 @@ def thinking_request_body_for_wire(
             return {}
     if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
         if wire_api != WIRE_CHAT_COMPLETIONS:
-            raise ValueError("Kimi thinking mode is only supported on the OpenAI Chat route")
-        return {"thinking": _kimi_thinking_payload(normalized)}
+            raise ValueError("Kimi K2.7 Code thinking policy is only supported on OpenAI Chat")
+        if normalized == THINKING_MODE_DISABLED:
+            raise ValueError("Kimi K2.7 Code is thinking-only and cannot disable thinking mode")
+        return {}
     if wire_api == WIRE_CHAT_COMPLETIONS:
         return {"thinking": _kimi_thinking_payload(normalized)}
     if wire_api == WIRE_RESPONSES:
