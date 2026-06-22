@@ -309,6 +309,13 @@ is a blocker, not permission to fall back to an older artifact.
   or `git commit -a` in a shared checkout. Prefer explicit pathspecs,
   `git add -p`, or a temporary `GIT_INDEX_FILE` index when the worktree already
   contains unrelated changes.
+- Do not run `git checkout`, `git switch`, `git worktree add/remove`, or other
+  branch/worktree-management commands from this shared checkout unless the
+  human explicitly asks for that repository-level operation. Those commands
+  mutate shared git state and can disrupt parallel agents. If you need isolated
+  verification or a clean tree for your own task, use an already task-owned
+  checkout/clone outside this repo, or ask before creating one; never assume a
+  temporary worktree attached to this repository is harmless.
 - Do not reset, restore, unstage, or commit another agent's work unless the human
   explicitly asks for that. If a file contains mixed edits that cannot be safely
   separated, leave it uncommitted and report the blocker instead of sweeping in
