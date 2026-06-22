@@ -607,6 +607,12 @@ def _promote_b1_camera_previews(
             "fpv_source": str(fpv_source) if fpv_source is not None else "",
             "chase_source": str(chase_source) if chase_source is not None else "",
         }
+        provenance_errors = _b1_camera_preview_provenance_errors(payload, candidate)
+        if provenance_errors:
+            candidate_result["status"] = "provenance_rejected"
+            candidate_result["provenance_errors"] = provenance_errors
+            evaluated.append(candidate_result)
+            continue
         if fpv_source is None or chase_source is None:
             candidate_result["status"] = "missing_view_path"
             evaluated.append(candidate_result)
@@ -674,6 +680,12 @@ def _promote_b1_camera_previews(
             "selected_label": selected_label,
             "selected_action": selected_action,
             "selected_waypoint_id": selected_waypoint,
+            "alignment_artifact": selected.get("alignment_artifact")
+            or payload.get("alignment_artifact")
+            or "",
+            "alignment_transform_source": selected.get("alignment_transform_source")
+            or payload.get("alignment_transform_source")
+            or "",
             "candidate_count": len(candidates),
             "accepted_candidate_count": len(accepted),
         },
@@ -683,6 +695,12 @@ def _promote_b1_camera_previews(
                 "path": fpv_path.name,
                 "view": "raw_fpv",
                 "waypoint_id": selected_waypoint,
+                "alignment_artifact": selected.get("alignment_artifact")
+                or payload.get("alignment_artifact")
+                or "",
+                "alignment_transform_source": selected.get("alignment_transform_source")
+                or payload.get("alignment_transform_source")
+                or "",
                 "action": selected_action,
                 "label": selected_label,
                 "camera": agent_facing_fpv.get("camera_prim_path") or "/World/robot_0/head_camera",
@@ -698,6 +716,12 @@ def _promote_b1_camera_previews(
                 "path": chase_path.name,
                 "view": "chase_camera",
                 "waypoint_id": selected_waypoint,
+                "alignment_artifact": selected.get("alignment_artifact")
+                or payload.get("alignment_artifact")
+                or "",
+                "alignment_transform_source": selected.get("alignment_transform_source")
+                or payload.get("alignment_transform_source")
+                or "",
                 "action": selected_action,
                 "label": selected_label,
                 "camera": report_chase.get("camera_prim_path") or "robot_relative_chase_camera",
@@ -733,6 +757,9 @@ def _b1_camera_preview_candidates(
                 "waypoint_id": step.get("waypoint_id")
                 or step.get("current_waypoint_id")
                 or step.get("room_id"),
+                "robot_pose_applied": step.get("robot_pose_applied"),
+                "alignment_artifact": step.get("alignment_artifact"),
+                "alignment_transform_source": step.get("alignment_transform_source"),
                 "fpv": views.get("fpv"),
                 "chase": views.get("chase"),
                 "camera_control_contract": step.get("camera_control_contract"),
@@ -752,6 +779,9 @@ def _b1_camera_preview_candidates(
                 "label": item.get("waypoint_id") or f"waypoint_evidence_{index:03d}",
                 "action": "navigation_smoke",
                 "waypoint_id": item.get("waypoint_id"),
+                "robot_pose_applied": item.get("robot_pose_applied"),
+                "alignment_artifact": item.get("alignment_artifact"),
+                "alignment_transform_source": item.get("alignment_transform_source"),
                 "fpv": views.get("fpv"),
                 "chase": views.get("chase"),
                 "camera_control_contract": {},
@@ -759,6 +789,24 @@ def _b1_camera_preview_candidates(
         )
     del artifact_path
     return candidates
+
+
+def _b1_camera_preview_provenance_errors(
+    payload: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    if candidate.get("robot_pose_applied") is not True:
+        errors.append("robot_pose_not_applied")
+    alignment_artifact = candidate.get("alignment_artifact") or payload.get("alignment_artifact")
+    if not alignment_artifact:
+        errors.append("missing_alignment_artifact")
+    transform_source = candidate.get("alignment_transform_source") or payload.get(
+        "alignment_transform_source"
+    )
+    if str(transform_source or "") != "reviewed_correspondence_fit":
+        errors.append("missing_reviewed_correspondence_transform_source")
+    return errors
 
 
 def _b1_camera_label_from_view_path(raw_path: Any) -> str:

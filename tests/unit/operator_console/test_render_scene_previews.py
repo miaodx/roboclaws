@@ -222,11 +222,16 @@ def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
         json.dumps(
             {
                 "contract": "realworld_cleanup_v1",
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
                 "robot_view_steps": [
                     {
                         "action": "observe",
                         "label": "0001_observe",
                         "waypoint_id": "generated_exploration_002",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
                         "camera_control_contract": {
                             "agent_facing_fpv": {
                                 "camera_prim_path": "/World/robot_0/head_camera",
@@ -264,9 +269,16 @@ def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
     metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
     assert metadata["camera_preview_artifact"]["path"] == str(artifact)
+    assert metadata["camera_preview_artifact"]["alignment_artifact"] == str(
+        run_dir / "alignment_residuals.json"
+    )
+    assert metadata["camera_preview_artifact"]["alignment_transform_source"] == (
+        "reviewed_correspondence_fit"
+    )
     assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
     assert metadata["views"]["fpv"]["camera"] == "/World/robot_0/head_camera"
     assert metadata["views"]["fpv"]["waypoint_id"] == "generated_exploration_002"
+    assert metadata["views"]["fpv"]["alignment_transform_source"] == "reviewed_correspondence_fit"
     assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert metadata["views"]["chase"]["source"] == "isaac_lab_camera_rgb_scene_camera:chase"
 
@@ -281,15 +293,21 @@ def test_b1_camera_promotion_rejects_low_detail_pairs(tmp_path: Path) -> None:
     artifact.write_text(
         json.dumps(
             {
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
                 "robot_view_steps": [
                     {
                         "label": "flat",
+                        "waypoint_id": "generated_exploration_002",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
                         "views": {
                             "fpv": "robot_views/flat.fpv.png",
                             "chase": "robot_views/flat.chase.png",
                         },
                     }
-                ]
+                ],
             },
             indent=2,
             sort_keys=True,
@@ -311,6 +329,53 @@ def test_b1_camera_promotion_rejects_low_detail_pairs(tmp_path: Path) -> None:
     assert any(
         error.startswith("fpv:") for error in result["evaluated_candidates"][0]["quality_errors"]
     )
+
+
+def test_b1_camera_promotion_rejects_missing_residual_alignment_provenance(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    _write_pattern_image(views_dir / "probe.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(views_dir / "probe.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "robot_view_steps": [
+                    {
+                        "label": "probe",
+                        "waypoint_id": "generated_exploration_002",
+                        "robot_pose_applied": True,
+                        "views": {
+                            "fpv": "robot_views/probe.fpv.png",
+                            "chase": "robot_views/probe.chase.png",
+                        },
+                    }
+                ]
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _promote_b1_camera_previews(
+        camera_artifact=artifact,
+        fpv_path=tmp_path / "b1-map12-fpv.png",
+        chase_path=tmp_path / "b1-map12-chase.png",
+        width=320,
+        height=200,
+    )
+
+    assert result["status"] == "no_usable_camera_pair"
+    assert result["evaluated_candidates"][0]["status"] == "provenance_rejected"
+    assert result["evaluated_candidates"][0]["provenance_errors"] == [
+        "missing_alignment_artifact",
+        "missing_reviewed_correspondence_transform_source",
+    ]
 
 
 def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(

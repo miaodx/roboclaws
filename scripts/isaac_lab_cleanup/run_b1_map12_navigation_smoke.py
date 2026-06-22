@@ -176,6 +176,14 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         if provisional_passed
         else "blocked_local_isaac_b1_map12_navigation_smoke",
         "navigation_provenance": "kinematic_pose_driven" if provisional_passed else "blocked",
+        "alignment_artifact": str(
+            waypoints[0].get("alignment_artifact") or readiness.get("alignment_artifact") or ""
+        ),
+        "alignment_transform_source": str(
+            waypoints[0].get("alignment_transform_source")
+            or readiness.get("residual_evidence", {}).get("transform_source")
+            or ""
+        ),
         "planner_backed": False,
         "physical_robot": False,
         "navigation_waypoint_count": len(waypoint_evidence),
@@ -243,6 +251,9 @@ def capture_one(args: argparse.Namespace) -> int:
         "waypoint_id": waypoint.get("waypoint_id"),
         "source_anchor_id": waypoint.get("source_anchor_id"),
         "semantic_source": SEMANTIC_SOURCE,
+        "alignment_artifact": waypoint.get("alignment_artifact") or "",
+        "alignment_transform_source": waypoint.get("alignment_transform_source") or "",
+        "selected_transform_type": waypoint.get("selected_transform_type") or "",
         "map12_nav_goal": waypoint.get("map12_nav_goal"),
         "robot_pose": b1_pose,
         "robot_pose_stage_application": robot_pose_application,

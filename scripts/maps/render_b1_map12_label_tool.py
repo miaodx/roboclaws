@@ -10,8 +10,6 @@ import json
 import shutil
 import sys
 from dataclasses import dataclass
-from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -66,13 +64,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--output-review-manifest", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument(
-        "--serve",
-        action="store_true",
-        help="Serve the generated label tool over HTTP after writing artifacts.",
-    )
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
     return parser.parse_args(argv)
 
 
@@ -92,11 +83,6 @@ def main(argv: list[str] | None = None) -> int:
         "output": str(artifacts["html_path"]),
         "packet": str(artifacts["packet_path"]),
     }
-    if args.serve:
-        payload["url"] = label_tool_url(args.host, args.port)
-        print(json.dumps(payload, sort_keys=True), flush=True)
-        serve_label_tool(args.output_dir, host=args.host, port=args.port)
-        return 0
     print(json.dumps(payload, sort_keys=True))
     return 0
 
@@ -132,23 +118,6 @@ def write_label_tool_artifacts(
         "packet_path": packet_path,
         "shape_count": len(packet["shapes"]),
     }
-
-
-def label_tool_url(host: str, port: int) -> str:
-    public_host = "127.0.0.1" if host in {"0.0.0.0", ""} else host
-    return f"http://{public_host}:{port}/label_tool.html"
-
-
-def serve_label_tool(output_dir: Path, *, host: str, port: int) -> None:
-    handler = partial(SimpleHTTPRequestHandler, directory=str(Path(output_dir).resolve()))
-    server = ThreadingHTTPServer((host, port), handler)
-    print(f"Serving B1 / Map 12 label tool at {label_tool_url(host, port)}", flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("Stopping label tool server.", flush=True)
-    finally:
-        server.server_close()
 
 
 def build_label_tool_packet(
