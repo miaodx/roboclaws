@@ -11,8 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import parse_json_object_text
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "scripts" / "dev" / "python_quality_baseline.json"
 RUFF_COMPLEXITY_RULES = ("C901", "PLR0912", "PLR0915")
@@ -132,7 +130,13 @@ def read_quality_baseline(path: Path) -> dict[str, Any]:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise ValueError(f"python quality baseline source cannot be read: {path}: {exc}") from exc
-    return parse_json_object_text(text, label="python quality baseline", source=str(path))
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("python quality baseline source must contain valid JSON object") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("python quality baseline source must contain a JSON object")
+    return payload
 
 
 def tracked_python_files() -> list[Path]:
