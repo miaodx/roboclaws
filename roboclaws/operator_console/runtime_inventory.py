@@ -55,7 +55,7 @@ def runtime_inventory_payload(
     """Return a redacted inventory of repo-relevant local background tasks."""
 
     root = root.resolve()
-    port_list = _dedupe_ints([*(ports or []), DEFAULT_MCP_PORT])
+    port_list = _dedupe_ints([DEFAULT_MCP_PORT] if ports is None else ports)
     tasks: list[dict[str, Any]] = []
     tasks.extend(_operator_console_tasks(root, include_recent_terminal=include_recent_terminal))
     tasks.extend(_eval_harness_tasks(root, include_recent_terminal=include_recent_terminal))
