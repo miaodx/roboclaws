@@ -29,6 +29,7 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -247,7 +248,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         contrast_run_dirs=contrast_run_dirs,
         max_frames_per_source=int(args.max_frames_per_source),
     )
-    runtime_map_prior = _load_json_if_exists(args.runtime_map_prior)
+    runtime_map_prior = _load_json_if_exists(
+        args.runtime_map_prior,
+        label="RAW-FPV runtime map prior",
+    )
     public_inputs = build_public_inputs(
         frames,
         runtime_map_prior=runtime_map_prior,
@@ -619,7 +623,7 @@ def load_probe_labels(
         label_paths = tuple(paths)
     for path in label_paths:
         _require_input_file(path, purpose="RAW-FPV private label manifest")
-        payload = _load_json(path)
+        payload = _load_json(path, label="RAW-FPV private label manifest")
         rows = payload.get("labels", [])
         if not isinstance(rows, list):
             raise ValueError(
@@ -683,7 +687,7 @@ def load_predictions(path: Path | None) -> dict[str, dict[str, dict[str, Any]]]:
     if path is None:
         return {}
     _require_input_file(path, purpose="RAW-FPV prediction manifest")
-    payload = _load_json(path)
+    payload = _load_json(path, label="RAW-FPV prediction manifest")
     rows = payload.get("predictions") if "predictions" in payload else payload.get("runs", [])
     if not isinstance(rows, list):
         raise ValueError(
@@ -1201,7 +1205,7 @@ def _raw_observations_from_json_artifacts(run_dir: Path) -> list[dict[str, Any]]
         path = run_dir / name
         if not path.is_file():
             continue
-        payload = _load_json(path)
+        payload = _load_json(path, label="RAW-FPV run artifact")
         observations.extend(
             item
             for item in payload.get("raw_fpv_observations") or []
@@ -1284,7 +1288,7 @@ def _derive_resolved_contrast_labels(
             path = run_dir / payload_name
             if not path.is_file():
                 continue
-            payload = _load_json(path)
+            payload = _load_json(path, label="RAW-FPV contrast artifact")
             for item in payload.get("model_declared_observations") or []:
                 if item.get("grounding_status") != "resolved":
                     continue
@@ -1901,13 +1905,13 @@ def _safe_filename(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value)).strip("_") or "item"
 
 
-def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+def _load_json(path: Path, *, label: str) -> dict[str, Any]:
+    return read_json_object(path, label=label)
 
 
-def _load_json_if_exists(path: Path) -> dict[str, Any]:
+def _load_json_if_exists(path: Path, *, label: str) -> dict[str, Any]:
     if path and path.is_file():
-        return _load_json(path)
+        return _load_json(path, label=label)
     return {}
 
 

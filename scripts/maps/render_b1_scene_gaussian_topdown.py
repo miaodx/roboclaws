@@ -470,7 +470,7 @@ def _capture_scene(
     env.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
     env["ROBOCLAWS_HARD_EXIT_AFTER_ISAAC_CAPTURE"] = "1"
     subprocess.run(command, cwd=Path(__file__).resolve().parents[2], env=env, check=True)
-    payload = json.loads(result_path.read_text(encoding="utf-8"))
+    payload = read_json_object(result_path, label="gaussian topdown capture result")
     payload["result_path"] = str(result_path)
     return payload
 

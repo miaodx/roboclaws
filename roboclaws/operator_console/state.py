@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.process_status import pid_is_active
 from roboclaws.operator_console.redaction import redact_text
@@ -325,27 +326,22 @@ def _live_status_owner_pid(live_status: dict[str, Any]) -> int | None:
     return None
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    source = _read_json_source(path, label=path.name)
-    return _json_source_payload(source)
-
-
 def _read_json_source(path: Path, *, label: str) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return JsonSourceError(
-            path=path.resolve(),
-            label=label,
-            reason=f"invalid JSON at line {exc.lineno} column {exc.colno}",
-        )
+        return read_json_object(path, label=label)
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            return JsonSourceError(
+                path=path.resolve(),
+                label=label,
+                reason=f"invalid JSON at line {cause.lineno} column {cause.colno}",
+            )
+        return JsonSourceError(path=path.resolve(), label=label, reason="expected JSON object")
     except OSError as exc:
         return JsonSourceError(path=path.resolve(), label=label, reason=str(exc))
-    if not isinstance(payload, dict):
-        return JsonSourceError(path=path.resolve(), label=label, reason="expected JSON object")
-    return payload
 
 
 def _json_source_payload(source: dict[str, Any] | JsonSourceError) -> dict[str, Any]:

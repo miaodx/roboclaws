@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.agents.drivers.household_live import map_build_server_argv
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.agibot_map_build_mcp_server import MCP_SERVER_NAME
 from scripts.molmo_cleanup.run_live_codex_cleanup import (
     CODEX_CLEANUP_MCP_SERVER_NAME,
@@ -224,9 +225,7 @@ class LiveCodexAgibotMapBuildRunner:
 
     def _check_result(self) -> None:
         run_result = self.run_dir / "run_result.json"
-        if not run_result.is_file():
-            raise RuntimeError(f"live Agibot map-build run finished without {run_result}")
-        payload = json.loads(run_result.read_text(encoding="utf-8"))
+        payload = _read_agibot_map_build_run_result(run_result)
         if payload.get("mcp_server") != MCP_SERVER_NAME:
             raise RuntimeError(f"run_result has unexpected mcp_server: {payload.get('mcp_server')}")
         if payload.get("backend_variant") != "agibot_gdk":
@@ -277,6 +276,10 @@ def _codex_agibot_map_build_prompt(prompt: str) -> str:
         "explicitly left for operator review.\n\n"
         f"{prompt}"
     )
+
+
+def _read_agibot_map_build_run_result(path: Path) -> dict[str, Any]:
+    return read_json_object(path, label="Agibot map-build run_result")
 
 
 if __name__ == "__main__":

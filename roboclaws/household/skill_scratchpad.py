@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 SCRATCHPAD_SCHEMA = "molmo_cleanup_skill_scratchpad_v1"
 
 
@@ -38,7 +40,7 @@ def read_or_create_skill_scratchpad(
     for name in ("agent_scratchpad.json", "cleanup_scratch.json"):
         path = run_dir / name
         if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = read_json_object(path, label="skill scratchpad")
             validate_skill_scratchpad(data)
             target = run_dir / "agent_scratchpad.json"
             if path != target:

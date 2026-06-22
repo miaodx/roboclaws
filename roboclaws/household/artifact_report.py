@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.report import render_cleanup_report
 from roboclaws.household.types import (
     CleanupObject,
@@ -225,10 +226,7 @@ def _resolve_artifact(
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"expected JSON object in {path}")
-    return data
+    return read_json_object(Path(path), label="cleanup report artifact")
 
 
 def _int_or_zero(value: Any) -> int:

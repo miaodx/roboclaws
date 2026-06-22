@@ -35,6 +35,86 @@ def test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest(tmp_path:
     ]
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"cleanup report artifact source must contain valid JSON object: .*scenario\.json",
+        ),
+        (
+            "[]\n",
+            r"cleanup report artifact source must contain a JSON object: .*scenario\.json",
+        ),
+    ],
+)
+def test_load_cleanup_scenario_artifact_rejects_bad_scenario_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    scenario_path = tmp_path / "scenario.json"
+    scenario_path.write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_cleanup_scenario_artifact(scenario_path)
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"cleanup report artifact source must contain valid JSON object: "
+            r".*private_manifest\.json",
+        ),
+        (
+            "[]\n",
+            r"cleanup report artifact source must contain a JSON object: "
+            r".*private_manifest\.json",
+        ),
+    ],
+)
+def test_load_cleanup_scenario_artifact_rejects_bad_private_manifest_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    paths = write_scenario_bundle(tmp_path, scenario)
+    paths["private_manifest"].write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_cleanup_scenario_artifact(paths["scenario"])
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"cleanup report artifact source must contain valid JSON object: "
+            r".*run_result\.json",
+        ),
+        (
+            "[]\n",
+            r"cleanup report artifact source must contain a JSON object: "
+            r".*run_result\.json",
+        ),
+    ],
+)
+def test_rerender_cleanup_report_from_run_result_rejects_bad_run_result_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        rerender_cleanup_report_from_run_result(run_result_path)
+
+
 def test_rerender_cleanup_report_from_run_result_uses_shared_visual_core(
     tmp_path: Path,
 ) -> None:

@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.molmo_cleanup.planner_manipulation_probe_checker import assert_probe_result
 
 
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     path = args.path / "run_result.json" if args.path.is_dir() else args.path
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_json_object(path, label="planner manipulation probe result")
     _assert_probe_result(
         data,
         path.parent,

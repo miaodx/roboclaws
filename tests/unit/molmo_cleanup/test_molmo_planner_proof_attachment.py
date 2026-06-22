@@ -46,6 +46,54 @@ def test_attach_planner_proof_validates_and_copies_strict_images(tmp_path: Path)
     assert (cleanup_dir / attachment["image_artifacts"]["final"]).is_file()
 
 
+def test_attach_planner_proof_rejects_missing_source(tmp_path: Path) -> None:
+    proof_path = tmp_path / "proof" / "run_result.json"
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        attach_planner_proof(
+            proof_run_result_path=proof_path,
+            cleanup_run_dir=tmp_path / "cleanup",
+        )
+
+    message = str(excinfo.value)
+    assert "planner proof run result source is missing" in message
+    assert str(proof_path) in message
+
+
+def test_attach_planner_proof_rejects_malformed_source(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proof"
+    proof_dir.mkdir()
+    proof_path = proof_dir / "run_result.json"
+    proof_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        attach_planner_proof(
+            proof_run_result_path=proof_path,
+            cleanup_run_dir=tmp_path / "cleanup",
+        )
+
+    message = str(excinfo.value)
+    assert "planner proof run result source must contain valid JSON object" in message
+    assert str(proof_path) in message
+
+
+def test_attach_planner_proof_rejects_non_object_source(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proof"
+    proof_dir.mkdir()
+    proof_path = proof_dir / "run_result.json"
+    proof_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        attach_planner_proof(
+            proof_run_result_path=proof_path,
+            cleanup_run_dir=tmp_path / "cleanup",
+        )
+
+    message = str(excinfo.value)
+    assert "planner proof run result source must contain a JSON object" in message
+    assert str(proof_path) in message
+
+
 def test_attach_planner_proof_rejects_non_strict_probe(tmp_path: Path) -> None:
     proof_path = _write_strict_planner_proof(tmp_path / "proof")
     data = json.loads(proof_path.read_text(encoding="utf-8"))

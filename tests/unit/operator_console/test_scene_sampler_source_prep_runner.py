@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
@@ -107,6 +109,52 @@ def test_source_prep_runner_dry_run_records_install_commands(tmp_path: Path) -> 
     assert json.loads(output_path.read_text(encoding="utf-8")) == result
 
 
+def test_source_prep_runner_rejects_missing_prep_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"scene sampler source prep source is missing: .*source_prep\.json",
+    ):
+        runner.run_source_prep(
+            prep_path=tmp_path / "source_prep.json",
+            output_path=tmp_path / "source_prep_run.json",
+        )
+
+
+def test_source_prep_runner_rejects_malformed_prep_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    prep_path = tmp_path / "source_prep.json"
+    prep_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler source prep source must contain valid JSON object: "
+            r".*source_prep\.json"
+        ),
+    ):
+        runner.run_source_prep(
+            prep_path=prep_path,
+            output_path=tmp_path / "source_prep_run.json",
+        )
+
+
+def test_source_prep_runner_rejects_non_object_prep_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    prep_path = tmp_path / "source_prep.json"
+    prep_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"scene sampler source prep source must contain a JSON object: .*source_prep\.json",
+    ):
+        runner.run_source_prep(
+            prep_path=prep_path,
+            output_path=tmp_path / "source_prep_run.json",
+        )
+
+
 def test_source_prep_runner_execute_runs_install_commands(tmp_path: Path) -> None:
     runner = _load_runner()
     prep_path = tmp_path / "source_prep.json"
@@ -177,6 +225,48 @@ def test_source_prep_runner_records_worklist_alignment(tmp_path: Path) -> None:
         "molmospaces/ithor/1",
         "molmospaces/ithor/2",
     ]
+
+
+def test_source_prep_runner_rejects_malformed_worklist_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    prep_path = tmp_path / "source_prep.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    _write_prep(prep_path, [_candidate()])
+    worklist_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler next-flow worklist source must contain valid JSON object: "
+            r".*next_flow_worklist\.json"
+        ),
+    ):
+        runner.run_source_prep(
+            prep_path=prep_path,
+            worklist_path=worklist_path,
+            output_path=tmp_path / "source_prep_run.json",
+        )
+
+
+def test_source_prep_runner_rejects_non_object_worklist_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    prep_path = tmp_path / "source_prep.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    _write_prep(prep_path, [_candidate()])
+    worklist_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler next-flow worklist source must contain a JSON object: "
+            r".*next_flow_worklist\.json"
+        ),
+    ):
+        runner.run_source_prep(
+            prep_path=prep_path,
+            worklist_path=worklist_path,
+            output_path=tmp_path / "source_prep_run.json",
+        )
 
 
 def test_source_prep_runner_records_failures(tmp_path: Path) -> None:

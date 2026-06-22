@@ -29,6 +29,7 @@ OPEN_ENDED_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "open_en
 SCENE_SAMPLER_SUITE = (
     REPO_ROOT / "evals" / "household_world" / "suites" / "scene_sampler_stress.json"
 )
+EVAL_FILE_LOADERS = [(load_eval_suite, "suite.json"), (load_eval_sample, "sample.json")]
 
 
 def test_direct_runner_eval_sample_and_result_round_trip(tmp_path: Path) -> None:
@@ -249,6 +250,38 @@ def test_eval_sample_rejects_non_string_identity_values() -> None:
     payload["provider_profiles"] = ["not_applicable", 3]
     with pytest.raises(ValueError, match="provider_profiles must be a list of non-empty strings"):
         EvalSample.from_mapping(payload)
+
+
+@pytest.mark.parametrize("loader, filename", EVAL_FILE_LOADERS)
+def test_eval_file_sources_fail_when_missing(tmp_path: Path, loader, filename: str) -> None:
+    path = tmp_path / filename
+
+    with pytest.raises(FileNotFoundError, match=rf"eval JSON source is missing: .*{filename}"):
+        loader(path)
+
+
+@pytest.mark.parametrize("loader, filename", EVAL_FILE_LOADERS)
+def test_eval_file_sources_reject_malformed_json(tmp_path: Path, loader, filename: str) -> None:
+    path = tmp_path / filename
+    path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"eval JSON source must contain valid JSON object: .*{filename}",
+    ):
+        loader(path)
+
+
+@pytest.mark.parametrize("loader, filename", EVAL_FILE_LOADERS)
+def test_eval_file_sources_reject_non_object_json(tmp_path: Path, loader, filename: str) -> None:
+    path = tmp_path / filename
+    path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"eval JSON source must contain a JSON object: .*{filename}",
+    ):
+        loader(path)
 
 
 def test_direct_runner_fixture_suite_loads_sample_contract() -> None:

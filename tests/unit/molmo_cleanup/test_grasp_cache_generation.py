@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from roboclaws.household import grasp_cache_generation as generation
 from roboclaws.household.grasp_cache_generation import (
@@ -87,6 +88,45 @@ def test_load_generation_preflight_from_manifest(tmp_path: Path) -> None:
     )
 
     assert load_generation_preflight_from_manifest(manifest) == {"status": "ready"}
+
+
+def test_load_generation_preflight_rejects_missing_manifest_source(tmp_path: Path) -> None:
+    with pytest.raises(
+        FileNotFoundError,
+        match=(
+            r"grasp cache generation proof bundle manifest source is missing: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_generation_preflight_from_manifest(tmp_path / "proof_bundle_run_manifest.json")
+
+
+def test_load_generation_preflight_rejects_malformed_manifest_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "proof_bundle_run_manifest.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp cache generation proof bundle manifest source must contain valid JSON object: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_generation_preflight_from_manifest(manifest)
+
+
+def test_load_generation_preflight_rejects_non_object_manifest_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "proof_bundle_run_manifest.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp cache generation proof bundle manifest source must contain a JSON object: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_generation_preflight_from_manifest(manifest)
 
 
 def test_render_grasp_cache_generation_report(tmp_path: Path) -> None:

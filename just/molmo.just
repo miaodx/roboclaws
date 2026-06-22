@@ -40,7 +40,7 @@ default:
 # Private household-world implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" map_build="off" runtime_map_prior="" backend_override="auto" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" b1_alignment_artifact="" b1_navigation_artifact="" b1_semantic_projection_artifact="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
+household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" map_build="off" runtime_map_prior="" backend_override="auto" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_artifact="" b1_navigation_artifact="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -69,10 +69,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     task_surface="{{task_surface}}"
     task_intent="{{task_intent}}"
     operator_messages_path="{{operator_messages_path}}"
-    b1_alignment_review="{{b1_alignment_review}}"
     b1_alignment_artifact="{{b1_alignment_artifact}}"
     b1_navigation_artifact="{{b1_navigation_artifact}}"
-    b1_semantic_projection_artifact="{{b1_semantic_projection_artifact}}"
     skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
@@ -117,14 +115,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     launch_world_id="${ROBOCLAWS_LAUNCH_WORLD_ID:-}"
     operator_messages_path="${operator_messages_path#operator_messages_path=}"
     operator_messages_path="${operator_messages_path#operator-messages-path=}"
-    b1_alignment_review="${b1_alignment_review#b1_alignment_review=}"
-    b1_alignment_review="${b1_alignment_review#b1-alignment-review=}"
     b1_alignment_artifact="${b1_alignment_artifact#b1_alignment_artifact=}"
     b1_alignment_artifact="${b1_alignment_artifact#b1-alignment-artifact=}"
     b1_navigation_artifact="${b1_navigation_artifact#b1_navigation_artifact=}"
     b1_navigation_artifact="${b1_navigation_artifact#b1-navigation-artifact=}"
-    b1_semantic_projection_artifact="${b1_semantic_projection_artifact#b1_semantic_projection_artifact=}"
-    b1_semantic_projection_artifact="${b1_semantic_projection_artifact#b1-semantic-projection-artifact=}"
     skill_name="${skill_name#skill_name=}"
     skill_name="${skill_name#skill-name=}"
     skill_name="${skill_name:-${ROBOCLAWS_TASK_SKILL:-}}"
@@ -148,8 +142,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         "$scene_index" "$isaac_scene_usd_path"
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
         "$task_surface" "$task_intent" "$operator_messages_path"
-        "$b1_alignment_review" "$b1_alignment_artifact" "$b1_navigation_artifact"
-        "$b1_semantic_projection_artifact"
+        "$b1_alignment_artifact" "$b1_navigation_artifact"
       )
       if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" || -n "$run_dir_override" ]]; then
         trace_args+=("$skill_name" "$goal_contract_json" "$goal_contract_path")
@@ -466,35 +459,23 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       map_bundle_dir="assets/maps/${map_bundle_dir}"
     fi
     if [[ "$backend" == "isaaclab_subprocess" && "$launch_world_id" == "b1-map12" ]]; then
-      if [[ -z "$b1_alignment_review" ]]; then
-        echo "error: world=b1-map12 requires b1_alignment_review=<review-manifest>" >&2
-        exit 1
-      fi
       if [[ -z "$map_bundle_dir" ]]; then
         echo "error: world=b1-map12 requires raw map_bundle before runtime compilation" >&2
         exit 1
       fi
-      b1_runtime_map_bundle_dir="${output_dir}/b1-map12-runtime-map-bundle"
-      b1_compile_args=(
-        --map-bundle "$map_bundle_dir"
-        --scene-root "data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
-        --review-manifest "$b1_alignment_review"
-        --output-dir "$b1_runtime_map_bundle_dir"
-      )
-      if [[ -n "$b1_alignment_artifact" ]]; then
-        b1_compile_args+=(--alignment-artifact "$b1_alignment_artifact")
-      fi
-      if [[ -n "$b1_navigation_artifact" ]]; then
-        b1_compile_args+=(--navigation-artifact "$b1_navigation_artifact")
-      fi
-      if [[ -n "$b1_semantic_projection_artifact" ]]; then
-        b1_compile_args+=(--semantic-projection-artifact "$b1_semantic_projection_artifact")
-      fi
-      .venv/bin/python scripts/maps/compile_b1_map12_runtime_bundle.py \
-        "${b1_compile_args[@]}" >/dev/null
+      b1_base_map_bundle_dir="${output_dir}/b1-map12-base-navigation-map"
+      b1_runtime_map_bundle_dir="${output_dir}/b1-map12-base-navigation-map-with-proof"
+      "$python_bin" scripts/maps/build_b1_map12_base_navigation_map.py \
+        --map-bundle "$map_bundle_dir" \
+        --output-dir "$b1_base_map_bundle_dir" >/dev/null
+      "$python_bin" scripts/maps/augment_b1_map12_base_navigation_map.py \
+        --base-map-bundle "$b1_base_map_bundle_dir" \
+        --alignment-artifact "$b1_alignment_artifact" \
+        --navigation-artifact "$b1_navigation_artifact" \
+        --output-dir "$b1_runtime_map_bundle_dir" >/dev/null
       cp "$b1_runtime_map_bundle_dir/b1_robot_consumption_manifest.json" \
         "${output_dir}/b1_robot_consumption_manifest.json"
-      .venv/bin/python scripts/maps/convert_nav2_cleanup_bundle.py \
+      "$python_bin" scripts/maps/convert_nav2_cleanup_bundle.py \
         "$b1_runtime_map_bundle_dir" \
         --output "${output_dir}/runtime_map_prior_snapshot.json" \
         --summary-json "${output_dir}/runtime_map_prior_targets.json" >/dev/null

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.visual_backend_slots import list_visual_backend_slots
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root, operator_output_request_path
@@ -968,14 +969,39 @@ def _json_source_error_resource(error: JsonSourceError) -> dict[str, Any]:
 def _read_json(path: Path) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    if not path.is_file():
         return JsonSourceError(
             {
-                "error_reason": "invalid_json",
+                "error_reason": "unreadable_json",
                 "source_path": str(path),
-                "message": f"{path.name} is not readable JSON: {exc.msg}",
+                "message": f"{path.name} could not be read: Is a directory",
+            }
+        )
+    try:
+        return read_json_object(path, label=path.name)
+    except FileNotFoundError as exc:
+        return JsonSourceError(
+            {
+                "error_reason": "unreadable_json",
+                "source_path": str(path),
+                "message": f"{path.name} could not be read: {exc}",
+            }
+        )
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            return JsonSourceError(
+                {
+                    "error_reason": "invalid_json",
+                    "source_path": str(path),
+                    "message": f"{path.name} is not readable JSON: {cause.msg}",
+                }
+            )
+        return JsonSourceError(
+            {
+                "error_reason": "invalid_json_object",
+                "source_path": str(path),
+                "message": f"{path.name} must contain a JSON object",
             }
         )
     except OSError as exc:
@@ -986,15 +1012,6 @@ def _read_json(path: Path) -> dict[str, Any] | JsonSourceError:
                 "message": f"{path.name} could not be read: {exc.strerror or exc}",
             }
         )
-    if isinstance(payload, dict):
-        return payload
-    return JsonSourceError(
-        {
-            "error_reason": "invalid_json_object",
-            "source_path": str(path),
-            "message": f"{path.name} must contain a JSON object",
-        }
-    )
 
 
 def _latest_paths(paths: Any, *, limit: int) -> list[Path]:

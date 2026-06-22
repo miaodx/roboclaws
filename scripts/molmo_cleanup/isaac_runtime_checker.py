@@ -7,6 +7,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -347,8 +348,10 @@ def _assert_isaac_scene_index_artifact(
     )
     assert artifact_path, isaac
     resolved = _resolve_path(base, artifact_path)
-    assert resolved.is_file(), resolved
-    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    try:
+        payload = read_json_object(resolved, label="Isaac scene-index artifact")
+    except (FileNotFoundError, ValueError) as exc:
+        raise AssertionError(str(exc)) from exc
     assert payload.get("schema") == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA, payload
     assert payload.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, payload
     assert payload.get("agent_facing") is False, payload

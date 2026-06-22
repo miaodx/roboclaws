@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 LIVE_SURFACE_DISCOVERY_MTIME_TOLERANCE_S = 1.0
 
@@ -139,13 +140,7 @@ def load_live_eval_json(path: Path) -> dict[str, Any]:
 
     if not path.exists():
         return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid live eval JSON artifact {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"live eval JSON artifact {path} must contain an object")
-    return payload
+    return read_json_object(path, label="invalid live eval JSON artifact")
 
 
 def _unique_live_surface_candidates(candidates: list[Path | None]) -> list[Path]:

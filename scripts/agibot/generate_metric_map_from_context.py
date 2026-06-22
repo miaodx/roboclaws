@@ -11,6 +11,13 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
+
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 METRIC_MAP_SCHEMA = "real_robot_map_bundle_v1"
 STATIC_FIXTURE_PROJECTION_SCHEMA = "static_fixture_projection_v1"
@@ -35,9 +42,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    context = json.loads(args.context_json.read_text(encoding="utf-8"))
-    if not isinstance(context, dict):
-        raise SystemExit("context JSON must be an object")
+    context = _read_context_source(args.context_json)
     errors = validate_context(context)
     if errors:
         for error in errors:
@@ -205,8 +210,8 @@ def metric_map_from_context(
     robot_pose = _robot_pose(context, frame_id=frame_id)
     base_navigation_map = _base_navigation_map_context(context)
     generated_candidates = generated_exploration_candidates(context)
-    waypoints = generated_candidates if base_navigation_map else _list(
-        context.get("inspection_waypoints")
+    waypoints = (
+        generated_candidates if base_navigation_map else _list(context.get("inspection_waypoints"))
     )
     rooms = [_room_payload(room) for room in _list(context.get("rooms"))]
     return {
@@ -622,6 +627,13 @@ def _public_safety_bounds(context: dict[str, Any]) -> dict[str, Any]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _read_context_source(path: Path) -> dict[str, Any]:
+    try:
+        return read_json_object(path, label="Agibot map context")
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _required_text(

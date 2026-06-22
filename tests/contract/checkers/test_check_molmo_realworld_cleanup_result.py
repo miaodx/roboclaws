@@ -20,7 +20,8 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
 )
-from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle
+from scripts.maps.augment_b1_map12_base_navigation_map import augment_base_navigation_map_bundle
+from scripts.maps.build_b1_map12_base_navigation_map import build_base_navigation_map_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -33,10 +34,8 @@ AGIBOT_SDK_RUNNER_PATH = (
 B1_MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
 )
-B1_SCENE_ROOT = (
-    REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / "2rd_floor_seperated"
-)
-B1_REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+B1_ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
+B1_BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -1338,6 +1337,67 @@ def test_checker_rejects_isaac_selected_binding_index_mismatch(
     )
 
     with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"valid JSON object: .*isaac_scene_index\.json",
+        ),
+        (
+            "[]\n",
+            r"source must contain a JSON object: .*isaac_scene_index\.json",
+        ),
+    ],
+)
+def test_checker_rejects_bad_isaac_scene_index_artifact_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    (tmp_path / "isaac_scene_index.json").write_text(source, encoding="utf-8")
+
+    with pytest.raises(AssertionError, match=message):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_missing_isaac_scene_index_artifact_source(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+
+    with pytest.raises(
+        AssertionError,
+        match=r"Isaac scene-index artifact source is missing: .*isaac_scene_index\.json",
+    ):
         checker._assert_isaac_runtime(
             data,
             tmp_path,
@@ -4922,11 +4982,16 @@ def _compile_b1_runtime_bundle_for_checker(tmp_path: Path, *, verified: bool) ->
             "alignment_artifact_path": alignment_path,
             "navigation_artifact_path": navigation_path,
         }
-    result = compile_runtime_bundle(
+    base_result = build_base_navigation_map_bundle(
         map_bundle=B1_MAP12_BUNDLE,
-        scene_root=B1_SCENE_ROOT,
-        review_manifest_path=B1_REVIEW_MANIFEST,
+        labels_path=B1_BASE_LABELS,
+        room_semantics_path=B1_ROOM_SEMANTICS,
+        output_dir=tmp_path / ("b1-base-verified" if verified else "b1-base-blocked"),
+    )
+    result = augment_base_navigation_map_bundle(
+        base_map_bundle=Path(base_result["output_dir"]),
         output_dir=tmp_path / ("b1-runtime-verified" if verified else "b1-runtime-blocked"),
+        allow_blocked_proof=not verified,
         **kwargs,
     )
     return Path(result["output_dir"])

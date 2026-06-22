@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 EVAL_SUITE_SCHEMA = "roboclaws_eval_suite_v1"
 EVAL_SAMPLE_SCHEMA = "roboclaws_eval_sample_v1"
@@ -487,13 +488,7 @@ _RESULT_IDENTITY_FIELDS = (
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid eval JSON {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"eval JSON {path} must contain an object")
-    return payload
+    return read_json_object(Path(path), label="eval JSON")
 
 
 def _validate_result_status(status: str) -> None:

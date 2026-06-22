@@ -21,7 +21,26 @@ their full execution notes back here.
 Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
-- Oversized modules: 79.
+- Oversized modules: 79 in the current shared checkout. The count change from
+  the prior 80-module checkpoint is affected by unrelated no-touch worktree
+  state and is not claimed by the backend runtime or OpenAI Agents live timing
+  source-reader slices.
+- Current shared-checkout note after the B1 readiness navigation-memory
+  source-reader slice:
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
+  reports 0 Ruff complexity rows and 80 oversized modules. The touched
+  B1 readiness checker and focused contract tests remain under the current
+  ratchet ceiling.
+- Current shared-checkout note after the backend runtime state-reader slice:
+  MolmoSpaces and Isaac Lab backend wrapper state-file reads now use the
+  shared JSON-source helper, preserving valid state accessor behavior while
+  failing missing, malformed, or non-object backend state with path-labelled
+  source errors.
+- Current shared-checkout note after the OpenAI Agents live timing
+  source-reader slice: final live timing now routes present `run_result.json`
+  reads through the shared JSON-value helper while preserving the existing
+  `OpenAI Agents live source ...` timing-source error wording for malformed
+  and non-object run results.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -54,7 +73,10 @@ Latest quality snapshot from 2026-06-20:
   crashing or deriving proof-summary fields from wrong-shaped JSON. The Nav2
   map-bundle exporter now reports malformed agent-view JSON and non-object
   run-result JSON as concise CLI source errors instead of surfacing tracebacks
-  or raw type failures. Runtime Map Prior Snapshot conversion now reports
+  or raw type failures, and routes explicit exporter JSON-object sources
+  through the shared JSON-source helper so missing, malformed, and parseable
+  non-object `--agent-view` / `--run-result` files use the canonical
+  path-labelled wording. Runtime Map Prior Snapshot conversion now reports
   malformed or non-object Agibot `navigation_memory.json`, missing, empty, or
   wrong-shaped Agibot navigation-memory item sources, Agibot `source.json`,
   Nav2 `semantics.json`, missing, empty, or wrong-shaped Nav2 waypoint sources,
@@ -89,6 +111,354 @@ Latest quality snapshot from 2026-06-20:
   through the shared JSON-source helper too, so missing, malformed, or
   non-object file-backed launch contracts fail with path-labelled source
   errors before household launch/runtime consumers normalize the payload.
+  Nav2 map-bundle semantics loading now routes validation, projection,
+  snapshot, and source-frame preview reads through the shared JSON-source
+  helper, so malformed or non-object `semantics.json` sources fail with
+  canonical path-labelled source errors before projection or preview use.
+  The shared Agibot navigation-memory source owner now routes required
+  `navigation_memory.json` object reads through the shared JSON-object helper
+  while preserving existing navigation-memory-specific diagnostics for
+  downstream map/runtime consumers.
+  Compressed Agibot raw-map loading now routes Map 12 consistency and Agibot
+  Nav2 bundle export reads through a shared gzip JSON-object helper, so
+  malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources fail
+  with path-labelled source errors instead of tracebacks or generic
+  missing-metadata results.
+  Planner-proof attachment loading now routes strict proof `run_result.json`
+  sources through the shared JSON-object helper, so missing, malformed, or
+  non-object proof results fail with path-labelled source errors before strict
+  evidence validation or proof-image copies.
+  Planner manipulation-probe and proof-bundle runner checker CLIs now route
+  required top-level checker source artifacts through the shared JSON-object
+  helper, so corrupt checker inputs fail with path-labelled source errors
+  before assertion logic sees wrong-shaped payloads.
+  Pages index rendering now routes present Molmo live
+  `live-report-manifest.json` sources through the shared JSON-object helper,
+  so corrupt published live-report manifests fail aloud while the missing
+  manifest placeholder path stays explicit.
+  Report-performance comparison manifest loading now routes explicit
+  `--manifest` artifacts through the shared JSON-object helper, so missing,
+  malformed, or non-object comparison manifests fail with path-labelled source
+  errors before comparison-list validation or run-dir extraction.
+  Report-server index summary loading now routes present `run_result.json`
+  sidecars through the shared JSON-object helper, so malformed or non-object
+  sidecars fail with path-labelled source errors instead of being hidden as
+  missing summary metadata.
+  Live eval artifact sidecar loading now routes present JSON sidecars through
+  the shared JSON-object helper while preserving missing optional sidecars as
+  empty evidence, so malformed or non-object live eval artifacts use canonical
+  source errors before runner grading.
+  Skill scratchpad artifact loading now routes present `agent_scratchpad.json`
+  and legacy `cleanup_scratch.json` sources through the shared JSON-object
+  helper while preserving missing-source creation, so malformed or non-object
+  scratchpad artifacts fail with path-labelled source errors before MCP
+  done-artifact assembly.
+  Cleanup report artifact re-rendering now routes run-result, scenario, and
+  private-manifest JSON-object sources through the shared JSON-object helper,
+  so malformed or non-object report inputs fail with path-labelled source
+  errors before report assembly.
+  Cleanup report runtime timing now routes present `live_timing.json`
+  sidecars through the shared JSON-object helper while preserving missing
+  sidecars as absent runner timing, so malformed or non-object timing evidence
+  fails with path-labelled source errors before report rendering.
+  Eval regression promotion now routes explicit eval-results and suite
+  JSON-object inputs through the shared JSON-object helper while preserving the
+  do-not-promote stop label before source reads or writes, so malformed,
+  missing, or non-object promotion sources fail with path-labelled source
+  errors before regression sample or suite outputs are written.
+  Eval-runner optional/required JSON sidecar grading now routes object reads
+  through the shared JSON-object helper while preserving existing grader
+  reason codes for missing, malformed, non-object, and unreadable sidecars.
+  Report-performance JSON artifact loading now routes object reads through the
+  shared JSON-object helper while preserving existing
+  `ReportPerformanceSourceError` wording for malformed or non-object sources.
+  Live-agent artifact JSON loading now routes object reads through the shared
+  JSON-object helper while preserving existing live-runtime artifact error
+  wording for malformed or non-object status/result sources.
+  Provider timing proxy readiness now routes present
+  `provider_timing_proxy.ready.json` reads through the shared JSON-object
+  helper and writes the ready artifact atomically, so missing readiness still
+  polls but malformed or non-object readiness fails startup with source-specific
+  evidence instead of returning a fabricated proxy handle.
+  Operator-console request-field readiness now routes attached JSON-object gate
+  artifacts through the shared JSON-object helper while preserving existing
+  gate statuses and operator-facing unreadable/non-object message categories.
+  Operator-console state JSON source normalization now routes present operator
+  state, live status, and run-result object reads through the shared helper
+  while preserving the existing `JsonSourceError` payload shape and reason
+  text.
+  Operator-console interaction command strict session and run-state readers now
+  route object reads through the shared helper while preserving existing
+  `InteractionError` wording; passive message-listing state reads remain
+  permissive by design.
+  Operator-console latest-run history sidecar reads now route operator-state
+  and live-status object sources through the shared helper while preserving
+  existing `HistorySourceError` evidence; history JSONL row parsing remains
+  local because it is row-oriented.
+  Operator-console control endpoint operator-state reads now route strict
+  operator-state object sources through the shared helper while preserving
+  existing `OperatorControlError` wording and status codes; control JSONL row
+  parsing remains local because it is row-oriented.
+  Operator-console runtime inventory optional JSON-object source reads now
+  route through the shared helper while preserving existing `JsonSourceError`
+  reason codes and source-error task messages.
+  Operator-console backend resource-lock reads now route lock JSON-object
+  sources through the shared helper while preserving missing-lock and stale
+  corrupt-lock recovery semantics.
+  Operator-console launcher strict JSON-object source reads now route through
+  the shared helper while preserving existing `_JsonSourceError` wording for
+  stop/readiness diagnostics; its permissive optional reader remains local by
+  design.
+  Agibot metric-map generation now routes the required `context_json` source
+  through the shared helper before map-context validation, so missing,
+  malformed, or non-object authoring context files fail with path-labelled
+  source errors instead of raw parser/type failures. Agibot map-context
+  capture/update and PNC waypoint verification now use the same required
+  context source reader before capture upsert or robot waypoint verification
+  while preserving existing schema validation.
+  Isaac worker state loading now routes required state-file reads through the
+  shared helper before adding the private `_state_path` runtime field, so
+  missing, malformed, or non-object worker state files fail with path-labelled
+  source errors while valid state reads preserve worker state semantics.
+  Isaac B1 / Map 12 navigation-smoke child capture request and result reads now
+  route through the shared JSON-object helper, so malformed or non-object
+  `_capture-one` requests fail before worker import/capture and malformed
+  child results become explicit `child_failures` source-error evidence instead
+  of parser crashes during aggregation.
+  B1 / Map 12 waypoint-pose request builder `--points` JSON-array reads now
+  route through the shared JSON-value helper before existing array validation,
+  preserving current CLI diagnostic categories while removing its local parser.
+  Visual-grounding benchmark checker result JSON and prediction JSONL reads now
+  route through the shared JSON-object/JSONL helpers while preserving existing
+  checker CLI error wording for malformed or non-object sources.
+  MolmoSpaces subprocess worker state loading now routes required state-file
+  reads through the shared helper, so missing, malformed, or non-object worker
+  state files fail with path-labelled source errors while valid state payloads
+  remain unchanged.
+  MolmoSpaces worker initialization now routes generated-mess manifest and
+  adjacent source scene JSON-object reads through the shared helper while
+  preserving existing schema validation and source-room diagnostics for
+  malformed, non-object, wrong-shaped, or label-less scene metadata.
+  Camera-control request loading now routes file-backed payloads through the
+  shared JSON-value source helper, so missing or malformed camera-control
+  request files fail with path-labelled source errors before normalization
+  while legacy view-list JSON remains accepted by the existing request
+  normalizer.
+  Isaac scene camera view-spec loading now routes file-backed view-list or
+  `{views: [...]}` payloads through the shared JSON-value helper before
+  existing list/object-with-views validation, so missing or malformed
+  view-spec files fail with path-labelled source errors while accepted payload
+  forms remain unchanged.
+  MolmoSpaces subprocess worker camera view-spec loading now uses the same
+  shared JSON-value helper before list/object-with-views validation, preserving
+  accepted view-spec payloads while giving missing or malformed inputs
+  canonical source errors before camera-request normalization.
+  B1 scene Gaussian topdown capture-result loading now routes child
+  `capture_result.json` artifacts through the shared JSON-object helper, so
+  malformed or non-object child results fail with path-labelled source errors
+  before topdown packet assembly.
+  B1 Map 12 manual alignment overlay scene-topdown and alignment artifact
+  reads now route through the shared JSON-object helper while preserving the
+  tested CLI wording for missing, malformed, and non-object sources.
+  B1 Map 12 label-tool semantics and source-metadata reads now route through
+  the shared JSON-object helper while preserving the tested CLI wording for
+  missing, malformed, and non-object sources.
+  Scene-camera comparison metadata loading now routes present
+  `scene_metadata.json` files through the shared JSON-object helper while
+  preserving tested RuntimeError diagnostics for malformed or non-object
+  metadata.
+  MolmoSpaces visual backend slot reads now route present slot lease files
+  through the shared JSON-object helper while preserving the fail-closed
+  corrupt-lock behavior for malformed or non-object slot JSON.
+  Isaac scenario-builder map-bundle semantics loading now routes strict
+  `semantics.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object map-bundle semantics fail with
+  path-labelled source errors before Isaac map-aligned scenario assembly while
+  valid empty-fixture fallback and valid map-aligned scenarios remain
+  unchanged.
+  Cleanup-result Isaac runtime checker scene-index artifact loading now routes
+  required `isaac_scene_index.json` object sources through the shared
+  JSON-source helper, so missing, malformed, or non-object artifacts fail with
+  path-labelled assertion evidence before checker schema/privacy/binding/index
+  assertions.
+  Scene-sampler required Procthor preview metadata loading now routes
+  `molmospaces-val_<N>-preview.json` object sources through the shared
+  JSON-source helper, so malformed or non-object preview metadata fails with
+  path-labelled source errors before scanner admission or eval sample rows
+  derive preview status from wrong-shaped metadata while missing-source,
+  source-id, and backend validation remain explicit.
+  Realworld MCP smoke runner result loading now routes required
+  `run_result.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object smoke result artifacts fail with
+  path-labelled source errors before checker/report consumers derive confidence
+  from wrong-shaped evidence.
+  Live Codex Agibot map-build result loading now routes required
+  `run_result.json` object sources through the shared JSON-source helper, so
+  missing, malformed, or non-object live map-build result artifacts fail with
+  path-labelled source errors before route identity checks or report links
+  derive confidence from wrong-shaped evidence.
+  Claude live timing now routes present `run_result.json` object sources
+  through the shared JSON-source helper, so malformed or non-object Claude
+  run-result artifacts fail live timing aloud instead of silently falling back
+  to trace-derived timing and preserving a green finished status.
+  B1 runtime-bundle room-semantics reference validation now delegates per-room
+  checks to a focused helper, preserving existing validation errors while
+  clearing the last Ruff complexity row.
+  MolmoSpaces USD reference installer state-artifact loading now routes
+  required `--state-path` JSON-object sources through the shared JSON-source
+  helper while preserving the CLI-facing `SystemExit` wrapper, so missing,
+  malformed, or non-object state artifacts use path-labelled source errors
+  before missing USD reference collection.
+  MolmoSpaces scene metadata optional sidecar loading now routes present
+  `scene_metadata.json` object sources through the shared JSON-source helper
+  while preserving the missing/corrupt/non-object-as-empty optional metadata
+  contract.
+  MolmoSpaces flattened semantic USD scene metadata loading now routes present
+  `scene_metadata.json` object sources through the shared JSON-source helper,
+  so malformed or non-object metadata fails before semantic label authoring
+  while missing metadata still yields the existing blocked summary.
+  Robot-camera apple-to-apple required JSON artifacts and explicit optional
+  color-profile artifacts now route through the shared JSON-source helper, so
+  required missing, malformed, or non-object state/manifest artifacts fail with
+  path-labelled source errors, absent optional color-profile input remains
+  empty, and present bad optional input fails aloud.
+  Planner proof result summarization now routes proof `run_result.json` reads
+  through the shared JSON-source helper while preserving the existing
+  missing/malformed/non-object unreadable-result payload shape.
+  Planner grasp-cache JSON loader validation now routes present
+  `*_grasps_filtered.json` sources through the shared JSON-source helper while
+  preserving missing, non-object-as-empty, valid transform-count, and
+  malformed-as-error preflight behavior.
+  Scene-sampler prefilter optional JSON sidecar loading now routes through the
+  shared JSON-source helper while preserving missing, unreadable, malformed,
+  and non-object sources as empty optional metadata.
+  B1 base-navigation label validation now splits source, label-row,
+  navigation-area, usage, identity, and geometry checks into focused helpers,
+  preserving existing validation errors while clearing the two C901 rows
+  introduced by the concurrent base-navigation map builder commit.
+  Scene-sampler facade no longer carries the unused permissive
+  `_read_json_if_exists` raw JSON helper or its direct `json` import; active
+  preview metadata reads already route through their focused strict source
+  readers.
+  Operator-console MolmoSpaces scene preview rendering now routes required
+  `molmospaces_backend_state.json` reads through the shared JSON-source helper,
+  so missing, malformed, or non-object backend state fails before scene
+  alignment or top-down camera request construction.
+  MolmoSpaces and Isaac Lab backend wrapper state accessors now route saved
+  backend state JSON-object reads through the shared JSON-source helper, so
+  missing, malformed, or non-object state files fail with source-labelled
+  errors before adapter properties derive runtime metadata from wrong-shaped
+  evidence.
+  B1 / Map 12 readiness inspection now routes `navigation_memory.json` through
+  the shared navigation-memory source reader, preserving accepted
+  `items`/`catalog.navigation_memory` shapes while failing malformed or
+  non-object memory sources with the canonical path-labelled diagnostics.
+  Isaac RBY1M robot import summary loading now routes present optional import
+  summary files through the shared JSON-object helper while preserving the
+  missing/corrupt/non-object-as-empty optional source contract.
+  Isaac report scene-index artifact loading now routes present optional
+  `isaac_scene_index.json` sidecars through the shared JSON-object helper
+  while preserving the missing/corrupt/non-object-as-absent report behavior.
+  Scene-camera USDA prepared-scene summary loading now routes present optional
+  `summary.json` sidecars through the shared JSON-object helper while
+  preserving the missing/corrupt/non-object-as-empty render-contract behavior.
+  Operator-console passive interaction state reads now route present
+  `operator_state.json` summary files through the shared JSON-object helper
+  while preserving the missing/corrupt/non-object-as-empty passive UI-summary
+  behavior.
+  RAW-FPV perception probe runtime-map prior, private-label manifests,
+  prediction manifests, run artifacts, and contrast artifacts now route
+  present JSON-object sources through the shared helper while preserving
+  optional missing runtime-map prior behavior; malformed or non-object sources
+  fail with path-labelled source errors before report/scoring assembly.
+  Robot-camera apple-to-apple prior-probe manifest readers now route
+  light/shadow, material-response, and tone/color comparison-history manifests
+  through the shared JSON-object helper while preserving the optional report
+  contract: missing prior probes stay `missing_manifest`, present malformed or
+  non-object probes become `read_failed`, and valid probes keep existing
+  summary/history behavior.
+  Grasp initial-contact diagnostics now route parent-side child
+  `initial_contact_probe_result.json` reads through the shared JSON-object
+  helper, so malformed or non-object child probe results fail with
+  path-labelled source errors before variant summary/report assembly.
+  Grasp filter diagnostics now route present candidate-grasp JSON artifact
+  reads through the shared JSON-object helper, so malformed or non-object
+  `*_grasps.json` sources fail with path-labelled source errors before subset
+  generation, candidate counting, or filter-variant execution while missing
+  candidate-grasp files keep the existing blocked-result path.
+  Scene-camera source artifacts now route optional nearby
+  `isaac_scene_index.json` probes through the shared JSON-object helper while
+  preserving the permissive optional-index contract: malformed, non-object,
+  unreadable, or mismatched nearby indexes are ignored, and matching valid
+  scene indexes still provide USD prim hints.
+  Agibot SDK runner strict JSON-object artifact reads now route through the
+  shared JSON-object helper, so malformed or non-object context, agent-view,
+  and subphase result artifacts fail with path-labelled source errors before
+  adapter consumers derive metric-map, fixture projection, or stage metadata.
+  MolmoSpaces Agibot contract rehearsal strict JSON-object artifact reads now
+  route through the shared JSON-object helper, so missing, malformed, or
+  non-object context/reference artifacts fail with path-labelled source errors
+  before rehearsal reference evidence is assembled.
+  Agent SDK performance-matrix manifest loading now routes explicit manifest
+  JSON-object sources through the shared JSON-object helper while preserving
+  existing CLI failure behavior for missing, malformed, non-object, unsupported
+  schema, and wrong-shaped row inputs.
+  Isaac scenario-builder generated-mess manifest loading now routes strict
+  manifest JSON-object sources through the shared JSON-object helper while
+  preserving schema-mismatch validation, so missing, malformed, or non-object
+  manifests fail before Isaac worker init scenario assembly.
+  Operator-console launcher no longer carries an unused permissive `_read_json`
+  helper; launcher JSON source reads use the existing strict/optional
+  `read_json_object`-backed path.
+  Operator-console state normalization no longer carries an unused `_read_json`
+  wrapper; active state reads use `_read_json_source` and preserve
+  source-error evidence for malformed live state artifacts.
+  Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
+  now route explicit JSON-object artifacts through the shared source helper, so
+  missing, malformed, or non-object runner inputs fail with path-labelled
+  source errors before runner schema or alignment validation.
+  Grasp cache generation now routes proof-bundle run manifest input through
+  the shared JSON-object helper before extracting
+  `grasp_cache_generation_preflight`, so missing, malformed, or non-object
+  manifests fail with path-labelled source errors before generation preflight
+  validation.
+  Robot-camera RGB gain profile fitting now routes declared comparison
+  manifests through the shared JSON-object helper before selecting image pairs,
+  so missing, malformed, or non-object manifests fail with path-labelled
+  source errors before RGB gain fitting.
+  Detached live-run summary comparison manifests now route through the shared
+  JSON-object helper before comparison-list validation, so missing, malformed,
+  or non-object manifests fail with path-labelled source errors before
+  report-performance comparison output.
+  Detached live-run summary sidecar readers now route optional
+  `live_status.json`, `live_timing.json`, `run_result.json`, and `trace.jsonl`
+  artifacts through the shared JSON-object/JSONL helpers while preserving
+  missing sidecars as empty evidence.
+  Eval suite/sample file loading now routes explicit suite/sample JSON sources
+  through the shared JSON-object helper, so missing, malformed, or non-object
+  eval suite/sample files fail with path-labelled source errors before schema
+  validation.
+  Molmo live CI report status loading now routes published `status.json`
+  artifacts through the shared JSON-object helper, so missing, malformed, or
+  non-object status sources fail with path-labelled source errors before CI
+  status schema validation or live index assembly.
+  Grasp generation setup now routes proof-bundle run manifest input through
+  the shared JSON-object helper before extracting
+  `grasp_cache_availability_preflight`, so missing, malformed, or non-object
+  manifests fail with path-labelled source errors before preflight shape
+  validation.
+  Grasp pose-policy cache loading now routes initial-contact result artifacts
+  through the shared JSON-object helper, so malformed or non-object result
+  files fail with path-labelled source errors before best-variant pose-policy
+  validation.
+  Runtime-map-prior file loading now routes direct cleanup, household agent
+  server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
+  Snapshot owner, preserving path-labelled source errors before raw runtime
+  maps or snapshot wrappers are normalized.
+  Scene room semantic overlays now reject present malformed or non-object
+  source-bundle `semantics.json` packets through the shared JSON-source helper
+  and no longer fabricate navigation polygon, map-center, geometry-source, or
+  polygon-usage claims when no source-room geometry exists.
   Robot-camera visual parity summary now routes its comparison, visual-sample,
   RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
   Isaac state artifacts through the shared JSON-source helper instead of a
@@ -122,9 +492,14 @@ Latest quality snapshot from 2026-06-20:
   apply the same source-truth rule to explicit `--review-packet` inputs before
   promotion, preview, residual, or committed-manifest writes. B1 manual-draft
   verification promotion now applies the same source-truth rule to explicit
-  `--draft` inputs before verification-only manifest writes. B1 scene topdown
+  `--draft` inputs before verification-only manifest writes. The B1
+  manual-draft verification and semantic review-packet promotion readers now
+  route those JSON-object sources through the shared source helper instead of
+  duplicate local readers. B1 scene topdown
   diagnostics now apply the same source-truth rule to explicit
-  `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
+  `--scene-topdown-render` packets before overlay report writes and route that
+  JSON-object source through the shared source helper instead of a duplicate
+  local reader. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
   writes, and routes that JSON-object source through the shared source helper
@@ -157,6 +532,12 @@ Latest quality snapshot from 2026-06-20:
   prepared USD summaries, paired comparison manifests, report visual sample
   manifests, and nested RGB-gain source manifests as JSON-object source truth
   before writing `visual_parity_summary.json` or `report.html`.
+  RAW-FPV private-label generation now treats required saved
+  `molmospaces_backend_state.json` sources as JSON-object source truth before
+  replay setup or scorer-private generated-mess reconstruction.
+  RAW-FPV public sweep corpus generation now treats required saved
+  `molmospaces_backend_state.json` sources as JSON-object source truth before
+  sweep replay setup or public frame capture.
   B1 asset visual comparisons now treat explicit baseline/candidate navigation
   artifacts as JSON-object source truth through the shared source helper before
   writing comparison outputs.
@@ -169,7 +550,8 @@ Latest quality snapshot from 2026-06-20:
   duplicate local reader. The parity test reflects the current accepted B1
   alignment-anchor manifest.
   Nav2 map-bundle export now treats missing explicit `--agent-view` and
-  `--run-result` sources as source-path errors before bundle writes.
+  `--run-result` sources as source-path errors before bundle writes and routes
+  explicit exporter JSON-object sources through the shared source helper.
   Visual-grounding benchmark checks now treat declared result JSON and
   prediction JSONL artifacts as object-typed source truth before benchmark
   validation.
@@ -180,6 +562,10 @@ Latest quality snapshot from 2026-06-20:
   `run_result.json` inputs as object-typed source truth before writing corpus
   outputs and routes that JSON-object source through the shared helper instead
   of a duplicate local reader.
+  Representative visual-grounding corpus building now treats discovered
+  cleanup `run_result.json` inputs as object-typed source truth before
+  sampling or writing corpus outputs, and routes those JSON-object sources
+  through the shared helper instead of a duplicate local reader.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`, and
@@ -195,9 +581,13 @@ Latest quality snapshot from 2026-06-20:
   explicit control/candidate state artifacts as JSON-object source truth before
   writing comparison outputs, and AOV matrix summaries now treat
   explicit `--entry LABEL=PATH` artifacts as JSON-object source truth before
-  writing matrix outputs. Prepared semantic USD summary validation now treats
-  the explicit summary path as JSON-object source truth before reporting
-  readiness.
+  writing matrix outputs, with both tools routing those reads through the
+  shared JSON-object helper while preserving current CLI source diagnostics.
+  Isaac segmentation AOV comparison and matrix summary now share the same
+  CLI-facing JSON artifact source adapter instead of carrying parallel
+  wrappers around `read_json_object`.
+  Prepared semantic USD summary validation now treats the explicit summary path
+  as JSON-object source truth before reporting readiness.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

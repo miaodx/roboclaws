@@ -1,0 +1,367 @@
+{
+  "accepted_at": "2026-06-20",
+  "alignment_status": "accepted_operator_review",
+  "labels": [
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "meeting_room_a",
+      "category": "meeting_room",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": 3.467635,
+            "y": 2.273081
+          },
+          {
+            "x": 7.260021,
+            "y": 3.408033
+          },
+          {
+            "x": 5.463444,
+            "y": 9.411205
+          },
+          {
+            "x": 1.671058,
+            "y": 8.276253
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Meeting room A",
+      "label_id": "scene_bbox_seed_meeting_room_a",
+      "map_center": {
+        "x": 4.466,
+        "y": 5.842
+      },
+      "navigation_area_id": "meeting_room_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": false,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "meeting_room_a"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "meeting_room_b",
+      "category": "meeting_room",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": 4.389,
+            "y": -0.982
+          },
+          {
+            "x": 8.542,
+            "y": 0.239
+          },
+          {
+            "x": 7.663,
+            "y": 3.112
+          },
+          {
+            "x": 3.471,
+            "y": 1.74
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Meeting room B",
+      "label_id": "scene_bbox_seed_meeting_room_b",
+      "map_center": {
+        "x": 6.016,
+        "y": 1.027
+      },
+      "navigation_area_id": "meeting_room_b",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "meeting_room_b"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "meeting_room_c",
+      "category": "meeting_room",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": 5.613,
+            "y": -5.146
+          },
+          {
+            "x": 9.987,
+            "y": -3.848
+          },
+          {
+            "x": 9.001,
+            "y": -1.065
+          },
+          {
+            "x": 4.742,
+            "y": -2.391
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Meeting room C",
+      "label_id": "scene_bbox_seed_meeting_room_c",
+      "map_center": {
+        "x": 7.336,
+        "y": -3.112
+      },
+      "navigation_area_id": "meeting_room_c",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "meeting_room_c"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "reception_area_a",
+      "category": "living_room",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": -3.398,
+            "y": -3.422
+          },
+          {
+            "x": 4.143,
+            "y": -1.032
+          },
+          {
+            "x": 0.146,
+            "y": 10.969
+          },
+          {
+            "x": -7,
+            "y": 8.562
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Main hall / living area",
+      "label_id": "scene_bbox_seed_reception_area_a",
+      "map_center": {
+        "x": -1.527,
+        "y": 3.769
+      },
+      "navigation_area_id": "reception_area_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "reception_area_a"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "short_corridor_a",
+      "category": "corridor",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": -10.560375,
+            "y": -12.643209
+          },
+          {
+            "x": -8.226244,
+            "y": -11.944671
+          },
+          {
+            "x": -9.753517,
+            "y": -6.841365
+          },
+          {
+            "x": -12.087648,
+            "y": -7.539903
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Short corridor",
+      "label_id": "scene_bbox_seed_short_corridor_a",
+      "map_center": {
+        "x": -10.157,
+        "y": -9.742
+      },
+      "navigation_area_id": "short_corridor_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": false,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "short_corridor_a"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "storage_room_a",
+      "category": "storage",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": -20.005427,
+            "y": -13.113302
+          },
+          {
+            "x": -19.3721,
+            "y": -12.923765
+          },
+          {
+            "x": -19.622999,
+            "y": -12.085398
+          },
+          {
+            "x": -20.256326,
+            "y": -12.274935
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Storage room",
+      "label_id": "scene_bbox_seed_storage_room_a",
+      "map_center": {
+        "x": -19.814,
+        "y": -12.599
+      },
+      "navigation_area_id": "storage_room_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": false,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": "storage_room_a"
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "",
+      "category": "kitchen",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": -3.16,
+            "y": -3.59
+          },
+          {
+            "x": 4.13,
+            "y": -1.313
+          },
+          {
+            "x": 5.548,
+            "y": -5.873
+          },
+          {
+            "x": -1.94,
+            "y": -8.03
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Open kitchen",
+      "label_id": "draft_1781964196771_1",
+      "map_center": {
+        "x": 1.144,
+        "y": -4.701
+      },
+      "navigation_area_id": "open_kitchen_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": ""
+    },
+    {
+      "alignment_status": "accepted_operator_review",
+      "asset_partition_id": "",
+      "category": "corridor",
+      "geometry": {
+        "kind": "polygon",
+        "polygon": [
+          {
+            "x": -10.941,
+            "y": 7.072
+          },
+          {
+            "x": -7.279,
+            "y": 8.453
+          },
+          {
+            "x": -0.196,
+            "y": -16.349
+          },
+          {
+            "x": -2.985,
+            "y": -17.361
+          }
+        ]
+      },
+      "geometry_source": "operator_authored_navigation_zone",
+      "label": "Long corridor",
+      "label_id": "draft_1781964286250_2",
+      "map_center": {
+        "x": -5.35,
+        "y": -4.546
+      },
+      "navigation_area_id": "long_corridor_a",
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "accepted"
+      },
+      "review_status": "accepted",
+      "source_map_frame_id": "map",
+      "source_room_id": ""
+    }
+  ],
+  "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
+  "policy": {
+    "contains_movable_objects": false,
+    "contains_private_scoring_truth": false,
+    "contains_receptacles": false,
+    "contains_runtime_observations": false,
+    "contains_static_fixtures": false,
+    "digital_twin_room_labels_are_preferred_when_asset_partition_id_matches": true,
+    "navigation_false_labels_are_review_boundaries_not_base_waypoint_areas": true,
+    "source_of_truth": "operator_reviewed_map12_navigation_area_labels"
+  },
+  "review_status": "accepted",
+  "schema": "b1_map12_base_navigation_labels_v1",
+  "source_image": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/occupancy.pgm",
+  "source_map_frame_id": "map",
+  "source_map_mutated": false,
+  "source_review_draft": "tmp/b1-map12-label-draft-0620.json"
+}

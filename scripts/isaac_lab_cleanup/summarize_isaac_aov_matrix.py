@@ -13,6 +13,7 @@ from scripts.isaac_lab_cleanup.compare_isaac_segmentation_aov import (
     _dict,
     _int,
     _label_class,
+    read_json_artifact,
 )
 
 SCHEMA = "isaac_segmentation_aov_matrix_v1"
@@ -73,22 +74,10 @@ def _parse_entry(spec: str) -> tuple[str, Path]:
 
 
 def _summarize_path(path: Path) -> dict[str, Any]:
-    payload = _read_json(path)
+    payload = read_json_artifact(path, label="artifact")
     if payload.get("schema") == "roboclaws_isaac_lab_runtime_preflight_v1":
         return _summarize_preflight(path, payload)
     return _summarize_state(path, payload)
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"artifact is missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"artifact must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"artifact must contain a JSON object: {path}")
-    return payload
 
 
 def _summarize_preflight(path: Path, payload: dict[str, Any]) -> dict[str, Any]:

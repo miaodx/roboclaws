@@ -77,7 +77,7 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
-from roboclaws.maps.runtime_prior_snapshot import runtime_metric_map_from_prior_artifact
+from roboclaws.maps.runtime_prior_snapshot import read_runtime_map_prior_artifact
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -459,11 +459,7 @@ def run_realworld_cleanup(
 
 
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
-    if path is None:
-        return None
-    prior_path = Path(path)
-    payload = json.loads(prior_path.read_text(encoding="utf-8"))
-    return runtime_metric_map_from_prior_artifact(payload)
+    return read_runtime_map_prior_artifact(path)
 
 
 def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:

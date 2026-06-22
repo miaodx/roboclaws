@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.reports.live_performance import (
     ReportPerformanceSourceError,
     compare_report_performance_metrics,
@@ -80,12 +81,16 @@ def main(argv: list[str] | None = None) -> int:
 
 def _load_manifest(path: Path) -> dict[str, Any] | None:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = read_json_object(path, label="matrix manifest")
+    except FileNotFoundError as exc:
         print(f"error: could not read matrix manifest {path}: {exc}", file=sys.stderr)
         return None
-    if not isinstance(payload, dict):
-        print("error: matrix manifest must be a JSON object", file=sys.stderr)
+    except ValueError as exc:
+        message = str(exc)
+        if "source must contain a JSON object" in message:
+            print("error: matrix manifest must be a JSON object", file=sys.stderr)
+            return None
+        print(f"error: could not read matrix manifest {path}: {exc}", file=sys.stderr)
         return None
     if payload.get("schema") != "agent_sdk_speedup_matrix_v1":
         print("error: unsupported matrix manifest schema", file=sys.stderr)

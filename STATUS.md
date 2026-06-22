@@ -60,12 +60,13 @@ raw/source-map aligned previews.
 The B1 / Map 12 digital-twin map input contract now has accepted geometry
 alignment, preview-grade residual-backed robot pose/render proof, and
 agent-visible runtime-prior capability exposure. Product and operator-preview
-routes compile a generated runtime bundle from
-`vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
-`vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
-`assets/maps/b1-map12-alignment-review.json`, explicit alignment/navigation
-proof artifacts, and the raw scene root before passing map context to
-lower-level consumers. The implemented P0 consumer-chain plan is
+routes first generate the strict shared Base Navigation Map from
+`assets/maps/b1-map12-base-navigation-labels.json` plus the vendor Agibot Nav2
+map, then add explicit alignment/navigation proof through a thin sidecar before
+passing map context to lower-level consumers. The sidecar does not read
+`navigation_memory.json`, generate rooms/waypoints, or accept a separate
+semantic-projection launch axis. Generated outputs are local artifacts, not
+checked-in source truth. The implemented P0 consumer-chain plan is
 `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: explicit B1
 runtime priors now expose `digital_twin_capabilities`, `capability_summary`,
 render/observation readiness, and blocked `B1_floor2_slow` default visual-route
@@ -90,16 +91,18 @@ thin review/runtime contract is
 
 ## Next Action
 
-Use `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md` for
-the next B1 / Map 12 work: accepted room-semantic anchors, strict room/object
-semantic projection, and any public navigation extension after a separate
-proof gate.
+Use `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md` plus
+the new B1 / Map 12 Base Navigation Map generator for the next B1 / Map 12
+work: wire the strict shared bundle into real-robot / Digital Twin consumers,
+then handle room/object semantic projection or public navigation extensions
+behind separate proof gates.
 
 ## Current Blocker
 
 No current human blocker for the implemented B1 P0 digital-twin
-navigation/render consumer-chain slice. Room semantic review remains required
-before semantic projection follow-up work can be promoted.
+navigation/render consumer-chain slice. The accepted B1 / Map 12 base
+navigation labels generate a validated shared bundle locally; semantic
+projection and consumer wiring remain follow-up implementation work.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on

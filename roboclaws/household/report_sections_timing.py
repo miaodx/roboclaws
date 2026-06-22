@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import html
-import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.semantic_timeline import PLACE_CLEANUP_PHASES
 
 
@@ -293,11 +293,10 @@ def _object_cycle_phase_text(cycle: dict[str, Any]) -> str:
 
 
 def _load_live_timing(run_dir: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    path = run_dir / "live_timing.json"
+    if not path.exists():
         return {}
-    return payload if isinstance(payload, dict) else {}
+    return read_json_object(path, label="report live timing")
 
 
 def _runner_timing_timeline(runner_timing: dict[str, Any]) -> str:

@@ -7,6 +7,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAACLAB_SUBPROCESS_BACKEND,
@@ -121,7 +122,7 @@ def error_response(tool: str, error: str, **payload: Any) -> dict[str, Any]:
 
 
 def read_state(path: Path) -> dict[str, Any]:
-    state = json.loads(path.read_text(encoding="utf-8"))
+    state = read_json_object(path, label="Isaac worker state")
     state["_state_path"] = str(path)
     return state
 

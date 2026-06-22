@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.process_status import pid_is_active
 
@@ -50,8 +51,8 @@ class ResourceLock:
         if not self.path.exists():
             return LockState(name=self.name, path=self.path, held=False)
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            payload = read_json_object(self.path, label="operator resource lock")
+        except (OSError, ValueError):
             return LockState(name=self.name, path=self.path, held=True, stale=True)
         pid = payload.get("pid")
         stale = False

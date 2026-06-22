@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import socket
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.runtime_inventory import port_owner_task
 
@@ -164,8 +164,16 @@ def _request_field_gate(
             blocks_start=gate.required,
         )
     try:
-        payload = json.loads(context_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        read_json_object(context_path, label=label)
+    except ValueError as exc:
+        if exc.__cause__ is None:
+            return GateEvaluation(
+                ok=False,
+                message=f"{label} must contain a JSON object: {raw_path}",
+                kind=kind,
+                severity=gate.severity,
+                blocks_start=gate.required,
+            )
         return GateEvaluation(
             ok=False,
             message=f"{label} is not readable JSON: {raw_path} ({exc})",
@@ -173,10 +181,10 @@ def _request_field_gate(
             severity=gate.severity,
             blocks_start=gate.required,
         )
-    if not isinstance(payload, dict):
+    except OSError as exc:
         return GateEvaluation(
             ok=False,
-            message=f"{label} must contain a JSON object: {raw_path}",
+            message=f"{label} is not readable JSON: {raw_path} ({exc})",
             kind=kind,
             severity=gate.severity,
             blocks_start=gate.required,

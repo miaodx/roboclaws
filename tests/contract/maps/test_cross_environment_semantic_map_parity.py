@@ -96,11 +96,9 @@ def test_semantic_map_spatial_contract_normalizer_reports_bad_semantics_without_
     assert "Traceback" not in completed.stderr
 
 
-def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
-    review = json.loads(
-        (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
-            encoding="utf-8"
-        )
+def test_b1_uses_dt_room_reference_and_alignment_correspondence_manifest() -> None:
+    room_semantics = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json").read_text(encoding="utf-8")
     )
     correspondences = json.loads(
         (REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json").read_text(
@@ -111,11 +109,13 @@ def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
         REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
     )
     removed_authored_bundle = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+    rooms = {room["asset_partition_id"]: room for room in room_semantics["rooms"]}
 
-    assert review["schema"] == "b1_map12_alignment_review_v1"
-    assert review["source_assets"]["map_bundle"] == (
-        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
-    )
+    assert room_semantics["schema"] == "scene_room_semantic_overlay_overrides_v1"
+    assert room_semantics["policy"]["source_of_truth"] == "digital_twin_scene_partitions"
+    assert room_semantics["policy"]["contains_map12_candidate_polygons"] is False
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["review_status"] == "accepted"
     assert correspondences["schema"] == "b1_map12_scene_correspondences_v1"
     assert len(correspondences["anchors"]) == 7
     assert {anchor["review_status"] for anchor in correspondences["anchors"]} == {"accepted"}
@@ -128,7 +128,7 @@ def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
     assert (raw_map / "nav2.yaml").is_file()
     assert (raw_map / "occupancy.pgm").is_file()
     assert not removed_authored_bundle.exists()
-    assert not (REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics").exists()
+    assert not (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").exists()
 
 
 def test_candidate_navigation_zone_cannot_be_validated_as_room_boundary() -> None:

@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.maps.fit_b1_map12_scene_alignment import (
     SCENE_PROJECTION_HORIZONTAL_AXES,
     SCENE_PROJECTION_UP_AXIS,
@@ -212,16 +213,7 @@ def scene_partitions(scene_root: Path) -> list[dict[str, Any]]:
 
 
 def load_scene_topdown_render(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"required scene top-down render missing: {path}")
-    try:
-        packet = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"scene top-down render must contain valid JSON object: {path}: {exc.msg}"
-        ) from exc
-    if not isinstance(packet, dict):
-        raise ValueError(f"scene top-down render must contain a JSON object: {path}")
+    packet = read_json_object(path, label="scene top-down render")
     if packet.get("schema") != TOPDOWN_RENDER_SCHEMA:
         raise ValueError(
             f"scene top-down render must use schema {TOPDOWN_RENDER_SCHEMA}; "

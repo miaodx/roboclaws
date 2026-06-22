@@ -16,6 +16,7 @@ from roboclaws.agents.provider_registry import (
     default_provider_profile,
     provider_readiness,
 )
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.launch.environment_setup import (
@@ -526,10 +527,8 @@ def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, 
         "scene_index",
         "isaac_scene_usd_path",
         "map_bundle",
-        "b1_alignment_review",
         "b1_alignment_artifact",
         "b1_navigation_artifact",
-        "b1_semantic_projection_artifact",
         "robot_views",
         "record_robot_views",
         "real_movement_enabled",
@@ -945,16 +944,6 @@ def _docker_container_ids_with_mount(source: Path) -> list[str]:
     return docker_container_ids_with_mount(source, run_command=subprocess.run)
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
 def _read_optional_json_source(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -963,14 +952,16 @@ def _read_optional_json_source(path: Path) -> dict[str, Any]:
 
 def _read_json_source(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise _JsonSourceError(path, f"contains invalid JSON at line {exc.lineno}") from exc
+        return read_json_object(path, label=path.name)
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            raise _JsonSourceError(path, f"contains invalid JSON at line {cause.lineno}") from exc
+        raise _JsonSourceError(path, "must contain a JSON object") from exc
+    except FileNotFoundError as exc:
+        raise _JsonSourceError(path, "cannot be read: missing source") from exc
     except OSError as exc:
         raise _JsonSourceError(path, f"cannot be read: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise _JsonSourceError(path, "must contain a JSON object")
-    return payload
 
 
 def _pid_exists(pid: int) -> bool:

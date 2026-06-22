@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_value
 from roboclaws.household.planner_proof_fallbacks import (
     discovered_alias_values as _discovered_alias_values,
 )
@@ -1528,8 +1529,11 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     if not run_result_path.is_file():
         return result
     try:
-        data = json.loads(run_result_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        data = read_json_value(run_result_path, label="planner proof run result")
+    except ValueError as exc:
+        result.update(_unreadable_proof_result_payload(_proof_run_result_source_error(exc)))
+        return result
+    except OSError as exc:
         result.update(_unreadable_proof_result_payload(f"{type(exc).__name__}: {exc}"))
         return result
     if not isinstance(data, dict):
@@ -1615,6 +1619,13 @@ def _unreadable_proof_result_payload(message: str) -> dict[str, Any]:
             }
         ],
     }
+
+
+def _proof_run_result_source_error(exc: ValueError) -> str:
+    cause = exc.__cause__
+    if isinstance(cause, json.JSONDecodeError):
+        return f"{type(cause).__name__}: {cause}"
+    return f"{type(exc).__name__}: {exc}"
 
 
 def _has_blocker_code(result: dict[str, Any], code: str) -> bool:

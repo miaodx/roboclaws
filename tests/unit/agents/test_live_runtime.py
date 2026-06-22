@@ -2797,6 +2797,7 @@ def _assert_openai_agents_timeline_and_checker(
     ("source_name", "source_text", "expected_detail"),
     [
         ("run_result.json", "{not-json}\n", "run_result.json: invalid JSON"),
+        ("run_result.json", "[1]\n", "run_result.json: non-object JSON: list"),
         (
             "trace.jsonl",
             json.dumps({"event": "request", "tool": "done"}) + "\n[]\n",

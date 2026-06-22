@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from roboclaws.household.camera_control import (
     canonical_scene_camera_control_request,
+    load_camera_control_request,
     normalize_camera_control_request,
     scene_probe_camera_control_request,
 )
@@ -78,6 +81,37 @@ def test_normalize_camera_control_dict_accepts_valid_override_resolution() -> No
         width=8,
         height=5,
     )
+
+    assert request["render_resolution"] == {"width": 8, "height": 5}
+    assert request["views"][0]["view_id"] == "view_01"
+
+
+def test_load_camera_control_request_rejects_missing_source(tmp_path: Path) -> None:
+    path = tmp_path / "camera_request.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"camera control request source is missing: .*camera_request\.json",
+    ):
+        load_camera_control_request(path, width=8, height=5)
+
+
+def test_load_camera_control_request_rejects_malformed_source(tmp_path: Path) -> None:
+    path = tmp_path / "camera_request.json"
+    path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"camera control request source must contain valid JSON: .*camera_request\.json",
+    ):
+        load_camera_control_request(path, width=8, height=5)
+
+
+def test_load_camera_control_request_keeps_legacy_view_list_source(tmp_path: Path) -> None:
+    path = tmp_path / "camera_request.json"
+    path.write_text('[{"target": [0.0, 0.0, 0.0]}]\n', encoding="utf-8")
+
+    request = load_camera_control_request(path, width=8, height=5)
 
     assert request["render_resolution"] == {"width": 8, "height": 5}
     assert request["views"][0]["view_id"] == "view_01"

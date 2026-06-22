@@ -125,9 +125,37 @@ def test_nav2_projection_rejects_non_object_semantics(tmp_path: Path) -> None:
     validation = validate_nav2_map_bundle(bundle_dir)
 
     assert validation.ok is False
-    assert "semantics.json must contain a JSON object" in validation.errors
-    with pytest.raises(AssertionError, match="semantics.json must contain a JSON object"):
+    assert len(validation.errors) == 1
+    assert "Nav2 semantics source must contain a JSON object" in validation.errors[0]
+    assert str(bundle_dir / "semantics.json") in validation.errors[0]
+    with pytest.raises(
+        AssertionError,
+        match=r"Nav2 semantics source must contain a JSON object: .*semantics\.json",
+    ):
         metric_map_from_bundle(bundle_dir)
+
+
+def test_nav2_projection_rejects_malformed_semantics(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    (bundle_dir / "semantics.json").write_text("{", encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert len(validation.errors) == 1
+    assert "Nav2 semantics source must contain valid JSON object" in validation.errors[0]
+    assert str(bundle_dir / "semantics.json") in validation.errors[0]
+    with pytest.raises(
+        AssertionError,
+        match=r"Nav2 semantics source must contain valid JSON object: .*semantics\.json",
+    ):
+        static_landmarks_from_bundle(bundle_dir)
 
 
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
@@ -190,9 +218,37 @@ def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: P
     )
 
     assert result.returncode == 1
-    assert "agent view source is unreadable" in result.stderr
+    assert "agent view source must contain valid JSON object" in result.stderr
     assert str(agent_view_path) in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
+    tmp_path: Path,
+) -> None:
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text('["not", "an", "agent_view"]', encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "agent view source must contain a JSON object" in result.stderr
+    assert str(agent_view_path) in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "exported").exists()
 
 
 def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Path) -> None:
@@ -240,8 +296,7 @@ def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: 
     )
 
     assert result.returncode == 1
-    assert "run result payload must be a JSON object" in result.stderr
-    assert "got list" in result.stderr
+    assert "run result source must contain a JSON object" in result.stderr
     assert str(run_result_path) in result.stderr
     assert "Traceback" not in result.stderr
 

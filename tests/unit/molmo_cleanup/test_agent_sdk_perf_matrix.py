@@ -37,6 +37,53 @@ def test_agent_sdk_perf_matrix_dry_run_lists_rows_and_budgets(
     assert '"max_live_runs": 0' in output
 
 
+def test_agent_sdk_perf_matrix_rejects_missing_manifest(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "missing-matrix.json"
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    err = capsys.readouterr().err
+    assert "could not read matrix manifest" in err
+    assert "matrix manifest source is missing" in err
+    assert str(manifest) in err
+
+
+def test_agent_sdk_perf_matrix_rejects_malformed_manifest(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "matrix.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    err = capsys.readouterr().err
+    assert "could not read matrix manifest" in err
+    assert "matrix manifest source must contain valid JSON object" in err
+    assert str(manifest) in err
+
+
+def test_agent_sdk_perf_matrix_rejects_non_object_manifest(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "matrix.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    assert "matrix manifest must be a JSON object" in capsys.readouterr().err
+
+
 def test_agent_sdk_perf_matrix_rejects_manifest_without_rows(
     tmp_path: Path,
     capsys,

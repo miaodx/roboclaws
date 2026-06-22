@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_value
+
 GRASP_FEASIBILITY_SIGNATURE_SCHEMA = "planner_grasp_feasibility_signature_v1"
 GRASP_FEASIBILITY_MITIGATION_DECISION_SCHEMA = "planner_grasp_feasibility_mitigation_decision_v1"
 GRASP_CACHE_AVAILABILITY_PREFLIGHT_SCHEMA = "planner_grasp_cache_availability_preflight_v1"
@@ -977,7 +979,7 @@ def validate_grasp_cache_file(path: Path | str) -> dict[str, Any]:
                 transforms = data.get("transforms", [])
                 transform_count = len(transforms)
         elif path.suffix == ".json":
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload = read_json_value(path, label="planner grasp cache")
             transforms = payload.get("transforms", []) if isinstance(payload, dict) else []
             transform_count = len(transforms)
         else:

@@ -22,20 +22,20 @@ from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (  # noqa: E40
     REVIEW_PACKET_SCHEMA,
 )
 
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_ALIGNMENT_ARTIFACT = Path("output/b1-map12/alignment/alignment_residuals.json")
 DEFAULT_OUTPUT = Path("docs/status/active/b1-map12-semantic-anchor-review-packet.json")
 SEMANTIC_ANCHOR_ROLE = "semantic"
+SEMANTIC_PROJECTION_SCHEMA = "b1_map12_semantic_projection_v1"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a proposed semantic-anchor review packet from accepted B1 / Map12 "
-            "room labels and the verified residual transform. This never accepts anchors."
+            "Build a proposed semantic-anchor review packet from an explicit B1 / Map12 "
+            "room projection and the verified residual transform. This never accepts anchors."
         )
     )
-    parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--room-projection", type=Path, required=True)
     parser.add_argument("--alignment-artifact", type=Path, default=DEFAULT_ALIGNMENT_ARTIFACT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args(argv)
@@ -45,9 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         packet = build_semantic_anchor_review_packet(
-            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
+            room_projection=read_json_object(args.room_projection, label="room projection"),
             alignment=read_json_object(args.alignment_artifact, label="alignment artifact"),
-            review_manifest_path=args.review_manifest,
+            room_projection_path=args.room_projection,
             alignment_artifact_path=args.alignment_artifact,
         )
     except (FileNotFoundError, ValueError) as exc:
@@ -72,13 +72,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def build_semantic_anchor_review_packet(
     *,
-    review_manifest: dict[str, Any],
+    room_projection: dict[str, Any],
     alignment: dict[str, Any],
-    review_manifest_path: Path | None = None,
+    room_projection_path: Path | None = None,
     alignment_artifact_path: Path | None = None,
 ) -> dict[str, Any]:
     transform = verified_transform(alignment)
-    labels = accepted_room_labels(review_manifest)
+    labels = accepted_room_labels(room_projection)
     anchors = []
     for label in labels:
         map_xy = polygon_center(label)
@@ -107,11 +107,11 @@ def build_semantic_anchor_review_packet(
                 "asset_partition_id": str(label["scene_partition_id"]),
                 "map_xy": [round(map_xy[0], 6), round(map_xy[1], 6)],
                 "scene_xyz": [float(b1_pose["x"]), float(b1_pose["y"]), 0.0],
-                "map_coordinate_source": "accepted_review_label_polygon_center",
+                "map_coordinate_source": "accepted_room_projection_polygon_center",
                 "scene_coordinate_source": "reviewed_correspondence_fit_projection",
                 "confidence": 0.0,
                 "evidence": {
-                    "review_manifest": str(review_manifest_path or ""),
+                    "room_projection": str(room_projection_path or ""),
                     "alignment_artifact": str(alignment_artifact_path or ""),
                     "label_id": str(label["label_id"]),
                     "room_label": str(label.get("room_label") or ""),
@@ -144,7 +144,7 @@ def build_semantic_anchor_review_packet(
         ),
         "bbox_seed_policy": str(alignment.get("bbox_seed_policy") or "known_poor_seed_only"),
         "scene_projection_policy": alignment.get("scene_projection_policy") or {},
-        "source_review_manifest": str(review_manifest_path or ""),
+        "source_room_projection": str(room_projection_path or ""),
         "source_alignment_artifact": str(alignment_artifact_path or ""),
         "accepted_manifest_mutated": False,
         "accepted_anchor_count": 0,
@@ -179,29 +179,38 @@ def verified_transform(alignment: dict[str, Any]) -> dict[str, Any]:
     return transform
 
 
-def accepted_room_labels(review_manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    if review_manifest.get("schema") != "b1_map12_alignment_review_v1":
-        raise ValueError(f"unexpected review manifest schema: {review_manifest.get('schema')!r}")
+def accepted_room_labels(room_projection: dict[str, Any]) -> list[dict[str, Any]]:
+    if room_projection.get("schema") != SEMANTIC_PROJECTION_SCHEMA:
+        raise ValueError(f"unexpected room projection schema: {room_projection.get('schema')!r}")
     labels = []
-    for label in review_manifest.get("labels") or []:
-        row = label if isinstance(label, dict) else {}
+    for room in room_projection.get("rooms") or []:
+        row = room if isinstance(room, dict) else {}
         if row.get("review_status") != "accepted":
             continue
         if (
-            not row.get("label_id")
-            or not row.get("map_area_id")
-            or not row.get("scene_partition_id")
+            not row.get("room_id")
+            or not row.get("navigation_area_id")
+            or not row.get("asset_partition_id")
         ):
             raise ValueError(
-                "accepted review labels need label_id, map_area_id, and scene_partition_id"
+                "accepted projected rooms need room_id, navigation_area_id, and asset_partition_id"
             )
-        geometry = row.get("geometry") if isinstance(row.get("geometry"), dict) else {}
-        points = geometry.get("points")
-        if geometry.get("type") != "map_polygon" or not isinstance(points, list) or len(points) < 3:
-            raise ValueError(f"accepted label {row.get('label_id')!r} needs map_polygon geometry")
-        labels.append(row)
+        points = row.get("map_polygon")
+        if not isinstance(points, list) or len(points) < 3:
+            raise ValueError(f"accepted projected room {row.get('room_id')!r} needs map_polygon")
+        labels.append(
+            {
+                "label_id": str(row["room_id"]),
+                "map_area_id": str(row["navigation_area_id"]),
+                "scene_partition_id": str(row["asset_partition_id"]),
+                "room_label": str(row.get("room_label") or row["room_id"]),
+                "category": str(row.get("category") or ""),
+                "review_status": "accepted",
+                "geometry": {"points": points},
+            }
+        )
     if not labels:
-        raise ValueError("review manifest has no accepted labels")
+        raise ValueError("room projection has no accepted projected rooms")
     return labels
 
 

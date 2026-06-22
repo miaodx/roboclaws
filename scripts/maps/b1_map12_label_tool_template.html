@@ -70,6 +70,11 @@
       border-color: var(--blue);
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
+    button:disabled {
+      color: #8c98a5;
+      background: #eef2f6;
+      cursor: not-allowed;
+    }
     button.primary {
       background: var(--blue);
       border-color: var(--blue);
@@ -220,6 +225,22 @@
       padding: 16px;
       overflow: auto;
     }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(520px, 1fr) minmax(360px, 520px);
+      gap: 14px;
+      align-items: start;
+    }
+    .workspace-panel {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .panel-title {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
     .canvas-shell {
       width: max-content;
       max-width: 100%;
@@ -235,6 +256,11 @@
       height: auto;
       image-rendering: pixelated;
       cursor: crosshair;
+    }
+    #sceneReferenceCanvas {
+      width: min(100%, 520px);
+      cursor: default;
+      image-rendering: auto;
     }
     .draft {
       color: var(--amber);
@@ -263,6 +289,9 @@
       .control-row {
         grid-template-columns: 1fr;
       }
+      .workspace {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -279,10 +308,12 @@
     <h2>Tools</h2>
     <div class="toolbar">
       <button type="button" data-mode="select" class="active">Select</button>
+      <button type="button" data-mode="rectangle">Rectangle</button>
       <button type="button" data-mode="polygon">Polygon</button>
       <button type="button" data-mode="circle">Circle</button>
       <button type="button" data-mode="point">Point</button>
       <button type="button" id="finishPolygon">Finish Polygon</button>
+      <button type="button" id="undoAction" disabled>Undo</button>
       <button type="button" id="deleteShape" class="danger">Delete</button>
     </div>
     <div class="control-row">
@@ -355,14 +386,26 @@
     <textarea id="exportText" spellcheck="false"></textarea>
   </aside>
   <section class="stage">
-    <div class="canvas-shell">
-      <canvas id="mapCanvas"></canvas>
+    <div class="workspace">
+      <section class="workspace-panel">
+        <div class="panel-title">Map12 editable draft labels</div>
+        <div class="canvas-shell">
+          <canvas id="mapCanvas"></canvas>
+        </div>
+      </section>
+      <section class="workspace-panel" id="sceneReferencePanel" hidden>
+        <div class="panel-title">Read-only Digital Twin object aggregate bbox reference</div>
+        <div class="canvas-shell">
+          <canvas id="sceneReferenceCanvas"></canvas>
+        </div>
+      </section>
     </div>
   </section>
 </main>
 <script>
 const PACKET = __PACKET_JSON__;
 const IMAGE_DATA_URL = __IMAGE_DATA_URL__;
+const SCENE_REFERENCE_DATA_URL = __SCENE_REFERENCE_DATA_URL__;
 const palette = ["#2563eb", "#16a34a", "#a16207", "#dc2626", "#7c3aed", "#0f766e"];
 const state = {
   mode: "select",
@@ -380,11 +423,16 @@ const state = {
   selectedId: null,
   draftPolygon: [],
   drag: null,
+  undoStack: [],
+  undoGroupKey: null,
   counter: 0
 };
 const image = new Image();
+const sceneReferenceImage = new Image();
 const canvas = document.getElementById("mapCanvas");
 const ctx = canvas.getContext("2d");
+const sceneReferenceCanvas = document.getElementById("sceneReferenceCanvas");
+const sceneReferenceCtx = sceneReferenceCanvas.getContext("2d");
 const exportText = document.getElementById("exportText");
 
 function cloneSourceMapLayers(layers) {
@@ -426,9 +474,65 @@ function selectedShape() {
   return state.shapes.find((shape) => shape.shape_id === state.selectedId) || null;
 }
 
+function editorSnapshot() {
+  return {
+    shapes: JSON.parse(JSON.stringify(state.shapes)),
+    sourceMapLayers: JSON.parse(JSON.stringify(state.sourceMapLayers)),
+    navigationMemoryLayer: JSON.parse(JSON.stringify(state.navigationMemoryLayer)),
+    selectedId: state.selectedId,
+    draftPolygon: JSON.parse(JSON.stringify(state.draftPolygon)),
+    counter: state.counter
+  };
+}
+
+function restoreEditorSnapshot(snapshot) {
+  state.shapes = JSON.parse(JSON.stringify(snapshot.shapes || []));
+  state.sourceMapLayers = JSON.parse(JSON.stringify(snapshot.sourceMapLayers || {}));
+  state.navigationMemoryLayer = JSON.parse(JSON.stringify(snapshot.navigationMemoryLayer || {}));
+  state.selectedId = snapshot.selectedId || state.shapes[0]?.shape_id || null;
+  state.draftPolygon = JSON.parse(JSON.stringify(snapshot.draftPolygon || []));
+  state.drag = null;
+  state.undoGroupKey = null;
+  state.counter = Number(snapshot.counter || 0);
+  renderAll();
+}
+
+function pushUndoSnapshot(groupKey = "") {
+  if (groupKey && state.undoGroupKey === groupKey) {
+    return;
+  }
+  state.undoStack.push(editorSnapshot());
+  if (state.undoStack.length > 80) {
+    state.undoStack.shift();
+  }
+  state.undoGroupKey = groupKey || null;
+  updateUndoButton();
+}
+
+function closeUndoGroup() {
+  state.undoGroupKey = null;
+}
+
+function undoLastAction() {
+  const snapshot = state.undoStack.pop();
+  if (!snapshot) {
+    updateUndoButton();
+    return;
+  }
+  restoreEditorSnapshot(snapshot);
+}
+
+function updateUndoButton() {
+  const button = document.getElementById("undoAction");
+  if (button) {
+    button.disabled = state.undoStack.length === 0;
+  }
+}
+
 function setMode(mode) {
   state.mode = mode;
   state.drag = null;
+  closeUndoGroup();
   document.querySelectorAll("[data-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === mode);
   });
@@ -476,10 +580,56 @@ function createShape(kind, worldPoint) {
   return shape;
 }
 
+function createRectangleShape(startWorld, endWorld) {
+  const polygon = rectanglePolygon(startWorld, endWorld);
+  const center = polygonCenter(polygon);
+  const shape = createShape("polygon", center);
+  shape.geometry.polygon = polygon;
+  shape.map_center = center;
+  return shape;
+}
+
+function rectanglePolygon(startWorld, endWorld) {
+  const x1 = Number(startWorld.x);
+  const y1 = Number(startWorld.y);
+  const x2 = Number(endWorld.x);
+  const y2 = Number(endWorld.y);
+  return [
+    { x: round(x1), y: round(y1) },
+    { x: round(x2), y: round(y1) },
+    { x: round(x2), y: round(y2) },
+    { x: round(x1), y: round(y2) }
+  ];
+}
+
+function defaultRectangleAround(center) {
+  const halfWidth = 0.5;
+  const halfHeight = 0.35;
+  return [
+    { x: round(Number(center.x) - halfWidth), y: round(Number(center.y) - halfHeight) },
+    { x: round(Number(center.x) + halfWidth), y: round(Number(center.y) - halfHeight) },
+    { x: round(Number(center.x) + halfWidth), y: round(Number(center.y) + halfHeight) },
+    { x: round(Number(center.x) - halfWidth), y: round(Number(center.y) + halfHeight) }
+  ];
+}
+
+function polygonSize(points) {
+  if (!Array.isArray(points) || !points.length) {
+    return { width: 0, height: 0 };
+  }
+  const xs = points.map((point) => Number(point.x));
+  const ys = points.map((point) => Number(point.y));
+  return {
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys)
+  };
+}
+
 function finishDraftPolygon() {
   if (state.draftPolygon.length < 3) {
     return;
   }
+  pushUndoSnapshot("finishPolygon");
   const center = polygonCenter(state.draftPolygon);
   const shape = createShape("polygon", center);
   shape.geometry.polygon = state.draftPolygon.map((point) => ({ ...point }));
@@ -661,6 +811,7 @@ function applyGlobalTilt() {
   if (!targets.length) {
     return;
   }
+  pushUndoSnapshot("applyGlobalTilt");
   const pivot = pivotMode === "selection" ? selectionCenter(targets) : mapCenterWorld();
   const angleRad = (angleDeg * Math.PI) / 180;
   targets.forEach((shape) => rotateShapeAround(shape, pivot, angleRad));
@@ -668,6 +819,7 @@ function applyGlobalTilt() {
     rotateSourceMapLayersAround(pivot, angleRad);
   }
   renderAll();
+  closeUndoGroup();
 }
 
 function rotatePolygonDrag(shape, drag, worldPoint, event) {
@@ -756,6 +908,47 @@ function draw() {
     drawNavigationMemory();
   }
   drawDraftPolygon();
+}
+
+function drawSceneReference() {
+  if (!sceneReferenceImage.complete || !PACKET.scene_reference) {
+    return;
+  }
+  sceneReferenceCtx.clearRect(0, 0, sceneReferenceCanvas.width, sceneReferenceCanvas.height);
+  sceneReferenceCtx.drawImage(sceneReferenceImage, 0, 0);
+  (PACKET.scene_reference.regions || []).forEach((region, index) => {
+    drawSceneReferenceRegion(region, index);
+  });
+}
+
+function drawSceneReferenceRegion(region, index) {
+  const points = region.scene_pixel_polygon || [];
+  if (points.length < 3) {
+    return;
+  }
+  const color = palette[index % palette.length];
+  const selected = region.shape_id === state.selectedId;
+  sceneReferenceCtx.save();
+  sceneReferenceCtx.lineWidth = selected ? 4 : 2;
+  sceneReferenceCtx.strokeStyle = color;
+  sceneReferenceCtx.fillStyle = hexToRgba(color, selected ? 0.24 : 0.12);
+  sceneReferenceCtx.beginPath();
+  sceneReferenceCtx.moveTo(points[0].x, points[0].y);
+  points.slice(1).forEach((point) => sceneReferenceCtx.lineTo(point.x, point.y));
+  sceneReferenceCtx.closePath();
+  sceneReferenceCtx.fill();
+  sceneReferenceCtx.stroke();
+  const center = {
+    x: points.reduce((sum, point) => sum + Number(point.x), 0) / points.length,
+    y: points.reduce((sum, point) => sum + Number(point.y), 0) / points.length
+  };
+  sceneReferenceCtx.font = "12px Inter, system-ui, sans-serif";
+  sceneReferenceCtx.lineWidth = 4;
+  sceneReferenceCtx.strokeStyle = "rgba(255,255,255,0.95)";
+  sceneReferenceCtx.strokeText(region.label || region.partition_id, center.x + 7, center.y - 7);
+  sceneReferenceCtx.fillStyle = "#0f172a";
+  sceneReferenceCtx.fillText(region.label || region.partition_id, center.x + 7, center.y - 7);
+  sceneReferenceCtx.restore();
 }
 
 function drawDriveableWays() {
@@ -1030,21 +1223,40 @@ function hexToRgba(hex, alpha) {
 }
 
 canvas.addEventListener("pointerdown", (event) => {
+  closeUndoGroup();
   const pixel = canvasPoint(event);
   const world = pixelToWorld(pixel);
   if (state.mode === "polygon") {
+    pushUndoSnapshot("polygonPoint");
     state.draftPolygon.push(world);
     draw();
+    closeUndoGroup();
     return;
   }
   if (state.mode === "circle") {
+    pushUndoSnapshot("newCircle");
     const shape = createShape("circle", world);
-    state.drag = { shapeId: shape.shape_id, type: "radius" };
+    state.drag = { shapeId: shape.shape_id, type: "radius", undoPushed: true };
+    return;
+  }
+  if (state.mode === "rectangle") {
+    pushUndoSnapshot("newRectangle");
+    const shape = createRectangleShape(world, world);
+    state.drag = {
+      shapeId: shape.shape_id,
+      type: "newRectangle",
+      startWorld: world,
+      startGeometry: cloneGeometry(shape.geometry),
+      startMapCenter: clonePoint(shape.map_center),
+      undoPushed: true
+    };
     return;
   }
   if (state.mode === "point") {
+    pushUndoSnapshot("newPoint");
     createShape("point", world);
     setMode("select");
+    closeUndoGroup();
     return;
   }
   const hit = hitTest(pixel);
@@ -1056,7 +1268,8 @@ canvas.addEventListener("pointerdown", (event) => {
       pointIndex: hit.pointIndex,
       startWorld: world,
       startGeometry: cloneGeometry(hit.shape.geometry),
-      startMapCenter: clonePoint(hit.shape.map_center)
+      startMapCenter: clonePoint(hit.shape.map_center),
+      undoPushed: false
     };
   } else {
     state.selectedId = null;
@@ -1075,6 +1288,10 @@ canvas.addEventListener("pointermove", (event) => {
   if (!shape) {
     return;
   }
+  if (!state.drag.undoPushed) {
+    pushUndoSnapshot(`drag:${state.drag.shapeId}`);
+    state.drag.undoPushed = true;
+  }
   const geometry = shape.geometry || {};
   if (state.drag.type === "vertex" && geometry.kind === "polygon") {
     geometry.polygon[state.drag.pointIndex] = world;
@@ -1085,13 +1302,27 @@ canvas.addEventListener("pointermove", (event) => {
     moveShapeByDelta(shape, state.drag, world);
   } else if (state.drag.type === "rotate") {
     rotatePolygonDrag(shape, state.drag, world, event);
+  } else if (state.drag.type === "newRectangle" && geometry.kind === "polygon") {
+    geometry.polygon = rectanglePolygon(state.drag.startWorld, world);
   }
   syncShapeCenter(shape);
   renderAll();
 });
 
 canvas.addEventListener("pointerup", () => {
+  const drag = state.drag;
+  if (drag?.type === "newRectangle") {
+    const shape = state.shapes.find((item) => item.shape_id === drag.shapeId);
+    const geometry = shape?.geometry || {};
+    const size = polygonSize(geometry.polygon || []);
+    if (shape && (size.width < 0.05 || size.height < 0.05)) {
+      geometry.polygon = defaultRectangleAround(drag.startWorld);
+      syncShapeCenter(shape);
+      renderAll();
+    }
+  }
   state.drag = null;
+  closeUndoGroup();
 });
 
 canvas.addEventListener("dblclick", () => {
@@ -1114,6 +1345,7 @@ function renderShapeList() {
     button.innerHTML = `<strong>${escapeHtml(shape.label || shape.shape_id)}</strong>
       <span>${area} / ${category}</span>${warning}`;
     button.addEventListener("click", () => {
+      closeUndoGroup();
       state.selectedId = shape.shape_id;
       renderAll();
     });
@@ -1146,6 +1378,14 @@ function renderEditor() {
         value="${escapeAttr(polygonAngleDeg(shape.geometry.polygon || []))}"
       />
     </label>
+  ` : "";
+  const reviewSeed = shape.review_seed ? `
+    <div class="meta">
+      review seed: ${escapeHtml(shape.review_seed.source || "candidate")}<br />
+      partition: ${escapeHtml(shape.review_seed.partition_id || "")}<br />
+      objects: ${escapeHtml(shape.review_seed.object_bounds_count || 0)}<br />
+      ${escapeHtml(shape.review_seed.warning || "")}
+    </div>
   ` : "";
   editor.innerHTML = `
     <label>
@@ -1180,18 +1420,27 @@ function renderEditor() {
       geometry: ${escapeHtml(shape.geometry.kind)}<br />
       source: ${escapeHtml(shape.semantic_source || "unknown")}
     </div>
+    ${reviewSeed}
     ${conflict}
   `;
   editor.querySelectorAll("[data-field]").forEach((input) => {
+    input.addEventListener("focus", () => {
+      pushUndoSnapshot(`field:${shape.shape_id}:${input.dataset.field}`);
+    });
+    input.addEventListener("blur", closeUndoGroup);
     input.addEventListener("input", () => {
       shape[input.dataset.field] = input.value;
-      renderAll();
+      renderAfterInlineEdit();
     });
   });
   editor.querySelectorAll("[data-angle-field]").forEach((input) => {
+    input.addEventListener("focus", () => {
+      pushUndoSnapshot(`angle:${shape.shape_id}`);
+    });
+    input.addEventListener("blur", closeUndoGroup);
     input.addEventListener("input", () => {
       rotatePolygonToAngle(shape, input.value || 0);
-      renderAll();
+      renderAfterInlineEdit();
     });
   });
 }
@@ -1333,6 +1582,18 @@ function renderAll() {
   renderSceneEvidence();
   refreshExportText();
   draw();
+  drawSceneReference();
+  updateUndoButton();
+}
+
+function renderAfterInlineEdit() {
+  renderMeta();
+  renderShapeList();
+  renderSceneEvidence();
+  refreshExportText();
+  draw();
+  drawSceneReference();
+  updateUndoButton();
 }
 
 function loadManifest(payload) {
@@ -1350,6 +1611,7 @@ function loadManifest(payload) {
     asset_partition_id: label.asset_partition_id || "",
     source_room_id: label.source_room_id || "",
     semantic_source: "",
+    review_seed: label.review_seed || null,
     render_review_recommended: false,
     source_map_frame_id: label.source_map_frame_id || PACKET.source_map_frame_id,
     geometry: label.geometry || { kind: "point", center: label.map_center || { x: 0, y: 0 } },
@@ -1387,10 +1649,16 @@ document.querySelectorAll("[data-layer]").forEach((input) => {
   });
 });
 document.getElementById("finishPolygon").addEventListener("click", finishDraftPolygon);
+document.getElementById("undoAction").addEventListener("click", undoLastAction);
 document.getElementById("deleteShape").addEventListener("click", () => {
+  if (!state.selectedId) {
+    return;
+  }
+  pushUndoSnapshot("deleteShape");
   state.shapes = state.shapes.filter((shape) => shape.shape_id !== state.selectedId);
   state.selectedId = state.shapes[0]?.shape_id || null;
   renderAll();
+  closeUndoGroup();
 });
 document.getElementById("applyGlobalTilt").addEventListener("click", applyGlobalTilt);
 document.getElementById("copyJson").addEventListener("click", async () => {
@@ -1407,19 +1675,29 @@ document.getElementById("downloadJson").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
 });
 document.getElementById("loadInitial").addEventListener("click", () => {
+  pushUndoSnapshot("resetInitial");
   state.shapes = JSON.parse(JSON.stringify(PACKET.shapes || []));
   state.sourceMapLayers = cloneSourceMapLayers(PACKET.source_map_layers || {});
   state.navigationMemoryLayer = cloneNavigationMemoryLayer(PACKET.navigation_memory_layer || {});
   state.selectedId = state.shapes[0]?.shape_id || null;
   state.draftPolygon = [];
   renderAll();
+  closeUndoGroup();
 });
 document.getElementById("importJson").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   if (!file) {
     return;
   }
+  pushUndoSnapshot("importDraft");
   loadManifest(JSON.parse(await file.text()));
+  closeUndoGroup();
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    undoLastAction();
+  }
 });
 
 image.onload = () => {
@@ -1429,6 +1707,15 @@ image.onload = () => {
   renderAll();
 };
 image.src = IMAGE_DATA_URL;
+sceneReferenceImage.onload = () => {
+  sceneReferenceCanvas.width = PACKET.scene_reference?.image_width_px || sceneReferenceImage.width;
+  sceneReferenceCanvas.height = PACKET.scene_reference?.image_height_px || sceneReferenceImage.height;
+  document.getElementById("sceneReferencePanel").hidden = false;
+  drawSceneReference();
+};
+if (SCENE_REFERENCE_DATA_URL) {
+  sceneReferenceImage.src = SCENE_REFERENCE_DATA_URL;
+}
 </script>
 </body>
 </html>

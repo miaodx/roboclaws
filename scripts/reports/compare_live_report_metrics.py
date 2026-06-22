@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.reports.live_performance import compare_run_dirs, read_model_latency_calibration
 
 
@@ -74,8 +75,8 @@ def _compare_manifest(
     diagnostic: bool,
     calibration: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    entries = manifest.get("comparisons") if isinstance(manifest, dict) else None
+    manifest = read_json_object(path, label="report performance comparison manifest")
+    entries = manifest.get("comparisons")
     if not isinstance(entries, list):
         raise SystemExit("manifest must contain comparisons list")
     rows = []

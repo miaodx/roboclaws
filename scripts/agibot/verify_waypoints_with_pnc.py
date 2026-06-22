@@ -10,6 +10,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
+
 TASK_STATES = {
     0: "idle",
     1: "starting",
@@ -342,9 +349,10 @@ def _safe_task_state(pnc: Any) -> Any:
 
 
 def _load_context(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise SystemExit("context JSON must contain an object")
+    try:
+        data = read_json_object(path, label="Agibot map context")
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     if data.get("schema") != "agibot_gdk_map_context_authoring_v1":
         raise SystemExit("context schema must be agibot_gdk_map_context_authoring_v1")
     return data

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import html
-import json
 import mimetypes
 from functools import partial
 from http import HTTPStatus
@@ -11,6 +10,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
+
+from roboclaws.core.json_sources import read_json_object
 
 
 class ReportRequestHandler(SimpleHTTPRequestHandler):
@@ -178,11 +179,7 @@ def _report_card(root: Path, report_path: Path) -> str:
 def _run_summary(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return read_json_object(path, label="report server run result")
 
 
 def _summary_badges(summary: dict[str, Any]) -> list[str]:

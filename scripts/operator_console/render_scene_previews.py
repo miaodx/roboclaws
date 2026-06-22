@@ -61,9 +61,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Chase is the robot follower camera, the map preview is static Base "
             "Navigation Map context, and Top-down is a separate scene camera render. B1 / Map 12 "
             "previews are static map assets generated from the raw map bundle plus "
-            "the human review manifest so the console can show the experimental "
-            "digital twin before Isaac starts without presenting fake FPV or chase "
-            "camera frames."
+            "Digital Twin room references or explicit semantic projection artifacts so "
+            "the console can show the experimental digital twin before Isaac starts "
+            "without presenting fake FPV or chase camera frames."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -234,8 +234,9 @@ def render_molmospaces_preview(
                 "views": views,
             }
 
-        state_path = run_dir / "backend" / "molmospaces_backend_state.json"
-        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state = _read_molmospaces_backend_state(
+            run_dir / "backend" / "molmospaces_backend_state.json"
+        )
         scene_alignment = _scene_alignment(state, width=width, height=height)
         static_map = _static_navigation_preview(
             contract=contract,
@@ -498,6 +499,10 @@ def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
     if not isinstance(views, dict):
         return False
     return "fpv" not in views and "chase" not in views
+
+
+def _read_molmospaces_backend_state(path: Path) -> dict[str, Any]:
+    return read_json_object(path, label="MolmoSpaces backend state")
 
 
 def _b1_metadata_has_real_camera_previews(

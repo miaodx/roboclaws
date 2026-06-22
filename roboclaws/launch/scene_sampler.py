@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import platform
 import sys
 from pathlib import Path
@@ -1235,22 +1234,16 @@ def _eval_projection_support_status(
 def _preview_metadata(scene_index: int) -> dict[str, Any]:
     path = _PREVIEW_ROOT / f"molmospaces-val_{scene_index}-preview.json"
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = read_json_object(path, label="scene sampler preview metadata")
     except FileNotFoundError as exc:
         raise ValueError(f"missing preview metadata for scene {scene_index}: {path}") from exc
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
     if payload.get("scene_source") != "procthor-10k-val":
         raise ValueError(f"preview {path} is not procthor-10k-val")
     if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:
         raise ValueError(f"preview {path} is not for backend={PRIMARY_MOLMOSPACES_BACKEND}")
     return payload
-
-
-def _read_json_if_exists(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def _ready_row_preview_metadata(*, source: str, scene_index: int) -> dict[str, Any]:

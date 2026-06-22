@@ -8,6 +8,54 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 
+def test_molmospaces_worker_read_state_rejects_missing_state_source(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_protocol import read_state
+
+    missing = tmp_path / "missing_state.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"MolmoSpaces worker state source is missing: .*missing_state\.json",
+    ):
+        read_state(missing)
+
+
+def test_molmospaces_worker_read_state_rejects_malformed_state_source(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_protocol import read_state
+
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{bad json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"MolmoSpaces worker state source must contain valid JSON object: .*state\.json",
+    ):
+        read_state(state_path)
+
+
+def test_molmospaces_worker_read_state_rejects_non_object_state_source(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_protocol import read_state
+
+    state_path = tmp_path / "state.json"
+    state_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"MolmoSpaces worker state source must contain a JSON object: .*state\.json",
+    ):
+        read_state(state_path)
+
+
+def test_molmospaces_worker_read_state_loads_valid_state(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_protocol import read_state
+
+    state_path = tmp_path / "state.json"
+    state = {"schema": "molmospaces_subprocess_worker_state_v1", "locations": {}}
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    assert read_state(state_path) == state
+
+
 def test_init_state_builds_init_envelope_with_injected_hooks(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

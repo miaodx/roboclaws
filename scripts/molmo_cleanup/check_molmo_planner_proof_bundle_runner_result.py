@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
+from roboclaws.core.json_sources import read_json_object
 from scripts.molmo_cleanup.planner_proof_bundle_runner_checker import (
     assert_runner_result as _assert_runner_result,
 )
@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     path = args.path / "proof_bundle_run_manifest.json" if args.path.is_dir() else args.path
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_json_object(path, label="planner proof bundle runner manifest")
     _assert_runner_result(
         data,
         path.parent,

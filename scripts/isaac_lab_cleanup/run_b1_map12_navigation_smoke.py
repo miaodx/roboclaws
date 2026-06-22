@@ -180,7 +180,18 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
                 }
             )
             continue
-        result = json.loads(result_path.read_text(encoding="utf-8"))
+        try:
+            result = read_json_object(result_path, label="navigation smoke child result")
+        except (FileNotFoundError, ValueError) as exc:
+            child_failures.append(
+                {
+                    "waypoint_id": waypoint.get("waypoint_id"),
+                    "returncode": completed.returncode,
+                    "stderr_tail": completed.stderr[-2000:],
+                    "source_error": str(exc),
+                }
+            )
+            continue
         waypoint_evidence.append(result)
 
     provisional_passed = (
@@ -244,7 +255,7 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
 
 
 def capture_one(args: argparse.Namespace) -> int:
-    request = json.loads(args.request.read_text(encoding="utf-8"))
+    request = read_json_object(args.request, label="navigation smoke capture request")
     from scripts.isaac_lab_cleanup import isaac_lab_backend_worker as worker
 
     waypoint = request["waypoint"]

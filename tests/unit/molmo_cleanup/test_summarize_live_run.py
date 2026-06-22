@@ -133,6 +133,54 @@ def test_agent_sdk_comparison_manifest_rejects_smoke_full_lane(
     assert "smoke reference cannot satisfy full-lane baseline" in capsys.readouterr().err
 
 
+def test_agent_sdk_comparison_manifest_rejects_missing_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+
+    status = summarize.main(["--comparison-manifest", str(tmp_path / "manifest.json")])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live-run summary comparison manifest source is missing" in captured.err
+    assert "manifest.json" in captured.err
+
+
+def test_agent_sdk_comparison_manifest_rejects_malformed_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    status = summarize.main(["--comparison-manifest", str(manifest)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert (
+        "live-run summary comparison manifest source must contain valid JSON object" in captured.err
+    )
+    assert "manifest.json" in captured.err
+
+
+def test_agent_sdk_comparison_manifest_rejects_non_object_manifest_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    status = summarize.main(["--comparison-manifest", str(manifest)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live-run summary comparison manifest source must contain a JSON object" in captured.err
+    assert "manifest.json" in captured.err
+
+
 def test_agent_sdk_comparison_manifest_prints_explicit_run_pairs(
     tmp_path: Path,
     capsys,
@@ -275,7 +323,7 @@ def test_single_run_summary_fails_aloud_on_malformed_live_timing(
     captured = capsys.readouterr()
     assert status == 1
     assert "live_timing.json" in captured.err
-    assert "invalid JSON" in captured.err
+    assert "must contain valid JSON object" in captured.err
 
 
 def test_single_run_summary_fails_aloud_on_non_object_run_result(
@@ -296,7 +344,7 @@ def test_single_run_summary_fails_aloud_on_non_object_run_result(
     captured = capsys.readouterr()
     assert status == 1
     assert "run_result.json" in captured.err
-    assert "non-object JSON" in captured.err
+    assert "must contain a JSON object" in captured.err
 
 
 def test_single_run_summary_fails_aloud_on_malformed_trace_source(
@@ -320,7 +368,31 @@ def test_single_run_summary_fails_aloud_on_malformed_trace_source(
     captured = capsys.readouterr()
     assert status == 1
     assert "trace.jsonl:2" in captured.err
-    assert "invalid JSON" in captured.err
+    assert "must contain valid JSON object" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_non_object_trace_row(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"response","tool":"done"}\n[]\n',
+        encoding="utf-8",
+    )
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "trace.jsonl:2" in captured.err
+    assert "must contain a JSON object" in captured.err
 
 
 def test_agent_sdk_comparison_manifest_prints_terminal_classification(
