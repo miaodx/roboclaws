@@ -132,8 +132,15 @@ Decision:
 - Agent View owns agent-facing input assembly, provenance labeling,
   real-robot-obtainability labeling, blocked-capability labeling, and private
   exclusion enforcement.
+- Agent View enforcement covers every agent-facing robot input, including
+  `agent_view.json`, MCP tool responses, `done` readiness blockers, visual
+  candidate responses, and any sidecar evidence returned to the agent.
 - Active perception is an Agent View adapter, not a separate top-level product
   goal.
+- Active-perception sidecar inputs must be built from public Agent View
+  evidence, Base Navigation Map, Runtime Metric Map, or public fixture hints;
+  private scorer truth, hidden setup state, simulator-only fixture oracles, and
+  report-only views must not feed the sidecar.
 - Eval-to-evolution should later be allowed to target `agent_view_module` as a
   concrete evolution target.
 
@@ -152,8 +159,10 @@ roboclaws/household/agent_view.py
   AgentViewPayload
   AgentViewSection / provenance helper types if useful
   build_agent_view(...)
+  build_or_validate_agent_tool_response(...)
   build_runtime_metric_map_view(...)
   build_policy_view(...)
+  build_active_perception_sidecar_input(...)
   assert_no_private_agent_view_keys(...)
   strip_private_agent_view_keys(...)
   label_real_robot_obtainability(...)
@@ -172,6 +181,7 @@ Expected Agent View sections:
 
 | Section | Owns | Notes |
 | --- | --- | --- |
+| `schema` / version marker | explicit artifact-contract version such as `agent_view_v2` | Artifact name can remain `agent_view.json`; field layout changes still need a visible schema/version. |
 | `task` | prompt, preset/intent, public acceptance config | No private scenario setup or scorer target count. |
 | `capabilities` | public tool names, capability profile metadata, blocked capabilities | Pulls from MCP/capability profile source, not duplicated prose. |
 | `base_navigation_map` | start-of-run public map context | Must not include static movable inventory or private relocation truth. |
@@ -190,6 +200,9 @@ disappear.
 
 - Add the ADR described above.
 - Inventory current agent-facing payload builders and private guard call sites.
+- Inventory agent-facing MCP tool responses, `done` readiness blocker payloads,
+  visual candidate responses, and active-perception sidecar request inputs that
+  can affect what an agent sees or acts on.
 - Identify which current fields are public current contract, historical/report
   compatibility, or migration candidates.
 - Record the intended owner for each field in the plan or ADR appendix.
@@ -204,6 +217,9 @@ Acceptance:
 - The field inventory distinguishes Base Navigation Map, Runtime Metric Map,
   active perception, MCP capability metadata, blocked capabilities, and private
   exclusions.
+- The inventory distinguishes artifact payloads from live agent-facing tool
+  responses and sidecar inputs, and names whether each is Agent View-owned,
+  Agent View-derived, or report/private-only.
 - The inventory explicitly marks `static_fixture_projection` as not a new
   long-term public Agent View center.
 - The inventory has a row for `agibot_cleanup_contract.agent_view_payload` and
@@ -216,7 +232,8 @@ Acceptance:
 ### Slice 2: Canonical Agent View Builder
 
 - Move or wrap `agent_view_payload` construction behind one canonical builder.
-- Centralize forbidden-private-key enforcement through the Agent View module.
+- Centralize forbidden-private-key enforcement through the Agent View module
+  for both `agent_view.json` and agent-facing MCP/tool response payloads.
 - Add explicit real-robot-obtainability/provenance labels to top-level Agent
   View sections.
 - Keep existing product launch commands and output artifact names stable.
@@ -224,6 +241,10 @@ Acceptance:
   patch. Migrate known in-repo consumers to the new `agent_view.json` contract
   shape in the same scoped work instead of keeping old top-level keys only for
   compatibility.
+- Add an explicit Agent View schema/version marker such as `agent_view_v2`
+  before changing the artifact field layout.
+- Teach eval-harness path selection to recognize the new Agent View module path
+  in this slice so diff-based `recommend` does not miss the new boundary.
 - Ensure MolmoSpaces and Agibot Agent View payloads use the same forbidden-key
   guard and section labeling vocabulary, even if their backend-specific map or
   movement evidence stays in separate adapters.
@@ -231,12 +252,16 @@ Acceptance:
 Acceptance:
 
 - `agent_view.json` remains the artifact name, but its schema may move forward
-  when the ADR names the new contract and known consumers are migrated.
+  when the ADR names the new contract, the payload carries an explicit schema or
+  version marker, and known consumers are migrated.
 - Callers use the canonical Agent View module rather than assembling payloads
   directly across unrelated helper modules.
-- Forbidden private fields still fail loudly.
+- Forbidden private fields still fail loudly in both artifact payloads and
+  agent-facing tool responses.
 - No compatibility shim is added for obsolete public command names.
 - No compatibility shim is added for the old Agent View field layout.
+- Eval-harness focused recommendations include Agent View contract coverage for
+  changes under the new Agent View module path.
 - The Agibot payload path is either migrated to the shared builder or explicitly
   wrapped by shared Agent View validation; leaving it as an unvalidated duplicate
   is not accepted.
@@ -246,6 +271,9 @@ Acceptance:
 - Bring RAW-FPV guidance, camera-grounded-label evidence, detector provenance,
   visual-grounding sidecar status, uncertainty, and candidate lifecycle summary
   under the Agent View active-perception section.
+- Build visual-grounding / detector sidecar inputs only from public Agent View
+  evidence, Base Navigation Map, Runtime Metric Map, public fixture hints, or
+  current camera evidence.
 - Preserve the current distinction between `camera-raw-fpv` and
   `camera-grounded-labels`.
 - Do not make DINO or RAW-FPV separate top-level goals outside Agent View.
@@ -256,6 +284,11 @@ Acceptance:
 - Sidecar unavailable, provider unavailable, and no-camera evidence states are
   visible as blocked/provenance-limited Agent View state rather than silent
   fallback.
+- Sidecar request payloads do not consume private scorer truth, hidden
+  relocation/setup state, simulator-only fixture oracles, or report-only views.
+- If an existing sidecar request schema still names `static_fixture_projection`,
+  it must be treated as a migration candidate toward public map/fixture hints,
+  not as permission to pass private fixture truth.
 - Existing RAW-FPV candidate recovery tests still pass or are updated to assert
   the new Agent View section.
 
@@ -276,13 +309,12 @@ Acceptance:
 
 ### Slice 5: Eval-Harness Hook, Not Redesign
 
-- Teach eval-harness selection to notice Agent View module changes if current
-  path-based rules do not already cover them.
 - Add an Agent View focused deterministic gate if the existing focused tests are
   too scattered to catch private leakage/provenance drift.
-- Keep this hook narrow: path signals and a focused deterministic Agent View
-  gate only. Do not add `evolution_target`, capability-slice grouping, or a row
-  taxonomy redesign in this plan.
+- Keep this hook narrow: focused deterministic Agent View gate coverage only.
+  The new module path signal belongs in Slice 2 so selector coverage exists as
+  soon as the new path exists. Do not add `evolution_target`,
+  capability-slice grouping, or a row taxonomy redesign in this plan.
 - Do not reorganize the whole row taxonomy in this plan.
 
 Acceptance:
@@ -357,6 +389,13 @@ rg -n "hidden|relocation|private|scorer|static_fixture_projection" \
   roboclaws/household tests docs/plans/2026-06-22-agent-view-module-refactor.md
 ```
 
+When Slice 2 changes the artifact layout, add an explicit schema/version check
+for `agent_view.json` and at least one guard test that exercises an
+agent-facing MCP/tool response, not only the report artifact. When Slice 3
+touches visual grounding, add or update a sidecar-request test proving its
+input is built from public Agent View evidence rather than private setup or
+scorer truth.
+
 Optional local/live proof only after deterministic gates:
 
 ```bash
@@ -380,6 +419,13 @@ blocked, or skipped by budget; do not claim live proof from deterministic tests.
   code starts owning cleanup/search/map-build strategy.
 - **Private truth leakage:** stop if a desired report field cannot be included
   without exposing private scorer/setup truth to Agent View.
+- **Tool-response leak:** stop if a live MCP/tool response can expose a field
+  that would be forbidden in `agent_view.json`.
+- **Sidecar oracle leak:** stop if a detector or visual-grounding sidecar needs
+  private scorer truth, hidden setup state, simulator-only fixture oracles, or
+  report-only views to operate.
+- **Unversioned artifact break:** stop if `agent_view.json` field layout changes
+  without an explicit schema/version marker and migrated in-repo consumers.
 - **Public command churn:** stop if a slice requires changing
   `just run::surface` grammar; that needs a separate plan/ADR.
 - **Live provider dependency:** stop before requiring paid/live provider
@@ -435,6 +481,24 @@ blocked, or skipped by budget; do not claim live proof from deterministic tests.
    narrowly. It may add Agent View path signals and a focused deterministic
    gate; it must not add `evolution_target`, capability-slice grouping, or a
    provider-matrix redesign.
+8. Does Agent View guard only the saved artifact, or every live agent-facing
+   robot input? Decision: every live agent-facing robot input. MCP tool
+   responses, `done` blockers, visual candidate responses, and sidecar evidence
+   returned to the agent must be Agent View-owned, Agent View-derived, or
+   explicitly blocked/provenance-limited.
+9. May active-perception sidecars consume richer private/simulator context than
+   the acting agent? Decision: no by default. Sidecar inputs must be assembled
+   from public Agent View evidence, Base Navigation Map, Runtime Metric Map,
+   public fixture hints, or current camera evidence; private scorer/setup truth
+   and simulator-only oracles remain excluded.
+10. Does breaking `agent_view.json` field layout require an explicit schema or
+    version marker? Decision: yes. Keep the artifact name stable, but add a
+    visible schema/version marker and migrate in-repo consumers rather than
+    keeping compatibility shims.
+11. Should eval-harness path selection wait until Slice 5? Decision: no. The
+    new Agent View module path signal belongs in Slice 2 so diff-based
+    `recommend` recognizes the boundary immediately; Slice 5 keeps the broader
+    focused deterministic gate work.
 
 ## Reduce-Entropy Loop Notes
 
@@ -490,6 +554,19 @@ Round 4 findings resolved in this plan:
   selection and focused deterministic gate coverage. `evolution_target` and
   capability-slice grouping remain follow-ups.
 
+Round 5 findings resolved in this plan:
+
+- Agent View enforcement covers live agent-facing MCP/tool responses and
+  readiness blockers, not only the saved `agent_view.json` artifact.
+- Active-perception sidecar inputs are part of the public-evidence boundary;
+  DINO, RAW-FPV, and visual-grounding requests must not depend on private
+  scorer/setup truth or simulator-only fixture oracles.
+- A breaking `agent_view.json` layout change needs an explicit schema/version
+  marker while still avoiding backward-compatibility shims.
+- Eval-harness path selection for the new Agent View module moves to Slice 2 so
+  selector coverage exists as soon as the module path exists; Slice 5 keeps only
+  focused deterministic gate coverage.
+
 Parked observations:
 
 - Eval `evolution_target` belongs to the Candidate 2 follow-up after this plan
@@ -501,7 +578,8 @@ Parked observations:
 
 Saturation status: saturated for plan entropy. No remaining P0/P1 plan gap was
 found after Agibot ownership, eval-harness path selection, artifact-schema
-compatibility, and whole-plan row over-selection were made explicit.
+versioning, live tool-response coverage, sidecar-input boundaries, and
+whole-plan row over-selection were made explicit.
 
 The next workflow should check:
 
