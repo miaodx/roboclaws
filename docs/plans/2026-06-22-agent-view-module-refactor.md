@@ -584,13 +584,117 @@ whole-plan row over-selection were made explicit.
 The next workflow should check:
 
 - scope leaks between C1, C2, C3, and C4;
-- implementation preflight for Slice 1;
+- implementation flow for the full refactor, not Slice 1 only;
 - ADR naming and numbering;
 - exact field-inventory format;
-- narrow focused proof commands for the first slice.
+- focused proof commands for the affected slices.
+
+## Preflight Contract
+
+Preflight status: DRAFT
+
+Task source: plan + user prompt
+
+Canonical source: `docs/plans/2026-06-22-agent-view-module-refactor.md`
+
+Route: durable `$intuitive-flow`
+
+Goal: Implement the full Agent View Module refactor, not just Slice 1, while
+preserving the real-robot-obtainable public/private boundary.
+
+Scope:
+
+- Create ADR for Agent View as household-world module boundary.
+- Inventory and migrate agent-facing artifacts, MCP/tool responses, `done`
+  blockers, sidecar inputs, and Agibot/Molmo producers.
+- Add canonical Agent View builder or owner module, explicit `agent_view`
+  schema/version marker, shared private-key/provenance guards, and migrated
+  in-repo consumers.
+- Bring RAW-FPV, camera-grounded labels, visual-grounding sidecar state,
+  uncertainty, and candidate lifecycle under Agent View active perception.
+- Derive capability/blocked-capability metadata from MCP profiles.
+- Add eval-harness Agent View path signal and focused deterministic gate
+  coverage.
+
+Non-goals:
+
+- No `evolution_target` implementation.
+- No capability-slice eval grouping.
+- No provider matrix redesign.
+- No public `just run::surface` grammar change.
+- No backward-compatible shims for old Agent View field layout unless
+  explicitly requested.
+
+Entity budget:
+
+- reuse: `realworld_agent_view_contract.py`,
+  `realworld_contract_payloads.py`, `agibot_cleanup_contract.py`, MCP profiles,
+  eval-harness scripts.
+- remove/merge: duplicate Agent View semantics and stale compatibility
+  assumptions.
+- new: `roboclaws/household/agent_view.py` only if clearer than renaming the
+  existing owner, plus ADR and focused tests.
+- expansion triggers: public command changes, live-provider matrix changes, or
+  compatibility bridge.
+
+Context:
+
+- must-read: `README.md`, `ARCHITECTURE.md`, `STATUS.md`, `AGENTS.md`,
+  `CLAUDE.md`, this plan, `CONTEXT.md`, `docs/human/domain.md`,
+  `docs/human/mcp-skills-and-semantic-profiles.md`.
+- useful: `output/eval-harness/20260622T091939Z/eval_harness.md` when present.
+- avoid-unless-needed: historical plans and retrospectives.
+
+Acceptance:
+
+- SUCCESS: Agent View is a single enforced boundary for saved artifacts and
+  live agent-facing responses; private truth fails loudly; `agent_view.json` has
+  explicit schema/version; Molmo and Agibot paths share guards/vocabulary;
+  sidecar inputs are public-evidence only; eval-harness selects Agent View
+  gates.
+- BLOCKED_NEEDS_DECISION: none.
+- BLOCKED_NEEDS_LOCAL_VALIDATION: live Codex / Claude Code / OpenAI Agents SDK
+  proof unavailable or provider/Docker/network blocked.
+- INTERMEDIATE_ONLY: none unless the human approves a checkpoint.
+- No regressions: existing household cleanup, map-build, RAW-FPV,
+  visual-grounding, MCP/profile, eval-harness, and open-ended contract tests
+  pass or are intentionally migrated.
+
+Verification:
+
+- deterministic:
+  - `ruff check roboclaws/household roboclaws/mcp skills/eval-harness tests`
+  - `ruff format --check roboclaws/household roboclaws/mcp skills/eval-harness tests`
+  - `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/mcp/test_semantic_profiles.py tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/unit/evals/test_eval_harness_selector.py`
+- integration:
+  - `just agent::eval recommend plan=docs/plans/2026-06-22-agent-view-module-refactor.md budget=focused`
+  - narrowed `just agent::eval execute plan=docs/plans/2026-06-22-agent-view-module-refactor.md budget=focused`
+- product-run: direct cleanup world-public, direct map-build Grounding-DINO,
+  direct RAW-FPV cleanup, runtime-prior cleanup consumer as selected by
+  eval-harness.
+- local-live-manual: Codex CLI, Claude Code, and OpenAI Agents SDK live rows if
+  provider/Docker/network gates are available; otherwise record blocked
+  evidence.
+- optional: full focused matrix after deterministic and product gates are green.
+
+Execution:
+
+- main: root supervisor owns flow state, commits, gate judgment.
+- worker: optional scoped workers for inventory or test migration only.
+- worker-goal: bounded file inventory or focused test update, no independent
+  architecture decisions.
+
+To execute:
+
+```text
+/goal execute docs/plans/2026-06-22-agent-view-module-refactor.md with intuitive-flow
+```
+
+Optional tracking: none
+
+Approval: `LGTM`, `approve`, or `go ahead` approves; edits request revision.
 
 ## Current Recommendation
 
-Proceed to `$intuitive-preflight` for Slice 1: ADR plus Agent View interface
-inventory, including MolmoSpaces and Agibot producers, without starting the code
-movement yet.
+Proceed to `$intuitive-flow` for the full Agent View Module refactor using the
+preflight contract above.
