@@ -199,7 +199,7 @@
   ],
   "schema": "b1_map12_alignment_review_v1",
   "source_assets": {
-    "map_bundle": "assets/maps/agibot-robot-map-12",
+    "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
     "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",
     "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/configuration/scene_base.usd"
   }

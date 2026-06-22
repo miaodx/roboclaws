@@ -43,7 +43,8 @@ DEFAULT_WORK_DIR = Path("output/operator-console-scene-previews")
 DEFAULT_WIDTH = 900
 DEFAULT_HEIGHT = 560
 B1_MAP12_WORLD_ID = "b1-map12"
-B1_MAP_BUNDLE_DIR = Path("assets/maps/agibot-robot-map-12")
+B1_MAP_BUNDLE_DIR = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
+B1_NAVIGATION_MEMORY = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json")
 B1_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 B1_ALIGNMENT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
@@ -51,7 +52,7 @@ B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
 )
 B1_SCENE_USD_PATH = Path(
     "data/robot-data-lab/scene-engine/data/"
-    "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+    "2rd_floor_seperated/storey_1/scene_gs.usda"
 )
 
 
@@ -429,6 +430,7 @@ def render_b1_map12_preview(
             map_bundle=raw_map_bundle,
             scene_root=B1_SCENE_ROOT,
             review_manifest_path=B1_ALIGNMENT_REVIEW_MANIFEST,
+            navigation_memory_path=B1_NAVIGATION_MEMORY,
             output_dir=B1_RUNTIME_PREVIEW_BUNDLE_DIR,
         )
     except Exception as exc:
@@ -502,7 +504,10 @@ def render_b1_map12_preview(
         metadata["views"]["chase"] = camera_result["views"]["chase"]
         metadata["camera_preview_artifact"] = camera_result["artifact"]
     elif preserved_camera is not None:
-        metadata["renderer"] = "static_b1_map12_with_isaac_runtime_camera_previews"
+        metadata["renderer"] = (
+            preserved_camera.get("renderer")
+            or "static_b1_map12_with_isaac_runtime_camera_previews"
+        )
         metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
         metadata["views"]["chase"] = preserved_camera["views"]["chase"]
         if preserved_camera.get("artifact"):
@@ -559,9 +564,16 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     chase = views.get("chase")
     if not isinstance(fpv, dict) or not isinstance(chase, dict):
         return False
-    return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
-        chase.get("provenance") or ""
-    ).startswith("isaac_runtime_")
+    return _b1_camera_preview_provenance_is_preservable(fpv) and (
+        _b1_camera_preview_provenance_is_preservable(chase)
+    )
+
+
+def _b1_camera_preview_provenance_is_preservable(view: dict[str, Any]) -> bool:
+    provenance = str(view.get("provenance") or "")
+    return provenance.startswith("isaac_runtime_") or (
+        provenance == "prepared_b1_nurec_scene_camera_preview"
+    )
 
 
 def _b1_existing_real_camera_preview_metadata(
@@ -581,6 +593,7 @@ def _b1_existing_real_camera_preview_metadata(
     return {
         "views": {"fpv": dict(views["fpv"]), "chase": dict(views["chase"])},
         "artifact": dict(payload.get("camera_preview_artifact") or {}),
+        "renderer": str(payload.get("renderer") or ""),
     }
 
 
@@ -1018,7 +1031,7 @@ def _b1_map12_preview_metadata(
             "map": {
                 "path": map_path.name,
                 "view": "source_map_preview",
-                "provenance": "raw_map12_preview_png",
+                "provenance": "compiled_vendor_map12_runtime_preview_png",
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),

@@ -93,7 +93,7 @@ def evidence_lane_compatibility(
             requirement=requirement,
             reason=(
                 f"{evidence_lane} requires verified image transport for "
-                f"{agent_engine}+{route.route_id}; registry marks image_transport="
+                f"{agent_engine}+{route.public_profile}; registry marks image_transport="
                 f"{image_transport}."
             ),
         )

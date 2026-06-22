@@ -18,11 +18,19 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.maps.bundle import validate_nav2_map_bundle
+from roboclaws.maps.bundle import (
+    DEFAULT_COSTMAP_PARAMETERS,
+    DEFAULT_ROBOT_PROFILE,
+    validate_nav2_map_bundle,
+    write_source_frame_bundle_preview,
+)
+from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.rasterize import OccupancyGrid, load_pgm
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
     POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_rooms,
     source_frame_spatial_contract,
 )
 
@@ -32,7 +40,9 @@ ACCEPTED_REVIEW_STATUS = "accepted"
 RUNTIME_LABEL_STATUSES = frozenset({ACCEPTED_REVIEW_STATUS})
 REVIEW_ONLY_STATUSES = frozenset({"draft", "proposed", "blocked_shared_area"})
 EXPLICIT_SHARED_AREA_POLICIES = frozenset({"composite_area"})
-DEFAULT_MAP_BUNDLE = Path("assets/maps/agibot-robot-map-12")
+DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
+DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
+DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/digital-twin-runtime")
@@ -43,6 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Compile a generated B1 / Map 12 digital-twin runtime map bundle."
     )
     parser.add_argument("--map-bundle", type=Path, default=DEFAULT_MAP_BUNDLE)
+    parser.add_argument("--navigation-memory", type=Path, default=DEFAULT_NAVIGATION_MEMORY)
     parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
     parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -60,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle=args.map_bundle,
         scene_root=args.scene_root,
         review_manifest_path=args.review_manifest,
+        navigation_memory_path=args.navigation_memory,
         output_dir=args.output_dir,
         include_draft_labels=args.include_draft_labels,
     )
@@ -72,12 +84,14 @@ def compile_runtime_bundle(
     map_bundle: Path,
     scene_root: Path,
     review_manifest_path: Path,
+    navigation_memory_path: Path = DEFAULT_NAVIGATION_MEMORY,
     output_dir: Path,
     include_draft_labels: bool = False,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
     scene_root = Path(scene_root)
     review_manifest_path = Path(review_manifest_path)
+    navigation_memory_path = Path(navigation_memory_path)
     output_dir = Path(output_dir)
     if not review_manifest_path.is_file():
         raise ValueError(f"review manifest missing: {review_manifest_path}")
@@ -88,49 +102,59 @@ def compile_runtime_bundle(
         scene_root=scene_root,
         review_manifest_path=review_manifest_path,
     )
-    validation = validate_nav2_map_bundle(map_bundle)
-    validation.raise_for_errors()
     if not scene_root.is_dir():
         raise ValueError(f"scene root does not exist: {scene_root}")
+    if not navigation_memory_path.is_file():
+        raise ValueError(f"navigation memory missing: {navigation_memory_path}")
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
-    _copy_raw_map_bundle(map_bundle, output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _copy_vendor_map12_source(map_bundle, output_dir)
 
-    raw_semantics_path = map_bundle / "semantics.json"
-    semantics = json.loads(raw_semantics_path.read_text(encoding="utf-8"))
-    frame_id = _source_map_frame_id(semantics)
+    map_yaml = parse_map_yaml((output_dir / "map.yaml").read_text(encoding="utf-8"))
+    origin = _origin_payload(map_yaml)
+    grid = load_pgm(
+        output_dir / "map.pgm",
+        resolution_m=float(map_yaml.get("resolution") or 0.05),
+        origin_x=origin["x"],
+        origin_y=origin["y"],
+    )
+    frame_id = "map"
     runtime_labels = runtime_labels_from_review(
         review,
         frame_id=frame_id,
         include_draft_labels=include_draft_labels,
     )
     review_summary = review_validation_summary(review, include_draft_labels=include_draft_labels)
-    semantics["review_labels"] = runtime_labels
-    semantics["room_category_hints"] = _room_category_hints_from_review(runtime_labels)
-    semantics["spatial_contract"] = source_frame_spatial_contract(
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    waypoints = _inspection_waypoints_from_navigation_memory(
+        navigation_memory,
         frame_id=frame_id,
-        alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+        grid=grid,
     )
-    semantics["display_frame"] = None
-    semantics["provenance"] = {
-        **(semantics.get("provenance") if isinstance(semantics.get("provenance"), dict) else {}),
-        "generated_from_review_manifest": True,
-        "b1_alignment_review_schema": review.get("schema"),
-        "b1_alignment_review_source": str(review_manifest_path),
-        "b1_runtime_compiler": Path(__file__).as_posix(),
-        "contains_private_scoring_truth": False,
-        "contains_runtime_observations": False,
-    }
+    navigation_memory_anchors = _navigation_memory_anchors(navigation_memory, frame_id=frame_id)
+    semantics = _runtime_semantics_payload(
+        map_bundle=map_bundle,
+        review_manifest_path=review_manifest_path,
+        navigation_memory_path=navigation_memory_path,
+        map_yaml=map_yaml,
+        runtime_labels=runtime_labels,
+        waypoints=waypoints,
+        navigation_memory_anchors=navigation_memory_anchors,
+        frame_id=frame_id,
+    )
     (output_dir / "semantics.json").write_text(
         json.dumps(semantics, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    write_source_frame_bundle_preview(output_dir)
     write_review_topdown(output_dir, runtime_labels=runtime_labels)
     provenance = runtime_provenance(
         map_bundle=map_bundle,
         scene_root=scene_root,
         review_manifest_path=review_manifest_path,
+        navigation_memory_path=navigation_memory_path,
         output_dir=output_dir,
         review=review,
         runtime_labels=runtime_labels,
@@ -403,6 +427,7 @@ def runtime_provenance(
     map_bundle: Path,
     scene_root: Path,
     review_manifest_path: Path,
+    navigation_memory_path: Path,
     output_dir: Path,
     review: dict[str, Any],
     runtime_labels: list[dict[str, Any]],
@@ -410,11 +435,11 @@ def runtime_provenance(
     include_draft_labels: bool,
 ) -> dict[str, Any]:
     source_files = [
-        map_bundle / "map.yaml",
-        map_bundle / "map.pgm",
-        map_bundle / "semantics.json",
-        map_bundle / "profiles" / "rby1m.yaml",
-        map_bundle / "costmaps" / "rby1m.costmap_params.yaml",
+        map_bundle / "nav2.yaml",
+        map_bundle / "occupancy.pgm",
+        map_bundle / "raw_map.json.gz",
+        map_bundle / "source.json",
+        navigation_memory_path,
         review_manifest_path,
     ]
     return {
@@ -426,6 +451,7 @@ def runtime_provenance(
             "map_bundle": str(map_bundle),
             "scene_root": str(scene_root),
             "review_manifest": str(review_manifest_path),
+            "navigation_memory": str(navigation_memory_path),
             "review_schema": str(review.get("schema") or ""),
         },
         "output_dir": str(output_dir),
@@ -491,22 +517,334 @@ def write_review_topdown(output_dir: Path, *, runtime_labels: list[dict[str, Any
     return output_path
 
 
-def _copy_raw_map_bundle(source: Path, output_dir: Path) -> None:
-    for relative in (
-        Path("map.yaml"),
-        Path("map.pgm"),
-        Path("preview.png"),
-        Path("semantics.json"),
-        Path("profiles"),
-        Path("costmaps"),
-    ):
-        src = source / relative
-        dst = output_dir / relative
-        if src.is_dir():
-            shutil.copytree(src, dst)
-        else:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
+def _copy_vendor_map12_source(source: Path, output_dir: Path) -> None:
+    required = {
+        "nav2.yaml": source / "nav2.yaml",
+        "occupancy.pgm": source / "occupancy.pgm",
+        "source.json": source / "source.json",
+    }
+    missing = [str(path) for path in required.values() if not path.is_file()]
+    if missing:
+        raise ValueError("raw Map12 source is incomplete: " + ", ".join(missing))
+    (output_dir / "map.yaml").write_text(
+        _runtime_map_yaml(parse_map_yaml(required["nav2.yaml"].read_text(encoding="utf-8"))),
+        encoding="utf-8",
+    )
+    shutil.copy2(required["occupancy.pgm"], output_dir / "map.pgm")
+    shutil.copy2(required["source.json"], output_dir / "source.json")
+    if (source / "raw_map.json.gz").is_file():
+        shutil.copy2(source / "raw_map.json.gz", output_dir / "raw_map.json.gz")
+    profiles_dir = output_dir / "profiles"
+    costmaps_dir = output_dir / "costmaps"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    costmaps_dir.mkdir(parents=True, exist_ok=True)
+    (profiles_dir / "rby1m.yaml").write_text(
+        _simple_yaml(DEFAULT_ROBOT_PROFILE),
+        encoding="utf-8",
+    )
+    (costmaps_dir / "rby1m.costmap_params.yaml").write_text(
+        _costmap_yaml(),
+        encoding="utf-8",
+    )
+
+
+def _runtime_semantics_payload(
+    *,
+    map_bundle: Path,
+    review_manifest_path: Path,
+    navigation_memory_path: Path,
+    map_yaml: dict[str, Any],
+    runtime_labels: list[dict[str, Any]],
+    waypoints: list[dict[str, Any]],
+    navigation_memory_anchors: list[dict[str, Any]],
+    frame_id: str,
+) -> dict[str, Any]:
+    rooms = _rooms_from_review_labels(runtime_labels, frame_id=frame_id)
+    room_waypoints = _room_waypoints_from_review_labels(runtime_labels, frame_id=frame_id)
+    return {
+        "schema": "nav2_cleanup_semantics_v1",
+        "environment_id": "agibot-robot-map-12",
+        "frame_ids": {
+            "map": frame_id,
+            "base": DEFAULT_ROBOT_PROFILE["base_frame_id"],
+            "camera": DEFAULT_ROBOT_PROFILE["camera"]["frame_id"],
+        },
+        "spatial_contract": source_frame_spatial_contract(
+            frame_id=frame_id,
+            alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+        ),
+        "display_frame": None,
+        "map_id": "agibot-robot-map-12_semantic_map",
+        "map_version": "robot_map_12_vendor_review_v1",
+        "resolution_m": float(map_yaml.get("resolution") or 0.05),
+        "origin": _origin_payload(map_yaml),
+        "rooms": rooms,
+        "fixtures": [],
+        "inspection_waypoints": [*room_waypoints, *waypoints],
+        "driveable_ways": _driveable_ways_from_rooms(rooms),
+        "navigation_memory_anchors": navigation_memory_anchors,
+        "review_labels": runtime_labels,
+        "room_category_hints": _room_category_hints_from_review(runtime_labels),
+        "provenance": {
+            "source": "vendor_robot_map_12_plus_review_manifest",
+            "raw_map_bundle": str(map_bundle),
+            "navigation_memory": str(navigation_memory_path),
+            "generated_from_review_manifest": True,
+            "b1_alignment_review_schema": B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
+            "b1_alignment_review_source": str(review_manifest_path),
+            "b1_runtime_compiler": Path(__file__).as_posix(),
+            "contains_private_scoring_truth": False,
+            "contains_runtime_observations": False,
+        },
+    }
+
+
+def _rooms_from_review_labels(
+    labels: list[dict[str, Any]],
+    *,
+    frame_id: str,
+) -> list[dict[str, Any]]:
+    rooms = []
+    for label in labels:
+        label_id = str(label.get("label_id") or "")
+        rooms.append(
+            {
+                "room_id": label_id,
+                "room_label": str(label.get("room_label") or label_id),
+                "category": str(label.get("category") or ""),
+                "polygon": [dict(point) for point in label.get("polygon") or []],
+                "review_status": str(label.get("review_status") or ""),
+                "map_area_id": str(label.get("map_area_id") or ""),
+                "scene_partition_id": str(label.get("scene_partition_id") or ""),
+            }
+        )
+    return normalize_spatial_rooms(
+        rooms,
+        frame_id=frame_id,
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+        semantic_label_status=ALIGNMENT_STATUS_CANDIDATE,
+    )
+
+
+def _inspection_waypoints_from_navigation_memory(
+    payload: dict[str, Any],
+    *,
+    frame_id: str,
+    grid: OccupancyGrid,
+) -> list[dict[str, Any]]:
+    waypoints = []
+    for index, item in enumerate(_navigation_memory_items(payload), start=1):
+        if not isinstance(item, dict):
+            continue
+        nav_goal = item.get("nav_goal") if isinstance(item.get("nav_goal"), dict) else {}
+        pose = item.get("pose") if isinstance(item.get("pose"), dict) else {}
+        source_name, source = _first_free_navigation_memory_point(
+            nav_goal=nav_goal,
+            pose=pose,
+            grid=grid,
+        )
+        if source is None:
+            continue
+        try:
+            x = float(source["x"])
+            y = float(source["y"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
+        waypoints.append(
+            {
+                "waypoint_id": f"navmem_{item_id}",
+                "frame_id": frame_id,
+                "x": x,
+                "y": y,
+                "yaw": float(source.get("yaw") or 0.0),
+                "room_id": "",
+                "label": str(item.get("label") or item_id),
+                "purpose": str(item.get("kind") or "navigation_memory_anchor"),
+                "waypoint_source": "generated_exploration_candidate",
+                "source_navigation_memory_id": item_id,
+                "source_navigation_memory_point": source_name,
+            }
+        )
+    if not waypoints:
+        raise ValueError("navigation_memory.json did not yield any waypoints")
+    return waypoints
+
+
+def _first_free_navigation_memory_point(
+    *,
+    nav_goal: dict[str, Any],
+    pose: dict[str, Any],
+    grid: OccupancyGrid,
+) -> tuple[str, dict[str, Any] | None]:
+    for source_name, source in (("nav_goal", nav_goal), ("pose", pose)):
+        if not source:
+            continue
+        try:
+            x = float(source["x"])
+            y = float(source["y"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if grid.is_free_world(x, y):
+            return source_name, source
+    return "", None
+
+
+def _navigation_memory_anchors(payload: dict[str, Any], *, frame_id: str) -> list[dict[str, Any]]:
+    anchors = []
+    for index, item in enumerate(_navigation_memory_items(payload), start=1):
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
+        anchors.append(
+            {
+                "id": item_id,
+                "label": str(item.get("label") or item_id),
+                "kind": str(item.get("kind") or ""),
+                "scene_id": str(item.get("scene_id") or ""),
+                "pose": _navigation_memory_point(item.get("pose"), frame_id=frame_id),
+                "nav_goal": _navigation_memory_point(item.get("nav_goal"), frame_id=frame_id),
+                "source": str(item.get("source") or ""),
+                "confidence": _optional_float(item.get("confidence")),
+                "provenance": "navigation_memory.json",
+            }
+        )
+    return anchors
+
+
+def _navigation_memory_point(payload: Any, *, frame_id: str) -> dict[str, Any] | None:
+    if not isinstance(payload, dict) or "x" not in payload or "y" not in payload:
+        return None
+    try:
+        x = float(payload["x"])
+        y = float(payload["y"])
+    except (TypeError, ValueError):
+        return None
+    return {
+        "frame_id": frame_id,
+        "x": x,
+        "y": y,
+        "z": _optional_float(payload.get("z")),
+        "yaw": _optional_float(payload.get("yaw")),
+    }
+
+
+def _optional_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _room_waypoints_from_review_labels(
+    labels: list[dict[str, Any]],
+    *,
+    frame_id: str,
+) -> list[dict[str, Any]]:
+    waypoints = []
+    for label in labels:
+        label_id = str(label.get("label_id") or "")
+        center = label.get("map_center") if isinstance(label.get("map_center"), dict) else {}
+        if not label_id or not center:
+            continue
+        waypoints.append(
+            {
+                "waypoint_id": f"{label_id}_center",
+                "frame_id": frame_id,
+                "x": float(center.get("x") or 0.0),
+                "y": float(center.get("y") or 0.0),
+                "yaw": 0.0,
+                "room_id": label_id,
+                "label": str(label.get("room_label") or label_id),
+                "purpose": "reviewed_room_center",
+                "waypoint_source": "generated_exploration_candidate",
+            }
+        )
+    return waypoints
+
+
+def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
+    if isinstance(payload.get("items"), list):
+        return list(payload["items"])
+    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
+    memory = catalog.get("navigation_memory")
+    return list(memory) if isinstance(memory, list) else []
+
+
+def _driveable_ways_from_rooms(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:
+    room_ids = [str(room.get("room_id") or "") for room in rooms if room.get("room_id")]
+    return [{"from_room_id": room_id, "to_room_id": room_id} for room_id in room_ids]
+
+
+def _origin_payload(map_yaml: dict[str, Any]) -> dict[str, float]:
+    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
+    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    return {
+        "x": float(origin[0]),
+        "y": float(origin[1]),
+        "yaw": float(origin[2]),
+    }
+
+
+def _runtime_map_yaml(map_yaml: dict[str, Any]) -> str:
+    origin = _origin_payload(map_yaml)
+    return "\n".join(
+        [
+            "image: map.pgm",
+            f"resolution: {float(map_yaml.get('resolution') or 0.05):.12g}",
+            f"origin: [{origin['x']:.12g}, {origin['y']:.12g}, {origin['yaw']:.12g}]",
+            f"negate: {int(map_yaml.get('negate') or 0)}",
+            f"occupied_thresh: {float(map_yaml.get('occupied_thresh') or 0.65):.12g}",
+            f"free_thresh: {float(map_yaml.get('free_thresh') or 0.196):.12g}",
+            "",
+        ]
+    )
+
+
+def _costmap_yaml() -> str:
+    payload = {
+        "global_costmap": {
+            "global_costmap": {
+                "ros__parameters": {
+                    "global_frame": "map",
+                    "robot_base_frame": DEFAULT_ROBOT_PROFILE["base_frame_id"],
+                    "resolution": DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
+                    "footprint_padding": 0.01,
+                    "plugins": ["static_layer", "inflation_layer"],
+                    "static_layer": {
+                        "plugin": "nav2_costmap_2d::StaticLayer",
+                        "map_subscribe_transient_local": True,
+                    },
+                    "inflation_layer": {
+                        "plugin": "nav2_costmap_2d::InflationLayer",
+                        "inflation_radius": DEFAULT_COSTMAP_PARAMETERS["inflation_radius_m"],
+                        "cost_scaling_factor": DEFAULT_COSTMAP_PARAMETERS["cost_scaling_factor"],
+                    },
+                }
+            }
+        }
+    }
+    return _simple_yaml(payload)
+
+
+def _simple_yaml(value: Any, *, indent: int = 0) -> str:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        lines = []
+        for key, item in value.items():
+            if isinstance(item, dict):
+                lines.append(f"{prefix}{key}:")
+                lines.append(_simple_yaml(item, indent=indent + 2).rstrip())
+            elif isinstance(item, list):
+                lines.append(f"{prefix}{key}:")
+                for entry in item:
+                    lines.append(f"{prefix}  - {entry}")
+            else:
+                lines.append(f"{prefix}{key}: {item}")
+        return "\n".join(lines) + "\n"
+    return f"{prefix}{value}\n"
 
 
 def _room_category_hints_from_review(labels: list[dict[str, Any]]) -> list[dict[str, Any]]:

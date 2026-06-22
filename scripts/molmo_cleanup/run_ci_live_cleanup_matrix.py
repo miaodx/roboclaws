@@ -180,7 +180,7 @@ def _run_entry(
             "command": command,
             "rerun_command": rerun_command,
             "env": {
-                "ROBOCLAWS_CLAUDE_PROVIDER": entry.provider_profile,
+                "ROBOCLAWS_PROVIDER_PROFILE": entry.provider_profile,
                 "ROBOCLAWS_CLAUDE_MODEL": entry.model,
                 PROVIDER_TIMING_PROXY_ENV: _default_provider_timing_proxy_value(),
             },
@@ -204,7 +204,7 @@ def _run_entry(
         return _finalize_status(status, publish_root)
 
     env = os.environ.copy()
-    env["ROBOCLAWS_CLAUDE_PROVIDER"] = entry.provider_profile
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = entry.provider_profile
     env["ROBOCLAWS_CLAUDE_MODEL"] = entry.model
     env.setdefault(PROVIDER_TIMING_PROXY_ENV, "1")
     env["ROBOCLAWS_REPORT_RERUN_COMMAND"] = rerun_command
@@ -316,7 +316,7 @@ def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namesp
         f"task={args.task}",
     ]
     return (
-        f"ROBOCLAWS_CLAUDE_PROVIDER={entry.provider_profile} "
+        f"ROBOCLAWS_PROVIDER_PROFILE={entry.provider_profile} "
         f"ROBOCLAWS_CLAUDE_MODEL={entry.model} "
         f"{PROVIDER_TIMING_PROXY_ENV}={_default_provider_timing_proxy_value()} "
         f"{shell_join(command)}"

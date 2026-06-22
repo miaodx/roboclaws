@@ -10,7 +10,7 @@ from typing import Any, Callable
 from roboclaws.agents.provider_registry import provider_route_spec
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 
-ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
+ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_PROVIDER_PROFILE"}
 RunCommand = Callable[..., Any]
 
 
@@ -41,20 +41,12 @@ def _validate_env_override(
         raise error_type(f"unsupported provider override: {key}")
     if "\x00" in value or "\n" in value or "\r" in value:
         raise error_type(f"invalid control character in provider override: {key}")
-    if key == "ROBOCLAWS_CODEX_PROVIDER":
+    if key == "ROBOCLAWS_PROVIDER_PROFILE":
         _validate_provider_override(
             route,
             value,
-            {"codex-cli", "openai-agents-sdk"},
-            provider_label="Codex",
-            error_type=error_type,
-        )
-    if key == "ROBOCLAWS_CLAUDE_PROVIDER":
-        _validate_provider_override(
-            route,
-            value,
-            {"claude-code"},
-            provider_label="Claude",
+            {"codex-cli", "claude-code", "openai-agents-sdk"},
+            provider_label="provider profile",
             error_type=error_type,
         )
 
@@ -68,9 +60,7 @@ def _validate_provider_override(
     error_type: type[ValueError],
 ) -> None:
     if route.agent_engine_id not in allowed_engines:
-        raise error_type(
-            f"{provider_label} provider override is only supported for {provider_label} routes"
-        )
+        raise error_type(f"{provider_label} override is not supported for this route")
     try:
         route_spec = provider_route_spec(value)
     except KeyError:
@@ -78,7 +68,7 @@ def _validate_provider_override(
     if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
         expected = ", ".join(route.to_payload()["supported_provider_profiles"])
         raise error_type(
-            f"unsupported {provider_label} provider override: {value}; expected {expected}"
+            f"unsupported {provider_label} override: {value}; expected {expected}"
         )
 
 

@@ -68,7 +68,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     rows = _rows_by_id(grid)
 
     codex_dino = rows["online-codex-api-router-camera-grounded-labels-grounding-dino"]
-    assert codex_dino["env"] == {"ROBOCLAWS_CODEX_PROVIDER": "codex-env"}
+    assert codex_dino["env"] == {"ROBOCLAWS_PROVIDER_PROFILE": "codex-router-responses"}
     assert codex_dino["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
     assert codex_dino["command"][:9] == [
         "just",
@@ -78,7 +78,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
         "backend=mujoco",
         "intent=cleanup",
         "agent_engine=codex-cli",
-        "provider_profile=codex-env",
+        "provider_profile=codex-router-responses",
         "evidence_lane=camera-grounded-labels",
     ]
     assert "camera_labeler=grounding-dino" in codex_dino["command"]
@@ -86,7 +86,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
 
     offline_raw = rows["offline-claude-mimo-v25-camera-raw-fpv"]
     assert offline_raw["env"] == {
-        "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
+        "ROBOCLAWS_PROVIDER_PROFILE": "mimo-tp-anthropic",
         "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
     }
     assert offline_raw["command"][:9] == [
@@ -97,7 +97,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
         "backend=mujoco",
         "intent=cleanup",
         "agent_engine=claude-code",
-        "provider_profile=mimo-anthropic",
+        "provider_profile=mimo-tp-anthropic",
         "evidence_lane=camera-raw-fpv",
     ]
     assert not any(item.startswith("camera_labeler=") for item in offline_raw["command"])
@@ -105,12 +105,12 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
 
     claude_kimi = rows["online-claude-kimi-camera-raw-fpv"]
     assert claude_kimi["env"] == {
-        "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
+        "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
     }
     assert row_rerun_command(claude_kimi).startswith(
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
-        "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
+        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=claude-code "
         "provider_profile=kimi-anthropic evidence_lane=camera-raw-fpv"

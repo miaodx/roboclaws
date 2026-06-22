@@ -17,7 +17,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_ROOT = (
     REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / ("2rd_floor_seperated")
 )
-MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+MAP12_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
+    "robot_map_12"
+) / "agibot"
 REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
 GENERATOR_PATH = (
     REPO_ROOT
@@ -120,7 +122,6 @@ def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
 ) -> None:
     _require_scene_root()
 
-    raw_semantics = json.loads((MAP12_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
@@ -132,9 +133,9 @@ def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
 
     assert result["validation"]["ok"] is True
     assert validate_nav2_map_bundle(bundle_dir).ok
-    assert semantics["rooms"] == raw_semantics["rooms"]
-    assert semantics["inspection_waypoints"] == raw_semantics["inspection_waypoints"]
-    assert semantics["driveable_ways"] == raw_semantics["driveable_ways"]
+    assert len(semantics["rooms"]) == 3
+    assert semantics["fixtures"] == []
+    assert len(semantics["navigation_memory_anchors"]) == 9
     assert {item["label_id"] for item in semantics["review_labels"]} == {
         "meeting_room_a",
         "meeting_room_b",
@@ -178,7 +179,9 @@ def test_checked_in_b1_review_manifest_is_runtime_source_of_truth() -> None:
     labels = {item["label_id"]: item for item in manifest["labels"]}
 
     assert manifest["schema"] == "b1_map12_alignment_review_v1"
-    assert manifest["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert manifest["source_assets"]["map_bundle"] == (
+        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
+    )
     assert labels["meeting_room_b"]["review_status"] == "accepted"
     assert labels["short_corridor_a"]["review_status"] == "draft"
     assert labels["reception_area_a"]["review_status"] == "blocked_shared_area"

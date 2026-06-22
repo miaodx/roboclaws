@@ -113,7 +113,7 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
         output_root=tmp_path,
         stamp="live-blocked",
         agent_engine="codex-cli",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         product_runner=_passing_product_runner,
     )
 
@@ -128,11 +128,11 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     assert result["failure_class"] == "model_or_provider_unavailable"
     assert result["identity"]["agent_engine"] == "codex-cli"
     assert result["identity"]["runner_class"] == "live-agent"
-    assert result["identity"]["provider_profile"] == "codex-env"
+    assert result["identity"]["provider_profile"] == "codex-router-responses"
     assert result["grader_outputs"]["runner"]["error_type"] == "LiveAgentEvalNotExecuted"
     preflight = result["grader_outputs"]["runner"]["preflight"]
     assert preflight["schema"] == "roboclaws_live_eval_preflight_v1"
-    assert preflight["provider_readiness"]["provider_profile"] == "codex-env"
+    assert preflight["provider_readiness"]["provider_profile"] == "codex-router-responses"
     assert preflight["provider_readiness"]["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
     assert preflight["runtime_readiness"]["required_runtime"] == "docker-backed coding-agent CLI"
     assert preflight["blocker"] == "live_execution_not_requested"
@@ -158,7 +158,7 @@ def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> 
         output_root=tmp_path,
         stamp="live-run",
         agent_engine="openai-agents-sdk",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         live_execution="run",
         live_timeout_s=12.5,
         live_product_runner=live_product_runner,
@@ -168,7 +168,7 @@ def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> 
     assert payload["aggregate"]["passed"] == 3
     assert payload["aggregate"]["blocked"] == 0
     assert seen_kwargs[0]["agent_engine"] == "openai-agents-sdk"
-    assert seen_kwargs[0]["provider_profile"] == "codex-env"
+    assert seen_kwargs[0]["provider_profile"] == "codex-router-responses"
     assert seen_kwargs[0]["live_timeout_s"] == 12.5
     result = payload["results"][0]
     assert result["identity"]["runner_class"] == "live-agent"
@@ -189,7 +189,7 @@ def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path
         output_root=tmp_path,
         stamp="live-provider-blocked",
         agent_engine="openai-agents-sdk",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         live_execution="run",
         live_product_runner=live_product_runner,
     )
@@ -424,7 +424,7 @@ def test_live_open_ended_eval_grades_artifacts_after_checker_nonzero_exit(
         output_root=tmp_path,
         stamp="live-open-ended-checker-nonzero",
         agent_engine="openai-agents-sdk",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         live_execution="run",
         live_timeout_s=12.5,
     )
@@ -706,7 +706,7 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
         output_root=tmp_path,
         stamp="live-command",
         agent_engine="codex-cli",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         live_execution="run",
         live_product_runner=live_product_runner,
     )
@@ -714,7 +714,7 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
     command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
     assert "backend=mujoco" in command
     assert "agent_engine=codex-cli" in command
-    assert "provider_profile=codex-env" in command
+    assert "provider_profile=codex-router-responses" in command
     assert "evidence_lane=world-public-labels" in command
     assert "run_preset=smoke" in command
     assert "preset=cleanup" in command
@@ -748,7 +748,7 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
         output_root=tmp_path,
         stamp="live-open-task-command",
         agent_engine="codex-cli",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         live_execution="run",
         live_product_runner=live_product_runner,
     )
@@ -756,7 +756,7 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
     command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
     assert "surface=household-world" in command
     assert "agent_engine=codex-cli" in command
-    assert "provider_profile=codex-env" in command
+    assert "provider_profile=codex-router-responses" in command
     assert "run_preset=smoke" in command
     assert not any(item.startswith("preset=") for item in command)
     assert any(item.startswith("prompt=") for item in command)
@@ -768,14 +768,14 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
     kwargs: dict[str, Any] = {
         "agent_engine": "claude-code",
-        "provider_profile": "mimo-anthropic",
+        "provider_profile": "mimo-tp-anthropic",
         "model": "mimo-v2.5",
     }
 
     env = live_surface_env(kwargs, base_env={"PATH": "/bin"})
 
     assert env["PATH"] == "/bin"
-    assert env["ROBOCLAWS_CLAUDE_PROVIDER"] == "mimo-anthropic"
+    assert env["ROBOCLAWS_PROVIDER_PROFILE"] == "mimo-tp-anthropic"
     assert env["ROBOCLAWS_CLAUDE_MODEL"] == "mimo-v2.5"
 
 
@@ -1160,7 +1160,7 @@ def _live_surface_kwargs(run_dir: Path, *, live_timeout_s: float | None = None) 
         "scene_source": "procthor-10k-val",
         "scene_index": 0,
         "agent_engine": "codex-cli",
-        "provider_profile": "codex-env",
+        "provider_profile": "codex-router-responses",
         "model": None,
         "live_timeout_s": live_timeout_s,
     }

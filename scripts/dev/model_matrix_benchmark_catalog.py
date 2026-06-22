@@ -53,7 +53,7 @@ AGENT_BENCHMARK_CASES: tuple[AgentBenchmarkCase, ...] = (
     AgentBenchmarkCase(
         case_id="cleanup-worklist-plan",
         label="Cleanup worklist next-action plan",
-        source="output/household/verify-done-held-mify-mimo/0605_1507/seed-7/agent_view.json",
+        source="output/household/verify-done-held-mimo-mify-responses-mimo/0605_1507/seed-7/agent_view.json",
         prompt=(
             "You are driving the Roboclaws household-world cleanup MCP surface. Use only public "
             "evidence. Private scorer truth is unavailable. Given this public cleanup worklist, "
@@ -125,7 +125,8 @@ AGENT_BENCHMARK_CASES: tuple[AgentBenchmarkCase, ...] = (
         prompt=(
             "Given this sanitized Agent SDK performance row, decide whether it is an accepted "
             "speedup, expected-rejected evidence, or blocked evidence. Keep private data out.\n\n"
-            "Row: provider_profile=mify, model=mimo-v2.5, evidence_lane=camera-grounded-labels. "
+            "Row: provider_profile=mimo-mify-responses, model=mimo-v2.5, "
+            "evidence_lane=camera-grounded-labels. "
             "Baseline completed with done and report artifacts. Candidate O+AC completed with "
             "done and same-or-better quality. Observed wall time delta=-659.477s and model API "
             "time delta=-653.563s. Same-dataset calibration has low explanatory power "
@@ -259,13 +260,13 @@ def selected_agent_cases(*, case_ids: set[str]) -> tuple[AgentBenchmarkCase, ...
 
 
 def _codex_env_cases() -> tuple[MatrixCase, ...]:
-    route = provider_route_spec("codex-env")
+    route = provider_route_spec("codex-router-responses")
     base_url = route_base_url(route)
     return (
         MatrixCase(
-            case_id="codex-env:gpt-5.5:responses",
-            provider_id="codex-env",
-            provider_label="Codex env",
+            case_id="codex-router-responses:gpt-5.5:responses",
+            provider_id="codex-router-responses",
+            provider_label="Codex router",
             model="gpt-5.5",
             wire_api="openai-responses",
             api_key_env=route.api_key_env or "",
@@ -273,9 +274,9 @@ def _codex_env_cases() -> tuple[MatrixCase, ...]:
             expected_support="native",
         ),
         MatrixCase(
-            case_id="codex-env:gpt-5.5:chat",
-            provider_id="codex-env",
-            provider_label="Codex env",
+            case_id="codex-router-responses:gpt-5.5:chat",
+            provider_id="codex-router-responses",
+            provider_label="Codex router",
             model="gpt-5.5",
             wire_api="openai-chat",
             api_key_env=route.api_key_env or "",
@@ -286,14 +287,14 @@ def _codex_env_cases() -> tuple[MatrixCase, ...]:
 
 
 def _mify_cases() -> tuple[MatrixCase, ...]:
-    route = provider_route_spec("mify")
-    anthropic_route = provider_route_spec("mify-anthropic")
+    route = provider_route_spec("mimo-mify-responses")
+    anthropic_route = provider_route_spec("mimo-mify-anthropic")
     base_url = route_base_url(route)
     return (
         *(
             MatrixCase(
-                case_id=f"mify:{_case_model_id(model)}:{wire}",
-                provider_id="mify",
+                case_id=f"mimo-mify-responses:{_case_model_id(model)}:{wire}",
+                provider_id="mimo-mify-responses",
                 provider_label="MiMo mify",
                 model=model,
                 wire_api=wire,
@@ -305,8 +306,8 @@ def _mify_cases() -> tuple[MatrixCase, ...]:
             for wire in ("openai-chat", "openai-responses")
         ),
         MatrixCase(
-            case_id="mify:xiaomi-mimo-v2.5:anthropic",
-            provider_id="mify",
+            case_id="mimo-mify-responses:xiaomi-mimo-v2.5:anthropic",
+            provider_id="mimo-mify-responses",
             provider_label="MiMo mify",
             model="xiaomi/mimo-v2.5",
             wire_api="anthropic-messages",
@@ -318,7 +319,7 @@ def _mify_cases() -> tuple[MatrixCase, ...]:
 
 
 def _minimax_cases() -> tuple[MatrixCase, ...]:
-    route = provider_route_spec("minimax")
+    route = provider_route_spec("minimax-responses")
     base_url = route_base_url(route)
     notes = {
         "MiniMax-M3": (
@@ -328,8 +329,8 @@ def _minimax_cases() -> tuple[MatrixCase, ...]:
     }
     return tuple(
         MatrixCase(
-            case_id=f"minimax:{model}:responses",
-            provider_id="minimax",
+            case_id=f"minimax-responses:{model}:responses",
+            provider_id="minimax-responses",
             provider_label="MiniMax",
             model=model,
             wire_api="openai-responses",
@@ -343,8 +344,8 @@ def _minimax_cases() -> tuple[MatrixCase, ...]:
 
 
 def _mimo_token_plan_cases() -> tuple[MatrixCase, ...]:
-    chat_route = provider_route_spec("mimo-openai-chat")
-    anthropic_route = provider_route_spec("mimo-anthropic")
+    chat_route = provider_route_spec("mimo-tp-openai-chat")
+    anthropic_route = provider_route_spec("mimo-tp-anthropic")
     return (
         *(
             MatrixCase(
@@ -374,12 +375,12 @@ def _mimo_token_plan_cases() -> tuple[MatrixCase, ...]:
 
 
 def _mimo_inside_cases() -> tuple[MatrixCase, ...]:
-    route = provider_route_spec("mimo-inside")
+    route = provider_route_spec("mimo-inside-openai-chat")
     base_url = route_base_url(route)
     return tuple(
         MatrixCase(
-            case_id=f"mimo-inside:{model}:{wire}",
-            provider_id="mimo-inside",
+            case_id=f"mimo-inside-openai-chat:{model}:{wire}",
+            provider_id="mimo-inside-openai-chat",
             provider_label="MiMo inside",
             model=model,
             wire_api=wire,

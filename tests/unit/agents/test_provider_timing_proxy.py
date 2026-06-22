@@ -106,7 +106,7 @@ def _proxy_config(
         metrics_path=tmp_path / "run" / "provider_request_metrics.jsonl",
         bind_port=proxy_port,
         agent_engine="codex-cli",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
     )
 
@@ -139,7 +139,7 @@ def _assert_proxy_metrics(tmp_path: Path) -> None:
     row = rows[0]
     assert row["schema"] == "roboclaws_provider_request_metric_v1"
     assert row["agent_engine"] == "codex-cli"
-    assert row["provider_profile"] == "codex-env"
+    assert row["provider_profile"] == "codex-router-responses"
     assert row["method"] == "POST"
     assert row["path"] == "/v1/responses"
     assert row["status_code"] == 200

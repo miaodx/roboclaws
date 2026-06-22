@@ -28,10 +28,10 @@ def test_direct_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> Non
 
     probes = {probe.probe_id: probe for probe in script.build_direct_probes()}
 
-    assert probes["direct:minimax-m27"].max_tokens >= 256
-    assert probes["direct:mimo-chat"].max_tokens >= 128
-    assert probes["direct:mimo-inside"].model == "mimo-1000"
-    assert probes["direct:mimo-inside"].max_tokens >= 128
+    assert probes["direct:minimax-responses-m27"].max_tokens >= 256
+    assert probes["direct:mimo-tp-openai-chat"].max_tokens >= 128
+    assert probes["direct:mimo-inside-openai-chat"].model == "mimo-1000"
+    assert probes["direct:mimo-inside-openai-chat"].max_tokens >= 128
     kimi = probes["direct:kimi-coding-chat"]
     payload = script.kimi_coding_payload(
         prompt="Health check. Reply exactly ok.",
@@ -61,9 +61,9 @@ def test_require_all_fails_on_skipped_probe(monkeypatch) -> None:
         "build_agent_sdk_probes",
         lambda responses_max_tokens, chat_max_tokens: [
             script.ProbeSpec(
-                probe_id="agents-sdk:minimax",
+                probe_id="agents-sdk:minimax-responses",
                 mode="agents-sdk",
-                route_id="minimax",
+                route_id="minimax-responses",
                 wire_api=script.WIRE_RESPONSES,
                 model="MiniMax-M3",
                 api_key_env="MM_API_KEY",
@@ -82,11 +82,11 @@ def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
 
     probes = {probe.probe_id: probe for probe in script.build_agent_sdk_probes()}
 
-    assert probes["agents-sdk:minimax"].max_tokens >= 256
-    assert probes["agents-sdk:codex-env"].max_tokens >= 256
-    assert probes["agents-sdk:mimo-openai-chat"].max_tokens >= 128
-    assert probes["agents-sdk:mimo-inside"].model == "mimo-1000"
-    assert probes["agents-sdk:mimo-inside"].max_tokens >= 128
+    assert probes["agents-sdk:minimax-responses"].max_tokens >= 256
+    assert probes["agents-sdk:codex-router-responses"].max_tokens >= 256
+    assert probes["agents-sdk:mimo-tp-openai-chat"].max_tokens >= 128
+    assert probes["agents-sdk:mimo-inside-openai-chat"].model == "mimo-1000"
+    assert probes["agents-sdk:mimo-inside-openai-chat"].max_tokens >= 128
     assert probes["agents-sdk:kimi-openai-chat"].model == "kimi-k2.7-code"
     assert not probes["agents-sdk:kimi-openai-chat"].unsupported_reason
 
@@ -113,7 +113,9 @@ def test_direct_chat_probe_sends_thinking_through_extra_body(monkeypatch) -> Non
             self.chat = FakeChat()
 
     monkeypatch.setitem(sys.modules, "openai", type("FakeOpenAIModule", (), {"OpenAI": FakeOpenAI}))
-    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}["direct:mimo-chat"]
+    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
+        "direct:mimo-tp-openai-chat"
+    ]
 
     result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
 
@@ -193,14 +195,14 @@ def test_kimi_agents_sdk_probe_uses_coding_agent_user_agent_header(
 
 def test_select_probe_can_limit_by_route_or_probe_id() -> None:
     script = _load_script_module()
-    args = script.parse_args(["--mode", "all", "--probe", "minimax"])
+    args = script.parse_args(["--mode", "all", "--probe", "minimax-responses"])
 
     selected = script.select_probes(args)
 
     assert {probe.probe_id for probe in selected} == {
-        "agents-sdk:minimax",
-        "direct:minimax-m3",
-        "direct:minimax-m27",
+        "agents-sdk:minimax-responses",
+        "direct:minimax-responses-m3",
+        "direct:minimax-responses-m27",
     }
 
 

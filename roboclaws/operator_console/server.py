@@ -109,11 +109,12 @@ def _query_gates(query: dict[str, list[str]], keys: tuple[str, ...]) -> dict[str
 
 
 def _query_provider_env_overrides(query: dict[str, list[str]]) -> dict[str, str]:
-    overrides = {
-        "ROBOCLAWS_CODEX_PROVIDER": str(query.get("codex_provider", [""])[0]),
-        "ROBOCLAWS_CLAUDE_PROVIDER": str(query.get("claude_provider", [""])[0]),
-    }
-    return {key: value for key, value in overrides.items() if value}
+    provider = (
+        str(query.get("provider_profile", [""])[0])
+        or str(query.get("codex_provider", [""])[0])
+        or str(query.get("claude_provider", [""])[0])
+    )
+    return {"ROBOCLAWS_PROVIDER_PROFILE": provider} if provider else {}
 
 
 def _launch_request_from_payload(payload: dict[str, object]) -> LaunchRequest:

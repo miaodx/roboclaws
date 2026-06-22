@@ -6,9 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from roboclaws.agents.prompts.household_cleanup import (
-    PROMPT_MODE_COMPACT,
-    PROMPT_MODE_FULL,
-    PROMPT_MODE_RAW_FPV_COMPACT,
     render_kickoff_prompt,
     render_semantic_map_build_prompt,
 )
@@ -25,7 +22,6 @@ AGIBOT_MAP_BUILD_WRAPPER_SUMMARY = (
     "metric_map, navigate_to_waypoint, observe, and done behavior."
 )
 PROMPT_PREVIEW_ENV_KEYS = (
-    "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE",
     "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE",
     "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET",
     "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT",
@@ -57,7 +53,6 @@ def build_prompt_preview(
     overrides = {str(key): str(value) for key, value in (request.overrides or {}).items()}
     env_overrides = {str(key): str(value) for key, value in (request.env_overrides or {}).items()}
     lane = route.evidence_lane
-    prompt_mode = _prompt_mode(route=route, evidence_lane=lane, env_overrides=env_overrides)
     target_cleanup_count = _target_cleanup_count(
         selected_intent=selected_intent,
         evidence_lane=lane,
@@ -93,7 +88,6 @@ def build_prompt_preview(
                 target_cleanup_count=target_cleanup_count,
                 intent=selected_intent,
                 goal_contract=_goal_contract(route, selected_intent, raw_prompt, overrides),
-                prompt_mode=prompt_mode,
                 raw_fpv_candidate_budget=raw_budget,
                 max_observe_per_waypoint=max_observe,
                 done_retry_budget=done_retry_budget,
@@ -112,10 +106,9 @@ def build_prompt_preview(
         "source": source,
         "intent": selected_intent,
         "evidence_lane": lane,
-        "prompt_mode": prompt_mode,
         "target_cleanup_count": target_cleanup_count,
         "wrapper_notes": wrapper_notes,
-        "summary": _summary(source=source, prompt_mode=prompt_mode, wrapper_notes=wrapper_notes),
+        "summary": _summary(source=source, wrapper_notes=wrapper_notes),
     }
 
 
@@ -188,27 +181,6 @@ def _goal_contract(
         return None
 
 
-def _prompt_mode(
-    *,
-    route: ConsoleLaunchSelection,
-    evidence_lane: str,
-    env_overrides: dict[str, str],
-) -> str:
-    if route.agent_engine_id != "openai-agents-sdk":
-        return PROMPT_MODE_FULL
-    explicit = str(env_overrides.get("ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE") or "").strip()
-    if explicit:
-        return explicit
-    perf_profile = str(env_overrides.get("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE") or "").strip()
-    if perf_profile in {"gpt_compact_v1", "mimo_compact_v1"}:
-        return PROMPT_MODE_COMPACT
-    if perf_profile == "raw_fpv_budgeted_v1":
-        return PROMPT_MODE_RAW_FPV_COMPACT
-    if evidence_lane == "camera-raw-fpv" and perf_profile == "raw_fpv_budgeted_v1":
-        return PROMPT_MODE_RAW_FPV_COMPACT
-    return PROMPT_MODE_FULL
-
-
 def _target_cleanup_count(
     *,
     selected_intent: str,
@@ -264,8 +236,8 @@ def _wrapper_notes(route: ConsoleLaunchSelection) -> list[str]:
     return notes
 
 
-def _summary(*, source: str, prompt_mode: str, wrapper_notes: list[str]) -> str:
-    parts = [f"{source} kickoff prompt", f"mode={prompt_mode}"]
+def _summary(*, source: str, wrapper_notes: list[str]) -> str:
+    parts = [f"{source} kickoff prompt"]
     if wrapper_notes:
         parts.append("plus live-route wrapper")
     return "; ".join(parts)

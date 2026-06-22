@@ -109,17 +109,17 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
 `CODEX_BASE_URL` and `CODEX_API_KEY` in the repo-local `.env` for the default
-`codex-env` route, then run:
+`codex-router-responses` route, then run:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   scenario_setup=relocate-cleanup-related-objects \

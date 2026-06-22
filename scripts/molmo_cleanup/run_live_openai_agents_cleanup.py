@@ -96,7 +96,6 @@ REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS = 2
 DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
 AGENT_SDK_PERF_PROFILE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE"
-PROMPT_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE"
 CONTINUATION_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE"
 CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
@@ -150,7 +149,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     add_household_cleanup_live_runner_args(parser, policy_default="openai_agents_agent")
-    parser.add_argument("--provider-profile", default="codex-env")
+    parser.add_argument("--provider-profile", default="codex-router-responses")
     parser.add_argument("--model", default="")
     parser.add_argument(
         "--max-turns",
@@ -201,7 +200,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "baseline, gpt_compact_v1, mimo_compact_v1, raw_fpv_budgeted_v1, custom."
         ),
     )
-    parser.add_argument("--prompt-mode", default="")
     parser.add_argument("--continuation-mode", default="")
     parser.add_argument(
         "--model-thinking-mode",
@@ -897,13 +895,6 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             getattr(args, "model_thinking_mode", "default"),
             default="default",
         ),
-        "prompt_mode": _string_setting(
-            args,
-            "prompt_mode",
-            PROMPT_MODE_ENV,
-            default=defaults["prompt_mode"],
-            allowed={"full", "compact", "raw_fpv_compact"},
-        ),
         "continuation_mode": _string_setting(
             args,
             "continuation_mode",
@@ -1063,7 +1054,6 @@ def _stable_prefix_packet(
         [
             str(skill_context.get("relative_path") or ""),
             skill_hash,
-            str(profile.get("prompt_mode") or ""),
             str(profile.get("provider_profile") or ""),
             str(profile.get("wire_api") or ""),
             prompt_prefix,
@@ -1072,7 +1062,7 @@ def _stable_prefix_packet(
     return {
         "schema": "agent_sdk_stable_prefix_v1",
         "hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
-        "material": "skill-path+skill-hash+prompt-mode+provider-profile+wire-api+prompt-prefix",
+        "material": "skill-path+skill-hash+provider-profile+wire-api+prompt-prefix",
         "skill_context_sha256": skill_hash,
         "prompt_prefix_chars": len(prompt_prefix),
         "prompt_cache_retention": (profile.get("sdk_model_settings") or {}).get(
@@ -1115,7 +1105,6 @@ def _validate_profile_id(value: str) -> str:
 
 def _profile_defaults(profile_id: str) -> dict[str, Any]:
     baseline = {
-        "prompt_mode": "full",
         "continuation_mode": "repeat_full_prompt",
         "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
         "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
@@ -1195,7 +1184,6 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
     if profile_id == "gpt_compact_v1":
         return {
             **baseline,
-            "prompt_mode": "compact",
             "continuation_mode": "state_summary_only",
             "max_continuations": 1,
             "done_retry_budget": 2,
@@ -1206,7 +1194,6 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
     if profile_id == "mimo_compact_v1":
         return {
             **baseline,
-            "prompt_mode": "compact",
             "continuation_mode": "state_summary_only",
             "max_continuations": 1,
             "done_retry_budget": 2,
@@ -1217,7 +1204,6 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
     if profile_id == "raw_fpv_budgeted_v1":
         return {
             **baseline,
-            "prompt_mode": "raw_fpv_compact",
             "continuation_mode": "state_summary_only",
             "max_turns": 40,
             "max_continuations": 1,
@@ -1527,9 +1513,9 @@ def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
     }
     if wire_api == "responses":
         settings["store"] = False
-        if provider_profile != "codex-env":
+        if provider_profile != "codex-router-responses":
             settings["truncation"] = "auto"
-        if provider_profile == "codex-env" and profile_id != "baseline":
+        if provider_profile == "codex-router-responses" and profile_id != "baseline":
             settings["prompt_cache_retention"] = "in_memory"
     elif wire_api == "chat-completions":
         settings["include_usage"] = True
@@ -1544,7 +1530,7 @@ def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
-    return normalize_provider_route(provider_profile, default="codex-env")
+    return normalize_provider_route(provider_profile, default="codex-router-responses")
 
 
 def _wire_api_for_provider_profile(provider_profile: str) -> str:
@@ -1652,7 +1638,6 @@ def _validate_context_limits(profile: dict[str, Any]) -> None:
 
 
 def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any]) -> str:
-    mode = str(profile.get("prompt_mode") or "full")
     original = str(getattr(args, "kickoff_prompt", "") or "")
     lane = str(getattr(args, "profile", "") or "")
     composite_tools = _camera_grounded_composite_tools_enabled_for_run(
@@ -1661,16 +1646,15 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
     )
     if _prompt_already_matches_profile(
         original,
-        mode=mode,
         camera_grounded_composite_tools=composite_tools,
     ):
         return original
     intent = _household_intent(args)
-    can_render = (
-        intent == "cleanup"
-        and mode in {"compact", "raw_fpv_compact"}
-        and lane in {"world-public-labels", "camera-grounded-labels", "camera-raw-fpv"}
-    )
+    can_render = intent == "cleanup" and lane in {
+        "world-public-labels",
+        "camera-grounded-labels",
+        "camera-raw-fpv",
+    }
     if not can_render:
         return original
     target_cleanup_count = _target_cleanup_count_for_prompt(args, lane=lane)
@@ -1681,7 +1665,6 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             target_cleanup_count=target_cleanup_count,
             intent=intent,
             goal_contract=None,
-            prompt_mode=mode,
             raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
             max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
             done_retry_budget=int(profile.get("done_retry_budget") or 1),
@@ -1704,39 +1687,33 @@ def _target_cleanup_count_for_prompt(args: argparse.Namespace, *, lane: str) -> 
 
 def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) -> str:
     original = str(getattr(args, "kickoff_prompt", "") or "")
-    mode = str(profile.get("prompt_mode") or "full")
     composite_tools = _camera_grounded_composite_tools_enabled_for_run(
         profile,
         evidence_lane=str(getattr(args, "profile", "") or ""),
     )
     if _prompt_already_matches_profile(
         original,
-        mode=mode,
         camera_grounded_composite_tools=composite_tools,
     ):
-        return f"provided-profile-rendered-{mode}"
+        return "provided-lane-default"
     rendered = _profiled_kickoff_prompt(args, profile=profile)
     if rendered == original:
-        return "just-rendered-full"
-    return f"profile-rendered-{profile.get('prompt_mode') or 'full'}"
+        return "provided"
+    return "profile-rendered-lane-default"
 
 
 def _prompt_already_matches_profile(
     prompt: str,
     *,
-    mode: str,
     camera_grounded_composite_tools: bool = False,
 ) -> bool:
-    if mode == "compact":
-        if camera_grounded_composite_tools:
-            return "observe_camera_grounded_candidates" in prompt
-        return (
-            "Compact action cadence for world-public-labels" in prompt
-            or "Compact action cadence for camera-grounded-labels" in prompt
-        )
-    if mode == "raw_fpv_compact":
-        return "Compact action cadence for camera-raw-fpv" in prompt
-    return False
+    if camera_grounded_composite_tools:
+        return "observe_camera_grounded_candidates" in prompt
+    return (
+        "Compact action cadence for world-public-labels" in prompt
+        or "Compact action cadence for camera-grounded-labels" in prompt
+        or "Compact action cadence for camera-raw-fpv" in prompt
+    )
 
 
 def _budget_failure_from_run_state(

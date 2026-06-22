@@ -459,7 +459,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
     assert reset_state["camera_state"]["latest_event"] == "navigate_to_object_reset"
 
 
-def test_state_splits_semantic_map_from_top_down_scene_view(
+def test_state_splits_semantic_map_from_top_down_scene_preview(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -487,16 +487,45 @@ def test_state_splits_semantic_map_from_top_down_scene_view(
     os.utime(robot_map, (1, 1))
     os.utime(report_map, (2, 2))
     os.utime(semantic_map, (3, 3))
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "agent_view": {
+                    "metric_map": {
+                        "robot_pose": {
+                            "frame_id": "map",
+                            "x": 8.544,
+                            "y": 6.408,
+                            "yaw": 90.0,
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert state["latest_view_assets"]["topdown"]["path"] == str(robot_map.resolve())
+    assert state["latest_view_assets"]["topdown"]["path"] == (
+        "/previews/molmospaces-val_0-topdown.png"
+    )
+    assert state["latest_view_assets"]["topdown"]["display_source"] == "scene_preview_topdown"
+    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"] == {
+        "schema": "operator_console_robot_pose_overlay_v1",
+        "x_pct": 50.0,
+        "y_pct": 50.0,
+        "yaw_deg": 90.0,
+        "x": 8.544,
+        "y": 6.408,
+        "source": "current_robot_pose_on_scene_preview",
+    }
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
 
-def test_state_does_not_use_semantic_map_as_top_down_scene_view(
+def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -518,7 +547,49 @@ def test_state_does_not_use_semantic_map_as_top_down_scene_view(
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_MAP_BUILD))
 
     assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert "topdown" not in state["latest_view_assets"]
+    assert state["latest_view_assets"]["topdown"]["path"] == (
+        "/previews/molmospaces-val_0-topdown.png"
+    )
+    assert "robot_pose_overlay" not in state["latest_view_assets"]["topdown"]
+
+
+def test_state_keeps_latest_robot_pose_overlay_after_non_pose_trace(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "running",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "navigate_to_waypoint",
+                "response": {
+                    "backend_pose_mutation": {
+                        "robot_pose": {"x": 8.544, "y": 6.408, "theta": 1.570796}
+                    }
+                },
+            }
+        )
+        + "\n"
+        + json.dumps({"event": "response", "tool": "observe", "response": {"ok": True}})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"]["yaw_deg"] == 90.0
 
 
 def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
@@ -832,6 +903,58 @@ def test_state_allows_stop_to_release_lock_for_failed_terminal_run(tmp_path: Pat
     assert state["status"] == "failed"
     assert state["checker_status"]["status"] == "failed"
     assert state["controls"]["stop_available"] is True
+
+
+def test_state_keeps_manual_control_available_for_paused_handoff_attempt(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0617_1126" / "seed-7"
+    route = get_selection(B1_CODEX_OPEN_TASK)
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:18788/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "paused",
+                "reason": "operator_handoff_requested",
+                "resume_available": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "server.pid").write_text("12345\n", encoding="utf-8")
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "navigate_to_waypoint",
+                "response": {"ok": True, "waypoint_id": "generated_exploration_001"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["phase"] == "paused"
+    assert state["status"] == "paused"
+    assert state["terminal_reason"] == "operator_handoff_requested"
+    assert state["latest_action"] == "navigate_to_waypoint"
+    assert state["controls"]["relative_navigation_control_available"] is True
+    assert state["controls"]["next_goal_available"] is False
 
 
 def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing(

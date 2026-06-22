@@ -56,7 +56,7 @@ def test_cleanup_skill_change_selects_cleanup_suite_and_live_codex_eval(
     assert rows["cleanup-capability-eval-suite"]["row_kind"] == "eval_suite"
     assert codex_row["row_kind"] == "live_agent_eval"
     assert codex_row["axes"]["agent_engine"] == "codex-cli"
-    assert codex_row["axes"]["provider_profile"] == "codex-env"
+    assert codex_row["axes"]["provider_profile"] == "codex-router-responses"
     assert codex_row["axes"]["evidence_lane"] == "world-public-labels"
     assert "live_execution=run" in codex_row["command"]
     assert codex_row["status"] == "not_run"
@@ -72,13 +72,13 @@ def test_agent_sdk_change_selects_openai_agents_sdk_live_eval(tmp_path: Path) ->
     rows = _selected_rows(manifest)
     sdk_row = rows["openai-agents-sdk-open-task-live-eval"]
     assert sdk_row["axes"]["agent_engine"] == "openai-agents-sdk"
-    assert sdk_row["axes"]["provider_profile"] == "minimax"
+    assert sdk_row["axes"]["provider_profile"] == "minimax-responses"
     assert sdk_row["axes"]["intent"] == "open-ended"
     assert sdk_row["axes"]["preset"] == ""
     assert "suite=open_ended_goals" in sdk_row["command"]
-    assert "provider_profile=minimax" in sdk_row["command"]
+    assert "provider_profile=minimax-responses" in sdk_row["command"]
     assert "live_execution=run" in sdk_row["command"]
-    assert "openai-agents-sdk-codex-env-availability" not in rows
+    assert "openai-agents-sdk-codex-router-responses-availability" not in rows
 
 
 def test_visual_grounding_change_selects_real_dino_product_row(tmp_path: Path) -> None:
@@ -187,8 +187,10 @@ def test_explicit_open_ended_intent_selects_open_ended_row(tmp_path: Path) -> No
     assert rows["open-ended-household-contract-tests"]["axes"]["intent"] == "open-ended"
     assert rows["open-ended-goals-eval-suite"]["axes"]["suite"] == "open_ended_goals"
     assert rows["codex-open-task-live-eval"]["axes"]["intent"] == "open-ended"
-    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == "minimax"
-    assert "openai-agents-sdk-codex-env-availability" not in rows
+    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == (
+        "minimax-responses"
+    )
+    assert "openai-agents-sdk-codex-router-responses-availability" not in rows
 
 
 def test_explicit_planner_proof_intent_selects_planner_proof_row(tmp_path: Path) -> None:
@@ -245,15 +247,17 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
     manifest = selector.build_eval_harness(
         budget="focused",
         agent_engine=["codex-cli", "openai-agents-sdk"],
-        provider_profile=["mify"],
+        provider_profile=["mimo-mify-responses"],
         evidence_lane=["camera-grounded-labels"],
         camera_labeler=["grounding-dino"],
         output_dir=tmp_path,
     )
 
     rows = _selected_rows(manifest)
-    assert rows["codex-cleanup-live-eval"]["axes"]["provider_profile"] == "mify"
-    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == "mify"
+    assert rows["codex-cleanup-live-eval"]["axes"]["provider_profile"] == "mimo-mify-responses"
+    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == (
+        "mimo-mify-responses"
+    )
     assert rows["direct-camera-grounded-grounding-dino"]["axes"]["camera_labeler"] == (
         "grounding-dino"
     )
@@ -265,17 +269,17 @@ def test_explicit_codex_env_selects_agent_sdk_availability_evidence(
     manifest = selector.build_eval_harness(
         budget="focused",
         agent_engine=["openai-agents-sdk"],
-        provider_profile=["codex-env"],
+        provider_profile=["codex-router-responses"],
         intent=["open-ended"],
         output_dir=tmp_path,
     )
 
     rows = _selected_rows(manifest)
     behavior_row = rows["openai-agents-sdk-open-task-live-eval"]
-    availability_row = rows["openai-agents-sdk-codex-env-availability"]
-    assert behavior_row["axes"]["provider_profile"] == "minimax"
+    availability_row = rows["openai-agents-sdk-codex-router-responses-availability"]
+    assert behavior_row["axes"]["provider_profile"] == "minimax-responses"
     assert behavior_row["requirement"] == "required"
-    assert availability_row["axes"]["provider_profile"] == "codex-env"
+    assert availability_row["axes"]["provider_profile"] == "codex-router-responses"
     assert availability_row["requirement"] == "optional"
     assert manifest["summary"]["optional_row_count"] == 1
 
@@ -543,7 +547,9 @@ def test_dino_sidecar_requirement_autostarts_default_service(
     assert calls["available"] >= 1
     assert calls["started"] == 1
     assert calls["stopped"] == 1
-    assert manifest["dino_sidecar_autostart"]["base_url"] == runner.DEFAULT_VISUAL_GROUNDING_BASE_URL
+    assert manifest["dino_sidecar_autostart"]["base_url"] == (
+        runner.DEFAULT_VISUAL_GROUNDING_BASE_URL
+    )
 
 
 def test_dino_sidecar_autostart_can_be_disabled(

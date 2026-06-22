@@ -84,7 +84,9 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
     assert b1.world == "b1-map12"
     assert b1.backend == "isaaclab"
     assert b1.implementation_backend == "isaaclab_subprocess"
-    assert "map_bundle=agibot-robot-map-12" in b1.overrides
+    assert (
+        "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1.overrides
+    )
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1.overrides
     assert "world=b1-map12" in b1.argv
     assert "backend=isaaclab_subprocess" in b1.argv
@@ -117,7 +119,7 @@ def test_cleanup_surface_exposes_setup_overrides_but_dispatches_private_count() 
             "backend=mujoco",
             "intent=cleanup",
             "agent_engine=codex-cli",
-            "provider_profile=codex-env",
+            "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
             "seed=7",
             "scenario_setup=relocate-cleanup-related-objects",
@@ -147,7 +149,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "backend=mujoco",
             "intent=map-build",
             "agent_engine=codex-cli",
-            "provider_profile=codex-env",
+            "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
         ]
     )
@@ -158,7 +160,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "backend=mujoco",
             "intent=open-ended",
             "agent_engine=codex-cli",
-            "provider_profile=codex-env",
+            "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
             "prompt=帮我找遥控器",
         ]
@@ -213,21 +215,21 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
             "backend=mujoco",
             "intent=cleanup",
             "agent_engine=openai-agents-sdk",
-            "provider_profile=mimo-openai-chat",
+            "provider_profile=mimo-tp-openai-chat",
             "evidence_lane=world-public-labels",
         ]
     )
 
-    assert plan.provider_profile == "mimo-openai-chat"
-    assert "provider_profile=mimo-openai-chat" in plan.overrides
+    assert plan.provider_profile == "mimo-tp-openai-chat"
+    assert "provider_profile=mimo-tp-openai-chat" in plan.overrides
 
 
 @pytest.mark.parametrize(
     ("agent_engine", "provider_profile", "env_key"),
     (
-        ("codex-cli", "mify", "ROBOCLAWS_CODEX_PROVIDER"),
-        ("claude-code", "kimi-anthropic", "ROBOCLAWS_CLAUDE_PROVIDER"),
-        ("openai-agents-sdk", "mimo-openai-chat", "ROBOCLAWS_CODEX_PROVIDER"),
+        ("codex-cli", "mimo-mify-responses", "ROBOCLAWS_PROVIDER_PROFILE"),
+        ("claude-code", "kimi-anthropic", "ROBOCLAWS_PROVIDER_PROFILE"),
+        ("openai-agents-sdk", "mimo-tp-openai-chat", "ROBOCLAWS_PROVIDER_PROFILE"),
     ),
 )
 def test_provider_profile_env_export_uses_agent_engine_catalog(
@@ -261,13 +263,13 @@ def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: s
             "backend=mujoco",
             "intent=cleanup",
             f"agent_engine={agent_engine}",
-            "provider_profile=minimax",
+            "provider_profile=minimax-responses",
             "evidence_lane=world-public-labels",
         ]
     )
 
-    assert plan.provider_profile == "minimax"
-    assert "provider_profile=minimax" in plan.overrides
+    assert plan.provider_profile == "minimax-responses"
+    assert "provider_profile=minimax-responses" in plan.overrides
 
 
 def test_raw_fpv_rejects_routes_without_verified_image_transport() -> None:
@@ -279,14 +281,14 @@ def test_raw_fpv_rejects_routes_without_verified_image_transport() -> None:
                 "backend=mujoco",
                 "intent=cleanup",
                 "agent_engine=codex-cli",
-                "provider_profile=minimax",
+                "provider_profile=minimax-responses",
                 "evidence_lane=camera-raw-fpv",
             ]
         )
 
 
 def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
-    with pytest.raises(LaunchError, match="provider_profile 'mimo-openai-chat' is unsupported"):
+    with pytest.raises(LaunchError, match="provider_profile 'mimo-tp-openai-chat' is unsupported"):
         resolve_surface_launch(
             [
                 "surface=household-world",
@@ -294,7 +296,7 @@ def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
                 "backend=mujoco",
                 "intent=cleanup",
                 "agent_engine=codex-cli",
-                "provider_profile=mimo-openai-chat",
+                "provider_profile=mimo-tp-openai-chat",
                 "evidence_lane=world-public-labels",
             ]
         )
@@ -349,7 +351,22 @@ def test_invalid_relocation_count_is_rejected() -> None:
                 "intent=cleanup",
                 "agent_engine=codex-cli",
                 "evidence_lane=world-public-labels",
-                "scenario_setup=relocate-loose-objects",
+                "scenario_setup=relocate-cleanup-related-objects",
                 "relocation_count=-1",
+            ]
+        )
+
+
+def test_loose_object_relocation_setup_is_not_publicly_supported() -> None:
+    with pytest.raises(LaunchError, match="unsupported scenario_setup"):
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=codex-cli",
+                "evidence_lane=world-public-labels",
+                "scenario_setup=relocate-loose-objects",
             ]
         )

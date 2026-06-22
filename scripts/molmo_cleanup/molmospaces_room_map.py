@@ -7,6 +7,10 @@ from typing import Any, Callable
 import mujoco
 from PIL import Image, ImageDraw
 
+ROBOT_PATH_COLOR = (37, 99, 235)
+ROBOT_HEADING_COLOR = (15, 23, 42)
+MANUAL_ADJUSTMENT_COLOR = (168, 85, 247)
+
 
 def render_robot_map(
     state: dict[str, Any],
@@ -70,10 +74,17 @@ def render_robot_map(
     trajectory = state.get("robot_trajectory", [])
     projected_path = [project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
     if len(projected_path) >= 2:
-        draw.line(projected_path, fill=(37, 99, 235), width=3)
+        draw.line(projected_path, fill=ROBOT_PATH_COLOR, width=3)
     for index, (x, y) in enumerate(projected_path):
-        radius = 5 if index == len(projected_path) - 1 else 3
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(37, 99, 235))
+        pose = trajectory[index]
+        manual_adjustment = _is_manual_adjustment_pose(pose)
+        color = MANUAL_ADJUSTMENT_COLOR if manual_adjustment else ROBOT_PATH_COLOR
+        radius = 7 if manual_adjustment and index == len(projected_path) - 1 else 5
+        if not manual_adjustment:
+            radius = 5 if index == len(projected_path) - 1 else 3
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=color)
+        if manual_adjustment:
+            draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=(255, 255, 255))
     if trajectory:
         pose = trajectory[-1]
         x, y = projected_path[-1]
@@ -87,15 +98,28 @@ def render_robot_map(
             int(round(x + math.cos(heading - 2.45) * 10)),
             int(round(y - math.sin(heading - 2.45) * 10)),
         )
-        draw.polygon([tip, left, right], fill=(15, 23, 42))
+        draw.polygon([tip, left, right], fill=ROBOT_HEADING_COLOR)
 
     draw.text((24, 22), "RBY1M map", fill=(31, 41, 55))
     draw.text(
         (24, height - 30),
-        "blue: robot path  gray: receptacles  red: objects  cyan/red rings: focus",
+        "blue: robot path  purple: manual adjust waypoint  gray: receptacles  red: objects",
+        fill=(75, 85, 99),
+    )
+    draw.text(
+        (24, height - 16),
+        "cyan/red rings: focus",
         fill=(75, 85, 99),
     )
     return image
+
+
+def _is_manual_adjustment_pose(pose: Any) -> bool:
+    if not isinstance(pose, dict):
+        return False
+    return str(pose.get("pose_source") or "") == "relative_robot_frame" or isinstance(
+        pose.get("relative_pose_delta"), dict
+    )
 
 
 def map_points(state: dict[str, Any], focus: dict[str, Any]) -> list[list[float]]:

@@ -69,7 +69,7 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
         kickoff_prompt="clean the room",
         mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
         run_dir=tmp_path / "run",
-        provider_profile="minimax",
+        provider_profile="minimax-responses",
     )
 
     OpenAIAgentsLiveRuntime().run(request)
@@ -85,7 +85,7 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
         json.loads(line)
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
-    assert events[0]["provider_profile"] == "minimax"
+    assert events[0]["provider_profile"] == "minimax-responses"
     assert events[0]["wire_api"] == "responses"
     assert events[0]["model"] == "MiniMax-M2.7-highspeed"
     assert events[0]["agent_sdk_responses_features"]["available"] is True

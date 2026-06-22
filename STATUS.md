@@ -52,13 +52,14 @@ geometry source, and alignment status. B1 scene partition labels bind through
 `scene_map_correspondence_v1` instead of list order, and reports label
 raw/source-map aligned previews.
 
-The B1 / Map 12 digital-twin map input contract now uses raw Map12 plus a
-human review manifest instead of the old thick merged map bundle. Product and
-operator-preview routes compile a generated runtime bundle from
-`assets/maps/agibot-robot-map-12/`,
+The B1 / Map 12 digital-twin map input contract now uses vendor raw Map12 plus a
+human review manifest instead of the deleted authored merged map bundle.
+Product and operator-preview routes compile a generated runtime bundle from
+`vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
+`vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
 `assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
-passing map context to lower-level consumers. Draft/shared south labels stay out
-of runtime semantics until reviewed.
+passing map context to lower-level consumers. Draft/shared south labels stay
+out of runtime semantics until reviewed.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -87,10 +88,10 @@ not active implementation blockers.
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
 this host, and `open_ended_goals` passed with `agent_engine=codex-cli`,
-`provider_profile=codex-env`, and `live_execution=run` on 2026-06-16. The same
+`provider_profile=codex-router-responses`, and `live_execution=run` on 2026-06-16. The same
 suite also passed with `agent_engine=openai-agents-sdk`,
-`provider_profile=minimax`, and `live_execution=run` on 2026-06-16. The
-`openai-agents-sdk` / `codex-env` route was exercised live but blocked on an
+`provider_profile=minimax-responses`, and `live_execution=run` on 2026-06-16. The
+`openai-agents-sdk` / `codex-router-responses` route was exercised live but blocked on an
 upstream 502 provider response, so it is not counted as a behavioral pass.
 Default non-direct eval requests remain blocked identity/preflight packets
 unless live execution is explicitly requested. Remaining validation blockers are

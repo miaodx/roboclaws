@@ -91,10 +91,10 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, or OpenClaw integration/local verification gates. Do not run
 system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
-contains a supported MiMo, Kimi, or mify Anthropic key route. Codex recipes
-default to `codex-env` and may run there when `CODEX_BASE_URL` and
-`CODEX_API_KEY` are configured; mify and MiniMax are available only as explicit
-`ROBOCLAWS_CODEX_PROVIDER=mify|minimax` overrides with `XM_LLM_API_KEY` or
+contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. Codex recipes
+default to `codex-router-responses` and may run there when `CODEX_BASE_URL` and
+`CODEX_API_KEY` are configured; mimo-mify-responses and MiniMax are available only as explicit
+`ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` overrides with `XM_LLM_API_KEY` or
 `MM_API_KEY`.
 Model-only overrides do not bypass the guard. Guarded coding-agent recipes
 should fail before launching when the work-network probe is reachable and no
@@ -155,14 +155,14 @@ set -a && source .env && set +a
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
 #   XM_LLM_API_KEY       — internal multi-model aggregator; used by Codex only
-#                           with ROBOCLAWS_CODEX_PROVIDER=mify, and by optional
-#                           Claude mify route
+#                           with ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses, and by optional
+#                           Claude mimo-mify-responses route
 #   XM_LLM_BASE_URL      — optional override; defaults to https://api.llm.mioffice.cn/v1
-#   XM_LLM_ANTHROPIC_BASE_URL — optional Claude mify override; defaults to
+#   XM_LLM_ANTHROPIC_BASE_URL — optional Claude mimo-mify-responses override; defaults to
 #                               https://api.llm.mioffice.cn/anthropic
-#   CODEX_BASE_URL / CODEX_API_KEY — default codex-env endpoint for live agents
+#   CODEX_BASE_URL / CODEX_API_KEY — default codex-router-responses endpoint for live agents
 #   MM_BASE_URL / MM_API_KEY — optional MiniMax Responses endpoint for Codex
-#                              and OpenAI Agents SDK profile=minimax
+#                              and OpenAI Agents SDK profile=minimax-responses
 ```
 
 Sanity check:
@@ -245,7 +245,7 @@ ruff format --check .
 2. **Base Navigation Map is the start-of-run map contract**: do not expose private relocation/scoring truth, static movable-object inventory, or full fixture tables as default agent input.
 3. **Runtime Metric Map owns semantic enrichment**: map-build and observations create public anchors, target candidates, and observed-object evidence.
 4. **VLM output parsing must be robust**: model-backed runs may return malformed JSON or partial tool arguments. Always wrap parsing in try/except with a safe recovery path.
-5. **Cost guard**: default to cheap provider profiles for development (Kimi/MiMo/codex-env as appropriate) and record model usage/cost when live agents run. See `docs/human/model-matrix.md` for current verified models.
+5. **Cost guard**: default to cheap provider profiles for development (Kimi/MiMo/codex-router-responses as appropriate) and record model usage/cost when live agents run. See `docs/human/model-matrix.md` for current verified models.
 6. **Every addition names an architecture layer**: new behavior, surfaces,
    presets, server adapters, agent engines, provider profiles, MCP tools,
    skills, backends, eval suites, reports, or artifact contracts must name
@@ -430,8 +430,8 @@ scope.
 Examples:
 
 - "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino`
-- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels`
-- "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"`
+- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels`
+- "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"`
 - "run the planner proof dry run" -> `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run`
 
 Use `agent::*` for deeper maintainer control:

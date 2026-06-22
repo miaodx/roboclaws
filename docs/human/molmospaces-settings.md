@@ -428,7 +428,7 @@ Use the public launch catalog for operator-facing runs:
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=<engine> evidence_lane=<lane>
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
 ```
 
 Use `agent::run` and lower `molmo::*` recipes only for maintainer debugging or
@@ -492,12 +492,12 @@ MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```
 
-Codex repo workflows default to `codex-env` and require `CODEX_BASE_URL` plus
-`CODEX_API_KEY` (`gpt-5.5`, Responses API). They do not fall back to mify when
-`XM_LLM_API_KEY` is present. To use mify, set `ROBOCLAWS_CODEX_PROVIDER=mify`
+Codex repo workflows default to `codex-router-responses` and require `CODEX_BASE_URL` plus
+`CODEX_API_KEY` (`gpt-5.5`, Responses API). They do not fall back to mimo-mify-responses when
+`XM_LLM_API_KEY` is present. To use mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
 explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
 API, and web search disabled. Claude Code prefers MiMo when
-`MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present, then mify
+`MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present, then mimo-mify-responses
 Anthropic when `XM_LLM_API_KEY` is present. Bare system CLIs are outside the
 supported path unless a human explicitly asks for a debugging run. Before a
 long Codex visual cleanup run, use:
@@ -513,7 +513,7 @@ the validation-required Gateway proof is green. Use the same key set when
 comparing Kimi/MiMo results across machines:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-tp-anthropic evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
@@ -647,9 +647,9 @@ just molmo::claude-report
 OpenClaw report recipes are maintainer-only validation routes documented under
 `docs/human/openclaw/`; they are not part of the normal current entrypoint set.
 `claude-report` is blocked on the work network unless the repo-local `.env`
-contains a supported MiMo, Kimi, or mify Anthropic key route. `codex-report`
-may run on the work network with the repo-local `codex-env` route configured in
-`.env`, or with explicit `ROBOCLAWS_CODEX_PROVIDER=mify` plus
+contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. `codex-report`
+may run on the work network with the repo-local `codex-router-responses` route configured in
+`.env`, or with explicit `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` plus
 `XM_LLM_API_KEY`. Run `just dev::network-status` first if you are unsure which
 network you are on.
 

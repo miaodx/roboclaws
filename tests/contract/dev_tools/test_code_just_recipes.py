@@ -179,7 +179,8 @@ def test_live_agent_routes_prepare_selected_model_for_mcp_server() -> None:
 
     assert "roboclaws_code_agent_prepare_mcp_env" not in code_text
     selected_model_snippet = (
-        'codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"'
+        'codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL '
+        'ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"'
     )
     assert selected_model_snippet in agent_text or selected_model_snippet in molmo_text
     assert "roboclaws_code_agent_prepare_mcp_env" in env_text

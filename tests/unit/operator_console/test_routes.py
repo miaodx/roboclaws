@@ -57,7 +57,7 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     }
     assert "topdown" not in worlds["agibot-g2/map-12"]["preview_assets"]
     assert worlds["agibot-g2/map-12"]["preview_assets"]["map"]["href"] == (
-        "/asset-previews/maps/agibot-robot-map-12/preview.png"
+        "/previews/b1-map12-map.png"
     )
     assert worlds["b1-map12"]["preview_assets"] == {
         "fpv": {
@@ -153,16 +153,16 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
     assert metadata["views"]["fpv"]["view"] == "raw_fpv"
-    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
     assert metadata["views"]["chase"]["view"] == "chase_camera"
-    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
-    assert metadata["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
     assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
     assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["map"]["provenance"] == "raw_map12_preview_png"
+    assert metadata["views"]["map"]["provenance"] == "compiled_vendor_map12_runtime_preview_png"
     assert metadata["views"]["topdown"]["view"] == "review_label_topdown"
     assert metadata["views"]["topdown"]["provenance"] == (
         "compiled_b1_map12_review_labels_topdown_png"
@@ -191,7 +191,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -199,7 +199,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "claude-code",
-            "mimo-anthropic",
+            "mimo-tp-anthropic",
             "world-public-labels",
         ),
         (
@@ -207,7 +207,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "openai-agents-sdk",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -215,7 +215,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "map-build",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -223,7 +223,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -231,7 +231,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -239,7 +239,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "agibot-gdk",
             "map-build",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "camera-grounded-labels",
         ),
         (
@@ -247,7 +247,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "isaaclab",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
     }
@@ -260,19 +260,21 @@ def test_openai_agents_route_payload_lists_provider_profiles() -> None:
     )
     payload = route.to_payload()
 
-    assert payload["provider_profile"] == "codex-env"
+    assert payload["provider_profile"] == "codex-router-responses"
     assert payload["supported_provider_profiles"] == [
-        "codex-env",
-        "mify",
-        "minimax",
-        "mimo-openai-chat",
-        "mimo-inside",
+        "codex-router-responses",
+        "mimo-mify-responses",
+        "minimax-responses",
+        "mimo-tp-openai-chat",
+        "mimo-inside-openai-chat",
         "kimi-openai-chat",
     ]
     route_by_profile = {route["provider_profile"]: route for route in payload["provider_routes"]}
-    assert route_by_profile["mify"]["route_status"] == "provisional"
-    assert route_by_profile["mimo-openai-chat"]["wire_api"] == "chat-completions"
-    assert route_by_profile["minimax"]["route_capabilities"]["image_transport"] == "unknown"
+    assert route_by_profile["mimo-mify-responses"]["route_status"] == "provisional"
+    assert route_by_profile["mimo-tp-openai-chat"]["wire_api"] == "chat-completions"
+    assert route_by_profile["minimax-responses"]["route_capabilities"]["image_transport"] == (
+        "unknown"
+    )
 
 
 def test_openclaw_agent_engine_marks_validation_required() -> None:
@@ -419,7 +421,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert mujoco["world_id"] == "molmospaces/val_0"
     assert mujoco["backend_id"] == "mujoco"
     assert mujoco["agent_engine_id"] == "codex-cli"
-    assert mujoco["provider_profile"] == "codex-env"
+    assert mujoco["provider_profile"] == "codex-router-responses"
     assert mujoco["scenario_setup"] == "relocate-cleanup-related-objects"
     assert "agent_engine=codex-cli" in mujoco["argv_preview"]
     assert "scenario_setup=relocate-cleanup-related-objects" in mujoco["argv_preview"]
@@ -433,7 +435,9 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert b1["default_intent"] == "open-ended"
     assert b1["field_groups"] == ["common", "isaac"]
     assert "grounding" in b1["view_modes"]
-    assert "map_bundle=agibot-robot-map-12" in b1["argv_preview"]
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1[
+        "argv_preview"
+    ]
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
 
@@ -466,7 +470,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         "agent_engine=codex-cli",
     ]
     assert "evidence_lane=world-public-labels" in argv
-    assert "provider_profile=codex-env" in argv
+    assert "provider_profile=codex-router-responses" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 
@@ -499,12 +503,12 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     assert not any(item.startswith("preset=") for item in argv)
     assert "backend=isaaclab" in argv
     assert "scenario_setup=baseline" in argv
-    assert "map_bundle=agibot-robot-map-12" in argv
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in argv
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in argv
     assert "robot_views=on" in argv
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+        "2rd_floor_seperated/storey_1/scene_gs.usda"
     ) in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
 

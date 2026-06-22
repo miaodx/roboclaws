@@ -17,6 +17,8 @@ from roboclaws.agents.drivers.openai_agents_model_input import (
 from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, LiveAgentRuntime
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.provider_registry import (
+    PROVIDER_PROFILE_CODEX_RESPONSES,
+    PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
     normalize_provider_route,
     provider_route_spec,
     route_base_url,
@@ -486,13 +488,13 @@ def _default_sdk_model_settings_payload(
     }
     if wire_api == "chat-completions":
         payload["include_usage"] = True
-        if provider_profile == "kimi-openai-chat":
+        if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
             payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
     else:
         payload["store"] = False
-        if provider_profile != "codex-env":
+        if provider_profile != PROVIDER_PROFILE_CODEX_RESPONSES:
             payload["truncation"] = "auto"
-        if provider_profile == "codex-env" and profile_id != "baseline":
+        if provider_profile == PROVIDER_PROFILE_CODEX_RESPONSES and profile_id != "baseline":
             payload["prompt_cache_retention"] = "in_memory"
     return apply_model_thinking_policy(
         payload,
@@ -1807,16 +1809,17 @@ def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
         metadata.get("provider_profile")
         or request.provider_profile
         or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER")
-        or os.environ.get("ROBOCLAWS_CODEX_PROVIDER")
-        or "codex-env"
+        or os.environ.get("ROBOCLAWS_PROVIDER_PROFILE")
+        or PROVIDER_PROFILE_CODEX_RESPONSES
     ).strip()
     try:
-        provider = normalize_provider_route(raw_provider, default="codex-env")
+        provider = normalize_provider_route(raw_provider, default=PROVIDER_PROFILE_CODEX_RESPONSES)
         route = provider_route_spec(provider)
     except KeyError as exc:
         raise RuntimeError(
-            "openai-agents-live supports provider profiles codex-env, mify, "
-            "minimax, mimo-openai-chat, and kimi-openai-chat"
+            "openai-agents-live supports provider profiles codex-router-responses, "
+            "mimo-mify-responses, minimax-responses, mimo-tp-openai-chat, "
+            "mimo-inside-openai-chat, and kimi-openai-chat"
         ) from exc
     if "openai-agents-sdk" not in route.supported_engines:
         raise RuntimeError(f"openai-agents-live does not support provider profile {provider}")

@@ -118,18 +118,29 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
         run_id="run-1",
         overrides={
             "seed": "9",
-            "scenario_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-cleanup-related-objects",
             "relocation_count": "2",
         },
     )
 
     assert "seed=7" not in argv
-    assert "scenario_setup=relocate-cleanup-related-objects" not in argv
     assert "relocation_count=5" not in argv
     assert "seed=9" in argv
-    assert "scenario_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
+
+
+def test_launcher_rejects_loose_object_relocation_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+
+    with pytest.raises(ConsoleLaunchError, match="unsupported scenario_setup"):
+        build_launch_argv(
+            route,
+            root=tmp_path,
+            run_id="run-1",
+            overrides={"scenario_setup": "relocate-loose-objects"},
+        )
 
 
 def test_launcher_rejects_old_public_generated_mess_override(tmp_path: Path) -> None:
@@ -200,7 +211,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
                 prompt="收拾桌面上的杯子",
                 next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
                 env_overrides={
-                    "ROBOCLAWS_CODEX_PROVIDER": "mify",
+                    "ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-responses",
                 },
                 overrides={"port": _free_port()},
             ),
@@ -208,9 +219,9 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         )
 
     assert seen_lock_owner == state["run_id"]
-    assert seen_env["ROBOCLAWS_CODEX_PROVIDER"] == "mify"
+    assert seen_env["ROBOCLAWS_PROVIDER_PROFILE"] == "mimo-mify-responses"
     assert state["env_overrides"] == {
-        "ROBOCLAWS_CODEX_PROVIDER": "mify",
+        "ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-responses",
     }
     assert state["selected_intent"] == "open-ended"
     assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
@@ -604,7 +615,7 @@ def test_provider_gate_auto_loads_codex_env_from_repo_dotenv(tmp_path: Path, mon
 
     assert readiness["can_start"] is True
     assert load_repo_dotenv(tmp_path, {})["CODEX_API_KEY"] == "from-dotenv"
-    assert readiness["provider"]["provider"] == "codex-env"
+    assert readiness["provider"]["provider"] == "codex-router-responses"
 
 
 def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path) -> None:
@@ -613,11 +624,11 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
         get_selection(MUJOCO_CODEX_CLEANUP),
         env={"XM_LLM_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "mify"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-responses"},
     )
 
     assert readiness["can_start"] is True
-    assert readiness["provider"]["provider"] == "mify"
+    assert readiness["provider"]["provider"] == "mimo-mify-responses"
 
 
 def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Path) -> None:
@@ -626,11 +637,11 @@ def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Pa
         get_selection(MUJOCO_CODEX_CLEANUP),
         env={"MM_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
 
     assert readiness["can_start"] is True
-    assert readiness["provider"]["provider"] == "minimax"
+    assert readiness["provider"]["provider"] == "minimax-responses"
     assert readiness["provider"]["model"] == "MiniMax-M3"
 
 
@@ -642,7 +653,7 @@ def test_provider_gate_blocks_raw_fpv_when_route_image_transport_unknown(tmp_pat
         route,
         env={"MM_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
 
     assert readiness["can_start"] is False
@@ -658,10 +669,10 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         route,
         env={"MM_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
     assert minimax["can_start"] is True
-    assert minimax["provider"]["provider"] == "minimax"
+    assert minimax["provider"]["provider"] == "minimax-responses"
     assert minimax["provider"]["driver"] == "openai-agents-sdk"
     assert minimax["provider"]["model"] == "MiniMax-M3"
 
@@ -670,10 +681,10 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         route,
         env={"MIMO_TP_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "mimo-openai-chat"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-tp-openai-chat"},
     )
     assert mimo["can_start"] is True
-    assert mimo["provider"]["provider"] == "mimo-openai-chat"
+    assert mimo["provider"]["provider"] == "mimo-tp-openai-chat"
     assert mimo["provider"]["driver"] == "openai-agents-sdk"
     assert mimo["provider"]["model"] == "mimo-v2.5"
 
@@ -682,7 +693,7 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         route,
         env={"KIMI_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "kimi-openai-chat"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "kimi-openai-chat"},
     )
     assert kimi["can_start"] is True
     assert kimi["provider"]["provider"] == "kimi-openai-chat"
@@ -694,7 +705,7 @@ def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
 
     missing_default = route_readiness(tmp_path, route, env={})
     assert missing_default["can_start"] is False
-    assert missing_default["provider"]["provider"] == "mimo-anthropic"
+    assert missing_default["provider"]["provider"] == "mimo-tp-anthropic"
     assert "MIMO_TP_KEY" in missing_default["blocker"]
 
     kimi = route_readiness(
@@ -702,7 +713,7 @@ def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
         route,
         env={"KIMI_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic"},
     )
     assert kimi["can_start"] is True
     assert kimi["provider"]["provider"] == "kimi-anthropic"
@@ -712,10 +723,10 @@ def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
         route,
         env={"XM_LLM_API_KEY": "key"},
         overrides={"port": _free_port()},
-        env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "mify-anthropic"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-anthropic"},
     )
     assert mify["can_start"] is True
-    assert mify["provider"]["provider"] == "mify-anthropic"
+    assert mify["provider"]["provider"] == "mimo-mify-anthropic"
 
 
 def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
@@ -724,10 +735,10 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
             route_readiness(
                 tmp_path,
                 get_selection(MUJOCO_CODEX_CLEANUP),
-                env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "system"},
+                env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "system"},
             )
         except ValueError as exc:
-            assert "unsupported Codex provider override" in str(exc)
+            assert "unsupported provider profile override" in str(exc)
         else:  # pragma: no cover - assertion style keeps dependency surface small.
             raise AssertionError("expected invalid provider override to fail")
 
@@ -736,10 +747,10 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
             route_readiness(
                 tmp_path,
                 get_selection(MUJOCO_CLAUDE_CLEANUP),
-                env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "system"},
+                env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "system"},
             )
         except ValueError as exc:
-            assert "unsupported Claude provider override" in str(exc)
+            assert "unsupported provider profile override" in str(exc)
         else:  # pragma: no cover - assertion style keeps dependency surface small.
             raise AssertionError("expected invalid Claude provider override to fail")
 
@@ -784,5 +795,5 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
     ]
     assert "preset=cleanup" in argv
     assert "evidence_lane=world-public-labels" in argv
-    assert "provider_profile=mimo-anthropic" in argv
+    assert "provider_profile=mimo-tp-anthropic" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv

@@ -332,8 +332,8 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     )
     assert open_ended_sample.provider_profiles == (
         MISSING_NOT_APPLICABLE,
-        "codex-env",
-        "minimax",
+        "codex-router-responses",
+        "minimax-responses",
     )
     assert open_ended_sample.grader_config["semantic_satisfaction_authoritative"] is False
     assert open_ended_sample.grader_config["open_ended_category"] == "negative_search"

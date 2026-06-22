@@ -209,9 +209,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-id", default="")
     parser.add_argument(
         "--provider",
-        choices=("offline", "codex-env"),
+        choices=("offline", "codex-router-responses"),
         default="offline",
-        help="offline scores supplied predictions only; codex-env calls a Responses endpoint.",
+        help=(
+            "offline scores supplied predictions only; codex-router-responses calls "
+            "a Responses endpoint."
+        ),
     )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
@@ -1635,7 +1638,7 @@ def _call_responses_api(
 
 
 def _provider_config(provider: str) -> dict[str, Any]:
-    if provider != "codex-env":
+    if provider != "codex-router-responses":
         return {"error": {"type": "unsupported_provider", "provider": provider}}
     base_url = os.environ.get("CODEX_BASE_URL", DEFAULT_CODEX_BASE_URL)
     api_key = os.environ.get("CODEX_API_KEY", "")

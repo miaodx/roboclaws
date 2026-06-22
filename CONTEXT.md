@@ -49,8 +49,8 @@ Claude Code, OpenAI Agents SDK, or a direct deterministic runner.
 _Avoid_: model provider, evidence lane, backend variant
 
 **Provider Profile**:
-The model/provider route used by an Agent Engine, such as `codex-env`, `mify`,
-`kimi-anthropic`, or `mimo-anthropic`. It applies to live model-backed engines;
+The model/provider route used by an Agent Engine, such as `codex-router-responses`, `mify`,
+`kimi-anthropic`, or `mimo-tp-anthropic`. It applies to live model-backed engines;
 deterministic direct runners do not require one.
 _Avoid_: agent engine, task intent, evidence lane
 
@@ -116,9 +116,9 @@ relocation setup; reports may record setup provenance, but Agent View must not.
 _Avoid_: task intent, cleanup scenario, agent-facing context
 
 **Relocation Policy**:
-A Scenario Setup mode that moves eligible loose or cleanup-related objects before
-the run starts. The policy, object IDs, before/after locations, and relocation
-count stay private/report-side.
+A Scenario Setup mode that moves cleanup-related objects before the run starts.
+The policy, object IDs, before/after locations, and relocation count stay
+private/report-side.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
 **Base Navigation Map**:

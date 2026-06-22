@@ -35,6 +35,7 @@ const EVIDENCE_STRIP_MAX_HEIGHT = 620;
 const MAIN_CONTENT_MIN_HEIGHT = 360;
 const MANUAL_CONTROL_STEP_M = 0.25;
 const MANUAL_CONTROL_TURN_DEG = 15;
+const DEFAULT_UI_INTENT = "open-ended";
 
 const els = {
   appShell: document.querySelector(".app-shell"),
@@ -129,8 +130,8 @@ async function boot() {
   state.runtime = payload.runtime || { tasks: [], summary: {} };
   state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
-    combinationsForWorld(state.selectedWorld && state.selectedWorld.id).find((route) => route.enabled) ||
-    state.combinations.find((route) => route.enabled) ||
+    preferredDefaultCombination(combinationsForWorld(state.selectedWorld && state.selectedWorld.id)) ||
+    preferredDefaultCombination(state.combinations) ||
     state.combinations[0];
   if (state.selectedRoute) {
     state.selectedWorld =
@@ -510,9 +511,7 @@ function renderRoutes() {
     `;
     button.addEventListener("click", () => {
       state.selectedWorld = world;
-      state.selectedRoute =
-        combinationsForWorld(world.id).find((item) => item.enabled) ||
-        combinationsForWorld(world.id)[0];
+      state.selectedRoute = preferredDefaultCombination(combinationsForWorld(world.id));
       state.selectedIntent = state.selectedRoute ? state.selectedRoute.intent_id : "";
       state.syncAxesFromRoute = true;
       renderRoutes();
@@ -525,6 +524,14 @@ function renderRoutes() {
 
 function combinationsForWorld(worldId) {
   return state.combinations.filter((item) => item.world_id === worldId);
+}
+
+function preferredDefaultCombination(combinations) {
+  return (
+    combinations.find((item) => item.enabled && item.intent_id === DEFAULT_UI_INTENT) ||
+    combinations.find((item) => item.enabled) ||
+    combinations[0]
+  );
 }
 
 function selectedCombinationFromAxes() {
@@ -763,6 +770,8 @@ function renderProviderProfileOptions(route) {
   if (!route || !route.provider_profile) {
     els.providerProfileFields.hidden = true;
     els.providerProfileInput.innerHTML = "";
+    els.providerProfileHelp.textContent =
+      "Provider profiles are resolved through the selected agent engine.";
     return;
   }
   els.providerProfileFields.hidden = false;
@@ -774,11 +783,19 @@ function renderProviderProfileOptions(route) {
           .map((item) => item.provider_profile)
           .filter(Boolean)
       )];
+  const current = els.providerProfileInput.value || "";
+  const selected = profiles.includes(current)
+    ? current
+    : route.provider_profile || route.default_provider_profile || profiles[0] || "";
   renderSelectOptions(
     els.providerProfileInput,
-    profiles.map((profile) => ({ value: profile, label: profile })),
-    route.provider_profile
+    profiles.map((profile) => ({ value: profile, label: providerProfileLabel(profile, route) })),
+    selected
   );
+  const providerRoute = selectedProviderRoute(route);
+  els.providerProfileHelp.textContent = providerRoute
+    ? `${providerRoute.label}; default model ${providerRoute.default_model_id}.`
+    : "Provider profiles are resolved through the selected agent engine.";
 }
 
 function renderOperatorInput(route) {
@@ -945,16 +962,19 @@ function renderMessupAction(route) {
       route.world_id.startsWith("molmospaces/") &&
       route.backend_id === "mujoco"
   );
-  const statusKey = route ? `${route.world_id}:${route.backend_id}` : "";
-  els.messupButton.disabled = !supported || Boolean(state.activeRunId);
-  els.messupButton.hidden = !supported;
+  const relocation = selectedScenarioSetup() !== "baseline";
+  const statusKey = currentMessupStatusKey(route);
+  els.messupButton.disabled = !supported || !relocation || Boolean(state.activeRunId);
+  els.messupButton.hidden = !supported || !relocation;
   els.messupStatus.hidden = !supported;
   if (!supported) {
     return;
   }
   if (state.messupStatusKey !== statusKey) {
     state.messupStatusKey = statusKey;
-    els.messupStatus.textContent = "Mess-up check is optional and does not block baseline tests.";
+    els.messupStatus.textContent = relocation
+      ? "Mess-up check is optional; run it before Start Agent Run to check target capacity."
+      : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
   }
 }
 
@@ -967,6 +987,7 @@ function resetMessupStatusForManualSetup() {
   els.messupStatus.textContent = relocation
     ? "Mess-up check is optional; run it again after changing setup or count."
     : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
+  state.messupStatusKey = currentMessupStatusKey(route);
 }
 
 function renderIntentSelector(route) {
@@ -985,7 +1006,7 @@ function renderIntentSelector(route) {
 
 function commandPreview(route) {
   const selected = selectedIntentForRoute(route);
-  const parts = [...(route.argv_preview || route.command_preview || [])];
+  let parts = [...(route.argv_preview || route.command_preview || [])];
   if (!parts.length) {
     return "Route unavailable.";
   }
@@ -993,11 +1014,21 @@ function commandPreview(route) {
   if (intentIndex >= 0) {
     parts[intentIndex] = `intent=${selected}`;
   }
+  const providerProfile = selectedProviderProfile();
+  if (providerProfile) {
+    parts = withProviderProfile(parts, providerProfile);
+  }
   const prompt = effectiveLaunchPromptText(route);
   if (route.supports_prompt && prompt) {
     parts.push(`prompt=${prompt}`);
   }
   return commandPartsWithSetup(parts).join(" ");
+}
+
+function withProviderProfile(parts, providerProfile) {
+  const next = withoutKeys(parts, ["provider_profile"]);
+  next.push(`provider_profile=${providerProfile}`);
+  return next;
 }
 
 function commandPartsWithSetup(parts) {
@@ -1019,6 +1050,13 @@ function withoutKeys(parts, keys) {
 
 function selectedScenarioSetup() {
   return els.scenarioSetupInput.value || "baseline";
+}
+
+function currentMessupStatusKey(route) {
+  if (!route) {
+    return "";
+  }
+  return `${route.world_id}:${route.backend_id}:${selectedScenarioSetup()}`;
 }
 
 function routeDefaultOverrides(route) {
@@ -1535,6 +1573,7 @@ async function previewMessup() {
   if (result.error) {
     els.scenarioSetupInput.value = "baseline";
     els.messupStatus.textContent = `Mess-up check failed: ${result.error}. Baseline remains available.`;
+    markCurrentMessupStatus(route);
     renderSelection();
     return;
   }
@@ -1545,12 +1584,14 @@ async function previewMessup() {
     els.messupStatus.textContent =
       `Mess-up ready: ${result.selected_count} / ${result.requested_count} targets. ` +
       "Start Agent Run will use this relocation setup.";
+    markCurrentMessupStatus(route);
   } else {
     els.scenarioSetupInput.value = "baseline";
     markCurrentSetupSelection(route);
     els.messupStatus.textContent =
       `Mess-up unavailable: ${result.message || "not enough eligible targets"}. ` +
       "Baseline remains available for follow-up tests.";
+    markCurrentMessupStatus(route);
   }
   renderSelection();
   scheduleReadinessRefresh();
@@ -1558,6 +1599,10 @@ async function previewMessup() {
 
 function markCurrentSetupSelection(route) {
   state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+}
+
+function markCurrentMessupStatus(route) {
+  state.messupStatusKey = currentMessupStatusKey(route);
 }
 
 function launchRequestBody(route = state.selectedRoute) {
@@ -1604,12 +1649,12 @@ function launchOverrides(route = state.selectedRoute) {
 function launchEnvOverrides(route = state.selectedRoute) {
   if (route.agent_engine_id === "codex-cli" || route.agent_engine_id === "openai-agents-sdk") {
     return {
-      ROBOCLAWS_CODEX_PROVIDER: selectedProviderProfile(),
+      ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
     };
   }
   if (route.agent_engine_id === "claude-code") {
     return {
-      ROBOCLAWS_CLAUDE_PROVIDER: selectedProviderProfile(),
+      ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
     };
   }
   return {};
@@ -2161,6 +2206,7 @@ function setImageSlot(name, asset, emptyText) {
       title="Open image preview"
     >
       <img alt="${escapeHtml(label)} artifact" src="${escapeHtml(src)}" />
+      ${robotPoseOverlayMarkup(asset.robot_pose_overlay)}
     </button>
   `;
   const button = slot.querySelector(".image-preview-button");
@@ -2171,6 +2217,28 @@ function setImageSlot(name, asset, emptyText) {
       path: asset.path || "",
     });
   });
+}
+
+function robotPoseOverlayMarkup(overlay) {
+  if (!overlay || !Number.isFinite(Number(overlay.x_pct)) || !Number.isFinite(Number(overlay.y_pct))) {
+    return "";
+  }
+  const x = clampNumber(Number(overlay.x_pct), 0, 100);
+  const y = clampNumber(Number(overlay.y_pct), 0, 100);
+  const yaw = Number.isFinite(Number(overlay.yaw_deg)) ? Number(overlay.yaw_deg) : 0;
+  const title = `Robot pose x=${overlay.x ?? "?"} y=${overlay.y ?? "?"}`;
+  return `
+    <span
+      class="robot-pose-overlay"
+      style="--robot-x: ${x}%; --robot-y: ${y}%; --robot-yaw: ${yaw}deg;"
+      title="${escapeHtml(title)}"
+      aria-hidden="true"
+    ></span>
+  `;
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function imageLabel(name) {
@@ -2258,15 +2326,31 @@ function isAgibotRoute(route) {
 }
 
 function selectedCodexProvider() {
-  return selectedProviderProfile() || els.codexProviderInput.value || "codex-env";
+  return selectedProviderProfile() || els.codexProviderInput.value || "codex-router-responses";
 }
 
 function selectedClaudeProvider() {
-  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-anthropic";
+  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-tp-anthropic";
 }
 
 function selectedProviderProfile() {
   return (els.providerProfileInput && els.providerProfileInput.value) || "";
+}
+
+function selectedProviderRoute(route = state.selectedRoute) {
+  const providerProfile = selectedProviderProfile();
+  if (!providerProfile || !route || !Array.isArray(route.provider_routes)) {
+    return null;
+  }
+  return route.provider_routes.find((item) => item.provider_profile === providerProfile) || null;
+}
+
+function providerProfileLabel(profile, route = state.selectedRoute) {
+  if (!route || !Array.isArray(route.provider_routes)) {
+    return profile;
+  }
+  const providerRoute = route.provider_routes.find((item) => item.provider_profile === profile);
+  return providerRoute ? `${providerRoute.label} (${profile})` : profile;
 }
 
 function selectedClaudeProviderLabel() {
