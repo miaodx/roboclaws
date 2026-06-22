@@ -5,8 +5,8 @@ source_of_truth:
   narrative: docs/human/model-matrix.md
 verdicts:
   - agent_engine: codex-cli
-    provider_route: codex-env
-    provider_profile: codex-env
+    provider_route: codex-router-responses
+    provider_profile: codex-router-responses
     model_id: gpt-5.5
     route_status: healthy
     lane_verdicts:
@@ -16,19 +16,19 @@ verdicts:
     evidence: current local cleanup evidence
     notes: Default Codex Responses route; requires CODEX_BASE_URL and CODEX_API_KEY.
   - agent_engine: codex-cli
-    provider_route: mify
-    provider_profile: mify
+    provider_route: mimo-mify-responses
+    provider_profile: mimo-mify-responses
     model_id: xiaomi/mimo-v2.5
     route_status: degraded
     lane_verdicts:
       structured_labels: degraded
       camera_grounded_labels: degraded
       camera_raw_fpv: blocked
-    evidence: current local Codex/mify probes
+    evidence: current local Codex/mimo-mify-responses probes
     notes: MCP calls work, but current probes can early-stop after one live-agent turn.
   - agent_engine: codex-cli
-    provider_route: minimax
-    provider_profile: minimax
+    provider_route: minimax-responses
+    provider_profile: minimax-responses
     model_id: MiniMax-M3
     route_status: blocked
     lane_verdicts:
@@ -38,8 +38,8 @@ verdicts:
     evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
     notes: MiniMax Responses auth/transport connects, but Codex's MCP router rejects MiniMax-emitted tool names such as mcp__cleanup__metric_map and cleanup__ping_tool as unsupported calls.
   - agent_engine: codex-cli
-    provider_route: minimax
-    provider_profile: minimax
+    provider_route: minimax-responses
+    provider_profile: minimax-responses
     model_id: MiniMax-M2.7-highspeed
     route_status: blocked
     lane_verdicts:
@@ -49,8 +49,8 @@ verdicts:
     evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
     notes: Same MCP tool-name routing failure as MiniMax-M3; keep only as an explicit re-review route until Codex or MiniMax changes the Responses MCP tool-call shape.
   - agent_engine: openai-agents-sdk
-    provider_route: codex-env
-    provider_profile: codex-env
+    provider_route: codex-router-responses
+    provider_profile: codex-router-responses
     model_id: gpt-5.5
     route_status: experimental
     lane_verdicts:
@@ -60,8 +60,8 @@ verdicts:
     evidence: experimental SDK route
     notes: SDK route remains non-default.
   - agent_engine: openai-agents-sdk
-    provider_route: mimo-openai-chat
-    provider_profile: mimo-openai-chat
+    provider_route: mimo-tp-openai-chat
+    provider_profile: mimo-tp-openai-chat
     model_id: mimo-v2.5
     route_status: healthy
     lane_verdicts:
@@ -71,8 +71,8 @@ verdicts:
     evidence: local non-raw-FPV Agent SDK cleanup evidence
     notes: Chat transport is suitable for structured lanes; raw FPV is blocked by route image transport.
   - agent_engine: openai-agents-sdk
-    provider_route: mimo-inside
-    provider_profile: mimo-inside
+    provider_route: mimo-inside-openai-chat
+    provider_profile: mimo-inside-openai-chat
     model_id: mimo-1000
     route_status: provisional
     lane_verdicts:
@@ -93,8 +93,8 @@ verdicts:
     evidence: 2026-06-16 Kimi OpenAI Chat thinking probes; cleanup verdict pending
     notes: Default model is kimi-k2.7-code. Kimi K2.7 Code requires Thinking On for the new code-model behavior. OpenAI Agents SDK uses model_thinking_mode=default|enabled|disabled and maps Chat routes to thinking={type: enabled, keep: all} or thinking={type: disabled}; disabled is diagnostic/A-B only because it disables reasoning_content on probed Chat routes.
   - agent_engine: openai-agents-sdk
-    provider_route: minimax
-    provider_profile: minimax
+    provider_route: minimax-responses
+    provider_profile: minimax-responses
     model_id: MiniMax-M3
     route_status: healthy
     lane_verdicts:
@@ -104,8 +104,8 @@ verdicts:
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
     notes: Default MiniMax model. M3 is multimodal and image-capable, but raw FPV remains blocked until runtime image transport is verified for this route.
   - agent_engine: openai-agents-sdk
-    provider_route: minimax
-    provider_profile: minimax
+    provider_route: minimax-responses
+    provider_profile: minimax-responses
     model_id: MiniMax-M2.7-highspeed
     route_status: healthy
     lane_verdicts:
@@ -115,8 +115,8 @@ verdicts:
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
     notes: Explicit non-default text-only variant. The single paired cleanup run did not show a speed advantage over MiniMax-M3.
   - agent_engine: claude-code
-    provider_route: mimo-anthropic
-    provider_profile: mimo-anthropic
+    provider_route: mimo-tp-anthropic
+    provider_profile: mimo-tp-anthropic
     model_id: mimo-v2.5
     route_status: healthy
     lane_verdicts:
@@ -135,10 +135,10 @@ verdicts:
       camera_grounded_labels: healthy
       camera_raw_fpv: healthy
     evidence: current Claude Code household route evidence
-    notes: Kimi can be selected explicitly with ROBOCLAWS_CLAUDE_PROVIDER.
+    notes: Kimi can be selected explicitly with ROBOCLAWS_PROVIDER_PROFILE.
   - agent_engine: claude-code
-    provider_route: mify-anthropic
-    provider_profile: mify-anthropic
+    provider_route: mimo-mify-anthropic
+    provider_profile: mimo-mify-anthropic
     model_id: xiaomi/mimo-v2.5
     route_status: experimental
     lane_verdicts:
@@ -146,4 +146,4 @@ verdicts:
       camera_grounded_labels: experimental
       camera_raw_fpv: experimental
     evidence: gateway route wired; cleanup verdict pending
-    notes: Uses XM_LLM_API_KEY through the Anthropic-compatible mify gateway.
+    notes: Uses XM_LLM_API_KEY through the Anthropic-compatible mimo-mify-responses gateway.

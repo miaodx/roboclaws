@@ -17,28 +17,28 @@ MIMO_TP_KEY=        # MiMo
 NV_API_KEY=          # NVIDIA NIM, optional
 
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1  # Internal multi-model aggregator
-XM_LLM_ANTHROPIC_BASE_URL=      # Optional Claude mify route override
-XM_LLM_API_KEY=      # Codex mify key only with explicit ROBOCLAWS_CODEX_PROVIDER=mify
+XM_LLM_ANTHROPIC_BASE_URL=      # Optional Claude mimo-mify-responses route override
+XM_LLM_API_KEY=      # Codex mimo-mify-responses key only with explicit ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses
 
-CODEX_BASE_URL=      # Default Codex codex-env Responses-compatible endpoint
-CODEX_API_KEY=       # Default Codex codex-env endpoint key
+CODEX_BASE_URL=      # Default Codex codex-router-responses Responses-compatible endpoint
+CODEX_API_KEY=       # Default Codex codex-router-responses endpoint key
 ```
 
 The launch recipes infer the repo-local runtime route from explicit provider
-settings. Codex defaults to `codex-env` and requires `CODEX_BASE_URL` plus
-`CODEX_API_KEY` (`gpt-5.5`, Responses API). It does not fall back to mify when
-`XM_LLM_API_KEY` is present. To use mify, set `ROBOCLAWS_CODEX_PROVIDER=mify`
+settings. Codex defaults to `codex-router-responses` and requires `CODEX_BASE_URL` plus
+`CODEX_API_KEY` (`gpt-5.5`, Responses API). It does not fall back to mimo-mify-responses when
+`XM_LLM_API_KEY` is present. To use mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
 explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
 API, and web search disabled.
-Claude Code prefers a MiMo key when available, then Kimi, then the mify
-Anthropic route from `XM_LLM_API_KEY` (`mify-anthropic`,
+Claude Code prefers a MiMo key when available, then Kimi, then the mimo-mify-responses
+Anthropic route from `XM_LLM_API_KEY` (`mimo-mify-anthropic`,
 `xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
 network.
 
 Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
 workflows. On the work network, OpenClaw and system-provider Claude Code are
-blocked; the repo-local Codex `codex-env` route (`CODEX_BASE_URL` plus
-`CODEX_API_KEY`), explicit Codex mify override, and Claude `mify-anthropic` remain
+blocked; the repo-local Codex `codex-router-responses` route (`CODEX_BASE_URL` plus
+`CODEX_API_KEY`), explicit Codex mimo-mify-responses override, and Claude `mimo-mify-anthropic` remain
 allowed. Work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 

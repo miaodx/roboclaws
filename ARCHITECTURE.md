@@ -66,8 +66,8 @@ Harness recipes
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  or `direct-runner`) from the model/key route (`provider_profile=codex-env`,
-  `mify`, `mimo-anthropic`, and related profiles).
+  or `direct-runner`) from the model/key route (`provider_profile=codex-router-responses`,
+  `mimo-mify-responses`, `mimo-tp-anthropic`, and related profiles).
   `openclaw-gateway` is registered only as a validation-required maintainer
   route until off-work-network Gateway proof is green. The active stabilization
   focus is coding-agent routes and the OpenAI Agents SDK route; OpenClaw,
@@ -170,7 +170,7 @@ Examples:
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels scenario_setup=relocate-cleanup-related-objects seed=7
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
 ```

@@ -20,8 +20,8 @@
   ],
   "provider_profiles": [
     "not_applicable",
-    "codex-env",
-    "minimax"
+    "codex-router-responses",
+    "minimax-responses"
   ],
   "trial_count": 1,
   "required_graders": [

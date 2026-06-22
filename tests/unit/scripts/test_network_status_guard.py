@@ -35,8 +35,11 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
     assert "network: work" in result.stdout
     assert "api-router.evad.mioffice.cn" in result.stdout
     assert "OpenClaw and system-provider Claude Code" in result.stdout
-    assert "mify-anthropic" in result.stdout
-    assert "Codex defaults to codex-env; mify/minimax require explicit" in result.stdout
+    assert "mimo-mify-anthropic" in result.stdout
+    assert (
+        "Codex defaults to codex-router-responses; "
+        "mimo-mify-responses/minimax-responses require explicit"
+    ) in result.stdout
     assert "system-provider Codex just recipes are blocked" not in result.stdout
 
 
@@ -68,8 +71,7 @@ def test_assert_off_work_allows_when_probe_is_unreachable(tmp_path: Path) -> Non
 
 def test_claude_provider_guard_blocks_system_provider_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env.pop("ROBOCLAWS_CLAUDE_PROVIDER", None)
-    env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
+    env.pop("ROBOCLAWS_PROVIDER_PROFILE", None)
     env.pop("KIMI_API_KEY", None)
     env.pop("MIMO_TP_KEY", None)
     env.pop("XM_LLM_API_KEY", None)
@@ -120,7 +122,7 @@ def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_pa
 
 def test_claude_provider_guard_allows_mify_anthropic_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CLAUDE_PROVIDER"] = "mify-anthropic"
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = "mimo-mify-anthropic"
     env["XM_LLM_API_KEY"] = "fake-xm-key"
 
     result = subprocess.run(
@@ -140,13 +142,14 @@ def test_claude_provider_guard_allows_mify_anthropic_on_work_network(tmp_path: P
         text=True,
     )
 
-    assert "repo-local Claude provider (mify-anthropic)" in result.stderr
+    assert "repo-local Claude provider (mimo-mify-anthropic)" in result.stderr
 
 
-def test_codex_provider_guard_defaults_to_codex_env_on_work_network(tmp_path: Path) -> None:
+def test_codex_provider_guard_defaults_to_codex_router_responses_on_work_network(
+    tmp_path: Path,
+) -> None:
     env = _fake_curl(tmp_path, "204")
-    env.pop("ROBOCLAWS_CODEX_PROVIDER", None)
-    env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
+    env.pop("ROBOCLAWS_PROVIDER_PROFILE", None)
     env.pop("CODEX_BASE_URL", None)
     env.pop("CODEX_API_KEY", None)
     env.pop("XM_LLM_BASE_URL", None)
@@ -169,12 +172,12 @@ def test_codex_provider_guard_defaults_to_codex_env_on_work_network(tmp_path: Pa
         text=True,
     )
 
-    assert "repo-local Codex provider (codex-env)" in result.stderr
+    assert "repo-local Codex provider (codex-router-responses)" in result.stderr
 
 
 def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "mify"
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = "mimo-mify-responses"
     env["XM_LLM_API_KEY"] = "fake-xm-key"
 
     result = subprocess.run(
@@ -194,12 +197,12 @@ def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path
         text=True,
     )
 
-    assert "repo-local Codex provider (mify)" in result.stderr
+    assert "repo-local Codex provider (mimo-mify-responses)" in result.stderr
 
 
 def test_codex_provider_guard_allows_minimax_profile_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "minimax"
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = "minimax-responses"
     env["MM_API_KEY"] = "fake-mm-key"
 
     result = subprocess.run(
@@ -219,14 +222,14 @@ def test_codex_provider_guard_allows_minimax_profile_on_work_network(tmp_path: P
         text=True,
     )
 
-    assert "repo-local Codex provider (minimax)" in result.stderr
+    assert "repo-local Codex provider (minimax-responses)" in result.stderr
 
 
 def test_openai_agents_provider_guard_allows_minimax_profile_on_work_network(
     tmp_path: Path,
 ) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "minimax"
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = "minimax-responses"
     env["MM_API_KEY"] = "fake-mm-key"
 
     result = subprocess.run(
@@ -246,12 +249,12 @@ def test_openai_agents_provider_guard_allows_minimax_profile_on_work_network(
         text=True,
     )
 
-    assert "repo-local OpenAI Agents SDK provider (minimax)" in result.stderr
+    assert "repo-local OpenAI Agents SDK provider (minimax-responses)" in result.stderr
 
 
 def test_openai_agents_provider_guard_allows_chat_profile_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "mimo-openai-chat"
+    env["ROBOCLAWS_PROVIDER_PROFILE"] = "mimo-tp-openai-chat"
     env["MIMO_TP_KEY"] = "fake-mimo-key"
 
     result = subprocess.run(
@@ -271,7 +274,7 @@ def test_openai_agents_provider_guard_allows_chat_profile_on_work_network(tmp_pa
         text=True,
     )
 
-    assert "repo-local OpenAI Agents SDK provider (mimo-openai-chat)" in result.stderr
+    assert "repo-local OpenAI Agents SDK provider (mimo-tp-openai-chat)" in result.stderr
 
 
 def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_path: Path) -> None:
@@ -298,7 +301,7 @@ def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_pat
         text=True,
     )
 
-    assert "repo-local Codex provider (codex-env)" in result.stderr
+    assert "repo-local Codex provider (codex-router-responses)" in result.stderr
 
 
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:

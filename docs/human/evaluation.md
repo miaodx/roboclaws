@@ -71,7 +71,7 @@ when needed, and waits for detached Codex CLI cleanup artifacts before grading:
 
 ```bash
 just agent::eval suite=cleanup_capability budget=smoke \
-  agent_engine=openai-agents-sdk provider_profile=codex-env \
+  agent_engine=openai-agents-sdk provider_profile=codex-router-responses \
   live_execution=run live_timeout_s=120
 ```
 

@@ -60,6 +60,43 @@ CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"
 CODEX_TURN_IDLE_TIMEOUT_ENV = "ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S"
 CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS = 124
 DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S = 300.0
+OPERATOR_HANDOFF_REASON = "operator_handoff_requested"
+OPERATOR_HANDOFF_MARKERS = (
+    "manual adjust",
+    "manual reposition",
+    "manual control",
+    "operator handoff",
+    "human handoff",
+    "wait for operator",
+    "wait for human",
+    "手动调整",
+    "手动调",
+    "手动控制",
+    "手动移动",
+    "人工调整",
+    "人工接管",
+    "人工介入",
+)
+OPERATOR_HANDOFF_WAIT_MARKERS = (
+    "do not call done",
+    "don't call done",
+    "not call done",
+    "without done",
+    "do not exit",
+    "don't exit",
+    "wait",
+    "stop here",
+    "不调用 done",
+    "不调用done",
+    "不要调用 done",
+    "不要调用done",
+    "不 call done",
+    "不退出",
+    "不要退出",
+    "不要推出",
+    "等待",
+    "我现在停止",
+)
 CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
     "Live MCP route constraint: do not call update_plan, do not create todo/checklist "
     "tool items, and do not use any planning tool. In this Docker Codex live MCP "
@@ -140,6 +177,7 @@ class LiveCodexCleanupRunner:
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
         self.run_lease = HouseholdLiveRunLease()
+        self.operator_handoff_active = False
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
@@ -156,6 +194,11 @@ class LiveCodexCleanupRunner:
             self._start_server()
             self._wait_for_mcp_ready()
             self._run_codex()
+            if self.operator_handoff_active:
+                status = self._finish_operator_handoff()
+                self._cleanup_provider_timing_proxy()
+                self._release_visual_slot()
+                return status
             self._wait_for_server_finish()
             self._check_result()
         except KeyboardInterrupt:
@@ -350,6 +393,23 @@ class LiveCodexCleanupRunner:
             and self.server_proc.poll() is None
             and not (self.run_dir / "run_result.json").is_file()
         ):
+            handoff = _explicit_operator_handoff_requested(
+                self.args,
+                self.run_dir / "codex-last-message.md",
+            )
+            if handoff:
+                self.operator_handoff_active = True
+                self._write_status(
+                    "paused",
+                    reason=OPERATOR_HANDOFF_REASON,
+                    resume_available=True,
+                    detail=handoff,
+                )
+                print(
+                    "==> Codex requested an operator handoff; keeping MCP server alive "
+                    "for manual control"
+                )
+                return
             raise RuntimeError("Codex exec ended without done after one live-agent turn")
 
     def _configure_provider_timing_proxy(self, env: dict[str, str]) -> None:
@@ -414,6 +474,37 @@ class LiveCodexCleanupRunner:
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
+
+    def _finish_operator_handoff(self) -> int:
+        assert self.server_proc is not None
+        print("==> waiting for operator handoff to finish")
+        self._mark_timing("operator_handoff_wait_start")
+        status = self.server_proc.wait()
+        self._mark_timing("server_finished")
+        self.server_proc = None
+
+        terminal_phase = _wait_for_terminal_phase_from_status(self.status_path)
+        if (self.run_dir / "run_result.json").is_file() and status == 0:
+            self._check_result()
+            self._write_live_timing("finished", 0)
+            self._write_status("finished", 0)
+            return 0
+        if terminal_phase in {
+            "stopped_by_operator",
+            "human_takeover_stop",
+            "emergency_stopped",
+        }:
+            self._write_live_timing(terminal_phase, 130, reason=terminal_phase)
+            return 0
+        if status != 0:
+            reason = f"cleanup MCP server exited with status {status} during operator handoff"
+            self._write_status("failed", 1, reason=reason)
+            self._write_live_timing("failed", 1, reason=reason)
+            return 1
+        reason = "operator handoff server exited without run_result.json"
+        self._write_status("failed", 1, reason=reason)
+        self._write_live_timing("failed", 1, reason=reason)
+        return 1
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
@@ -858,6 +949,64 @@ def _codex_live_prompt(prompt: str) -> str:
         f"{CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION}\n\n"
         f"{prompt}"
     )
+
+
+def _explicit_operator_handoff_requested(args: argparse.Namespace, last_message_path: Path) -> str:
+    parts = [
+        str(getattr(args, "task", "") or ""),
+        str(getattr(args, "kickoff_prompt", "") or ""),
+        _read_text_if_exists(last_message_path),
+    ]
+    text = _normalized_handoff_text("\n".join(part for part in parts if part))
+    if not text:
+        return ""
+    has_manual_marker = any(marker in text for marker in OPERATOR_HANDOFF_MARKERS)
+    has_wait_marker = any(marker in text for marker in OPERATOR_HANDOFF_WAIT_MARKERS)
+    if not (has_manual_marker and has_wait_marker):
+        return ""
+    return (
+        "Codex ended without done after an explicit operator handoff request. "
+        "The MCP server remains alive for operator-console manual control."
+    )
+
+
+def _normalized_handoff_text(text: str) -> str:
+    lowered = text.lower()
+    for char in "`'\"“”‘’[](){}<>":
+        lowered = lowered.replace(char, " ")
+    return " ".join(lowered.split())
+
+
+def _read_text_if_exists(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _wait_for_terminal_phase_from_status(status_path: Path, *, timeout_s: float = 2.0) -> str:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        phase = _phase_from_status(status_path)
+        if phase in {
+            "finished",
+            "failed",
+            "stopped_by_operator",
+            "human_takeover_stop",
+            "emergency_stopped",
+        }:
+            return phase
+        if time.monotonic() >= deadline:
+            return phase
+        time.sleep(0.05)
+
+
+def _phase_from_status(status_path: Path) -> str:
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    return str(payload.get("phase") or "").strip().lower() if isinstance(payload, dict) else ""
 
 
 def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:

@@ -716,6 +716,7 @@ pre,
 }
 
 .image-preview-button {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
@@ -733,6 +734,42 @@ pre,
 
 .image-preview-button img {
   transition: transform 120ms ease, filter 120ms ease;
+}
+
+.robot-pose-overlay {
+  position: absolute;
+  left: var(--robot-x);
+  top: var(--robot-y);
+  width: 26px;
+  height: 26px;
+  transform: translate(-50%, -50%) rotate(var(--robot-yaw));
+  pointer-events: none;
+}
+
+.robot-pose-overlay::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 22px solid #0b1f4d;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 1px 2px rgb(255 255 255 / 0.9));
+}
+
+.robot-pose-overlay::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  transform: translate(-50%, -20%);
 }
 
 .image-preview-button:hover img,

@@ -12,13 +12,13 @@ from roboclaws.agents.thinking_policy import (
 def test_default_thinking_policy_maps_by_wire_api() -> None:
     responses = apply_model_thinking_policy(
         {"store": False},
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         wire_api="responses",
         mode="default",
     )
     chat = apply_model_thinking_policy(
         {"include_usage": True},
-        provider_profile="mimo-openai-chat",
+        provider_profile="mimo-tp-openai-chat",
         wire_api="chat-completions",
         mode="default",
     )
@@ -29,7 +29,7 @@ def test_default_thinking_policy_maps_by_wire_api() -> None:
 
 def test_disabled_thinking_policy_maps_by_wire_api() -> None:
     assert thinking_request_body_for_wire(
-        provider_profile="minimax",
+        provider_profile="minimax-responses",
         wire_api="responses",
         mode="disabled",
     ) == {"reasoning": {"effort": "none"}}
@@ -43,7 +43,7 @@ def test_disabled_thinking_policy_maps_by_wire_api() -> None:
 def test_thinking_policy_rejects_unknown_wire_api() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         thinking_request_body_for_wire(
-            provider_profile="mimo-anthropic",
+            provider_profile="mimo-tp-anthropic",
             wire_api="anthropic",
             mode="enabled",
         )

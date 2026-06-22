@@ -123,8 +123,9 @@ def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[st
                 {
                     "category": "model_or_provider_unavailable",
                     "detail": (
-                        "codex-env requires CODEX_BASE_URL and CODEX_API_KEY; "
-                        "mify requires XM_LLM_API_KEY; minimax requires MM_API_KEY"
+                        "codex-router-responses requires CODEX_BASE_URL and CODEX_API_KEY; "
+                        "mimo-mify-responses requires XM_LLM_API_KEY; "
+                        "minimax-responses requires MM_API_KEY"
                     ),
                 }
             )
@@ -432,10 +433,10 @@ def _command_value(row: dict[str, Any], key: str) -> str:
 
 
 def _has_codex_provider(axes: dict[str, Any]) -> bool:
-    profile = str(axes.get("provider_profile") or "codex-env")
-    if profile == "mify":
+    profile = str(axes.get("provider_profile") or "codex-router-responses")
+    if profile == "mimo-mify-responses":
         return bool(os.environ.get("XM_LLM_API_KEY"))
-    if profile == "minimax":
+    if profile == "minimax-responses":
         return bool(os.environ.get("MM_API_KEY"))
     return bool(os.environ.get("CODEX_BASE_URL") and os.environ.get("CODEX_API_KEY"))
 

@@ -15,9 +15,8 @@ of task intent and evaluation policy.
 _Avoid_: task intent, cleanup scenario, Agent View context
 
 **Relocation Policy**:
-A Scenario Setup mode that moves eligible loose or cleanup-related objects before
-the run starts. The Cleanup Agent is not told the policy, object IDs, or
-before/after locations.
+A Scenario Setup mode that moves cleanup-related objects before the run starts.
+The Cleanup Agent is not told the policy, object IDs, or before/after locations.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
 **Relocation Count**:

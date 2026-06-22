@@ -10,6 +10,16 @@ from typing import Any
 MODEL_CAP_TEXT = "text"
 MODEL_CAP_IMAGE_INPUT = "image_input"
 
+PROVIDER_PROFILE_CODEX_RESPONSES = "codex-router-responses"
+PROVIDER_PROFILE_MIMO_MIFY_RESPONSES = "mimo-mify-responses"
+PROVIDER_PROFILE_MINIMAX_RESPONSES = "minimax-responses"
+PROVIDER_PROFILE_MIMO_OPENAI_CHAT = "mimo-tp-openai-chat"
+PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT = "mimo-inside-openai-chat"
+PROVIDER_PROFILE_KIMI_OPENAI_CHAT = "kimi-openai-chat"
+PROVIDER_PROFILE_KIMI_ANTHROPIC = "kimi-anthropic"
+PROVIDER_PROFILE_MIMO_ANTHROPIC = "mimo-tp-anthropic"
+PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC = "mimo-mify-anthropic"
+
 ROUTE_CAP_SUPPORTED = "supported"
 ROUTE_CAP_UNSUPPORTED = "unsupported"
 ROUTE_CAP_UNKNOWN = "unknown"
@@ -98,7 +108,7 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="gpt",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
         default_use=True,
-        default_use_note="Best current codex-env model and default Codex route model.",
+        default_use_note="Best current Codex router model and default Codex route model.",
     ),
     ModelSpec(
         model_id="gpt-4o",
@@ -255,9 +265,9 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
 
 _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
-        route_id="codex-env",
-        public_profile="codex-env",
-        label="Codex Responses",
+        route_id=PROVIDER_PROFILE_CODEX_RESPONSES,
+        public_profile=PROVIDER_PROFILE_CODEX_RESPONSES,
+        label="Codex Router Responses",
         supported_engines=("codex-cli", "openai-agents-sdk"),
         default_model_id="gpt-5.5",
         required_env_keys=("CODEX_BASE_URL", "CODEX_API_KEY"),
@@ -267,7 +277,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_api=WIRE_RESPONSES,
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
-        default_use_note="Default Codex route; uses gpt-5.5.",
+        default_use_note="Default Codex router route; uses gpt-5.5.",
         per_engine_status={
             "codex-cli": ROUTE_HEALTHY,
             "openai-agents-sdk": ROUTE_EXPERIMENTAL,
@@ -278,8 +288,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         },
     ),
     ProviderRouteSpec(
-        route_id="mify",
-        public_profile="mify",
+        route_id=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
+        public_profile=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
         label="MiMo mify Responses Gateway",
         supported_engines=("codex-cli", "openai-agents-sdk"),
         default_model_id="xiaomi/mimo-v2.5",
@@ -291,9 +301,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_GATEWAY,
         default_use=True,
         default_use_note=(
-            "Default-enabled mify route; uses xiaomi/mimo-v2.5 unless explicitly overridden."
+            "Default-enabled MiMo mify route; uses xiaomi/mimo-v2.5 unless explicitly overridden."
         ),
-        aliases=("codex-mify",),
         per_engine_status={
             "codex-cli": ROUTE_DEGRADED,
             "openai-agents-sdk": ROUTE_PROVISIONAL,
@@ -308,8 +317,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         ),
     ),
     ProviderRouteSpec(
-        route_id="minimax",
-        public_profile="minimax",
+        route_id=PROVIDER_PROFILE_MINIMAX_RESPONSES,
+        public_profile=PROVIDER_PROFILE_MINIMAX_RESPONSES,
         label="MiniMax Responses",
         supported_engines=("codex-cli", "openai-agents-sdk"),
         default_model_id="MiniMax-M3",
@@ -321,7 +330,6 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note="Default-enabled MiniMax route; uses MiniMax-M3, not M2.7-highspeed.",
-        aliases=("mm",),
         per_engine_status={
             "codex-cli": ROUTE_BLOCKED,
             "openai-agents-sdk": ROUTE_HEALTHY,
@@ -337,9 +345,9 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         ),
     ),
     ProviderRouteSpec(
-        route_id="mimo-openai-chat",
-        public_profile="mimo-openai-chat",
-        label="MiMo OpenAI Chat",
+        route_id=PROVIDER_PROFILE_MIMO_OPENAI_CHAT,
+        public_profile=PROVIDER_PROFILE_MIMO_OPENAI_CHAT,
+        label="MiMo token plan OpenAI Chat",
         supported_engines=("openai-agents-sdk",),
         default_model_id="mimo-v2.5",
         required_env_keys=("MIMO_TP_KEY",),
@@ -350,7 +358,6 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note="Default-enabled MiMo token-plan chat route; uses mimo-v2.5.",
-        aliases=("mimo-chat",),
         per_engine_status={"openai-agents-sdk": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
@@ -358,8 +365,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         },
     ),
     ProviderRouteSpec(
-        route_id="mimo-inside",
-        public_profile="mimo-inside",
+        route_id=PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT,
+        public_profile=PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT,
         label="MiMo inside OpenAI Chat",
         supported_engines=("openai-agents-sdk",),
         default_model_id="mimo-1000",
@@ -383,7 +390,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ),
     ProviderRouteSpec(
         route_id="kimi-openai-chat",
-        public_profile="kimi-openai-chat",
+        public_profile=PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
         label="Kimi OpenAI Chat",
         supported_engines=("openai-agents-sdk",),
         default_model_id="kimi-k2.7-code",
@@ -399,7 +406,6 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
             "for the new code-model behavior. Default OpenAI Agents SDK payloads "
             "enable thinking through the provider-aware model_thinking_mode policy."
         ),
-        aliases=("kimi-chat",),
         per_engine_status={"openai-agents-sdk": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
@@ -408,7 +414,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ),
     ProviderRouteSpec(
         route_id="kimi-anthropic",
-        public_profile="kimi-anthropic",
+        public_profile=PROVIDER_PROFILE_KIMI_ANTHROPIC,
         label="Kimi Anthropic",
         supported_engines=("claude-code",),
         default_model_id="kimi-k2.6",
@@ -425,9 +431,9 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         },
     ),
     ProviderRouteSpec(
-        route_id="mimo-anthropic",
-        public_profile="mimo-anthropic",
-        label="MiMo Anthropic",
+        route_id=PROVIDER_PROFILE_MIMO_ANTHROPIC,
+        public_profile=PROVIDER_PROFILE_MIMO_ANTHROPIC,
+        label="MiMo token plan Anthropic",
         supported_engines=("claude-code",),
         default_model_id="mimo-v2.5",
         required_env_keys=("MIMO_TP_KEY",),
@@ -443,8 +449,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         },
     ),
     ProviderRouteSpec(
-        route_id="mify-anthropic",
-        public_profile="mify-anthropic",
+        route_id=PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC,
+        public_profile=PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC,
         label="MiMo mify Anthropic Gateway",
         supported_engines=("claude-code",),
         default_model_id="xiaomi/mimo-v2.5",
@@ -492,7 +498,6 @@ _MODEL_BY_ID = {spec.model_id: spec for spec in _MODEL_SPECS}
 _MODEL_BY_ALIAS = {
     _normalize_model_name(alias): spec for spec in _MODEL_SPECS for alias in spec.aliases
 }
-_ROUTE_BY_ID = {spec.route_id: spec for spec in _PROVIDER_ROUTE_SPECS}
 _ROUTE_BY_ALIAS = {
     alias: spec for spec in _PROVIDER_ROUTE_SPECS for alias in (spec.route_id, *spec.aliases)
 }
@@ -564,7 +569,7 @@ def normalize_provider_route(route_id: str | None, *, default: str = "") -> str:
     raw = str(route_id or default).strip()
     if not raw:
         return ""
-    return provider_route_spec(raw).route_id
+    return provider_route_spec(raw).public_profile
 
 
 def provider_routes_for_engine(agent_engine: str) -> tuple[ProviderRouteSpec, ...]:
@@ -577,19 +582,17 @@ def supported_provider_profiles(agent_engine: str) -> tuple[str, ...]:
 
 def default_provider_profile(agent_engine: str) -> str | None:
     defaults = {
-        "codex-cli": "codex-env",
-        "openai-agents-sdk": "codex-env",
-        "claude-code": "mimo-anthropic",
+        "codex-cli": PROVIDER_PROFILE_CODEX_RESPONSES,
+        "openai-agents-sdk": PROVIDER_PROFILE_CODEX_RESPONSES,
+        "claude-code": PROVIDER_PROFILE_MIMO_ANTHROPIC,
         "openclaw-gateway": "kimi",
     }
     return defaults.get(agent_engine)
 
 
 def provider_env_key(agent_engine: str) -> str | None:
-    if agent_engine in {"codex-cli", "openai-agents-sdk"}:
-        return "ROBOCLAWS_CODEX_PROVIDER"
-    if agent_engine == "claude-code":
-        return "ROBOCLAWS_CLAUDE_PROVIDER"
+    if agent_engine in {"codex-cli", "openai-agents-sdk", "claude-code"}:
+        return "ROBOCLAWS_PROVIDER_PROFILE"
     return None
 
 
@@ -623,7 +626,7 @@ def route_capabilities_for_engine(route: ProviderRouteSpec, agent_engine: str) -
 
 def route_base_url(route: ProviderRouteSpec, env: dict[str, str] | None = None) -> str:
     env_map = os.environ if env is None else env
-    if route.route_id == "mify-anthropic":
+    if route.route_id == PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC:
         return _mify_anthropic_base_url(env_map)
     if route.base_url_env and env_map.get(route.base_url_env):
         return str(env_map[route.base_url_env])
@@ -658,14 +661,17 @@ def provider_readiness(
     missing_env = [key for key in required_env if not env_map.get(key)]
     if missing_env:
         required = " and ".join(required_env)
-        message = f"{_engine_label(agent_engine)} provider {route.route_id} requires {required}."
+        message = (
+            f"{_engine_label(agent_engine)} provider "
+            f"{route.public_profile} requires {required}."
+        )
     else:
         message = ""
     model_spec = maybe_resolve_model(selected_model)
     return {
         "driver": _driver_for_agent_engine(agent_engine),
         "agent_engine": agent_engine,
-        "provider": route.route_id,
+        "provider": route.public_profile,
         "provider_profile": route.public_profile,
         "label": route.label,
         "model": selected_model,
@@ -753,6 +759,7 @@ def _main(argv: list[str] | None = None) -> int:
             "default-model",
             "json",
             "key-env",
+            "public-profile",
             "supports-engine",
             "wire-api",
         ],
@@ -786,6 +793,8 @@ def _main(argv: list[str] | None = None) -> int:
         print(route_base_url(route))
     elif args.command == "key-env":
         print(route.api_key_env or "")
+    elif args.command == "public-profile":
+        print(route.public_profile)
     elif args.command == "wire-api":
         print(route.wire_api)
     elif args.command == "supports-engine":

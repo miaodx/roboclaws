@@ -21,8 +21,8 @@
   ],
   "provider_profiles": [
     "not_applicable",
-    "codex-env",
-    "mimo-anthropic"
+    "codex-router-responses",
+    "mimo-tp-anthropic"
   ],
   "trial_count": 3,
   "required_graders": [

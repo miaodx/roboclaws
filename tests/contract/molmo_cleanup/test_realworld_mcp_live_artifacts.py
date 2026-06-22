@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
+from roboclaws.household.scenario import build_cleanup_scenario
+
+
+def test_realworld_mcp_writes_live_public_map_artifacts_before_done(tmp_path: Path) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        waypoint_id = str(metric_map["inspection_waypoints"][0]["waypoint_id"])
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
+        server.call_tool("observe")
+    finally:
+        server.close()
+
+    agent_view_path = tmp_path / "agent_view.json"
+    runtime_map_path = tmp_path / "runtime_metric_map.json"
+    semantic_map_path = tmp_path / "semantic_map.png"
+    overlay_path = tmp_path / "map_overlay.json"
+
+    assert agent_view_path.is_file()
+    assert runtime_map_path.is_file()
+    assert semantic_map_path.is_file()
+    assert semantic_map_path.stat().st_size > 0
+    assert overlay_path.is_file()
+    assert not (tmp_path / "run_result.json").exists()
+
+    agent_view = json.loads(agent_view_path.read_text(encoding="utf-8"))
+    runtime_map = json.loads(runtime_map_path.read_text(encoding="utf-8"))
+    overlay = json.loads(overlay_path.read_text(encoding="utf-8"))
+
+    assert waypoint_id in agent_view["observed_waypoint_ids"]
+    assert runtime_map["schema"] == "runtime_metric_map_v1"
+    assert overlay["semantic_map"]["runtime_metric_map_schema"] == "runtime_metric_map_v1"

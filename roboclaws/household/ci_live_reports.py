@@ -34,7 +34,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
     MolmoLiveModelEntry(
         name="mimo-v2.5",
         label="MiMo v2.5",
-        provider_profile="mimo-anthropic",
+        provider_profile="mimo-tp-anthropic",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
         profile="world-public-labels",
@@ -50,7 +50,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
     MolmoLiveModelEntry(
         name="mimo-v2.5-camera-raw-fpv",
         label="MiMo v2.5 RAW_FPV",
-        provider_profile="mimo-anthropic",
+        provider_profile="mimo-tp-anthropic",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
         profile="camera-raw-fpv",

@@ -34,9 +34,10 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
-DEFAULT_MAP_BUNDLE = Path("assets/maps/agibot-robot-map-12")
+DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
+DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
+DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
 
@@ -58,7 +59,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--map-bundle", type=Path, default=DEFAULT_MAP_BUNDLE)
     parser.add_argument("--semantics", type=Path)
     parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
-    parser.add_argument("--output-review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument(
+        "--include-gaussian-scene",
+        action="store_true",
+        help="Include scene/Gaussian evidence in the packet for review-only comparison.",
+    )
+    parser.add_argument("--output-review-manifest", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--serve",
@@ -76,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle=args.map_bundle,
         semantics_path=args.semantics,
         scene_root=args.scene_root,
+        include_gaussian_scene=args.include_gaussian_scene,
         review_manifest_path=args.output_review_manifest,
         output_dir=args.output_dir,
     )
@@ -99,13 +106,15 @@ def write_label_tool_artifacts(
     map_bundle: Path,
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
-    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
+    include_gaussian_scene: bool = False,
+    review_manifest_path: Path | None = None,
     output_dir: Path,
 ) -> dict[str, Any]:
     packet = build_label_tool_packet(
         map_bundle=map_bundle,
         semantics_path=semantics_path,
         scene_root=scene_root,
+        include_gaussian_scene=include_gaussian_scene,
         review_manifest_path=review_manifest_path,
     )
     image_url = image_data_url(Path(packet["source_image"]))
@@ -147,11 +156,13 @@ def build_label_tool_packet(
     map_bundle: Path,
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
-    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
+    include_gaussian_scene: bool = False,
+    review_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
-    semantics_path = semantics_path or map_bundle / "semantics.json"
     map_yaml_path = map_bundle / "map.yaml"
+    if not map_yaml_path.is_file():
+        map_yaml_path = map_bundle / "nav2.yaml"
     map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
     image_path = map_bundle / str(map_yaml.get("image") or "map.pgm")
     with Image.open(image_path) as image:
@@ -164,7 +175,11 @@ def build_label_tool_packet(
         origin_y=float(_origin(map_yaml)[1]),
         origin_yaw_rad=float(_origin(map_yaml)[2]),
     )
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics_path = semantics_path or map_bundle / "semantics.json"
+    semantics = load_semantics_or_empty(
+        semantics_path,
+        source_json_path=map_bundle / "source.json",
+    )
     frame_id = source_map_frame_id(semantics)
     review_manifest = load_review_manifest(review_manifest_path)
     shapes = seed_shapes_from_review_or_semantics(
@@ -179,10 +194,10 @@ def build_label_tool_packet(
         transform=transform,
         frame_id=frame_id,
     )
-    scene_evidence = scene_evidence_from_scene_root(
-        scene_root,
-        map_bundle=map_bundle,
-        fallback_semantics=semantics,
+    navigation_memory_layer = navigation_memory_layer_from_path(
+        DEFAULT_NAVIGATION_MEMORY,
+        transform=transform,
+        frame_id=frame_id,
     )
     packet = {
         "schema": LABEL_TOOL_PACKET_SCHEMA,
@@ -224,7 +239,7 @@ def build_label_tool_packet(
         "valid_geometry_sources": sorted(POLYGON_GEOMETRY_SOURCES),
         "shapes": shapes,
         "semantic_map_layers": semantic_layers,
-        "scene_evidence": scene_evidence,
+        "navigation_memory_layer": navigation_memory_layer,
         "initial_draft_manifest": draft_manifest_from_shapes(
             shapes,
             source_packet={
@@ -237,6 +252,12 @@ def build_label_tool_packet(
             },
         ),
     }
+    if include_gaussian_scene:
+        packet["scene_evidence"] = scene_evidence_from_scene_root(
+            scene_root,
+            map_bundle=map_bundle,
+            fallback_semantics=semantics,
+        )
     return packet
 
 
@@ -247,6 +268,30 @@ def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | 
     if not path.is_file():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_semantics_or_empty(semantics_path: Path, *, source_json_path: Path) -> dict[str, Any]:
+    path = Path(semantics_path)
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    source = {}
+    if source_json_path.is_file():
+        source = json.loads(source_json_path.read_text(encoding="utf-8"))
+    return {
+        "schema": "robot_map12_empty_label_tool_semantics_v1",
+        "environment_id": str(source.get("alias") or "robot_map_12"),
+        "frame_ids": {"map": "map"},
+        "display_frame": None,
+        "rooms": [],
+        "fixtures": [],
+        "inspection_waypoints": [],
+        "driveable_ways": [],
+        "provenance": {
+            "source": "agibot_vendor_map_without_authored_semantics",
+            "contains_private_scoring_truth": False,
+            "contains_runtime_observations": False,
+        },
+    }
 
 
 def seed_shapes_from_review_or_semantics(
@@ -632,6 +677,103 @@ def _source_frame_point(payload: dict[str, Any], *, frame_id: str) -> dict[str, 
         return None
 
 
+def navigation_memory_layer_from_path(
+    navigation_memory_path: Path,
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> dict[str, Any]:
+    path = Path(navigation_memory_path)
+    if not path.is_file():
+        return {
+            "schema": "robot_map12_navigation_memory_layer_v1",
+            "source": str(path),
+            "coordinate_policy": "navigation_memory_pose_and_nav_goal_are_map_frame_priors",
+            "items": [],
+        }
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    items = [
+        item
+        for item in (
+            navigation_memory_layer_item(raw_item, transform=transform, frame_id=frame_id)
+            for raw_item in navigation_memory_items(payload)
+            if isinstance(raw_item, dict)
+        )
+        if item is not None
+    ]
+    return {
+        "schema": "robot_map12_navigation_memory_layer_v1",
+        "source": str(path),
+        "coordinate_policy": "navigation_memory_pose_and_nav_goal_are_map_frame_priors",
+        "items": items,
+    }
+
+
+def navigation_memory_layer_item(
+    item: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> dict[str, Any] | None:
+    item_id = str(item.get("id") or "")
+    pose = _navigation_memory_point(item.get("pose"), transform=transform, frame_id=frame_id)
+    nav_goal = _navigation_memory_point(
+        item.get("nav_goal"),
+        transform=transform,
+        frame_id=frame_id,
+    )
+    if not item_id or (pose is None and nav_goal is None):
+        return None
+    return {
+        "id": item_id,
+        "label": str(item.get("label") or item_id),
+        "kind": str(item.get("kind") or ""),
+        "scene_id": str(item.get("scene_id") or ""),
+        "pose": pose,
+        "nav_goal": nav_goal,
+        "source": str(item.get("source") or ""),
+        "confidence": _optional_float(item.get("confidence")),
+        "coordinate_status": "map_frame_prior",
+    }
+
+
+def navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
+    if isinstance(payload.get("items"), list):
+        return list(payload["items"])
+    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
+    memory = catalog.get("navigation_memory")
+    return list(memory) if isinstance(memory, list) else []
+
+
+def _navigation_memory_point(
+    payload: Any,
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> dict[str, Any] | None:
+    if not isinstance(payload, dict) or "x" not in payload or "y" not in payload:
+        return None
+    try:
+        x = float(payload["x"])
+        y = float(payload["y"])
+    except (TypeError, ValueError):
+        return None
+    return {
+        "frame_id": frame_id,
+        "x": x,
+        "y": y,
+        "yaw": _optional_float(payload.get("yaw")),
+        "pixel_center": world_to_pixel(x, y, transform),
+    }
+
+
+def _optional_float(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def scene_evidence_from_semantics(semantics: dict[str, Any]) -> dict[str, Any]:
     rooms: dict[str, dict[str, Any]] = {}
     for raw_room in semantics.get("rooms") or []:
@@ -802,11 +944,7 @@ def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
             POLYGON_ROLES,
             POLYGON_ROLE_NAVIGATION_AREA,
         ),
-        "geometry_source": _valid_or_default(
-            str(shape.get("geometry_source") or ""),
-            POLYGON_GEOMETRY_SOURCES,
-            GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        ),
+        "geometry_source": GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
         "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
         "review_status": "draft",
         "polygon_usage": {

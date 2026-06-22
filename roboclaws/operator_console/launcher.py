@@ -230,10 +230,7 @@ def start_console_run(
     env_overrides = dict(request.env_overrides or {})
     if request.provider_profile:
         overrides.setdefault("provider_profile", request.provider_profile)
-        if request.agent_engine_id in {"codex-cli", "openai-agents-sdk"}:
-            env_overrides.setdefault("ROBOCLAWS_CODEX_PROVIDER", request.provider_profile)
-        elif request.agent_engine_id == "claude-code":
-            env_overrides.setdefault("ROBOCLAWS_CLAUDE_PROVIDER", request.provider_profile)
+        env_overrides.setdefault("ROBOCLAWS_PROVIDER_PROFILE", request.provider_profile)
     if request.scenario_setup:
         overrides.setdefault("scenario_setup", request.scenario_setup)
     run_env = _apply_env_overrides(route, run_env, env_overrides)
@@ -353,8 +350,9 @@ def route_readiness(
             "gates": [],
         }
 
-    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
+    env_override_map = _provider_env_overrides_for_route(route, override_map, env_overrides or {})
+    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_override_map)
     gate_map = gates or {}
     if runtime_tasks is None:
         _, port = requested_mcp_endpoint(override_map)
@@ -552,6 +550,19 @@ def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[s
     validate_env_overrides(route, env_overrides, error_type=ConsoleLaunchError)
 
 
+def _provider_env_overrides_for_route(
+    route: ConsoleLaunchSelection,
+    overrides: dict[str, str],
+    env_overrides: dict[str, str],
+) -> dict[str, str]:
+    merged = dict(env_overrides)
+    provider_profile = str(overrides.get("provider_profile") or "")
+    if not provider_profile:
+        return merged
+    merged.setdefault("ROBOCLAWS_PROVIDER_PROFILE", provider_profile)
+    return merged
+
+
 def _apply_env_overrides(
     route: ConsoleLaunchSelection,
     env_map: dict[str, str],
@@ -627,8 +638,7 @@ def _with_evidence_lane_compatibility(
 
 def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
-        env_map.get("ROBOCLAWS_CLAUDE_PROVIDER")
-        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
         or default_provider_profile("claude-code")
     )
     model = env_map.get("ROBOCLAWS_CLAUDE_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
@@ -642,8 +652,7 @@ def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
 
 def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
-        env_map.get("ROBOCLAWS_CODEX_PROVIDER")
-        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
         or default_provider_profile("codex-cli")
     )
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
@@ -657,8 +666,7 @@ def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
 
 def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
-        env_map.get("ROBOCLAWS_CODEX_PROVIDER")
-        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
         or default_provider_profile("openai-agents-sdk")
     )
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")

@@ -21,14 +21,14 @@ def test_default_cases_cover_routes_and_wire_formats() -> None:
 
     cases = {case.case_id: case for case in script.default_cases()}
 
-    assert "codex-env:gpt-5.5:responses" in cases
-    assert "mify:xiaomi-mimo-v2.5:openai-chat" in cases
-    assert "mify:xiaomi-mimo-v2.5:openai-responses" in cases
-    assert "mify:xiaomi-mimo-v2.5:anthropic" in cases
-    assert "minimax:MiniMax-M3:responses" in cases
+    assert "codex-router-responses:gpt-5.5:responses" in cases
+    assert "mimo-mify-responses:xiaomi-mimo-v2.5:openai-chat" in cases
+    assert "mimo-mify-responses:xiaomi-mimo-v2.5:openai-responses" in cases
+    assert "mimo-mify-responses:xiaomi-mimo-v2.5:anthropic" in cases
+    assert "minimax-responses:MiniMax-M3:responses" in cases
     assert "mimo-token-plan:mimo-v2.5:openai-chat" in cases
     assert "mimo-token-plan:mimo-v2.5:anthropic" in cases
-    assert "mimo-inside:mimo-1000:openai-chat" in cases
+    assert "mimo-inside-openai-chat:mimo-1000:openai-chat" in cases
     assert "kimi:k2.6:anthropic" in cases
     assert "nvidia:nemotron-nano-vl:chat" in cases
     assert {case.wire_api for case in cases.values()} == {
@@ -54,7 +54,7 @@ def test_mimo_inside_cases_read_registry_env(monkeypatch) -> None:
 
     cases = {case.case_id: case for case in script.default_cases()}
 
-    case = cases["mimo-inside:mimo-1000:openai-chat"]
+    case = cases["mimo-inside-openai-chat:mimo-1000:openai-chat"]
     assert case.base_url == "https://inside.example/v1"
     assert case.api_key_env == "MIMO_API_KEY"
     assert "Default-enabled" in case.note
@@ -82,12 +82,12 @@ def test_payloads_match_wire_format() -> None:
     cases = {case.case_id: case for case in script.default_cases()}
 
     chat_payload = script.payload_for_case(
-        cases["mimo-inside:mimo-1000:openai-chat"],
+        cases["mimo-inside-openai-chat:mimo-1000:openai-chat"],
         prompt="ping",
         max_tokens=8,
     )
     responses_payload = script.payload_for_case(
-        cases["mify:xiaomi-mimo-v2.5:openai-responses"],
+        cases["mimo-mify-responses:xiaomi-mimo-v2.5:openai-responses"],
         prompt="ping",
         max_tokens=8,
     )
@@ -146,8 +146,8 @@ def test_headers_include_anthropic_version_and_custom_user_agent() -> None:
 def test_missing_key_skips_without_secret_values() -> None:
     script = _load_script_module()
     case = script.MatrixCase(
-        case_id="mimo-inside:mimo-1000:openai-chat",
-        provider_id="mimo-inside",
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
         provider_label="MiMo inside",
         model="mimo-1000",
         wire_api="openai-chat",
@@ -235,7 +235,7 @@ def test_result_payload_counts_statuses() -> None:
 def test_usage_tokens_and_tps_prefer_provider_usage() -> None:
     script = _load_script_module()
     case = {case.case_id: case for case in script.default_cases()}[
-        "mimo-inside:mimo-1000:openai-chat"
+        "mimo-inside-openai-chat:mimo-1000:openai-chat"
     ]
 
     result = script.summarize_case(
@@ -280,7 +280,7 @@ def test_usage_tokens_and_tps_prefer_provider_usage() -> None:
 def test_stream_throughput_skips_non_chat_wire() -> None:
     script = _load_script_module()
     case = {case.case_id: case for case in script.default_cases()}[
-        "mify:xiaomi-mimo-v2.5:openai-responses"
+        "mimo-mify-responses:xiaomi-mimo-v2.5:openai-responses"
     ]
 
     result = script.run_case(
@@ -325,8 +325,8 @@ def test_max_tokens_for_layer_uses_stream_budget() -> None:
 def test_first_content_stream_payload_omits_usage_tail(monkeypatch) -> None:
     script = _load_script_module()
     case = script.MatrixCase(
-        case_id="mimo-inside:mimo-1000:openai-chat",
-        provider_id="mimo-inside",
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
         provider_label="MiMo inside",
         model="mimo-1000",
         wire_api="openai-chat",
@@ -381,8 +381,8 @@ def test_first_content_stream_payload_omits_usage_tail(monkeypatch) -> None:
 def test_stream_throughput_payload_requests_usage_tail(monkeypatch) -> None:
     script = _load_script_module()
     case = script.MatrixCase(
-        case_id="mimo-inside:mimo-1000:openai-chat",
-        provider_id="mimo-inside",
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
         provider_label="MiMo inside",
         model="mimo-1000",
         wire_api="openai-chat",
@@ -446,7 +446,7 @@ def test_agent_cases_are_selectable_and_do_not_store_full_prompt() -> None:
 def test_agent_case_summary_carries_case_metadata() -> None:
     script = _load_script_module()
     case = {case.case_id: case for case in script.default_cases()}[
-        "mimo-inside:mimo-1000:openai-chat"
+        "mimo-inside-openai-chat:mimo-1000:openai-chat"
     ]
     agent_case = script.selected_agent_cases(case_ids={"cleanup-worklist-plan"})[0]
 

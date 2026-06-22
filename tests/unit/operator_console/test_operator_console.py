@@ -120,7 +120,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         prompt="pick up the mug; rm -rf /",
         overrides={
             "seed": "8",
-            "scenario_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-cleanup-related-objects",
             "relocation_count": "2",
         },
     )
@@ -136,9 +136,9 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     ]
     assert "preset=cleanup" in argv
     assert "evidence_lane=world-public-labels" in argv
-    assert "provider_profile=codex-env" in argv
+    assert "provider_profile=codex-router-responses" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
-    assert "scenario_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
@@ -192,7 +192,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
                     "backend_id": "mujoco",
                     "intent_id": "cleanup",
                     "agent_engine_id": "codex-cli",
-                    "provider_profile": "codex-env",
+                    "provider_profile": "codex-router-responses",
                     "evidence_lane": "world-public-labels",
                     "scenario_setup": "relocate-cleanup-related-objects",
                     "prompt": "只收拾桌面上的杯子",
@@ -211,10 +211,10 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     assert payload["operator_prompt"] == "只收拾桌面上的杯子"
     assert payload["source"] == "household-cleanup"
     assert payload["intent"] == "cleanup"
-    assert payload["prompt_mode"] == "full"
+    assert "prompt_mode" not in payload
     assert "This run is surface=household-world intent=cleanup" in payload["agent_kickoff_prompt"]
     assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
-    assert "metric_map.inspection_waypoints" in payload["agent_kickoff_prompt"]
+    assert "exact inspection_waypoints checklist" in payload["agent_kickoff_prompt"]
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
@@ -231,6 +231,34 @@ def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blockin
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert "Backend lock is held" in readiness["blocker"]
+
+
+def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-responses"},
+        env={"XM_LLM_API_KEY": "key"},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "mimo-mify-responses"
+    assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
+
+
+def test_console_readiness_uses_claude_provider_profile_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CLAUDE_CLEANUP)
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        overrides={"port": _free_port(), "provider_profile": "kimi-anthropic"},
+        env={"KIMI_API_KEY": "key"},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "kimi-anthropic"
+    assert readiness["provider"]["model"] == "kimi-k2.6"
 
 
 def test_resource_lock_prevents_conflicting_starts(tmp_path: Path) -> None:
@@ -509,9 +537,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/asset-previews/maps/agibot-robot-map-12/preview.png"
-        ) as response:
+        with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-map.png") as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
@@ -545,11 +571,13 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             f"http://{host}:{port}/previews/b1-map12-preview.json"
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
-            assert preview["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+            assert preview["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
             assert preview["views"]["fpv"]["provenance"] == (
-                "isaac_runtime_robot_mounted_head_camera_fpv"
+                "prepared_b1_nurec_scene_camera_preview"
             )
-            assert preview["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+            assert preview["views"]["chase"]["provenance"] == (
+                "prepared_b1_nurec_scene_camera_preview"
+            )
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
         assert exc_info.value.code == 404
@@ -845,6 +873,66 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
     assert state["operator_interventions"]["count"] == 1
     assert any(item["label"] == "Operator Control" for item in state["artifact_paths"])
     assert any(item["label"] == "Operator Interventions" for item in state["artifact_paths"])
+
+
+def test_operator_console_control_endpoint_allows_paused_operator_handoff(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    run_id = "handoff-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "paused",
+                "reason": "operator_handoff_requested",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:19999/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
+        assert mcp_url == "http://127.0.0.1:19999/mcp"
+        assert action == "observe"
+        assert arguments == {}
+        return {
+            "ok": True,
+            "tool": action,
+            "status": "ok",
+            "visible_object_detections": [],
+        }
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps({"action": "observe"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["ok"] is True
+    state = derive_operator_state(tmp_path, run_dir, route)
+    assert state["phase"] == "paused"
+    assert state["controls"]["relative_navigation_control_available"] is True
+    assert state["controls"]["next_goal_available"] is False
+    assert state["latest_operator_control"]["action"] == "observe"
 
 
 def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: Path) -> None:

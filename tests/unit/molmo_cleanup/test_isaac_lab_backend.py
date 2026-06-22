@@ -4,12 +4,14 @@ import json
 import math
 import sys
 import types
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from PIL import Image, ImageDraw
 
+from roboclaws.household.b1_nurec_scene import prepare_b1_nurec_scene_usd
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -20,6 +22,71 @@ from roboclaws.household.isaac_lab_backend import (
     IsaacLabSubprocessBackend,
 )
 from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+
+def test_prepare_b1_nurec_scene_unpacks_usdz_reference(tmp_path: Path) -> None:
+    scene_gs = _write_b1_scene_gs_fixture(tmp_path / "storey_1")
+
+    prepared = prepare_b1_nurec_scene_usd(scene_gs, cache_root=tmp_path / "cache")
+
+    assert prepared == tmp_path / "cache" / "storey_1" / "scene_gs.unpacked_nurec.usda"
+    text = prepared.read_text(encoding="utf-8")
+    assert "xm_large_scene.usdz" not in text
+    assert "xm_large_scene_unpacked/default.usda" in text
+    assert (prepared.parent / "xm_large_scene_unpacked" / "xm_large_scene.nurec").read_bytes() == (
+        b"nurec"
+    )
+
+
+def test_isaac_backend_prepares_b1_scene_gs_before_worker_init(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scene_gs = _write_b1_scene_gs_fixture(tmp_path / "source")
+    captured_init_args: list[str] = []
+    original_run_worker = IsaacLabSubprocessBackend._run_worker
+    monkeypatch.setenv("ROBOCLAWS_B1_NUREC_CACHE_DIR", str(tmp_path / "cache"))
+
+    def wrapped_run_worker(
+        self: IsaacLabSubprocessBackend,
+        command: str,
+        *args: str,
+    ) -> dict[str, object]:
+        if command == "init":
+            captured_init_args.extend(args)
+        return original_run_worker(self, command, *args)
+
+    monkeypatch.setattr(IsaacLabSubprocessBackend, "_run_worker", wrapped_run_worker)
+
+    IsaacLabSubprocessBackend(
+        run_dir=tmp_path / "run",
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        scene_usd_path=scene_gs,
+    )
+
+    scene_arg = captured_init_args[captured_init_args.index("--scene-usd-path") + 1]
+    assert scene_arg.endswith("scene_gs.unpacked_nurec.usda")
+    assert Path(scene_arg).is_file()
+
+
+def _write_b1_scene_gs_fixture(source_dir: Path) -> Path:
+    source_dir.mkdir()
+    scene_gs = source_dir / "scene_gs.usda"
+    scene_gs.write_text(
+        '#usda 1.0\n'
+        'def Xform "combined" {\n'
+        '    def "sim" (prepend references = @./scene.usd@) {}\n'
+        '    def Xform "gs" (prepend references = @./xm_large_scene.usdz@) {}\n'
+        '}\n',
+        encoding="utf-8",
+    )
+    (source_dir / "scene.usd").write_text("#usda 1.0\n", encoding="utf-8")
+    with zipfile.ZipFile(source_dir / "xm_large_scene.usdz", "w") as archive:
+        archive.writestr("default.usda", "#usda 1.0\n")
+        archive.writestr("gauss.usda", "#usda 1.0\n")
+        archive.writestr("xm_large_scene.nurec", b"nurec")
+    return scene_gs
 
 
 def test_isaac_lab_backend_reports_missing_runtime(tmp_path: Path) -> None:

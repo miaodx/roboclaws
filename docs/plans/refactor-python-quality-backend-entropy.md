@@ -17,6 +17,25 @@ CONTINUE. Continue one verified, non-overlapping slice at a time. This file is
 the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
+Planning update on 2026-06-17: the next cleanup group should prioritize
+fail-aloud-and-early behavior over more silent compatibility cleanup. Silent
+fallbacks that fabricate labels, choose alternate assets, hide missing source
+metadata, normalize invalid launch/profile input without surfacing it, or turn
+real setup failures into plausible defaults are now first-class cleanup targets.
+Environment-variable cleanup belongs in the same pass: collapse duplicate env
+knobs, remove stale compatibility aliases, make precedence explicit, and reject
+ambiguous provider/model/key/base-url combinations instead of silently selecting
+another route or developer fallback. Execute these as dedicated slices before
+returning to hard-ceiling owner splits.
+
+Planning update on 2026-06-17: unnecessary unit-test cleanup is also in scope,
+but it must run through `$intuitive-tests` audit/propose before deleting tests.
+The suite already has `unit` / `contract` / `integration` layers and strict
+markers, so the next test cleanup should be pruning-first rather than
+layout-first: remove, merge, or reclassify low-signal unit tests that assert
+implementation shape, copied constants, private-call choreography, file/path
+trivia, or registration metadata without caller-visible behavior.
+
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
 compaction owner split. Treat this as the planning snapshot for the next slice;
@@ -142,6 +161,14 @@ lane/workflow wording.
 - Every slice names its `ARCHITECTURE.md` owner layer, behavior-change class,
   touched files, proof, and non-goals. One verified vertical slice beats broad
   line shaving.
+- Fail-aloud rule: when required runtime/source metadata, route support,
+  provider profile, environment variable, map bundle inputs, room labels,
+  visual artifacts, readiness facts, or configuration precedence are missing,
+  ambiguous, or inconsistent, prefer an explicit exception,
+  blocked/unavailable status, or operator-visible validation error over a
+  guessed default. Keep only deliberate, documented defaults that are part of a
+  public contract, and make them visible in artifacts, readiness payloads, or
+  provider-route diagnostics.
 - Compaction rule: every 3-5 accepted slices, move completed outcomes into the
   ledger and trim this file back to unresolved decisions, current candidates,
   proof gates, and stop conditions.
@@ -157,6 +184,11 @@ lane/workflow wording.
 - Complexity target: production/shared code trends toward zero ratcheted Ruff
   complexity rows. Test complexity is reduced through fixture builders, data
   factories, behavior-focused split tests, and shared assertions.
+- Unit-test cleanup rule: existing unit tests are not grandfathered in. Keep
+  tests that prove project logic, caller-visible behavior, meaningful failure
+  modes, public contracts, or known regressions; delete, merge, or reclassify
+  tests that only assert static shape, duplicated constants, file names, import
+  paths, private helper calls, or implementation layout.
 - Line-count relief is evidence, not the goal. Prefer concept reduction:
   delete stale surfaces, merge duplicate concepts, move behavior to existing
   owners, or create a new owner only around a named ownership boundary. Preserve
@@ -166,20 +198,44 @@ lane/workflow wording.
 
 ## Current Target
 
-Current checkpoint: Candidate B's apple camera-contract diagnostics split is
-implemented in the worktree and ready for final verification/commit. Refresh the
-ratchet again before the next implementation, then choose the next P1 from the
-remaining hard-ceiling frontier by owner-boundary evidence.
+Current checkpoint: pause implementation and treat the next execution as a
+dedicated fail-aloud cleanup pass. Refresh the ratchet and run a targeted
+silent-fallback and env-var audit before selecting code changes. The first
+implementation should remove one bounded family of silent fallbacks or
+ambiguous environment-variable routes and prove the new explicit
+failure/blocked path with tests before returning to line-count owner splits.
 
-Candidate D is the clearest known next choice, but keep it narrower than the old
-"profile plus timing" wording. The default D slice is runner-side Agent SDK
-performance-profile/default resolution: `_resolve_agent_sdk_perf_profile()`,
-profile id/default selection, profile sub-builders, SDK model/run config
-payloads, provider route normalization, and the setting coercion helpers used by
-those profile builders. Timing/latency/timeline/MCP control-plane summaries are
-a separate D follow-up only if D remains the best frontier after the profile
-owner split. Do not move runner profile construction into the SDK driver and do
-not combine profile defaults with live server lifecycle.
+Dedicated implementation prompt for the next cleanup run:
+
+```text
+Update Roboclaws to fail aloud and early instead of silently falling back. Audit
+the touched area first, then choose one bounded fallback family. Remove fallback
+branches that fabricate missing source truth, silently substitute legacy assets,
+normalize unsupported user input without surfacing the canonical value or error,
+continue after required runtime evidence is absent, or let missing/ambiguous
+environment variables silently choose a provider route, model, key, base URL, or
+developer-only override. Treat env-var cleanup as part of this pass: collapse
+duplicate knobs, remove stale compatibility aliases, make CLI/config/env
+precedence visible, and reject conflicting combinations instead of selecting a
+plausible default. Preserve explicit public defaults only when they are
+documented launch contracts and surfaced in diagnostics. For every removed
+fallback, add or update focused tests proving the missing/invalid input now
+raises a clear exception or produces an explicit blocked/unavailable
+readiness/status packet. Do not combine this with hard-ceiling file splitting
+unless the fallback owner is the actual reason for the split.
+```
+
+Candidate D remains a valid follow-up, but it is no longer the default next
+choice while fail-aloud cleanup is active. When D resumes, keep it narrower than
+the old "profile plus timing" wording. The default D slice is runner-side Agent
+SDK performance-profile/default resolution:
+`_resolve_agent_sdk_perf_profile()`, profile id/default selection, profile
+sub-builders, SDK model/run config payloads, provider route normalization, and
+the setting coercion helpers used by those profile builders.
+Timing/latency/timeline/MCP control-plane summaries are a separate D follow-up
+only if D remains the best frontier after the profile owner split. Do not move
+runner profile construction into the SDK driver and do not combine profile
+defaults with live server lifecycle.
 
 Candidate B remains active through `scene_camera_comparison.py` and
 `summarize_robot_camera_visual_parity.py`, but the apple runner is now below the
@@ -190,17 +246,42 @@ longer the default next P1 unless the planner probe runner crosses 2000 lines
 again or the task-sampler owner reveals a second real owner with call-site
 evidence.
 
+Dedicated `$intuitive-tests` prompt for the next UT cleanup run:
+
+```text
+Audit Roboclaws unit tests for unnecessary coverage before deleting anything.
+Selected mode: Audit / propose first, then Prune / consolidate after the slice
+is accepted. The suite already has unit/contract/integration layers, strict
+pytest markers, and auto-marking from tests/conftest.py; do not start with a
+layout or marker migration. Inventory the selected domain's unit tests, map each
+candidate to the behavior/contract/regression it protects, and classify it as
+keep, merge, delete, or reclassify. Delete or merge tests that only assert
+dataclass mechanics, copied constants, static registry/config metadata,
+file/path/name trivia, import locations, private helper call choreography, or
+stale implementation layout. Preserve the last meaningful proof of parser
+behavior, validation, safety defaults, fail-aloud errors, public CLI/report/MCP
+contracts, artifact schemas, provider route semantics, and known regressions.
+Run only focused collection/tests for the accepted domain plus git diff check;
+do not broaden into production refactors or unrelated test layout churn.
+```
+
 Recommended next slice claim:
 
 - Slice: choose one owner-boundary P1. Default order after this slice is:
-  Candidate D runner-side Agent SDK performance-profile/default resolution,
-  Candidate D timing/timeline summary only as a separate follow-up if D remains
-  the best frontier, Candidate B scene-camera / visual-parity summary ownership,
-  then Candidate A only with new facade-private/report evidence. Choose by fresh
-  call-site evidence, not file size alone.
+  fail-aloud silent fallback and env-var cleanup, Candidate D runner-side Agent
+  SDK performance-profile/default resolution, Candidate D timing/timeline
+  summary only as a separate follow-up if D remains the best frontier,
+  Candidate B scene-camera / visual-parity summary ownership, then Candidate A
+  only with new facade-private/report evidence. Candidate T unit-test pruning
+  is a valid separate P2 slice when production P1 work is paused or when the
+  selected production slice leaves duplicated/low-signal tests directly in its
+  touched scope. Choose by fresh call-site and test-value evidence, not file
+  size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
-  Profiles plus Thin Runtime / Server Adapters for Candidate D.
+  Profiles plus Thin Runtime / Server Adapters for Candidate D and provider/env
+  cleanup; Runnable Surfaces And Presets when env vars are acting as hidden
+  launch-axis overrides.
 - Current friction: the hard-ceiling frontier is now
   `realworld_contract.py` at 2836, `scene_camera_comparison.py` is 2830,
   `summarize_robot_camera_visual_parity.py` is 2808,
@@ -259,11 +340,12 @@ checkpoint.
 
 Preflight status: REVIEWED, planning-only rechecked on 2026-06-17. Route:
 `$intuitive-refactor` ratchet mode. Default execution: refresh the ratchet, run
-a short ponytail recheck against current hard-ceiling candidates, and select one
-remaining owner-boundary P1. The default candidate order is D runner-side
-Agent SDK performance-profile/default resolution, D timing/timeline summary only
-as a separate follow-up if D remains best, B scene-camera / visual-parity
-summary ownership, then A only with fresh facade-private/report evidence.
+a targeted silent-fallback/env-var audit, and select one bounded fail-aloud
+cleanup family before returning to hard-ceiling owner-boundary P1s. The default
+candidate order is Silent Fallback And Env-Var Cleanup, D runner-side Agent SDK
+performance-profile/default resolution, D timing/timeline summary only as a
+separate follow-up if D remains best, B scene-camera / visual-parity summary
+ownership, then A only with fresh facade-private/report evidence.
 Non-goals: broad repo cleanup, line-count shaving across many files, preserving
 obsolete internal wrappers, lane initialization unless fresh drift appears,
 reopening SDK model-input compaction, mixing SDK driver internals with live
@@ -271,9 +353,139 @@ runner lifecycle, mixing timing/timeline helpers into the profile/default slice,
 and live/provider/simulator proof unless the chosen slice changes that route.
 Re-approve if a slice would change a public launch, artifact schema, report
 shape, agent-facing payload, provider behavior, event/span schema, model-input
-compaction schema, or private/public eval contract.
+compaction schema, private/public eval contract, or a documented public default;
+do not re-approve merely to delete undocumented env aliases or hidden fallback
+routes that the selected slice proves are stale.
 
 ## Active Candidates
+
+### S: Fail-Aloud Silent Fallback And Env-Var Cleanup
+
+Severity: P1 when a fallback can create false confidence, hide a missing source
+asset, mask unsupported launch/profile input, fabricate room/map/visual
+semantics, mask missing or conflicting environment-variable input, or let an
+operator believe a route is ready when required evidence is absent. Severity: P2
+when the fallback is local developer convenience with clear test coverage and no
+user-facing claim.
+
+Owning architecture layers depend on the selected family:
+Runnable Surfaces And Presets for launch/profile normalization; Agent Engines
+And Provider Profiles for provider route defaults; Thin Runtime / Server
+Adapters for readiness and status packets; Backend Runtime / Environment
+Primitive for simulator/map/source-asset loading; Artifacts, reports, and eval
+suites for preview/report/evidence generation. Env-var cleanup usually belongs
+to Agent Engines And Provider Profiles, Thin Runtime / Server Adapters, or the
+public launch catalog; avoid burying route choice in ad hoc `os.environ` reads.
+
+Audit prompts for the implementation slice:
+
+- Search for `or {}`, `or []`, `or ""`, broad `except Exception`, broad
+  `except (KeyError, TypeError, ValueError)`, `fallback`, `default`, `unknown`,
+  `synthetic`, `legacy`, `missing`, `skip_existing`, `os.environ`, `getenv`,
+  `ROBOCLAWS_`, `_API_KEY`, `_BASE_URL`, `_MODEL`, `provider_profile`, and
+  `alias` in the target owner.
+- Classify each hit as explicit public default, explicit blocked/unavailable
+  status, test-only fixture convenience, or silent fallback.
+- For env-var hits, classify each knob as canonical public config,
+  provider-secret input, local machine convenience, or stale compatibility
+  alias. Record precedence between CLI args, launch catalog defaults,
+  repo-local `.env`, process env, and hardcoded defaults before changing code.
+- Remove or replace only silent fallback rows in the selected family. Do not
+  mechanically delete every default.
+- Make failure actionable: include the missing key/path/route/capability and
+  the operator or developer command that should supply it when the local pattern
+  already has such vocabulary.
+
+Good first families:
+
+- Source map / preview inputs: do not fabricate B1 or Molmo room labels,
+  semantic-map labels, or preview metadata when source manifests are missing.
+- Provider route and launch profile input: accept documented aliases only when
+  the resolved canonical value is surfaced; reject unsupported values instead of
+  silently falling back to `codex-router-responses` or another route.
+- Environment-variable route selection: collapse duplicate provider/profile
+  knobs, remove stale route aliases, reject conflicting key/base-url/model
+  combinations, and make missing required provider keys fail readiness before a
+  live run starts.
+- Runtime artifact discovery: when a report/preview claims real camera, map, or
+  robot-view evidence, missing files should produce explicit unavailable status
+  rather than reusing stale or semantic-map substitutes.
+- Worker initialization: missing required source metadata should fail before
+  state write, not create plausible placeholder room/object/receptacle state.
+
+Allowed fallbacks:
+
+- Public launch defaults documented in README/ARCHITECTURE/just docs, such as
+  default `surface=household-world` axes.
+- Canonical provider secrets and machine-local mirror/proxy env vars that are
+  documented as external setup inputs, as long as missing or conflicting values
+  produce explicit readiness errors instead of route substitution.
+- Explicit operator-console unavailable/blocked readiness states.
+- Test fixtures that intentionally omit optional fields and assert the resulting
+  blocked/error behavior.
+- Historical artifact readers that preserve old reports without relabeling them
+  as current product proof.
+
+Proof should include focused tests for the selected owner plus `ruff` on touched
+files, `git diff --check`, and the ratchet summary. If a selected fallback is
+user-facing launch, env-var, or status behavior, include a contract test proving
+the message/status is visible and the old implicit route no longer starts.
+
+### T: Unnecessary Unit-Test Pruning
+
+Severity: P2 by default; P1 only when tests create false confidence for a public
+route, block safe refactors through private implementation coupling, or preserve
+obsolete behavior that conflicts with the current launch/profile/MCP contract.
+Route through `$intuitive-tests`, selected mode Audit / propose before any
+deletion. Current inventory: `tests/` already uses layer-first folders, strict
+pytest markers, and auto-marking; the next slice should be pruning-first or
+fixture/factory-first, not marker-first or layout-first.
+
+Owning architecture layer depends on the selected test domain. Unit tests should
+prove behavior in the code owner they exercise. Contract tests should remain
+only for public schemas, CLI/recipe shapes, MCP tools, reports, replay/artifact
+compatibility, provider route contracts, and documented compatibility promises.
+
+Audit prompts for the implementation slice:
+
+- Pick one domain first, for example provider/env route tests, operator-console
+  tests, eval-harness tests, Molmo cleanup worker tests, or report tests. Do not
+  prune the whole suite in one pass.
+- For each candidate unit test, answer: would a real project bug fail it; would
+  a harmless refactor fail it; is it already covered by a stronger behavior,
+  contract, or regression test; and does it protect a public API/artifact or only
+  implementation shape?
+- Classify each candidate as keep, merge, delete, or reclassify. Do not delete
+  the last proof of parsing, validation, state transition, fail-aloud behavior,
+  safety default, artifact schema, public command, provider route semantics, or
+  known regression.
+- Delete tests that only assert dataclass field storage, copied constants,
+  import paths, module locations, file existence, directory listings,
+  registration-table membership, decorator/marker presence, mocked private calls
+  without user-visible effect, or stale private helper layout.
+- Merge one-field-at-a-time tests into behavior tests when that improves
+  diagnosis and keeps the public behavior obvious.
+- Reclassify file/artifact/CLI/recipe checks as contract tests only when the
+  runtime, packaging, public docs, or artifact compatibility actually depends on
+  them.
+
+Good first families:
+
+- Provider/env tests that duplicate constants or assert route tables without
+  exercising canonical resolution, readiness failure, or visible diagnostics.
+- Operator-console tests that assert static DOM/route wiring without exercising
+  launch readiness, redaction, locks, status transitions, or artifact links.
+- Eval-harness selector/model tests that duplicate manifest keys one field at a
+  time instead of proving selected rows, blockers, promotion packets, or result
+  contracts.
+- Molmo cleanup worker/report tests that assert helper shape, static file names,
+  or copied fixture metadata already covered by contract/report tests.
+
+Proof should include `git diff --check`, focused collection for the selected
+test domain, and the smallest behavior/contract test command that proves the
+remaining coverage. Use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
+Report kept/merged/deleted/reclassified counts in the slice summary. Do not
+claim product behavior proof from pruning tests alone.
 
 ### A: Contract And Report Hard-Ceiling Split
 
@@ -552,6 +764,12 @@ be claimed without an explicit local run.
   changed.
 - Focused tests: use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
 - Contract/report changes: include the relevant contract or report tests.
+- Fail-aloud cleanup changes: include at least one regression test where the
+  old path would silently fabricate or substitute data, and the new path raises
+  a clear error or returns an explicit blocked/unavailable packet.
+- Unit-test pruning changes: run focused collection and the selected domain's
+  remaining behavior/contract tests; include a short keep/merge/delete/
+  reclassify report. Deleting tests is not proof that behavior still works.
 - Changed-code review: after implementation, run `$intuitive-refactor`
   changed-code review on the changed scope before final verification when the
   slice is not docs-only.
@@ -570,7 +788,17 @@ Stop this cleanup stream when:
 - Production/shared Ruff complexity rows are at or near zero.
 - Remaining test complexity is fixture-builder debt with clear ownership, not
   one-off long test bodies.
+- Low-signal unit tests in the accepted domains have been deleted, merged, or
+  reclassified, and the remaining unit tests protect behavior/failure modes
+  rather than static implementation shape.
 - Backend id, runtime metadata, artifacts, and evidence attachments use common
   surfaces instead of repeated concrete-class or `backend == ...` branching.
+- Silent fallback families that can create false confidence are either removed,
+  converted to explicit blocked/unavailable status, or documented as deliberate
+  public defaults with tests.
+- Env-var families no longer provide hidden route compatibility: canonical
+  knobs are documented, duplicate aliases are removed or explicitly blocked,
+  precedence is tested, and missing/conflicting provider keys, base URLs, or
+  model/profile settings fail before launch readiness.
 - A fresh reduce-entropy round finds no P0/P1 or material P2 candidate in this
   code-size/backend-complexity class.

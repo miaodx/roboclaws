@@ -84,14 +84,14 @@ table for coding-agent routes. The current MiniMax state is:
 
 Current default-enabled API sources:
 
-- `codex-env`: default model `gpt-5.5`, the strongest current Codex route.
-- `mify`: default model `xiaomi/mimo-v2.5`.
-- `mimo-openai-chat` / token plan: default model `mimo-v2.5`.
-- `mimo-inside`: default-enabled on-demand route, default model `mimo-1000`.
+- `codex-router-responses`: default model `gpt-5.5`, the strongest current Codex route.
+- `mimo-mify-responses`: default model `xiaomi/mimo-v2.5`.
+- `mimo-tp-openai-chat` / token plan: default model `mimo-v2.5`.
+- `mimo-inside-openai-chat`: default-enabled on-demand route, default model `mimo-1000`.
   It is allowed for benchmark and explicit text-agent experiments, but it is
   not promoted as a product cleanup default until a separate route decision
   proves tool/runtime behavior.
-- `minimax`: default model `MiniMax-M3`; `MiniMax-M2.7-highspeed` remains an
+- `minimax-responses`: default model `MiniMax-M3`; `MiniMax-M2.7-highspeed` remains an
   explicit non-default variant.
 - `kimi-openai-chat`: default model `kimi-k2.7-code`. Kimi K2.7 Code runs with
   Thinking On for the new code-model behavior. Roboclaws exposes a normalized
@@ -121,7 +121,7 @@ MiMo/Kimi Chat thinking checks, 2026-06-16:
   and returned non-empty `reasoning_content`.
 - The same routes accepted `thinking={"type":"disabled"}` and returned no
   `reasoning_content`.
-- Responses-compatible routes `codex-env`, `mify`, and `minimax` accepted the
+- Responses-compatible routes `codex-router-responses`, `mimo-mify-responses`, and `minimax-responses` accepted the
   OpenAI Responses `reasoning={"effort":"medium"}` shape.
 
 Thinking / reasoning flags by current route:
@@ -129,12 +129,12 @@ Thinking / reasoning flags by current route:
 | Route | Wire API | Roboclaws default flag | Notes |
 | --- | --- | --- | --- |
 | `kimi-openai-chat` / `kimi-k2.7-code` | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` in request body | Required for K2.7 Code behavior. `thinking=disabled` is accepted but disables `reasoning_content`. |
-| `codex-env` / `gpt-5.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Uses the OpenAI Responses reasoning schema, not Kimi's `thinking` body. `model_thinking_mode=disabled` maps to `reasoning={"effort":"none"}`. |
-| `minimax` / `MiniMax-M3` | OpenAI Responses | `reasoning={"effort":"medium"}` | M3 is the default MiniMax model. M2.7-highspeed can emit reasoning tokens, so probes keep larger token budgets. |
-| `mify` / `xiaomi/mimo-v2.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Responses gateway accepted the OpenAI reasoning body in 2026-06-16 probes. |
-| `mimo-openai-chat` / token plan | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | Chat route accepted Kimi-style thinking body in 2026-06-16 probes. |
-| `mimo-inside` / `mimo-1000` | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | On-demand benchmark/text route; disabled mode removes `reasoning_content` in probes. |
-| `mimo-anthropic`, `mify-anthropic`, `kimi-anthropic` | Anthropic-compatible routes | none in Roboclaws launch payloads | OpenClaw bootstrap model catalog marks its older Kimi/MiMo entries with `reasoning:false`; that is Gateway catalog metadata, not the OpenAI Chat `thinking` request field. |
+| `codex-router-responses` / `gpt-5.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Uses the OpenAI Responses reasoning schema, not Kimi's `thinking` body. `model_thinking_mode=disabled` maps to `reasoning={"effort":"none"}`. |
+| `minimax-responses` / `MiniMax-M3` | OpenAI Responses | `reasoning={"effort":"medium"}` | M3 is the default MiniMax model. M2.7-highspeed can emit reasoning tokens, so probes keep larger token budgets. |
+| `mimo-mify-responses` / `xiaomi/mimo-v2.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Responses gateway accepted the OpenAI reasoning body in 2026-06-16 probes. |
+| `mimo-tp-openai-chat` / token plan | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | Chat route accepted Kimi-style thinking body in 2026-06-16 probes. |
+| `mimo-inside-openai-chat` / `mimo-1000` | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | On-demand benchmark/text route; disabled mode removes `reasoning_content` in probes. |
+| `mimo-tp-anthropic`, `mimo-mify-anthropic`, `kimi-anthropic` | Anthropic-compatible routes | none in Roboclaws launch payloads | OpenClaw bootstrap model catalog marks its older Kimi/MiMo entries with `reasoning:false`; that is Gateway catalog metadata, not the OpenAI Chat `thinking` request field. |
 
 Open-ended thinking A/B:
 
@@ -219,7 +219,7 @@ For MiMo OpenAI Chat-only speed comparison across the three MiMo provider
 groups, use the same matrix benchmark with provider and wire filters:
 
 ```bash
-just dev::model-matrix-benchmark --provider mimo-token-plan --provider mify --provider mimo-inside --wire openai-chat --layer throughput --iterations 1 --timeout-s 240
+just dev::model-matrix-benchmark --provider mimo-token-plan --provider mimo-mify-responses --provider mimo-inside-openai-chat --wire openai-chat --layer throughput --iterations 1 --timeout-s 240
 ```
 
 That MiMo-focused benchmark includes:
@@ -243,7 +243,7 @@ does not dominate the denominator:
 
 ```bash
 just dev::model-matrix-benchmark \
-  --case mimo-inside:mimo-1000:openai-chat \
+  --case mimo-inside-openai-chat:mimo-1000:openai-chat \
   --layer stream-throughput \
   --iterations 1 \
   --stream-throughput-max-tokens 8192 \
@@ -262,8 +262,8 @@ just dev::model-matrix-benchmark \
 > long rationale fits comfortably.
 >
 > Image input note: `mimo-v2.5` was live-probed on 2026-05-28 with both the
-> mify OpenAI-compatible route (`xiaomi/mimo-v2.5`, chat and responses) and
-> the mify Anthropic-compatible route
+> mimo-mify-responses OpenAI-compatible route (`xiaomi/mimo-v2.5`, chat and responses) and
+> the MiMo mify Anthropic-compatible route
 > (`https://api.llm.mioffice.cn/anthropic`, `xiaomi/mimo-v2.5`). Both accepted
 > a PNG image and described image contents. The native MiMo OpenAI-compatible
 > route (`mimo-v2.5`, chat) and native MiMo Anthropic-compatible route

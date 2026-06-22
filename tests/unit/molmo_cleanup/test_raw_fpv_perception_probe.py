@@ -443,7 +443,7 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
         variant_id="raw_fpv_visual_labeler",
         public_inputs=public_inputs,
         output_dir=tmp_path / "responses",
-        provider="codex-env",
+        provider="codex-router-responses",
         model="test-model",
         timeout_s=1.0,
     )

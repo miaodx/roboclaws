@@ -13,6 +13,7 @@ task ids.
 
 from __future__ import annotations
 
+from roboclaws.agents.provider_registry import normalize_provider_route, provider_route_spec
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.household.profiles import (
     cleanup_evidence_lane_names,
@@ -225,7 +226,11 @@ def _resolve_launch(
     )
     dispatch_overrides = (
         *_without_launch_only_overrides(plan_overrides),
-        *((f"world={world.id}",) if backend.implementation_backend == "isaaclab_subprocess" else ()),
+        *(
+            (f"world={world.id}",)
+            if backend.implementation_backend == "isaaclab_subprocess"
+            else ()
+        ),
         f"backend={backend.implementation_backend}",
         *dispatch_setup_overrides,
     )
@@ -294,7 +299,7 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
     if _override_value(overrides, "environment_setup"):
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects",
         )
 
 
@@ -513,8 +518,24 @@ def _resolve_provider_profile(
         if provider_profile:
             raise LaunchError(f"agent_engine '{agent_engine.id}' does not accept provider_profile")
         return None
-    selected = provider_profile or agent_engine.default_provider_profile
+    try:
+        selected = normalize_provider_route(
+            provider_profile,
+            default=agent_engine.default_provider_profile or "",
+        )
+        route = provider_route_spec(selected)
+    except KeyError as exc:
+        raw = provider_profile or agent_engine.default_provider_profile or ""
+        raise LaunchError(
+            f"provider_profile '{raw}' is unsupported for agent_engine '{agent_engine.id}'",
+            f"expected {'|'.join(agent_engine.supported_provider_profiles)}",
+        ) from exc
     if selected not in agent_engine.supported_provider_profiles:
+        raise LaunchError(
+            f"provider_profile '{selected}' is unsupported for agent_engine '{agent_engine.id}'",
+            f"expected {'|'.join(agent_engine.supported_provider_profiles)}",
+        )
+    if agent_engine.id not in route.supported_engines:
         raise LaunchError(
             f"provider_profile '{selected}' is unsupported for agent_engine '{agent_engine.id}'",
             f"expected {'|'.join(agent_engine.supported_provider_profiles)}",
@@ -571,13 +592,13 @@ def _normalize_scenario_setup_overrides(
     if _override_value(overrides, "environment_setup") is not None:
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects",
         )
     if _override_value(overrides, "generated_mess_count") is not None:
         raise LaunchError(
             "generated_mess_count is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|"
-            "relocate-cleanup-related-objects and relocation_count=<N>",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects "
+            "and relocation_count=<N>",
         )
     default_setup = preset.default_scenario_setup if preset else ENVIRONMENT_SETUP_BASELINE
     setup = _override_value(overrides, "scenario_setup") or default_setup
@@ -595,8 +616,7 @@ def _normalize_scenario_setup_overrides(
     elif relocation_count not in {None, "", "0"}:
         raise LaunchError(
             "relocation_count is only valid when scenario_setup relocates objects",
-            "use scenario_setup=relocate-loose-objects or "
-            "scenario_setup=relocate-cleanup-related-objects",
+            "use scenario_setup=relocate-cleanup-related-objects",
         )
     merged = _without_override(
         _without_override(

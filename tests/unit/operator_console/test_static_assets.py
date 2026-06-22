@@ -27,14 +27,14 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'id="isaac-fields"',
     'id="codex-fields"',
     'id="codex-provider-input"',
-    'value="minimax"',
-    'value="mimo-openai-chat"',
+    'value="minimax-responses"',
+    'value="mimo-tp-openai-chat"',
     'value="kimi-openai-chat"',
     'id="claude-fields"',
     'id="claude-provider-input"',
     'value="kimi-anthropic"',
-    'value="mimo-anthropic"',
-    'value="mify-anthropic"',
+    'value="mimo-tp-anthropic"',
+    'value="mimo-mify-anthropic"',
     'id="agibot-fields"',
     'id="agibot-gate-fields"',
     'id="real-movement-gate"',
@@ -51,7 +51,6 @@ ROUTE_FIELD_HTML_REQUIRED = (
     "Baseline does not relocate objects",
     'id="scenario-setup-input"',
     'name="scenario_setup"',
-    "Relocate loose objects",
     "Relocate cleanup-related objects",
     'id="relocation-count-field"',
     'id="relocation-count-input"',
@@ -75,6 +74,7 @@ ROUTE_FIELD_HTML_FORBIDDEN = (
     "Isaac runtime preflight and smoke markers",
     "Generated mess count",
     'id="mess-count-input"',
+    "Relocate loose objects",
     'data-operator-mode="continue"',
     'data-operator-mode="ask_why"',
     'id="operator-message-input"',
@@ -94,10 +94,13 @@ ROUTE_FIELD_APP_REQUIRED = (
     "Movement",
     "Provider",
     "env_overrides",
-    "ROBOCLAWS_CODEX_PROVIDER",
-    "ROBOCLAWS_CLAUDE_PROVIDER",
+    "ROBOCLAWS_PROVIDER_PROFILE",
+    "ROBOCLAWS_PROVIDER_PROFILE",
     "selectedCodexProvider",
     "selectedClaudeProvider",
+    "selectedProviderRoute",
+    "withProviderProfile",
+    "default_model_id",
     "Capability Gate",
     "NEEDS SAFETY GATES",
     "NEEDS CONTEXT",
@@ -114,7 +117,11 @@ ROUTE_FIELD_APP_REQUIRED = (
     "/api/messup-preview",
     "Baseline remains available",
     "Baseline means no pre-run relocation",
+    "els.messupButton.hidden = !supported || !relocation;",
+    "els.messupButton.disabled = !supported || !relocation || Boolean(state.activeRunId);",
+    "return `${route.world_id}:${route.backend_id}:${selectedScenarioSetup()}`;",
     "markCurrentSetupSelection",
+    "markCurrentMessupStatus",
     "resetMessupStatusForManualSetup",
     "/next-goal",
     "Start Next Goal",
@@ -159,6 +166,9 @@ ROUTE_FIELD_APP_REQUIRED = (
     "data-open-background-tasks",
     "copy_command",
     "api_post",
+    "robotPoseOverlayMarkup",
+    "robot_pose_overlay",
+    "clampNumber",
 )
 
 ROUTE_FIELD_APP_FORBIDDEN = (
@@ -209,6 +219,18 @@ def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
     assert 'gate.id === "context_json" && Boolean(els.contextInput.value.trim())' not in app
+
+
+def test_static_app_renders_robot_pose_overlay() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert "robotPoseOverlayMarkup" in app
+    assert "robot_pose_overlay" in app
+    assert "robot-pose-overlay" in app
+    assert ".robot-pose-overlay" in css
+    assert "--robot-x" in css
+    assert "--robot-yaw" in css
 
 
 def test_static_app_renders_scene_preview_assets() -> None:
@@ -303,11 +325,11 @@ def test_static_app_renders_scene_preview_assets() -> None:
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["views"]["fpv"]["provenance"] == (
-        "isaac_runtime_robot_mounted_head_camera_fpv"
+    assert b1_metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert b1_metadata["views"]["chase"]["provenance"] == (
+        "prepared_b1_nurec_scene_camera_preview"
     )
-    assert b1_metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
-    assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert b1_metadata["views"]["topdown"]["view"] == "review_label_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
     assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["map"]["path"]
     assert b1_metadata["views"]["chase"]["path"] != b1_metadata["views"]["fpv"]["path"]
@@ -324,6 +346,9 @@ def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> Non
     assert 'id="intent-preview"' in html
     assert "selectedIntent" in app
     assert "selectedIntentForRoute" in app
+    assert 'const DEFAULT_UI_INTENT = "open-ended";' in app
+    assert "preferredDefaultCombination" in app
+    assert "item.enabled && item.intent_id === DEFAULT_UI_INTENT" in app
     assert "state.selectedIntent = els.intentInput.value;" in app
     assert "state.selectedIntent = selectedIntent();" not in app
     assert "syncAxesFromRoute" in app

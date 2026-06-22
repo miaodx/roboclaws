@@ -16,7 +16,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
         "budget=smoke",
         "stamp=trace",
         "agent_engine=codex-cli",
-        "provider_profile=codex-env",
+        "provider_profile=codex-router-responses",
         "live_execution=run",
         "live_timeout_s=30",
     )
@@ -25,7 +25,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
     assert "suite=smoke_regression" in trace
     assert "budget=smoke" in trace
     assert "agent_engine=codex-cli" in trace
-    assert "provider_profile=codex-env" in trace
+    assert "provider_profile=codex-router-responses" in trace
     assert "live_execution=run" in trace
     assert "live_timeout_s=30" in trace
 
@@ -97,7 +97,7 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
         "surface=household-world",
         "preset=cleanup",
         "agent_engine=codex-cli",
-        "provider_profile=codex-env",
+        "provider_profile=codex-router-responses",
         "evidence_lane=world-public-labels",
         "seed=7",
         "output_dir=/tmp/roboclaws-eval-surface-test",
