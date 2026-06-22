@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.maps.bundle import validate_nav2_map_bundle
+from roboclaws.maps.bundle import validate_base_navigation_map_v1_bundle, validate_nav2_map_bundle
 from scripts.maps.build_b1_map12_base_navigation_map import (
     B1_BASE_NAVIGATION_LABELS_SCHEMA,
     B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA,
@@ -79,6 +79,8 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
     assert result["schema"] == B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA
     assert result["status"] == "generated"
     assert validate_nav2_map_bundle(output_dir).ok
+    assert validate_base_navigation_map_v1_bundle(output_dir).ok
+    assert result["validation"]["metadata"]["base_navigation_map_v1_ready"] is True
     assert manifest["policy"]["shared_by_real_robot_and_digital_twin"] is True
     assert manifest["policy"]["does_not_use_navigation_memory_as_waypoint_source"] is True
     assert manifest["base_navigation_map"]["navigation_area_count"] == 5

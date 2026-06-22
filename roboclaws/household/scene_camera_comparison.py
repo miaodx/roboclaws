@@ -7,11 +7,13 @@ import sys
 import traceback
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.household import (
     scene_camera_geometry_contract,
     scene_camera_image_metrics,
@@ -359,17 +361,23 @@ def _lane_order(manifest: dict[str, Any]) -> list[str]:
 
 def _official_molmospaces_source() -> dict[str, Any]:
     try:
-        from importlib import metadata
-
         distribution = metadata.distribution("molmo-spaces")
-        direct_url_text = distribution.read_text("direct_url.json")
-        payload = json.loads(direct_url_text) if direct_url_text else {}
-    except (metadata.PackageNotFoundError, OSError, json.JSONDecodeError, KeyError):
+    except metadata.PackageNotFoundError:
         return {
             "package": "molmo-spaces",
             "status": "not_installed",
             "expected_source": "https://github.com/allenai/molmospaces",
         }
+    try:
+        direct_url_text = distribution.read_text("direct_url.json")
+    except OSError as exc:
+        return _molmospaces_source_metadata_error(status="metadata_unreadable", error=exc)
+    if not direct_url_text:
+        return _molmospaces_source_metadata_error(status="metadata_unavailable")
+    try:
+        payload = parse_json_object_text(direct_url_text, label="molmo-spaces direct_url.json")
+    except ValueError as exc:
+        return _molmospaces_source_metadata_error(status="metadata_unreadable", error=exc)
     vcs_info = payload.get("vcs_info") if isinstance(payload, dict) else {}
     return {
         "package": "molmo-spaces",
@@ -381,6 +389,21 @@ def _official_molmospaces_source() -> dict[str, Any]:
         if isinstance(vcs_info, dict)
         else "",
     }
+
+
+def _molmospaces_source_metadata_error(
+    *,
+    status: str,
+    error: BaseException | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "package": "molmo-spaces",
+        "status": status,
+        "expected_source": "https://github.com/allenai/molmospaces",
+    }
+    if error is not None:
+        payload["error"] = str(error)
+    return payload
 
 
 def _runtime_object_positions(state: dict[str, Any]) -> dict[str, dict[str, Any]]:

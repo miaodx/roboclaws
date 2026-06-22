@@ -13,7 +13,7 @@ from roboclaws.agents.provider_timing_contract import (
     PROVIDER_REQUEST_METRIC_SCHEMA,
     PROVIDER_REQUEST_METRICS_FILENAME,
 )
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import json_source_type_name, read_json_object
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 
 REPORT_PERFORMANCE_SCHEMA = "roboclaws_report_performance_metrics_v1"
@@ -346,16 +346,8 @@ def read_json(path: Path) -> dict[str, Any]:
                 f"line {cause.lineno} column {cause.colno}: {cause.msg}"
             ) from exc
         raise ReportPerformanceSourceError(
-            f"malformed JSON source {path}: expected object, got {_json_type_name(path)}"
+            f"malformed JSON source {path}: expected object, got {json_source_type_name(path)}"
         ) from exc
-
-
-def _json_type_name(path: Path) -> str:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return "unknown"
-    return type(payload).__name__
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:

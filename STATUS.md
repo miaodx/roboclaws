@@ -91,18 +91,18 @@ thin review/runtime contract is
 
 ## Next Action
 
-Use `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md` plus
-the new B1 / Map 12 Base Navigation Map generator for the next B1 / Map 12
-work: wire the strict shared bundle into real-robot / Digital Twin consumers,
-then handle room/object semantic projection or public navigation extensions
-behind separate proof gates.
+Start Slice 2 of
+`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`:
+extract the canonical area-based `BaseWaypointBuilder` so simulator, real
+robot, and Digital Twin bundles normalize base inspection waypoints through
+one builder contract.
 
 ## Current Blocker
 
-No current human blocker for the implemented B1 P0 digital-twin
-navigation/render consumer-chain slice. The accepted B1 / Map 12 base
-navigation labels generate a validated shared bundle locally; semantic
-projection and consumer wiring remain follow-up implementation work.
+No current human blocker for the approved cross-environment map/waypoint
+source-of-truth plan. Slice 1 strict Base Navigation Map v1 validation is
+implemented; the next implementation pressure is the canonical area-based
+waypoint builder and simulator source-map preparation.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
