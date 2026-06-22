@@ -43,6 +43,7 @@ ROBOT_MAP_12_ARTIFACT = DEFAULT_AGIBOT_MAP_ARTIFACT_DIR
 AGIBOT_SDK_RUNNER_PATH = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 )
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -563,6 +564,7 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path / "run",
         contract=contract,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
 
     try:

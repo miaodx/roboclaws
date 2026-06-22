@@ -49,8 +49,7 @@ def _assert_static_fixture_projection_artifact_only(run_dir: Path, run_result: d
     ]
     assert "static_fixture_projection" not in runner_task_input["public_tool_sequence"]
     assert (
-        "static_fixture_projection"
-        not in runner_task_input["stage_mapping"]["agent_view_export"]
+        "static_fixture_projection" not in runner_task_input["stage_mapping"]["agent_view_export"]
     )
     assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 

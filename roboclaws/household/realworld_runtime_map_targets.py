@@ -655,9 +655,7 @@ def internal_fixture_id_for_public_anchor(
         {},
     )
     fixture_id = (
-        best_internal_fixture_for_anchor(contract, anchor)
-        if _is_place_anchor(anchor)
-        else ""
+        best_internal_fixture_for_anchor(contract, anchor) if _is_place_anchor(anchor) else ""
     )
     if fixture_id:
         contract._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)

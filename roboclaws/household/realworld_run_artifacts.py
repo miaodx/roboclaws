@@ -439,9 +439,7 @@ def _map_build_payload(
 ) -> dict[str, Any]:
     return {
         "enabled": inputs.map_build,
-        "camera_schedule": (
-            list(inputs.map_build_camera_schedule) if inputs.map_build else []
-        ),
+        "camera_schedule": (list(inputs.map_build_camera_schedule) if inputs.map_build else []),
         "snapshot_artifact": str(artifacts.runtime_metric_map) if inputs.map_build else "",
         "cleanup_actions_disabled": inputs.map_build,
     }

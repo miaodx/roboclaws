@@ -1955,9 +1955,7 @@ def _has_reviewable_place_surface_evidence(
 ) -> bool:
     if step.get("semantic_phase") not in {"place", "place_inside"}:
         return False
-    if not (
-        focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")
-    ):
+    if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
         return False
     if not (
         focus.get("receptacle_id")

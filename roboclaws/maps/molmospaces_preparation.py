@@ -14,9 +14,7 @@ from roboclaws.maps.spatial_contract import (
 )
 
 BASE_NAVIGATION_MAP_CONTRACT_SCHEMA = "base_navigation_map_v1"
-MOLMOSPACES_BASE_NAVIGATION_PREPARATION_SCHEMA = (
-    "molmospaces_base_navigation_map_preparation_v1"
-)
+MOLMOSPACES_BASE_NAVIGATION_PREPARATION_SCHEMA = "molmospaces_base_navigation_map_preparation_v1"
 
 
 def prepare_molmospaces_base_navigation_map(

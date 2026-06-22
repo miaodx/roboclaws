@@ -98,11 +98,14 @@ def test_base_waypoint_builder_generates_area_inspection_waypoint_from_area_only
             "source_polygon_index": 7,
         }
     ]
-    assert validate_base_waypoints(
-        waypoints,
-        navigation_area_ids={"kitchen_a"},
-        grid=grid,
-    ) == []
+    assert (
+        validate_base_waypoints(
+            waypoints,
+            navigation_area_ids={"kitchen_a"},
+            grid=grid,
+        )
+        == []
+    )
 
 
 def test_base_waypoint_builder_selects_centroid_nearest_safe_pose_for_irregular_area() -> None:
@@ -273,7 +276,6 @@ def _grid(rows: list[str], *, resolution_m: float) -> OccupancyGrid:
         origin_x=0.0,
         origin_y=0.0,
         rows=tuple(
-            tuple(FREE_PIXEL if value == "." else OCCUPIED_PIXEL for value in row)
-            for row in rows
+            tuple(FREE_PIXEL if value == "." else OCCUPIED_PIXEL for value in row) for row in rows
         ),
     )
