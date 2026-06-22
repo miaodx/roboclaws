@@ -24,16 +24,16 @@ def test_provider_health_defaults_leave_room_for_reasoning_tokens() -> None:
     assert script.DEFAULT_CHAT_MAX_TOKENS >= 128
 
 
-def test_direct_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> None:
+def test_provider_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> None:
     script = _load_script_module()
 
-    probes = {probe.probe_id: probe for probe in script.build_direct_probes()}
+    probes = {probe.probe_id: probe for probe in script.build_provider_probes()}
 
-    assert probes["direct:minimax-responses-m27"].max_tokens >= 256
-    assert probes["direct:mimo-tp-openai-chat"].max_tokens >= 128
-    assert probes["direct:mimo-inside-openai-chat"].model == "mimo-1000"
-    assert probes["direct:mimo-inside-openai-chat"].max_tokens >= 128
-    kimi = probes["direct:kimi-coding-chat"]
+    assert probes["provider:minimax-responses-m27"].max_tokens >= 256
+    assert probes["provider:mimo-tp-openai-chat"].max_tokens >= 128
+    assert probes["provider:mimo-inside-openai-chat"].model == "mimo-1000"
+    assert probes["provider:mimo-inside-openai-chat"].max_tokens >= 128
+    kimi = probes["provider:kimi-coding-chat"]
     payload = script.kimi_coding_payload(
         prompt="Health check. Reply exactly ok.",
         model=kimi.model,
@@ -45,12 +45,12 @@ def test_direct_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> Non
     assert "temperature" not in payload
 
 
-def test_direct_probe_defaults_exclude_unavailable_official_openai_route() -> None:
+def test_provider_probe_defaults_exclude_unavailable_official_openai_route() -> None:
     script = _load_script_module()
 
-    probes = {probe.probe_id: probe for probe in script.build_direct_probes()}
+    probes = {probe.probe_id: probe for probe in script.build_provider_probes()}
 
-    assert "direct:openai-responses" not in probes
+    assert "provider:openai-responses" not in probes
     assert all(probe.api_key_env != "OPENAI_API_KEY" for probe in probes.values())
 
 
@@ -73,7 +73,7 @@ def test_require_all_fails_on_skipped_probe(monkeypatch) -> None:
             )
         ],
     )
-    monkeypatch.setattr(script, "build_direct_probes", lambda **_kwargs: [])
+    monkeypatch.setattr(script, "build_provider_probes", lambda **_kwargs: [])
 
     assert script.main(["--mode", "agents-sdk", "--dotenv", "", "--require-all"]) == 1
 
@@ -107,7 +107,7 @@ def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
     assert not probes["agents-sdk:kimi-openai-chat"].unsupported_reason
 
 
-def test_direct_chat_probe_sends_thinking_through_extra_body(monkeypatch) -> None:
+def test_provider_chat_probe_sends_thinking_through_extra_body(monkeypatch) -> None:
     script = _load_script_module()
     captured: dict[str, object] = {}
     monkeypatch.setenv("MIMO_TP_KEY", "fake-mimo-key")
@@ -129,8 +129,8 @@ def test_direct_chat_probe_sends_thinking_through_extra_body(monkeypatch) -> Non
             self.chat = FakeChat()
 
     monkeypatch.setitem(sys.modules, "openai", type("FakeOpenAIModule", (), {"OpenAI": FakeOpenAI}))
-    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
-        "direct:mimo-tp-openai-chat"
+    probe = {probe.probe_id: probe for probe in script.build_provider_probes()}[
+        "provider:mimo-tp-openai-chat"
     ]
 
     result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
@@ -239,11 +239,11 @@ def _install_fake_httpx(monkeypatch, *, response_text: str, status_error: Except
     return captured
 
 
-def test_kimi_direct_probe_validates_provider_response_source(monkeypatch) -> None:
+def test_kimi_provider_probe_validates_provider_response_source(monkeypatch) -> None:
     script = _load_script_module()
     monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
-    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
-        "direct:kimi-coding-chat"
+    probe = {probe.probe_id: probe for probe in script.build_provider_probes()}[
+        "provider:kimi-coding-chat"
     ]
     _install_fake_httpx(monkeypatch, response_text='["not-an-object"]')
 
@@ -252,14 +252,14 @@ def test_kimi_direct_probe_validates_provider_response_source(monkeypatch) -> No
     assert result.status == "FAIL"
     assert result.error_type == "ValueError"
     assert "Kimi coding provider response source must contain a JSON object" in result.error
-    assert "direct:kimi-coding-chat" in result.error
+    assert "provider:kimi-coding-chat" in result.error
 
 
-def test_kimi_direct_probe_validates_response_message_shape(monkeypatch) -> None:
+def test_kimi_provider_probe_validates_response_message_shape(monkeypatch) -> None:
     script = _load_script_module()
     monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
-    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
-        "direct:kimi-coding-chat"
+    probe = {probe.probe_id: probe for probe in script.build_provider_probes()}[
+        "provider:kimi-coding-chat"
     ]
     _install_fake_httpx(monkeypatch, response_text=json.dumps({"choices": [{"message": []}]}))
 
@@ -268,14 +268,14 @@ def test_kimi_direct_probe_validates_response_message_shape(monkeypatch) -> None
     assert result.status == "FAIL"
     assert result.error_type == "RuntimeError"
     assert "choices[0].message must be a JSON object" in result.error
-    assert "direct:kimi-coding-chat" in result.error
+    assert "provider:kimi-coding-chat" in result.error
 
 
-def test_kimi_direct_probe_reads_reasoning_content_from_valid_response(monkeypatch) -> None:
+def test_kimi_provider_probe_reads_reasoning_content_from_valid_response(monkeypatch) -> None:
     script = _load_script_module()
     monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
-    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
-        "direct:kimi-coding-chat"
+    probe = {probe.probe_id: probe for probe in script.build_provider_probes()}[
+        "provider:kimi-coding-chat"
     ]
     captured = _install_fake_httpx(
         monkeypatch,
@@ -297,12 +297,34 @@ def test_select_probe_can_limit_by_route_or_probe_id() -> None:
 
     assert {probe.probe_id for probe in selected} == {
         "agents-sdk:minimax-responses",
-        "direct:minimax-responses-m3",
-        "direct:minimax-responses-m27",
+        "provider:minimax-responses-m3",
+        "provider:minimax-responses-m27",
     }
 
 
-def test_select_probe_can_limit_kimi_route_across_sdk_and_direct_probes() -> None:
+def test_agents_sdk_public_profile_excludes_internal_routes() -> None:
+    script = _load_script_module()
+    args = script.parse_args(["--profile", "agents-sdk-public"])
+
+    selected = script.select_probes(args)
+
+    assert {probe.probe_id for probe in selected} == {
+        "agents-sdk:minimax-responses",
+        "agents-sdk:mimo-tp-openai-chat",
+        "agents-sdk:kimi-openai-chat",
+    }
+    assert not any(
+        probe.route_id
+        in {
+            "codex-router-responses",
+            "mimo-mify-responses",
+            "mimo-inside-openai-chat",
+        }
+        for probe in selected
+    )
+
+
+def test_select_probe_can_limit_kimi_route_across_sdk_and_provider_probes() -> None:
     script = _load_script_module()
     args = script.parse_args(["--mode", "all", "--probe", "kimi-openai-chat"])
 
@@ -310,5 +332,5 @@ def test_select_probe_can_limit_kimi_route_across_sdk_and_direct_probes() -> Non
 
     assert {probe.probe_id for probe in selected} == {
         "agents-sdk:kimi-openai-chat",
-        "direct:kimi-coding-chat",
+        "provider:kimi-coding-chat",
     }
