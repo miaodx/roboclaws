@@ -34,6 +34,1771 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Nav2 map-bundle export now treats missing explicit
+  `--agent-view` and `--run-result` sources as source-path errors before
+  bundle writes. This extends the existing malformed/non-object exporter
+  source guard so absent declared inputs no longer surface as raw file-read
+  tracebacks or create partial output directories. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud map/export
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules. Proof: focused Nav2 map-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh exporter evidence that missing declared agent-view or
+  run-result sources again read through raw file paths or write bundle outputs
+  after source-load failure.
+
+- 2026-06-20: Semantic map spatial-contract normalization now treats bundle
+  `semantics.json` as JSON-object source truth before in-place writes. Missing,
+  malformed, or parseable non-object semantics sources now return concise CLI
+  source-path errors instead of raw parser/type tracebacks, and the
+  cross-environment parity test now reflects the current seven accepted B1
+  geometry-only alignment anchors with blank semantic ids. Owner layer:
+  Backend Runtime / Environment Primitive and Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud map-bundle source truth plus stale
+  test-truth refresh. Metric: staged/add-N ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules. Proof: focused cross-environment semantic-map
+  parity tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only with fresh normalizer evidence that `semantics.json`
+  again loads through raw parser/type paths or writes after source-load
+  failure, or with current B1 manifest evidence contradicting the accepted
+  seven-anchor alignment contract.
+
+- 2026-06-20: B1 asset visual comparisons now treat explicit
+  `--baseline-navigation` and `--candidate-navigation` artifacts as
+  JSON-object source truth. Missing, malformed, or parseable non-object
+  navigation artifacts now return concise CLI source-path errors before
+  writing comparison outputs, instead of surfacing raw parser/type failures or
+  deriving same-pose visual comparison packets from corrupt evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 asset visual comparison source truth. Metric: staged/add-N
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  focused asset-comparison CLI source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh asset-comparison
+  evidence that explicit baseline or candidate navigation artifacts again load
+  through raw parser/type paths, accept plausible non-object packets, or write
+  comparison outputs after source-load failure.
+
+- 2026-06-20: Prepared semantic USD summary validation now treats the explicit
+  summary path as JSON-object source truth. Missing, malformed, or parseable
+  non-object summary sources now return concise CLI source-path errors before
+  reporting readiness, instead of surfacing raw parser/type failures or
+  assertion-only tracebacks. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud prepared semantic USD summary source
+  truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused prepared-summary CLI source tests, existing
+  prepared-summary assertion tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh prepared-summary
+  evidence that explicit summary artifacts again load through raw parser/type
+  paths or report readiness after source-load failure.
+
+- 2026-06-20: Isaac segmentation AOV comparisons now treat explicit
+  `--control-state` and `--candidate-state` artifacts as JSON-object source
+  truth. Missing, malformed, or parseable non-object state artifacts now return
+  concise CLI source-path errors before writing comparison outputs, instead of
+  surfacing raw parser/type failures or producing plausible comparison packets
+  from corrupt evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Isaac AOV comparison source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused AOV comparison CLI source tests, existing AOV
+  comparison/matrix tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only with fresh AOV comparison evidence that explicit
+  control or candidate artifacts again load through raw parser/type paths,
+  accept plausible non-object packets, or write comparison outputs after
+  source-load failure.
+
+- 2026-06-20: Isaac segmentation AOV matrix summaries now treat explicit
+  `--entry LABEL=PATH` artifacts as JSON-object source truth. Missing,
+  malformed, or parseable non-object entry artifacts now return concise CLI
+  source-path errors before writing matrix outputs, instead of surfacing raw
+  parser/type failures or producing plausible decision packets from corrupt
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Isaac AOV matrix source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused AOV matrix CLI source tests, existing AOV comparison
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only with fresh AOV matrix evidence that explicit entry artifacts
+  again load through raw parser/type paths, accept plausible non-object
+  packets, or write matrix outputs after source-load failure.
+
+- 2026-06-20: B1 digital-twin readiness now treats explicit
+  `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object optional proof
+  artifacts now return concise CLI source-path errors before writing the
+  readiness artifact, instead of surfacing raw parser/type failures or merging
+  plausible readiness evidence from corrupt sources. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 readiness
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules; coverage landed in a small dedicated readiness CLI
+  contract test file. Proof: focused readiness CLI source tests, existing B1
+  digital-twin readiness contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh B1 readiness
+  evidence that explicit alignment or navigation artifacts again load through
+  raw parser/type paths, accept plausible non-object packets, or write
+  readiness artifacts after source-load failure.
+
+- 2026-06-20: B1 manual alignment overlay rendering now treats explicit
+  `--scene-topdown-render` and `--alignment-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object scene top-down
+  render packets and alignment artifacts now return concise CLI source-path
+  errors before writing `map12_on_gaussian_topdown.json` or preview images,
+  instead of surfacing raw parser/type failures or publishing plausible overlay
+  evidence from corrupt sources. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud B1 manual-overlay source truth.
+  Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; coverage landed in a small dedicated manual-overlay CLI
+  contract test file instead of expanding the 2000-line B1 alignment
+  hard-ceiling test. Proof: focused manual-overlay CLI source tests, selected
+  existing overlay transform test, touched-file ruff/format checks, and
+  ratchet. Reopen only with fresh B1 manual-overlay evidence that explicit
+  topdown or alignment artifacts again load through raw parser/type paths,
+  accept plausible non-object packets, or write overlay artifacts after
+  source-load failure.
+
+- 2026-06-20: B1 map-scene alignment fitter CLI loading now treats explicit
+  `--correspondences` input as JSON-object source truth. Missing, malformed,
+  or parseable non-object correspondence manifests now return concise CLI
+  source-path errors before writing `alignment_residuals.json` or preview
+  artifacts, instead of surfacing raw parser/type failures or producing
+  plausible alignment packets from corrupt evidence. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 alignment
+  fitter source truth. Metric: staged/add-N ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated alignment-fit CLI contract test file instead of expanding the
+  2000-line B1 alignment hard-ceiling test. Proof: focused alignment-fit CLI
+  source tests, selected existing B1 alignment fitter tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh B1 alignment-fit evidence that explicit
+  correspondences are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write artifacts after source-load
+  failure.
+
+- 2026-06-20: B1 correspondence review rendering now treats explicit
+  `--correspondences` and `--scene-topdown-render` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object correspondence
+  manifests and scene top-down render packets now return concise CLI
+  source-path errors before writing `correspondence_review_packet.json` or
+  `correspondence_review.html`, instead of surfacing raw parser/type failures
+  or publishing plausible review packets from corrupt evidence. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud B1
+  correspondence review source truth. Metric: staged/add-N ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated correspondence-review CLI contract test file instead of expanding
+  the 2000-line B1 alignment hard-ceiling test. Proof: focused
+  correspondence-review CLI source tests, selected existing B1
+  correspondence-review tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh B1
+  correspondence-review evidence that explicit correspondences or topdown
+  render packets are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write artifacts after source-load
+  failure.
+
+- 2026-06-20: Robot-camera visual parity summary CLI loading now treats
+  explicit baseline/probe manifests, RAW-FPV run results, calibration
+  manifests, prepared USD summaries, paired comparison manifests, report
+  visual sample manifests, and nested RGB-gain source manifests as JSON-object
+  source truth. Missing declared optional sources, malformed JSON, and
+  parseable non-object source packets now return concise CLI/source errors
+  before writing `visual_parity_summary.json` or `report.html`, instead of
+  surfacing raw parser/type failures or publishing plausible parity reports
+  from corrupt evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-parity report source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the visual-parity summary script remained in existing warning-band
+  debt at 1988 lines, and coverage landed in a small dedicated source-error
+  unit test file instead of expanding the 2262-line visual-parity regression
+  test. Proof: focused visual-parity source tests, selected existing
+  visual-parity regression tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh
+  visual-parity summary evidence that explicit report/calibration/prepared/USD
+  or nested source manifests are again loaded through raw parser/type paths,
+  accepted as plausible non-object packets, or allowed to write artifacts
+  after source-load failure.
+
+- 2026-06-20: B1 manual-anchor semantic suggestion CLI loading now treats
+  `--draft`, `--review-manifest`, and `--scene-diagnostic` inputs as
+  JSON-object source truth. Missing, malformed, or parseable non-object source
+  packets now return concise CLI source-path errors before writing semantic
+  suggestions, semantic review packets, or HTML review reports, instead of
+  surfacing raw file/parser/type failures or rereading draft state for the
+  review packet. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 manual-anchor semantic suggestion
+  source truth. Metric: staged/add-N ratchet stayed at 0 Ruff complexity rows
+  and 79 oversized modules; coverage landed in a small dedicated CLI contract
+  test file instead of adding to the 2000-line B1 alignment hard-ceiling test.
+  Proof: focused manual-anchor semantic CLI tests, existing manual-anchor
+  semantic alignment tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh
+  manual-anchor semantic suggestion evidence that draft/review/scene sources
+  are again loaded through raw parser/type paths, accepted as plausible
+  non-object packets, reread inconsistently between outputs, or allowed to
+  write artifacts after source-load failure.
+
+- 2026-06-20: B1 navigation report rendering now treats
+  `navigation_smoke.json`, explicitly supplied `--readiness-artifact` /
+  `--waypoint-pose-requests`, and present default readiness/waypoint request
+  sidecars as JSON-object source truth. Missing explicit optional artifacts,
+  malformed required navigation artifacts, malformed present default sidecars,
+  and parseable non-object waypoint request artifacts now return concise
+  source-path errors before `report.html` writes, instead of silently omitting
+  corrupt report evidence or surfacing raw parser/type paths. The no-sidecar
+  default remains a deliberate report mode only when those optional files are
+  absent and not explicitly requested. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud B1 navigation report source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; report coverage stayed in the small navigation-report contract test
+  file instead of the 2000-line B1 alignment hard-ceiling test. Proof: focused
+  navigation-report tests, adjacent B1 readiness/report contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh navigation-report evidence that explicit
+  optional artifacts or present sidecars are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, silently
+  omitted, or allowed to write reports after source-load failure.
+
+- 2026-06-20: B1 navigation smoke now treats explicit
+  `--readiness-artifact` and `--waypoint-pose-requests` inputs as source truth.
+  Missing, malformed, or parseable non-object readiness or waypoint request
+  artifacts return concise source-path errors before `navigation_smoke.json`
+  writes, instead of surfacing raw parser/type failures or writing plausible
+  blocked navigation artifacts from corrupt source evidence. Schema-valid
+  blocked waypoint request artifacts still produce blocked navigation evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 navigation smoke source truth. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated navigation-smoke CLI contract test file instead of adding to the
+  2000-line B1 alignment hard-ceiling test. Proof: focused navigation smoke
+  CLI tests, existing B1 verified-alignment contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh navigation smoke evidence that explicit readiness or
+  waypoint request artifacts are again loaded through raw parser/type paths,
+  accepted as plausible non-object packets, or allowed to write artifacts after
+  source-load failure.
+
+- 2026-06-20: B1 Map 12 waypoint pose request building now treats required
+  `--alignment-artifact` input and explicit `--points` input as source truth.
+  Missing, malformed, or parseable wrong-shaped alignment artifacts and points
+  files return concise source-path errors before `waypoint_pose_requests.json`
+  writes, instead of surfacing raw parser/type failures or writing plausible
+  blocked pose-request artifacts from absent/corrupt source evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 waypoint pose request source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated CLI contract test file instead of adding to the 2000-line B1
+  alignment hard-ceiling test. Proof: focused waypoint pose request CLI tests,
+  existing B1 verified-alignment contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh waypoint pose request evidence that explicit alignment or points
+  sources are again loaded through raw parser/type paths, accepted as plausible
+  wrong-shaped packets, or allowed to write artifacts after source-load
+  failure.
+
+- 2026-06-20: B1 Gaussian scene topdown capture now treats the hidden explicit
+  `--camera-request` input as JSON-object source truth. Malformed or parseable
+  non-object camera-request packets return concise source-path errors before
+  Isaac capture or `capture_result.json` writes, instead of surfacing raw
+  parser/type failures or passing wrong-shaped request evidence into the
+  capture worker. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 scene camera-request source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  coverage landed in the small Gaussian topdown contract test file. Proof:
+  focused B1 scene Gaussian topdown contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh Gaussian topdown capture evidence that explicit camera-request
+  packets are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write capture artifacts after
+  source-load failure.
+
+- 2026-06-20: B1 scene topdown diagnostic overlay loading now treats explicit
+  `--scene-topdown-render` input as JSON-object source truth. Malformed or
+  parseable non-object render packets return concise source-path errors before
+  schema validation or overlay report writes, instead of surfacing raw
+  parser/type failures from wrong-shaped Gaussian topdown evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 scene topdown render source truth. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; coverage landed in the small
+  topdown diagnostic contract test file instead of the B1 alignment hard
+  ceiling test. Proof: focused B1 scene topdown diagnostic contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh scene-topdown diagnostic evidence that
+  explicit Gaussian topdown render packets are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, or allowed to
+  write overlay artifacts after source-load failure.
+
+- 2026-06-20: B1 Map 12 manual-draft verification promotion CLI loading now
+  treats explicit `--draft` input as JSON-object source truth. Missing,
+  malformed, or parseable non-object draft packets return concise CLI
+  source-path errors and do not write verification-only correspondence
+  manifests, instead of surfacing raw file/parser/type failures before draft
+  promotion. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 manual draft source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  touched B1 alignment test stayed at the 2000-line hard-ceiling boundary
+  after local table compaction. Proof: focused B1 manual-draft promotion
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh manual-draft
+  promotion CLI evidence that explicit drafts are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, or allowed to
+  write verification-only artifacts after source-load failure.
+
+- 2026-06-20: B1 Map 12 semantic review packet promotion and fit-check CLI
+  loading now treats explicit `--review-packet` inputs as JSON-object source
+  truth. Missing, malformed, or parseable non-object review packets return
+  concise CLI source-path errors and do not write promoted correspondence,
+  preview, or residual artifacts, instead of surfacing raw file/parser/type
+  failures before promotion or fit-check work. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud B1 semantic review packet
+  source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; table-driven tests kept the touched B1 alignment test
+  within existing warning-band debt. Proof: focused B1 alignment review-packet
+  promotion/fit-check contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  semantic review packet CLI evidence that explicit review packets are again
+  loaded through raw parser/type paths, accepted as plausible non-object source
+  packets, or allowed to write artifacts after source-load failure.
+
+- 2026-06-20: B1 Map 12 semantic-anchor review packet CLI loading now treats
+  explicit `--review-manifest` and `--alignment-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object review/alignment
+  files return concise CLI source-path errors and do not write proposed-anchor
+  packets, instead of surfacing raw file/parser/type failures before semantic
+  review packet construction. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud B1 semantic-anchor review source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; table-driven tests kept the touched B1 alignment test within
+  existing warning-band debt. Proof: focused B1 alignment/semantic-anchor
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh semantic-anchor
+  review CLI evidence that explicit review or alignment source files are again
+  loaded through raw parser/type paths or accepted as plausible non-object
+  source packets.
+
+- 2026-06-20: B1 Map 12 semantic projection CLI loading now treats explicit
+  `--correspondences` and `--review-manifest` inputs as JSON-object source
+  truth. Missing, malformed, or parseable non-object correspondence/review
+  files return concise CLI source-path errors and do not write projection
+  output, instead of surfacing raw file/parser/type failures before projection
+  validation. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 semantic projection source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the projection script remains small while the touched alignment test remains
+  existing warning-band debt. Proof: focused B1 alignment/projection contract
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet. Reopen only with fresh semantic-projection CLI evidence
+  that explicit correspondence or review source files are again loaded through
+  raw parser/type paths or accepted as plausible non-object source packets.
+
+- 2026-06-20: B1 runtime bundle robot-consumption proof loading now reads
+  explicit alignment and navigation artifacts through the shared JSON-object
+  source guard. Missing, malformed, or parseable non-object
+  `--alignment-artifact` / `--navigation-artifact` inputs now raise concise
+  source-path errors before proof validation or runtime bundle writes, instead
+  of surfacing raw parser/type failures from wrong-shaped proof evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 runtime proof source truth / source-reader consolidation.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  table-driven tests kept the B1 runtime bundle contract test below warning
+  band while the runtime compiler remains in warning-band debt at 1574 lines.
+  Proof: focused B1 runtime bundle contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh runtime bundle evidence that explicit alignment/navigation proof
+  artifacts are again loaded through raw parser/type paths or accepted as
+  plausible non-object source packets.
+
+- 2026-06-20: B1 runtime bundle compilation now reads explicit
+  `--review-manifest` input through the same JSON-object source guard used for
+  explicit semantic projection artifacts. Missing, malformed, or parseable
+  non-object review manifests now raise concise source-path errors before
+  review validation or artifact writes, instead of surfacing raw parser/type
+  failures from wrong-shaped review source truth. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 runtime
+  review source truth / source-reader consolidation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the runtime bundle compiler
+  remains in warning-band debt at 1578 lines. Proof: focused B1 runtime bundle
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh runtime bundle
+  evidence that explicit review manifests are again loaded through raw
+  parser/type paths or accepted as plausible non-object source packets.
+
+- 2026-06-20: B1 Map 12 label-tool semantic source loading now treats
+  explicitly supplied `--semantics` paths as source truth: missing files,
+  malformed JSON, and parseable non-object JSON raise clear source errors
+  instead of falling back to the empty vendor semantics packet. The intentional
+  no-authored-semantics default still exists for the raw vendor Map 12 bundle,
+  but now requires valid `source.json` metadata and fails when that source
+  identity packet is missing, malformed, or non-object instead of fabricating
+  `robot_map_12`. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud label-tool semantics source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  label-tool script remains in the tracked warning band at 1173 lines. Proof:
+  focused B1 label-tool contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  label-tool evidence that explicit semantics paths or required vendor source
+  metadata are again skipped, defaulted, or turned into plausible empty packet
+  identity.
+
+- 2026-06-20: B1 Map 12 label-tool review-manifest loading now treats an
+  explicitly supplied manifest path as source truth: missing files, malformed
+  JSON, parseable non-object JSON, and wrong-schema manifests raise clear
+  label-tool source errors instead of silently falling through to the
+  no-review-manifest semantics path. The default no-manifest vendor Map 12 path
+  remains supported. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud label-tool review source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  label-tool script remains in the tracked warning band at 1151 lines. Proof:
+  focused B1 label-tool contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  label-tool evidence that explicit review-manifest paths are again ignored,
+  schema-skipped, or treated like optional absent inputs.
+
+- 2026-06-20: B1 Map 12 label-tool draft export now preserves
+  `polygon_role` as source-truth metadata and rejects missing or invalid draft
+  label roles during manifest generation/validation instead of defaulting bad
+  source values to `navigation_area`. The slice keeps forced candidate
+  `alignment_status`, draft `review_status`, and operator-authored
+  `geometry_source` export behavior unchanged. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud semantic-map
+  draft source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the label-tool script remains in the tracked warning band
+  at 1140 lines. Proof: focused B1 label-tool contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh label-tool evidence that malformed semantic-map role
+  metadata is again silently converted into valid-looking draft labels.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion and B1 runtime bundle
+  compilation now reuse the shared `roboclaws.maps.navigation_memory` parser
+  for Agibot navigation-memory object loading, item-list selection, item type
+  guards, and point/pose numeric validation. This removes the duplicate local
+  readers and parsing helpers from both oversized callers while preserving the
+  existing Runtime Map Prior and B1 compiler diagnostics for malformed,
+  non-object, empty, wrong-shaped, and bad-coordinate sources. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: parser ownership
+  consolidation / no intended valid-output change. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; the B1 runtime bundle compiler
+  dropped below the previous 1639-line snapshot to 1576 lines, and Runtime Map
+  Prior Snapshot moved from 1213 lines before the earlier parser work to 1174
+  lines after this consolidation. Proof: focused Runtime Map Prior Snapshot and
+  B1 runtime bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, duplicate-parser search, and
+  ratchet. Reopen only with fresh evidence that these callers have grown
+  another local Agibot navigation-memory parser or that shared parser
+  diagnostics drift from the covered contract expectations.
+
+- 2026-06-20: B1 Map 12 consistency and label-tool review layers now load
+  `navigation_memory.json` through a shared strict parser, require a non-empty
+  `items` or `catalog.navigation_memory` list, reject non-object rows, reject
+  present malformed `nav_goal` / `pose` point fields, and fail on missing
+  selected-bundle sibling memory sources instead of rendering empty navigation
+  memory layers or partial consistency packets. The label tool also resolves
+  the memory source next to the selected map bundle instead of a stale global
+  default. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 review-layer source truth; valid
+  item-list and catalog-shaped memory sources remain accepted. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused B1
+  Map 12 consistency and label-tool contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Parked:
+  migrating the already-strict Runtime Map Prior Snapshot and B1 runtime bundle
+  compiler local parsers onto the shared helper should be a separate
+  caller-proof slice, not folded into this review-layer change. Reopen only
+  with fresh B1 review-tool evidence that malformed navigation memory sources
+  are again skipped, defaulted, or written as valid-looking empty/partial
+  packets.
+
+- 2026-06-20: B1 runtime bundle compilation now loads
+  `navigation_memory.json` through a strict object parser, requires a non-empty
+  `items` or `catalog.navigation_memory` list, rejects non-object rows, and
+  rejects present malformed `nav_goal` / `pose` point fields before writing
+  `semantics.json` or provenance. Malformed memory sources can no longer crash
+  raw, collapse into a generic no-waypoints failure, or be skipped into partial
+  runtime semantics. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 runtime source truth; valid memory rows
+  and costmap-based waypoint selection remain unchanged. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 79 oversized modules. Proof: focused B1 Map 12
+  runtime bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh runtime bundle
+  evidence that malformed navigation memory sources are again skipped,
+  genericized, or written into partial bundle artifacts.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now requires Nav2
+  cleanup-bundle `semantics.json` to provide a non-empty
+  `inspection_waypoints` list and rejects non-object waypoint rows before
+  materializing anchors. Missing, empty, or wrong-shaped waypoint sources can no
+  longer produce a valid-looking zero-waypoint prior snapshot. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior source-list truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules after compacting the focused contract tests
+  back below the 800-line threshold. Proof: focused Runtime Map Prior Snapshot
+  contract tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only with fresh Nav2 cleanup-bundle evidence that missing,
+  empty, or wrong-shaped waypoint entries again become empty or partially
+  fabricated snapshots.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now requires Agibot
+  `navigation_memory.json` to provide a non-empty `items` list or non-empty
+  `catalog.navigation_memory` list, and rejects non-object memory rows before
+  anchor materialization. Missing, empty, or wrong-shaped item sources can no
+  longer produce a valid-looking zero-anchor prior snapshot. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior source-list truth; the existing catalog-shaped alternate source
+  remains accepted. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh Agibot offline prior evidence that missing, empty, or wrong-shaped
+  memory entries again become empty or partially fabricated snapshots.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed,
+  missing, non-object, non-finite, or boolean Agibot `nav_goal`/`pose`
+  coordinates and Nav2 cleanup-bundle waypoint `x`/`y`/`yaw` coordinates before
+  materializing offline prior anchors. Present-but-bad Agibot `nav_goal` values
+  can no longer fall through to `pose`, and malformed Nav2 waypoint geometry can
+  no longer become plausible map-frame zero coordinates. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior waypoint geometry source truth; online runtime-map wrapping
+  remains unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh offline prior conversion evidence that waypoint or anchor pose
+  geometry is again defaulted, silently coerced, or fallback-substituted.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed
+  source-map geometry in Agibot `nav2.yaml` and Nav2 cleanup-bundle `map.yaml`
+  before building offline prior packets. Missing, non-positive, non-finite, or
+  wrong-shaped resolution/origin values can no longer default to `0.05` or
+  `[0, 0, 0]`, and yaw now comes from the same validated origin tuple. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-map geometry truth; valid Agibot and Nav2 conversion shape
+  is unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh offline prior conversion evidence that source map geometry is
+  again defaulted, silently coerced, or read through a separate parser.
+
+- 2026-06-20: OpenAI Agents SDK performance-profile numeric settings now
+  reject direct Python boolean values before runtime profile metadata is
+  produced. Direct `max_turns`, `raw_fpv_candidate_budget`,
+  `mcp_client_session_timeout_s`, and `model_service_retry_sleep_s` values can
+  no longer accept `True` as `1` / `1.0`; string env parsing, finite numeric
+  defaults, provider route/model selection, and boolean settings remain
+  unchanged. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: fail-aloud provider/env numeric config source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules; the profile
+  helper remains at the 800-line threshold after local compaction. Proof:
+  focused performance-profile validation cases, full `test_live_runtime.py`,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh numeric config bool/string coercion false-confidence evidence.
+
+- 2026-06-20: Provider retry helper tests now merge one-assertion status-code,
+  transient-error classification, and retry-delay checks into three
+  behavior-named parameter tables while keeping the negative-attempt error test
+  separate. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: `tests/unit/providers/test_provider_retry.py` keeps 14 collected
+  cases while test functions drop 10 -> 4; the file moves 77 -> 88 lines
+  because explicit case tables are longer than one-assertion functions. Proof:
+  `$intuitive-tests` audit/propose, focused provider-retry tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh provider retry tests that duplicate the same helper
+  classifications instead of adding a distinct retry/error behavior.
+
+- 2026-06-20: OpenAI Agents SDK performance-profile MCP-timeout validation
+  tests now fold the duplicate malformed-env and negative-direct one-off tests
+  into the existing invalid MCP-timeout value table. Route/profile/model
+  compatibility tests remain separate because they protect different provider
+  diagnostics. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: `tests/unit/agents/test_live_runtime.py` keeps 137 collected cases
+  while test functions drop 108 -> 106 and file size drops 5765 -> 5745 lines;
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused performance-profile validation
+  cases, full `test_live_runtime.py`, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh performance-profile
+  tests that duplicate simple invalid-value scaffolding without protecting a
+  distinct env/direct precedence, route compatibility, or visible diagnostic
+  surface.
+
+- 2026-06-20: OpenAI Agents SDK live-runtime config failure tests now fold
+  duplicate one-off invalid retry-attempt, retry-sleep, and MCP-timeout
+  env/direct tests into the existing parameterized validation tables. The
+  slice preserves exact provider-config failure detail checks through the shared
+  runtime failure helper while removing repeated request/run/status assertion
+  bodies. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: unit-test pruning / no production behavior change. Metric:
+  `tests/unit/agents/test_live_runtime.py` keeps 137 collected cases while test
+  functions drop 112 -> 108 and file size drops 5825 -> 5765 lines; ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused config-validation cases, full
+  `test_live_runtime.py`, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only with fresh provider/env tests that duplicate runtime
+  config failure scaffolding without protecting a distinct provider route,
+  readiness failure, or visible diagnostic surface.
+
+- 2026-06-20: Operator-console public recipe tests now merge the standalone
+  `just/console.just` text-shape assertion into the public `just --summary` /
+  `just --dry-run console::run` behavior check. The slice keeps the separate
+  CLI default test for `roboclaws.operator_console` while replacing direct
+  recipe-file parsing with the launched public recipe surface. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: unit-test pruning /
+  no production behavior change. Metric: `test_operator_console.py` keeps 42
+  collected cases while test functions drop 40 -> 39; the touched file moves
+  1578 -> 1581 lines because the stronger public-surface assertion is slightly
+  longer. Proof: `$intuitive-tests` audit/propose, focused operator-console
+  tests plus route-adjacent coverage, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh static
+  operator-console recipe/DOM/route wiring assertions that are not already
+  covered through public launch readiness, CLI defaults, artifact links,
+  redaction, locks, or status transitions.
+
+- 2026-06-20: Eval-runner unit tests now consolidate duplicate launch-metadata
+  validation bodies for direct live-surface command kwargs, sample-derived live
+  launch metadata, and live runtime-map dependency metadata into behavior tables.
+  The slice preserves the same collected parameter cases and keeps direct helper
+  validation, suite-level sample validation, direct dependency resolver checks,
+  and live-before-launch checks distinct. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: unit-test pruning / no production
+  behavior change. Metric: eval-runner collection stayed at 104 cases while
+  `tests/unit/evals/test_eval_runner.py` 2613 -> 2580 lines; ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: `$intuitive-tests`
+  audit/propose, focused eval-runner collection, eval-runner plus adjacent
+  eval-harness tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh duplicated
+  validation bodies; do not collapse helper-level and suite-level checks when
+  they prove different failure surfaces.
+
+- 2026-06-20: Eval-harness selector tests now merge low-signal route-selection
+  shape checks into two behavior tables for changed-file signals and explicit
+  intent axes. The slice preserves provider readiness, runtime-prior,
+  detached-live polling, DINO sidecar, budget, manifest-output, and source-error
+  regressions as separate behavior tests while dropping one-field row metadata
+  assertions. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: selector collection 31 -> 23 tests and
+  `tests/unit/evals/test_eval_harness_selector.py` 782 -> 738 lines; ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused selector collection,
+  selector+manifest tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen selector-test pruning only with
+  fresh duplicate static metadata assertions; keep live/blocker/source-error
+  regressions behavior-shaped.
+
+- 2026-06-20: Operator-console B1 camera preview promotion now rejects absolute
+  FPV/chase artifact view paths, so external local files cannot be promoted as
+  current Isaac runtime camera evidence. Relative view paths remain bound under
+  the source artifact directory, matching the existing `../` escape rejection.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud preview artifact source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; the preview script remains under
+  the current module-size warning while the focused operator-console preview
+  test file remains oversized. Proof: focused operator-console preview tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: Eval-harness detached live-product rows now require terminal
+  `live_status.json` evidence before marking a Codex live product row passed
+  from `run_result.json`. A row with result artifacts but a still-running live
+  status now blocks at the harness layer instead of publishing false-green pass
+  evidence. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud detached live eval source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  eval-harness selector tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-20: Detached live eval completion now requires terminal
+  `live_status.json` evidence before treating `run_result.json` as completed
+  Codex live-route proof. Timeout recovery, deadline recovery, and grace-window
+  polling now share the same terminal-status predicate, preserving the explicit
+  open-ended checker-failure allowance while rejecting still-running or
+  non-checker-failed detached runs. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud detached live eval source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  `roboclaws/evals/live_runtime.py` remains below the module-size warning.
+  Focused regression coverage keeps `tests/unit/evals/test_eval_runner.py`
+  above the 2000-line warning and remains parked for `$intuitive-tests`. Proof:
+  focused live surface product tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: Live eval surface artifact discovery now validates
+  stdout-declared `Artifacts:` directories before treating them as priority live
+  route evidence. Declared paths must stay under the live surface output root
+  and end at the expected `seed-*` leaf, preventing trial-directory artifacts,
+  malformed parent paths, or escaped paths from substituting for the actual live
+  product run. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud live eval artifact source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; focused
+  regression coverage keeps `tests/unit/evals/test_eval_runner.py` above the
+  2000-line warning and should be handled only through the planned
+  `$intuitive-tests` route. Proof: focused live surface artifact discovery
+  tests, full eval-runner unit file, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
+- 2026-06-20: Eval dependency resolution now treats present
+  `runtime_map_prior` fields as source truth even when the value is null or
+  empty. Explicit null values now fail as invalid dependency metadata, and
+  explicit empty launch overrides now fail as empty prior paths before product
+  launch instead of skipping validation or falling through to another dependency
+  source. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud eval dependency metadata source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules; focused regression
+  coverage keeps `tests/unit/evals/test_eval_runner.py` above the 2000-line
+  warning and should be handled only through the planned `$intuitive-tests`
+  route. Proof: focused explicit-prior dependency tests, full eval-runner unit
+  file, touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval dependency resolution now rejects wrong-shaped or empty
+  `runtime_map_prior_from_sample` metadata before direct or live product
+  launch. Boolean, numeric, list, object, or blank source-sample values now
+  become artifact-source eval result failures instead of fabricated source
+  sample ids, missing-output dependency errors, or skipped dependencies. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  eval dependency metadata source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; focused regression coverage keeps
+  `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and should
+  be handled only through the planned `$intuitive-tests` route. Proof: focused
+  direct/live source-sample dependency tests, full eval-runner unit file,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval dependency resolution now rejects wrong-shaped explicit
+  `runtime_map_prior` metadata before direct or live product launch. Boolean,
+  numeric, list, or object prior values now become artifact-source eval result
+  failures instead of raw exceptions or stringified path lookups, while the
+  existing explicit empty-string prior failure remains a dependency error.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud eval dependency metadata source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused regression coverage
+  keeps `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused direct/live dependency tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Open-ended authoritative predicate grading now rejects
+  wrong-shaped Runtime Metric Map predicate source fields before converting
+  them to empty evidence. Corrupt `public_semantic_anchors`,
+  `generated_exploration_candidates`, `target_search_summary`,
+  `inspection_observations`, `viewpoint_budget`, `observed_waypoint_ids`, or
+  `observed_objects` values now surface as source errors instead of ordinary
+  goal-not-satisfied behavior failures. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud runtime-map predicate source
+  shape truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; focused regression coverage keeps
+  `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused open-ended predicate source-shape tests, full eval-runner unit file,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Map-build outcome grading now rejects wrong-shaped
+  `runtime_metric_map.json` list fields before applying minimum-count checks.
+  Present `public_semantic_anchors` or `generated_exploration_candidates`
+  values that are strings, objects, or other non-list JSON can no longer pass
+  actionability thresholds via Python `len()` on the wrong type. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  runtime-map source shape truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules; focused regression coverage keeps
+  `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused map-build runtime-map tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval artifact grading now validates present required JSON
+  artifacts (`run_result.json`, `agent_view.json`, `runtime_metric_map.json`,
+  and `private_evaluation.json`) as object JSON before marking the artifacts
+  grader passed. Malformed or wrong-shaped required evidence now appears as
+  artifact source errors instead of letting a valid in-memory product result
+  mask corrupt persisted eval evidence. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud eval artifact source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  focused regression coverage keeps `tests/unit/evals/test_eval_runner.py`
+  above the 2000-line warning and should be handled only through the planned
+  `$intuitive-tests` route. Proof: focused required-artifact regression tests,
+  full eval-runner unit file, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
+- 2026-06-20: Live eval trial grading now requires live product runners to
+  declare an explicit `eval_effective_run_dir` under the trial run directory
+  before artifacts are graded. Missing, malformed, nonexistent, or escaped
+  effective run directories now fail as artifact-source errors instead of
+  letting stale trial-directory artifacts stand in for live route evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud live eval artifact source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused regression coverage
+  keeps `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused live eval tests, full eval-runner unit file, touched-file ruff/format
+  checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval regression promotion now requires a declared source sample
+  ref and validates promotion source identity before deriving promoted
+  sample/suite artifacts. Promotion can no longer fabricate a plausible
+  regression sample from eval-result identity fields when `sample_refs` are
+  absent, nor write durable source metadata from malformed `sample_id`,
+  `trial_id`, or `provider_profile` values. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud regression-promotion
+  source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused regression-promotion tests, full
+  eval-runner unit file, touched-file ruff/format checks, `git diff --check`,
+  and ratchet.
+
+- 2026-06-20: Eval result bundle and HTML report rendering now validate
+  scene-sampler projection source truth before publishing compact aggregate
+  evidence. Malformed or missing scene-source counts, support/status fields,
+  source `sample_ids`, non-object source rows, and malformed summary counts now
+  fail with explicit sampler-projection source errors instead of becoming
+  default-looking `0` values or silently disappearing from `eval_results.json`
+  / `eval_report.html`. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud report/eval artifact source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  focused eval report regression tests, full eval-runner unit file,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval live-product launch setup now rejects invalid
+  `scene_source` metadata before building direct product kwargs or live surface
+  commands. Explicit empty or wrong-shaped eval sample launch overrides and
+  live command kwargs can no longer fall back to `procthor-10k-val` or render a
+  non-string scene source into the command; missing sample overrides still use
+  the documented default. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud eval launch metadata source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  `tests/unit/evals/test_eval_runner.py` remains above the 2000-line warning
+  from focused regression coverage and should be handled only through the
+  planned `$intuitive-tests` route. Proof: focused live-surface command and
+  eval-runner regression tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval live-product launch setup now rejects invalid
+  `scene_index` metadata before building direct product kwargs or live surface
+  commands. Bad eval sample launch overrides or live command kwargs can no
+  longer coerce booleans, floats, negative values, or malformed strings into a
+  plausible scene id; missing sample overrides still use the documented scene
+  `0` default. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud eval launch metadata source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; focused
+  regression coverage pushed `tests/unit/evals/test_eval_runner.py` above the
+  2000-line warning and should be handled only through the planned
+  `$intuitive-tests` route. Proof: focused live-surface command and
+  eval-runner regression tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval live-product launch setup now rejects invalid cleanup
+  `generated_mess_count` / `relocation_count` metadata before building direct
+  or live surface commands. Bad eval sample private goal references, launch
+  overrides, or live command kwargs can no longer silently coerce cleanup mess
+  counts to zero and drop scenario setup from the launched product route; valid
+  integer counts and map-build zero defaults are unchanged. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud eval
+  launch metadata source truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules. Proof: focused live-surface command and
+  eval-runner regression tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Scene-camera comparison now has a focused
+  `scene_camera_source_artifacts.py` owner for prepared-USD source metadata,
+  local Isaac scene-index lookup, scene-index entry extraction, and support-pose
+  normalization. Present `scene_metadata.json` files now fail aloud when
+  malformed, wrong-shaped, or carrying non-object object entries instead of
+  degrading into missing Isaac target evidence; missing metadata remains
+  optional. The main comparison facade dropped below the 2000-line hard ceiling.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud scene-camera source artifact truth plus ownership split. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules;
+  `roboclaws/household/scene_camera_comparison.py` fell from 2011 to 1956
+  lines. Proof: focused scene-camera comparison contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: MolmoSpaces worker initialization now fails aloud on malformed,
+  wrong-shaped, or label-less adjacent scene JSON before deriving source room
+  labels. A present source scene JSON packet can no longer surface as a raw
+  parser/type failure or silently fall through to iTHOR-derived labels; missing
+  source JSON keeps the explicit iTHOR floorplan fallback. Owner layer:
+  Backend Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  worker initialization metadata source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused MolmoSpaces worker-state tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: B1 runtime bundle compilation now fails aloud when an explicit
+  semantic projection artifact is malformed or parses to non-object JSON.
+  Corrupt `semantic_projection.json` inputs now produce source-path validation
+  errors instead of raw `JSONDecodeError` or attribute failures, while missing
+  artifact, review-mismatch, malformed-room, and valid verified-room semantics
+  behavior remain unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud runtime-map source artifact truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules in
+  the current dirty worktree. Proof: focused B1 runtime-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: Nav2 map-bundle validation now fails aloud when
+  `semantics.json` parses to a non-object JSON value. Wrong-shaped semantics
+  files now produce an explicit bundle validation error and projection callers
+  receive the existing assertion path instead of raw attribute failures during
+  validation or projection; valid bundle export, checking, route validation,
+  and projection behavior are unchanged. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud map-bundle source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused Nav2 map-bundle
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-20: Runtime Map Prior Snapshot conversion now fails aloud on
+  malformed or parseable non-object source JSON for Agibot navigation memory
+  and Nav2 cleanup bundles. Corrupt `navigation_memory.json`, `agibot/source.json`,
+  or `semantics.json` files now produce concise source-path errors instead of
+  raw parser/type failures or deriving fields from wrong-shaped packets, while
+  valid Agibot and Nav2 conversion behavior is unchanged. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  map/source artifact truth. Metric: ratchet stayed at 0 Ruff complexity rows
+  and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused Runtime Map Prior Snapshot contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: The Nav2 map-bundle exporter now fails aloud on malformed
+  agent-view JSON and parseable non-object run-result JSON. CLI users get
+  concise source-path errors instead of tracebacks or raw type failures, while
+  valid `--agent-view` / `--run-result` export behavior and bundle validation
+  are unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud map/export source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused Nav2 map-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: Planner proof bundle result summaries now fail aloud when a
+  present proof `run_result.json` source parses to non-object JSON. Wrong-shaped
+  proof result files now become explicit unreadable result evidence with
+  `proof_run_result_unreadable` instead of crashing or letting proof-summary
+  fields derive from an invalid source packet; malformed JSON keeps the same
+  unreadable packet path. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused planner proof request tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: OpenAI Agents SDK live timing now fails aloud when present MCP
+  timing source artifacts are malformed or non-object. Corrupt
+  `run_result.json` no longer gets erased before falling back to trace-derived
+  timing, and corrupt `trace.jsonl` no longer escapes during downstream metrics
+  extraction before `live_timing.json` is written; final successful writes are
+  downgraded to failed timing evidence with `live_timing_source_error`. Owner
+  layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud live runtime artifact/source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree; the runner reuses the OpenAI Agents metrics JSONL source parser
+  rather than carrying a duplicate partial parser. Proof: focused OpenAI
+  Agents live timing tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-20: Operator-console prompt previews now reject malformed or negative
+  cleanup `relocation_count` overrides before rendering kickoff prompts.
+  Preview-only target cleanup counts can no longer silently coerce invalid
+  launch input into a plausible target of one; baseline/default cleanup counts,
+  valid relocation counts, and existing prompt-env numeric validation are
+  unchanged. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: fail-aloud operator-visible launch-input preview. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused operator-console prompt-preview tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: The live OpenAI Agents runtime now rejects boolean and non-finite
+  numeric settings before status/timing evidence is written. Direct metadata
+  and env inputs for max turns, model-service retry attempts,
+  model-service retry sleep, and MCP client session timeout now fail with
+  `provider_config_failure` instead of accepting booleans as numbers, leaking
+  `nan` / `inf`, or surfacing raw conversion failures; zero MCP timeout still
+  explicitly disables the client timeout. Owner layer: Agent Engines And
+  Provider Profiles.
+  Behavior-change class: fail-aloud live runtime env/metadata input; SDK
+  perf-profile defaults, provider route/model selection, live provider calls,
+  and zero-timeout disable semantics are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused OpenAI Agents live-runtime numeric tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-20: OpenAI Agents SDK performance-profile float settings now reject
+  non-finite values before runtime profile metadata is produced. `nan` can no
+  longer be clamped to `0.0`, and `inf` can no longer survive as a plausible
+  MCP timeout or model-service retry sleep value. Owner layer: Agent Engines
+  And Provider Profiles. Behavior-change class: fail-aloud provider/runtime
+  env input; finite defaults and finite overrides, provider route semantics,
+  model selection, live provider execution, and public defaults are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused OpenAI Agents
+  perf-profile tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-20: Runtime inventory artifact rows now advertise same-origin
+  `/artifacts/...` and `/api/raw/...` links only for files under
+  `output/operator-console`, matching the operator-console artifact server
+  boundary. Eval-harness and other non-console-output runtime files remain
+  visible by path and command-copy actions, but no longer publish links that
+  the server must reject. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud/source-boundary protection for
+  operator-visible artifact metadata. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused runtime-inventory tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: Operator-console artifact endpoints now serve only files under
+  `output/operator-console`. `/artifacts/...` and `/api/raw/...` reject
+  arbitrary repo files, directory escapes, and non-file paths instead of
+  treating every repo-relative file as operator-visible output, while valid raw
+  log serving still applies secret redaction. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud/source-boundary protection
+  for operator-visible artifacts. Metric: ratchet stayed at 0 Ruff complexity
+  rows and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused operator-console HTTP tests, touched-file ruff/format checks, `git
+  diff --check`, changed-code review, and ratchet.
+
+- 2026-06-20: Operator-console launch starts now reserve a unique run
+  directory before launch log or `operator_state.json` writes. Same-second
+  route launches or stale run directories can no longer overwrite existing run
+  evidence; exhausted reservation attempts fail before process spawn or lock
+  ownership, and empty pre-state reservations are removed when launch-build or
+  lock-acquire steps fail. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud operator-visible source truth and artifact
+  identity preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  reports 79 oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API tests, touched-file ruff/format checks, `git
+  diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console stop requests now reject malformed or
+  non-object child `live_status.json` sources before stopping child live runs,
+  terminating wrapper processes, releasing backend locks, or rewriting status
+  artifacts. Corrupt live child evidence can no longer be replaced by a clean
+  `stopped_by_operator` payload, and the HTTP stop endpoint now reports the
+  same operator-facing source error; missing child live status and valid
+  terminal failed-run preservation are unchanged. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud operator-visible source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API stop tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console stop requests now reject malformed or
+  non-object `operator_state.json` sources before stopping child live runs,
+  terminating wrapper processes, releasing backend locks, or rewriting stop
+  state. Corrupt stop-state evidence no longer surfaces as a raw JSON/type
+  failure or gets overwritten by stop handling; unknown runs and valid
+  stopped/failed terminal handling are unchanged. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud operator-visible source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API stop tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console request-field readiness now rejects present JSON
+  sources that do not contain a JSON object before marking required Agibot/B1
+  launch artifacts ready. Parseable-but-wrong-shaped attached context/proof
+  files such as arrays no longer satisfy `context_json`,
+  `b1_alignment_artifact`, or `b1_navigation_artifact` gates; missing files,
+  malformed JSON, relative path resolution, and valid object artifacts keep the
+  existing behavior. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud launch-input source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused Agibot readiness and neighboring
+  operator-console launcher/API readiness tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console session reads now reject malformed,
+  non-object, or mismatched `sessions/<id>.json` records as explicit source
+  errors. Corrupt session files no longer look like unknown sessions or get
+  bypassed while steer messages mutate run artifacts; missing sessions keep the
+  existing absent-session behavior. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud operator-visible source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused operator-console
+  interaction, launcher, and HTTP-console tests; touched-file ruff/format
+  checks; `git diff --check`; changed-code review; and ratchet.
+
+- 2026-06-19: Operator-console interaction commands now reject malformed or
+  non-object run `operator_state.json` sources before appending steer messages,
+  next-goal queue rows, or session-link updates. Corrupt run state no longer
+  looks like an unsupported route or missing session while mutating interaction
+  artifacts; passive normalized-state rendering still surfaces source-error
+  payloads through `derive_operator_state`. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud operator-visible source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused operator-console
+  interaction and state tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console manual control now rejects malformed or
+  non-object `operator_state.json` sources at the control endpoint route lookup
+  and state-update boundaries. Corrupt operator state no longer collapses into
+  a misleading missing MCP endpoint, and a control response cannot overwrite
+  the corrupt source while recording operator intervention evidence; unknown
+  runs remain 404 and valid state/control rows are unchanged. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud
+  operator-visible source truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused operator-console control endpoint tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console latest-run history attachment now surfaces
+  malformed `runs.jsonl`, `operator_state.json`, and `live_status.json` source
+  artifacts as explicit source-error payloads instead of skipping corrupt
+  history rows, attaching a metadata-free fallback run, or erasing bad live
+  status into an empty phase. Missing optional sources remain optional, and
+  normal history-index plus run-directory fallback attachment behavior is
+  unchanged. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: fail-aloud operator-visible source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused operator-console history tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: MolmoSpaces apple-to-apple grid execution now rejects malformed
+  or non-object existing `apple2apple_test_grid.json` manifests during filtered
+  execute, and stable malformed/non-object `live_status.json` sources during
+  detached live-row polling. Corrupt manifests no longer get treated as absent
+  before row-state merge, and corrupt live status no longer becomes
+  `phase=unknown`; the live-status reader keeps a small retry window for
+  transient partial writes while preserving missing-source optional behavior.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused apple-to-apple grid tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Live-agent result artifact loading now fails aloud when present
+  `live_status.json` or `run_result.json` sources are malformed or contain
+  non-object JSON. Corrupt live status no longer becomes `phase=unknown`, and
+  corrupt run-result completion evidence no longer disappears as an absent
+  task-completion packet; genuinely missing live artifacts keep the existing
+  optional incomplete-run behavior. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud artifact/source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules in
+  the current dirty worktree. Proof: focused live-runtime artifact-loader
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-19: Eval regression promotion now validates the promoted sample
+  payload and updated suite payload before writing either artifact. Invalid
+  suite updates no longer leave orphan promoted sample files behind when
+  promotion fails after sample validation; successful promotion and existing
+  fail-aloud source-sample guards are unchanged. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud artifact/write
+  atomicity. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused eval
+  regression-promotion tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval regression promotion now treats matched suite
+  `sample_refs` as declared source truth. Missing or invalid declared source
+  samples, plus refs that resolve to a different sample id, now fail before any
+  promoted sample or suite artifact is written, instead of silently
+  synthesizing a regression sample from eval-result identity fields while
+  ignoring corrupt suite/sample source evidence; promotion from a valid source
+  sample and passed-result/stop-label guards are unchanged. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused eval regression-promotion tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval artifact dependency resolution now treats explicit
+  `runtime_map_prior` values as declared source truth and fails before direct
+  or live product launch when the path is empty or missing. Missing explicit
+  priors now produce an `EvalDependencyError` packet with resolved dependency
+  provenance instead of letting the runner launch against a stale/nonexistent
+  runtime-map prior; sample-derived prior behavior and valid prior handoff are
+  unchanged. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused eval-runner dependency tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval HTML reports now validate declared `run_result` and
+  `report` artifact links against the eval output directory before rendering
+  them as proof links. Missing files, empty paths, absolute paths outside the
+  eval output tree, and `../` escapes now render as explicit unavailable source
+  evidence instead of clickable stale/substitute links; existing in-output
+  artifacts keep relative hyperlinks. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud artifact/source truth; eval
+  grading, result schemas, aggregation, and product-run artifact generation are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused eval-report
+  tests, existing eval-runner report smoke, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Scene-sampler readiness export now fails aloud when an enabled
+  artifact has no payload instead of writing `{}` as a valid-looking readiness
+  artifact, and invalid `--candidate-range` input returns a concise CLI error
+  before writing artifacts instead of surfacing a traceback. Normal readiness
+  artifact generation, threshold failures, generated eval packets, and disabled
+  artifact flags are unchanged. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud artifact/config input truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree.
+  Proof: focused scene-sampler readiness export tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Coding-agent provider profile selection now rejects unknown
+  provider profiles at the common shell helper boundary instead of echoing the
+  raw value as if it were selected, and the provider-registry CLI reports an
+  argparse-style unknown-profile error instead of a Python traceback. Explicit
+  `system` Claude fallback, catalog route aliases, route-compatible model
+  overrides, and downstream Codex/Claude/OpenAI Agents supported-profile checks
+  are unchanged. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud provider/profile input truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused coding-agent env helper and provider catalog tests, manual unknown
+  profile probes, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-19: Detached live-run summary auto-discovery now requires recognized
+  live-run evidence before selecting default or parent `seed-*` directories,
+  and explicit empty run directories fail aloud instead of printing
+  pending/all-missing summaries. The summary CLI no longer reports placeholder
+  seed dirs as the latest run; explicit `run_result.json` inputs,
+  comparison-manifest handling, timing extraction, and summary rendering are
+  unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof: full
+  detached live-run summary unit tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Molmo CI live failure diagnostics now select the latest
+  evidence-bearing `seed-*` directory instead of the newest directory of any
+  shape. Failed live entries no longer publish an empty latest seed placeholder
+  while hiding an older seed directory with actual failure evidence, and
+  runs with no recognized diagnostic artifacts leave the diagnostic link absent
+  instead of creating a no-evidence diagnostics page from automatic discovery.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; live launch commands, successful report
+  publishing, diagnostic index rendering for explicitly supplied bundles, and
+  live status schemas are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: full CI live reports unit
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet.
+
+- 2026-06-19: Operator-console B1 camera preview promotion now resolves
+  declared relative FPV/chase view paths only under the source artifact
+  directory and rejects relative path escapes before file lookup. The console no
+  longer promotes stale same-named CWD files or sibling-run view files as
+  current B1 robot camera preview evidence; explicit absolute view paths remain
+  accepted. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud artifact/source truth; preview quality scoring, provenance
+  checks, skip-existing metadata checks, static B1 preview behavior, and
+  MolmoSpaces rendering are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: focused operator-console
+  preview tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-19: Codex cleanup apple-to-apple summaries now fail aloud on declared
+  top-level artifact links or robot-view sample paths that are empty, missing,
+  or not the expected file/directory kind, and resolve declared relative paths
+  only under the lane run directory. The summary report no longer links CWD
+  substitute artifacts or silently omits missing declared visual evidence; the
+  absent-key historical defaults still point at run-directory defaults and are
+  omitted when those optional files are absent. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  comparison math, report layout, live run execution, and camera-contract
+  summaries are unchanged. Metric: the summary script shrank to 944 lines, and
+  the ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused Codex cleanup apple-to-apple summary tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Cleanup report regeneration now fails aloud on declared
+  scenario/trace/snapshot artifact paths that are empty, missing, or not files,
+  and resolves declared relative artifact paths only under the run directory.
+  Regenerated reports no longer substitute CWD files or same-basename colocated
+  files when `run_result.json` declares a different artifact source; historical
+  absent `scenario` artifacts still use the run-result shell fallback. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; report rendering, run-result path
+  discovery, historical absent-artifact defaults, and cleanup visual sections
+  are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused cleanup artifact-report contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-19: Split the live eval artifact selector's priority,
+  current-discovered, and current-existing candidate decisions into named
+  helpers after the previous fail-aloud slice introduced one Ruff C901 row.
+  The stale/ambiguous artifact behavior is unchanged, but
+  `discover_live_surface_run_dir` is back under the complexity gate. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  deterministic helper refactor; public launch command construction,
+  artifact freshness rules, detached polling, and grader schemas are
+  unchanged. Metric: ratchet returned to 0 Ruff complexity rows and stayed at
+  78 oversized modules. Proof: focused eval-runner tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval-runner live surface artifact discovery now fails aloud for
+  stale or ambiguous sibling `seed-*` run directories. Live eval rows no longer
+  silently grade substitute artifacts from an older run or an unclear current
+  route when the commanded run directory lacks evidence; the adapter still
+  accepts explicit/stdout artifact directories and one unique current
+  timestamped directory. The JSON sidecar loader and artifact-dir selector now
+  live in `roboclaws/evals/live_artifacts.py`, keeping
+  `roboclaws/evals/live_runtime.py` under the default module-size target.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; public launch command construction,
+  detached polling timeouts, checker recovery, and grader schemas are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused eval-runner tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval-harness detached live-product polling now fails aloud for
+  malformed `live_status.json` source evidence. A corrupt live-status sidecar
+  no longer looks absent while the harness waits for `run_result.json` or marks
+  the detached live-product row as passed; the row blocks with an explicit
+  source-error detail and keeps the live-status/driver artifacts attached.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; row selection, provider readiness, live
+  command construction, detached timeout duration, result-artifact attachment,
+  and eval aggregate parsing are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  eval-harness selector tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval-runner grader sidecar parsing now fails aloud for present
+  malformed or non-object optional JSON artifacts. Corrupt
+  `live_status.json`, `live_timing.json`, `advisory_evaluation.json`, and
+  open-ended `runtime_metric_map.json` sources no longer collapse into
+  unavailable live status/timing, advisory-neutral semantic satisfaction, or
+  predicate evidence; affected rows fail with `artifact_missing` and compact
+  `source_errors` while genuinely missing optional sidecars keep the existing
+  unavailable behavior. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; suite/sample/result
+  schemas, product-runner invocation, required map-build runtime-map grading,
+  trace policy, and live execution are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused eval-runner
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet.
+
+- 2026-06-19: Codex and Claude live-run timing source parsing now fails aloud
+  for present malformed or non-object `trace.jsonl` rows, and Codex event
+  summary parsing now fails aloud for malformed or non-object
+  `codex-events.jsonl` rows. Corrupt timing/model source evidence no longer
+  disappears before `live_timing.json`, MCP trace timing, time-to-first-MCP,
+  Codex event summaries, or model-call metrics are written. A would-be
+  successful run becomes a failed timing/status packet with
+  `live_timing_source_error`; existing failure packets preserve their original
+  reason while recording the source error. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  launch command construction, provider timing proxy behavior, checker gates,
+  cleanup-server lifecycle, and model-call metric schemas are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused CI live-report runner tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Agent SDK speedup matrix row loading now blocks on present
+  malformed or non-object baseline/candidate source artifacts instead of
+  deriving quality, speed, or reducible-bucket recommendations from empty or
+  partial evidence. The matrix reuses the strict report-performance
+  `trace.jsonl` reader for its camera-grounded tool breakdown and turns
+  report-performance source errors into explicit row reasons; missing optional
+  files still preserve the existing unavailable behavior. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  artifact/source truth; matrix manifest schema, privacy scanning,
+  comparison math, candidate coverage, and live-run producers are unchanged.
+  Metric: `run_agent_sdk_perf_matrix.py` shrank from 989 to 971 lines, and the
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused Agent SDK perf-matrix tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Detached live-run summary source parsing now fails aloud for
+  present malformed or non-object `live_status.json`, `live_timing.json`,
+  `run_result.json`, and `trace.jsonl` artifacts. Corrupt summary inputs no
+  longer collapse to pending/unknown runner, timing, result, or trace sections
+  that can make a damaged live run look merely incomplete; the CLI exits
+  nonzero with the source path and row/location. Missing optional files still
+  preserve the existing pending/unknown behavior. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud artifact/source
+  truth; report layout, comparison-manifest handling, performance extraction
+  math, and live artifact producers are unchanged. Metric: touched production
+  module remains under the default 800-line target, and the ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  summarize-live-run tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
+- 2026-06-19: RAW-FPV OpenAI Agents budget guard trace parsing now fails
+  aloud for present malformed or non-object `trace.jsonl` rows. Corrupt trace
+  evidence no longer disappears before the RAW-FPV candidate, repeated-failure,
+  or observe-per-waypoint budget guard decides whether the live SDK run hit a
+  terminal budget condition; diagnostics include the source path and row
+  number. Missing trace files still preserve the existing no-budget-failure
+  behavior. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; budget thresholds,
+  context-budget logic, live retry behavior, and trace producers are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused OpenAI Agents live-runtime budget tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-19: OpenAI Agents SDK metric JSONL parsing now fails aloud for
+  present malformed or non-object event/span/trace rows. Corrupt
+  `openai-agents-events.jsonl`, `openai-agents-spans.jsonl`, or `trace.jsonl`
+  sources no longer disappear before context/cache/growth, retry/fallback,
+  racing, input-filter, event-count, or span metrics are written into
+  `live_timing.json`; diagnostics include the source path and row number.
+  Missing optional files still preserve the existing unavailable behavior.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; metric schemas, aggregation math, live
+  runtime retry behavior, and event/span producers are unchanged. Metric:
+  `openai_agents_metrics.py` is 799 lines, and the ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused OpenAI
+  Agents live-runtime metrics tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Model-latency calibration source parsing now fails aloud for
+  present malformed or non-object `model_call_metrics.jsonl` rows. Calibration
+  fitting and holdout validation no longer skip corrupt source rows before
+  computing sample counts, fit statistics, validation statistics, or
+  coefficient sets, so diagnostic normalized-latency packets cannot look
+  cleaner by silently shrinking their source dataset. Missing metric files still
+  preserve the existing insufficient-samples / holdout-not-requested behavior,
+  and well-formed but unusable metric rows still count as rejected rows. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; calibration packet schema, fit math,
+  holdout limitation policy, and model-call metric row rejection rules are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused report-performance calibration tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-19: Report-performance source parsing now fails aloud for present
+  malformed or non-object JSON and JSONL artifacts. Corrupt
+  `live_timing.json`, `live_status.json`, `run_result.json`, `trace.jsonl`,
+  OpenAI/Codex/Claude event or span streams, and provider request metrics no
+  longer collapse to empty or partial inputs that can make performance packets,
+  model-call telemetry, provider transport evidence, or comparisons look
+  cleaner than the artifact source. Missing optional artifacts still preserve
+  the existing unavailable/missing behavior. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  packet schemas, telemetry math, privacy scanning, calibration handling, and
+  live-agent artifact producers are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  report-performance tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console route-lock readiness now fails aloud for
+  malformed lock-owner `operator_state.json` and nested `live_status.json`
+  sources. A backend lock held by a corrupt owner run no longer looks absent,
+  silently startable, or attachable; readiness blocks with `blocker_kind:
+  source_error` and keeps the lock held for operator inspection. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/source truth; valid attachable-run payloads, stale terminal-lock
+  release, stop-run process cleanup, provider readiness, route gates, and
+  runtime-inventory blockers are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console launcher tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console agent event JSONL parsing now fails aloud in
+  normalized live-state payloads. Malformed or non-object `codex-events*.jsonl`,
+  `claude-events*.jsonl`, and `openai-agents-events*.jsonl` rows no longer
+  disappear while latest-decision evidence is selected from remaining valid
+  agent messages; the state marks the run failed with the relevant event-source
+  label and keeps row-level `source_errors`. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud runtime artifact/source truth;
+  valid Codex/Claude/OpenAI Agents message extraction, trace-derived latest
+  action/tool summaries, artifact links, and checker handoff behavior are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused operator-console state tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console `trace.jsonl` parsing now fails aloud in the
+  normalized live-state payload. Present malformed or non-object trace rows no
+  longer disappear while latest-action, decision-evidence, and latest-tool
+  summaries are derived from the remaining valid rows; the state marks the run
+  failed with a deduplicated `operator state source error: Trace` terminal
+  reason and preserves row-level `source_errors`. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud runtime artifact/source
+  truth; valid trace pairing, nested live-attempt discovery, camera-state
+  summary, core JSON source errors, agent-message extraction, artifact links,
+  and checker handoff behavior are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console state tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console message inbox parsing now fails aloud for
+  malformed or non-object `operator_messages.jsonl` rows. Corrupt present
+  steering evidence no longer disappears from console message state or MCP
+  `check_operator_messages` results; list/state payloads expose compact
+  `source_errors`, MCP delivery returns an explicit source-error packet, and
+  the pending-message hint tells the agent to surface the source error instead
+  of treating the inbox as empty. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud runtime artifact/source truth; valid queued
+  steering delivery, seen-state rewriting, missing-file tolerance, next-goal
+  requests, session attachment, and private-payload stripping are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused operator-console interaction tests, stale private-reader
+  search, touched-file ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console manual-control source parsing now fails aloud
+  for malformed or non-object `operator_control.jsonl` rows. Corrupt present
+  control evidence no longer disappears before event-id assignment or
+  intervention summary generation, so the console will not append new manual
+  control rows around broken operator-intervention history. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/source truth; valid manual control calls, route gating, MCP tool
+  invocation, operator-state updates, intervention artifact writing, and
+  blank-line tolerance are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: focused operator-console
+  control endpoint tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet.
+
+- 2026-06-19: RAW-FPV Codex event source parsing now fails aloud for malformed
+  JSONL rows and malformed observe text-result JSON. Corrupt present
+  `codex-events*.jsonl` evidence no longer disappears into fewer source
+  observations or a generic "no usable FPV frames" error; the probe raises an
+  actionable source path and line number before scoring. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  artifact/source truth; JSON artifact loading, valid Codex observe event
+  extraction, robot-view fallback discovery, provider execution, private
+  scoring, and report rendering are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused RAW-FPV
+  perception probe unit tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Removed the stale `model_supports_images` helper from the
+  provider registry. The helper had no production callers and treated unknown
+  model ids as image-capable, which conflicted with the current fail-aloud
+  provider/model registry direction. Remaining tests now use the canonical
+  `resolve_model(...).supports_image_input` path. Owner layer: Agent Engines
+  And Provider Profiles. Behavior-change class: stale helper deletion;
+  provider readiness, route-model compatibility, aliases, direct-provider
+  factory routing, and public route payloads are unchanged. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  stale-reference search, full provider catalog unit tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-19: Provider/profile route selection now fails aloud for
+  route-incompatible catalog models. Provider routes declare compatible model
+  ids, readiness and route payloads expose them, OpenAI Agents SDK runtime and
+  performance-profile resolution reject known-but-wrong-route models such as
+  `gpt-5.5` on `minimax-responses`, RAW-FPV evidence-lane checks validate the
+  selected provider/model pair, and coding-agent shell helpers preserve the
+  existing unknown-model diagnostic while surfacing route incompatibility
+  details. Owner layer: Agent Engines And Provider Profiles, with
+  evidence-lane impact at the Runnable Surfaces And Presets boundary.
+  Behavior-change class: fail-aloud provider/model route compatibility;
+  documented defaults, known model aliases, unknown-model failures, supported
+  MiniMax variant selection, provider key/base-url validation, Codex/Claude
+  unsupported-provider checks, and live SDK execution behavior are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: full impacted provider catalog, OpenAI Agents live-runtime, MiniMax
+  provider, model-provider checker, evidence-lane, coding-agent helper, and
+  task-agent recipe contract tests, plus touched-file ruff/format checks,
+  `bash -n`, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: OpenAI Agents SDK runtime model selection now fails aloud for
+  unknown model overrides. Explicit `model`,
+  `LiveAgentRequest.model`, `ROBOCLAWS_OPENAI_AGENTS_MODEL`, or
+  `ROBOCLAWS_CODEX_MODEL` values must resolve through the provider model
+  catalog before the SDK route is constructed, so a typo like
+  `not-in-provider-catalog` becomes the existing `provider_config_failure`
+  status instead of being passed to the live provider client. Owner layer:
+  Agent Engines And Provider Profiles. Behavior-change class: fail-aloud
+  provider/model route input; default model selection, known model aliases,
+  valid explicit route models such as `MiniMax-M2.7-highspeed`, provider
+  profile conflict detection, base-url/API-key validation, and SDK execution
+  behavior are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused provider catalog and live-runtime
+  unknown-model tests, full provider catalog and OpenAI Agents live-runtime unit
+  files, Minimax SDK route regression, touched-file ruff and format check,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console live-state JSON source errors now fail aloud.
+  Present malformed or non-object core `operator_state.json`,
+  `live_status.json`, and `run_result.json` sources no longer collapse to empty
+  payloads that can make the console show idle, missing, or generic pending
+  state. `derive_operator_state` now records compact `source_errors`, marks the
+  run failed, and routes the existing status/checker/terminal-reason fields
+  through an actionable `operator state source error: ...` message, while
+  genuinely missing optional files remain absent. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud runtime artifact/source
+  truth; display-run discovery, valid live status/result handling, artifact
+  links, checker diagnostics, controls, JSONL trace parsing, and missing-file
+  tolerance are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused operator-console state tests, full
+  operator-console unit folder, touched-file ruff and format check,
+  `git diff --check`, and ratchet.
+
+- 2026-06-19: Operator-console prompt previews now fail aloud for malformed
+  OpenAI Agents numeric prompt-env values. Non-empty
+  `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`,
+  `ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT`, and
+  `ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET` preview inputs must be integers
+  and cannot be negative, so `/api/prompt-preview` no longer renders a
+  default-looking kickoff prompt for malformed live-route input that the typed
+  runner configuration would reject or reinterpret. Omitted values keep the
+  documented prompt defaults, and zero keeps the existing prompt-renderer
+  minimum behavior for candidate/observe budgets while allowing zero done
+  retries. Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud operator-preview configuration; route selection, launch env
+  application, provider-profile validation, kickoff prompt text for valid
+  values, and static console UI request shape are unchanged. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console prompt-preview tests, full operator-console unit folder,
+  touched-file ruff and format check, `git diff --check`, and ratchet.
+
+- 2026-06-19: Eval-harness explicit `since=` diff source selection now fails
+  aloud. A bad base ref, missing revision, or other `git diff --name-only`
+  failure no longer becomes an empty changed-file set that can make
+  recommendations look clean; the selector raises an actionable error while
+  preserving best-effort behavior for implicit dirty-worktree discovery. Owner
+  layer: Eval suites. Behavior-change class: fail-aloud harness source input;
+  explicit changed files, plan-based selection, explicit axes, implicit
+  worktree fallback, row selection rules, and execution behavior are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused eval-harness selector tests, full eval unit folder,
+  touched-file ruff and format check, `git diff --check`, and ratchet.
+
+- 2026-06-19: Eval-harness attached result packets now fail aloud when
+  malformed. Required `eval_results.json` artifacts linked from selected eval
+  rows no longer collapse to an empty aggregate that can leave a zero-exit row
+  looking passed; present corrupt JSON or non-object payloads now mark the row
+  `outcome=failed` with `failure_class=harness_bug_unclassified` and an
+  explicit `eval_results_error`. Owner layer: Eval suites. Behavior-change
+  class: fail-aloud harness artifact/source truth; missing result artifacts,
+  valid failed/blocked aggregates, detached live-status polling, report
+  rendering, and exit-status semantics are unchanged. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  eval-harness manifest tests, full eval unit folder, touched-file ruff and
+  format check, `git diff --check`, and ratchet.
+
+- 2026-06-19: Eval-harness provider readiness now fails aloud through the
+  provider registry. Live eval rows with unknown provider profiles no longer
+  pass preflight merely because Codex router environment variables are present;
+  provider readiness now reports an explicit unknown-profile diagnostic, and
+  eval-harness blockers consume the canonical readiness packet instead of a
+  duplicate hard-coded env table. Owner layer: Agent Engines And Provider
+  Profiles, surfaced through Eval suites. Behavior-change class: fail-aloud
+  provider/profile input; documented default provider profiles, known profile
+  env checks, optional/required row semantics, timing-proxy defaults, and live
+  row execution are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows
+  and 78 oversized modules. Proof: focused eval-harness and provider catalog
+  tests, touched-file ruff and format check, `git diff --check`, and ratchet.
+
+- 2026-06-19: Live eval surface JSON artifact loading now fails aloud.
+  Existing malformed or non-object `run_result.json` / `live_status.json`
+  files in live eval product-route directories no longer collapse to empty
+  payloads that look missing, unfinished, or terminally ambiguous. The live
+  adapter preserves missing optional files as absent, but present corrupt JSON
+  now raises an explicit source error that the eval packet classifies under the
+  existing `artifact_missing` failure class. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; live command
+  construction, detached polling, open-ended checker recovery, provider
+  readiness, report rendering, and public eval result failure-class schema are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized
+  modules. Proof: focused malformed live-run-result and live-recovery tests,
+  full eval-runner unit file, touched-file ruff and format check,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Eval trace JSONL parsing now fails aloud for trajectory grading.
+  Malformed or non-object `trace.jsonl` rows no longer disappear while valid
+  rows still drive required-tool and completion predicates; trajectory grading
+  records `trace_json_invalid` and `trace_parse_errors` under the canonical
+  `trajectory_policy_violation` failure class. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; missing traces,
+  valid traces, open-ended success predicates, live eval routing, report
+  rendering, and public eval result failure-class schema are unchanged. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused malformed-trace/open-ended predicate tests, full eval-runner unit
+  file, touched-file ruff and format check, `git diff --check`, and ratchet.
+
+- 2026-06-19: Eval map-build runtime-map artifact parsing now fails aloud.
+  Map-build outcome grading no longer collapses malformed or non-object
+  `runtime_metric_map.json` into an empty map that looks like ordinary
+  actionability drift. Corrupt required runtime-map evidence now keeps the
+  canonical `artifact_missing` failure class while exposing
+  `runtime_metric_map_error` in the outcome grader, and missing maps keep the
+  existing map-actionability/dependency behavior. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; live eval routing,
+  dependency resolution, open-ended predicates, report rendering, and public
+  eval result failure-class schema are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  map-build/map-consumer tests, full eval-runner unit file, touched-file ruff
+  and format check, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console runtime inventory JSON source errors now surface
+  explicitly. Malformed or non-object top-level `operator_state.json` and
+  `eval_harness.json` files produce non-blocking `source_error` task rows in
+  the runtime task payload, and malformed nested `live_status.json` /
+  `visual_backend_slot.json` files appear as inactive source-error resources
+  on the affected task instead of disappearing as empty metadata. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/status source truth; missing optional files, valid active-resource
+  blockers, route readiness blocking, artifact links, and tmux/docker/port
+  probing are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules; `runtime_inventory.py` remains oversized and should
+  be split only around a future ownership boundary. Proof: focused
+  runtime-inventory unit tests, touched-file ruff and format check,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console static scene-preview asset coverage was
+  consolidated through `$intuitive-tests`: the one long
+  `test_static_app_renders_scene_preview_assets` body was split into
+  behavior-named assertion helpers for app wiring, MolmoSpaces preview files,
+  MolmoSpaces metadata, B1 preview policy, and B1 camera-preview metadata.
+  Owner layer: tests for Thin Runtime / Server Adapters static
+  operator-console assets. Behavior-change class: test-only consolidation;
+  no static app, preview artifact, world catalog, route, or production code was
+  changed, and no assertions were intentionally removed. Metric: ratchet
+  improved from 1 to 0 Ruff complexity rows and stayed at 78 oversized
+  modules. Proof: focused static-assets unit tests, touched-file ruff and
+  format check, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: B1 custom-asset visual comparison validation was split into
+  input compatibility checks, waypoint-evidence checks, per-waypoint
+  pose/image row assembly, and contact-sheet status helpers inside the
+  existing comparison checker. Owner layer: Backend Runtime / Environment
+  Primitive, with artifact-validation impact on B1 custom render-scene visual
+  review. Behavior-change class: helper extraction only; passed same-pose
+  custom scene comparisons, pose mismatch failures, low-detail warning mode,
+  contact-sheet status, artifact schema, and non-default-route policy flags are
+  unchanged. Metric: ratchet improved from 3 to 1 Ruff complexity row and
+  stayed at 78 oversized modules; the selected
+  `check_b1_map12_asset_visual_comparison.py` complexity rows were cleared.
+  Proof: focused asset-visual-comparison contract tests, touched-file ruff and
+  format check, `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: B1 semantic-projection accepted review-label validation was
+  split into partition-id, label-required-field, and map-polygon geometry
+  helpers inside the existing semantic projection builder. Owner layer:
+  Backend Runtime / Environment Primitive, with artifact-validation impact on
+  B1 room semantic projection inputs. Behavior-change class: helper extraction
+  plus focused fail-aloud proof; accepted label projection, duplicate
+  partition detection, missing field errors, existing projection payload schema,
+  and object-semantic blocked status are unchanged. Metric: ratchet improved
+  from 4 to 3 Ruff complexity rows and stayed at 78 oversized modules; the
+  selected `build_b1_map12_semantic_projection.py` complexity row was cleared.
+  Proof: focused B1 verified-alignment/semantic-projection contract tests,
+  touched-file ruff and format check, `git diff --check`, changed-code review,
+  and ratchet.
+
+- 2026-06-19: B1 operator-console camera-preview provenance validation was
+  split into candidate-shape, alignment-provenance, FPV/chase contract, and
+  forbidden-source helpers inside the existing preview renderer owner. Owner
+  layer: Thin Runtime / Server Adapters, with artifact credibility impact on
+  operator-console B1 preview status. Behavior-change class: helper extraction
+  only; accepted Isaac runtime camera previews, navigation-smoke preview
+  promotion, rejection error tokens for missing camera contracts, scene-probe
+  sources, missing waypoint ids, mixed FPV/chase pairs, and missing residual
+  alignment provenance are unchanged. Metric: ratchet improved from 6 to 4
+  Ruff complexity rows and stayed at 78 oversized modules; the selected
+  `render_scene_previews.py` complexity rows were cleared while the file
+  remains oversized at 1400 lines. Proof: focused operator-console scene
+  preview unit tests, touched-file ruff and format check, `git diff --check`,
+  changed-code review, and ratchet.
+
+- 2026-06-19: B1 runtime-bundle semantic projection and robot-consumption
+  validation complexity was split into focused helpers inside the existing
+  compiler owner. Malformed semantic projection room rows now fail through the
+  explicit `ValueError("invalid semantic projection artifact: ...")`
+  validation path instead of risking incidental attribute errors during
+  duplicate tracking. Owner layer: Backend Runtime / Environment Primitive,
+  with artifact-validation impact on B1 Runtime Map Prior Snapshot inputs.
+  Behavior-change class: fail-aloud validation cleanup plus helper extraction;
+  public CLI arguments, runtime bundle schemas, valid alignment/navigation
+  proof handling, valid room-semantic projection materialization, and blocked
+  capability payloads are unchanged. Metric: fresh ratchet improved from 10 to
+  6 Ruff complexity rows and stayed at 78 oversized modules; the selected
+  `compile_b1_map12_runtime_bundle.py` complexity rows were cleared while the
+  file remains oversized at 1551 lines. Proof: focused B1 runtime bundle
+  contract tests, touched-file ruff and format check, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-18: Active plan compaction completed. The active plan was rewritten
   from an execution ledger mirror into a concise continuation control doc with
   resume checklist, operating rules, slice selector, active candidates, proof
@@ -309,6 +2074,9 @@ logs before choosing the next slice.
   check, py_compile, `git diff --check`, and ratchet.
 
 - 2026-06-18: B1 / Map 12 waypoint-capture render dimensions now fail aloud.
+  Superseded on 2026-06-19: the approximate bbox waypoint-capture path was
+  retired; current B1 / Map12 review uses manual anchors plus the recorded
+  top-down camera projector.
   The waypoint capture CLI rejects non-positive `--width` / `--height` values
   at argument parsing time instead of passing invalid dimensions into
   deterministic camera requests and optional old/new Gaussian scene capture
@@ -316,9 +2084,9 @@ logs before choosing the next slice.
   Behavior-change class: fail-aloud B1 waypoint capture configuration; default
   dimensions, valid positive dimensions, waypoint/extra-point selection,
   approximate bbox transform metadata, capture manifest schema, and capture
-  routing are unchanged. Metric: ratchet remains at 0 complexity rows and
-  79 oversized modules; `capture_b1_map12_waypoint_views.py` is 605 lines and
-  `test_b1_map12_waypoint_capture.py` is 101 lines. Proof: focused B1 waypoint
+  routing are unchanged. Metric at the time: ratchet remained at 0 complexity
+  rows and 79 oversized modules; the later-retired waypoint capture path was
+  605 lines and its test was 101 lines. Proof: focused B1 waypoint
   capture unit tests, touched-file ruff and format check, py_compile,
   `git diff --check`, and ratchet.
 
@@ -2236,6 +4004,51 @@ logs before choosing the next slice.
   only if the runner rebuilds object/receptacle audit rows, compact/skipped
   audit packets, selected RGB/focus evidence, visual-state contracts,
   semantic-pose index fallback, or category summaries directly.
+- Cleanup checker robot-camera verification is owned by the current
+  `--require-robot-head-camera-fpv` contract; the historical
+  `--require-canonical-robot-view-camera-control` spelling is now an explicit
+  unsupported checker input instead of a silent alias. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: checker-contract migration /
+  stale compatibility surface removal. Metric: no new owner; checker/tests
+  remain under the current ratchet ceiling. Proof: focused cleanup checker
+  contract tests, ruff, format check, diff check, and ratchet. Reopen only if
+  active verification commands or tests regain canonical free-camera wording as
+  a current robot-FPV acceptance gate.
+- Active agent planning guidance now names the staged
+  `docs/plans -> review/autoplan/preflight -> GSD` workflow directly instead
+  of pointing agents at the unavailable `hybrid-phase-pipeline` skill. Owner
+  layer: workflow / agent guidance. Behavior-change class: stale active
+  guidance removal. Metric: exact active-guidance search no longer finds the
+  old skill name outside this completed ledger. Proof: targeted search and
+  docs-only diff check. Reopen only if active repo guidance reintroduces the
+  hybrid-router skill as a dependency instead of spelling out the current
+  staged workflow.
+- The active small-cut checklist no longer carries stale exact-name entries for
+  empty camera-labeler maps or `_task_prefix_legacy`. Search found no active
+  code, recipe, or human-doc surface with those exact stale artifacts; current
+  `_task_prefix` remains a live prompt helper and is not a legacy surface by
+  itself. Owner layer: workflow / cleanup plan hygiene. Behavior-change class:
+  stale checklist residue removal. Proof: targeted active-surface search and
+  docs-only diff check. Reopen only with a concrete active symbol or command
+  surface, not the historical checklist names alone.
+- Live eval timeout validation is consolidated behind one finite-timeout parser
+  with positive and non-negative wrappers, preserving the existing detached
+  live route timeout and completion-grace error messages. Owner layer: Eval
+  suites / live runtime adapter. Behavior-change class: internal helper
+  consolidation. Metric: `live_runtime.py` remains under the current ratchet
+  ceiling with no complexity rows. Proof: focused eval runner timeout/live
+  runtime tests, ruff, format check, diff check, and ratchet. Reopen only if
+  `roboclaws/evals/live_runtime.py` regains duplicated numeric timeout parsing
+  policy.
+- Eval-harness runtime-prior blocking now checks the current
+  `direct-map-build-world-public` source row instead of the retired
+  `direct-map-build-world-oracle` id, so the cleanup consumer row can run after
+  the selected map-build row passes and writes `runtime_metric_map.json`. Owner
+  layer: Eval suites / eval-harness. Behavior-change class: stale launch-axis
+  bug fix. Metric: no new owner; harness runner stays under the current
+  ratchet ceiling. Proof: focused eval-harness selector tests, ruff, format
+  check, diff check, and ratchet. Reopen only if runtime-prior prerequisite
+  logic drifts from the row ids declared by `eval_harness_rows.py`.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

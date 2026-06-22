@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,6 @@ import pytest
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_cleanup import _load_runtime_map_prior, run_realworld_cleanup
 from roboclaws.household.realworld_contract import (
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     RealWorldCleanupContract,
 )
@@ -137,8 +137,8 @@ def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
 def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
         perception_mode=RAW_FPV_ONLY_MODE,
+        allow_synthetic_map_projection=True,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
@@ -178,9 +178,9 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
         perception_mode=RAW_FPV_ONLY_MODE,
         runtime_map_prior=snapshot["runtime_metric_map"],
+        allow_synthetic_map_projection=True,
     )
     public_receptacles = contract.public_receptacles_by_id()
 
@@ -268,6 +268,252 @@ def test_runtime_map_prior_loader_rejects_snapshot_with_invalid_runtime_map() ->
                 "runtime_metric_map": {"schema": "wrong"},
             }
         )
+
+
+def test_agibot_navigation_memory_rejects_non_object_navigation_memory(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "navigation_memory.json").write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Agibot navigation memory must contain a JSON object at .*navigation_memory\.json",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_agibot_navigation_memory_accepts_catalog_navigation_memory_items(
+    tmp_path: Path,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    items = navigation_memory.pop("items")
+    navigation_memory["catalog"] = {"navigation_memory": items}
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+    assert snapshot["summary"]["anchor_count"] == 9
+
+
+@pytest.mark.parametrize(
+    ("navigation_memory", "expected_error"),
+    [
+        (
+            {},
+            "Agibot navigation memory must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            {"items": {}},
+            "Agibot navigation memory items must be a non-empty list",
+        ),
+        (
+            {"items": []},
+            "Agibot navigation memory items must be a non-empty list",
+        ),
+        (
+            {"catalog": {"navigation_memory": {}}},
+            "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
+        ),
+        (
+            {"catalog": {"navigation_memory": []}},
+            "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "Agibot navigation memory item 1 must be a JSON object",
+        ),
+    ],
+)
+def test_agibot_navigation_memory_rejects_missing_or_empty_item_sources(
+    tmp_path: Path,
+    navigation_memory: dict,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_agibot_navigation_memory_rejects_malformed_source_json(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "agibot" / "source.json").write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Agibot map source must contain valid JSON object at .*source\.json",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_nav2_cleanup_bundle_rejects_non_object_semantics(tmp_path: Path) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    (bundle_dir / "semantics.json").write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Nav2 cleanup semantics must contain a JSON object at .*semantics\.json",
+    ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+@pytest.mark.parametrize(
+    ("inspection_waypoints", "expected_error"),
+    [
+        (
+            None,
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            {},
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            [],
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            [[]],
+            "Nav2 cleanup waypoint 1 must be a JSON object",
+        ),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_missing_or_empty_waypoint_sources(
+    tmp_path: Path,
+    inspection_waypoints: object,
+    expected_error: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    if inspection_waypoints is None:
+        semantics.pop("inspection_waypoints")
+    else:
+        semantics["inspection_waypoints"] = inspection_waypoints
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+@pytest.mark.parametrize(
+    ("map_yaml", "expected_error"),
+    [
+        (
+            ["image: map.pgm", "origin: [0, 0, 0]"],
+            "Nav2 cleanup map.yaml resolution must be a positive finite number",
+        ),
+        (
+            ["image: map.pgm", "resolution: 0.05"],
+            "Nav2 cleanup map.yaml origin must be a 3-item numeric list",
+        ),
+        (
+            ["image: map.pgm", "resolution: 0.05", "origin: [0, 0]"],
+            "Nav2 cleanup map.yaml origin must be a 3-item numeric list",
+        ),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_malformed_map_yaml_geometry(
+    tmp_path: Path,
+    map_yaml: list[str],
+    expected_error: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    (bundle_dir / "map.yaml").write_text("\n".join([*map_yaml, ""]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+def test_agibot_navigation_memory_rejects_malformed_nav2_yaml_geometry(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "agibot" / "nav2.yaml").write_text(
+        "\n".join(["image: occupancy.pgm", "resolution: 0.05", "origin: [0, 0]", ""]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Agibot nav2.yaml origin must be a 3-item numeric list",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_error"),
+    [
+        (
+            "missing_x",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal x "
+            "must be a finite number",
+        ),
+        (
+            "malformed_x",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal x "
+            "must be a finite number",
+        ),
+        (
+            "none",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
+            "must be an object with x, y, and yaw",
+        ),
+        (
+            "list",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
+            "must be an object with x, y, and yaw",
+        ),
+    ],
+)
+def test_agibot_navigation_memory_rejects_invalid_nav_goal_geometry(
+    tmp_path: Path,
+    case: str,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0]["nav_goal"] = _invalid_nav_goal(
+        navigation_memory["items"][0]["nav_goal"],
+        case,
+    )
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed_value"),
+    [
+        ("x", None),
+        ("y", None),
+        ("yaw", None),
+        ("x", "not-a-number"),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_invalid_waypoint_geometry(
+    tmp_path: Path,
+    field: str,
+    malformed_value: object,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    if malformed_value is None:
+        semantics["inspection_waypoints"][0].pop(field)
+    else:
+        semantics["inspection_waypoints"][0][field] = malformed_value
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Nav2 cleanup waypoint room_a_center {field} must be a finite number",
+    ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
 
 
 def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
@@ -364,6 +610,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
         output_dir=tmp_path / "cleanup",
         seed=7,
         runtime_map_prior_path=prior_path,
+        allow_synthetic_map_projection=True,
     )
 
     prior_rows = [
@@ -385,13 +632,19 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
 def _online_minimal_snapshot() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
+        allow_synthetic_map_projection=True,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     return runtime_prior_snapshot_from_runtime_metric_map(
         contract.agent_view_payload()["runtime_metric_map"],
         source_navigation_map=contract.metric_map(),
     )
+
+
+def _copy_agibot_runtime_prior_fixture(tmp_path: Path) -> Path:
+    map_dir = tmp_path / "robot_map_12"
+    shutil.copytree(ROBOT_MAP_12_FIXTURE, map_dir)
+    return map_dir
 
 
 def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
@@ -520,6 +773,20 @@ def _collect_forbidden_keys(value: object, hits: set[str]) -> None:
     elif isinstance(value, list):
         for item in value:
             _collect_forbidden_keys(item, hits)
+
+
+def _invalid_nav_goal(nav_goal: dict, case: str) -> object:
+    if case == "none":
+        return None
+    if case == "list":
+        return []
+    result = dict(nav_goal)
+    _, field = case.split("_", 1)
+    if case.startswith("missing_"):
+        result.pop(field)
+    else:
+        result[field] = "not-a-number"
+    return result
 
 
 def _load_module(path: Path, name: str):

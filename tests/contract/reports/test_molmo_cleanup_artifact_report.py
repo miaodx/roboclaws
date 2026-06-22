@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household.artifact_report import (
     is_cleanup_run_result_artifact,
     load_cleanup_scenario_artifact,
@@ -90,10 +92,10 @@ def test_rerender_cleanup_report_from_run_result_uses_shared_visual_core(
             },
         ],
         "artifacts": {
-            "scenario": "stale-output/demo/scenario.json",
-            "trace": "stale-output/demo/trace.jsonl",
-            "before_snapshot": "stale-output/demo/before.png",
-            "after_snapshot": "stale-output/demo/after.png",
+            "scenario": "scenario.json",
+            "trace": "trace.jsonl",
+            "before_snapshot": "before.png",
+            "after_snapshot": "after.png",
             "report": str(tmp_path / "report.html"),
         },
     }
@@ -201,6 +203,71 @@ def test_rerender_cleanup_report_from_run_result_handles_missing_scenario_artifa
     assert "<span>nav</span><small>object</small>" in report_text
     assert "Subphase: <strong>nav</strong>" in report_text
     assert "nav/object" not in report_text
+
+
+def test_rerender_cleanup_report_from_run_result_resolves_declared_paths_under_run_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_result_path = _write_minimal_run_result(run_dir)
+    nested = run_dir / "artifacts"
+    nested.mkdir()
+    (nested / "trace.jsonl").write_text(
+        (run_dir / "trace.jsonl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    cwd = tmp_path / "cwd"
+    (cwd / "artifacts").mkdir(parents=True)
+    (cwd / "artifacts" / "trace.jsonl").write_text("{not json}\n", encoding="utf-8")
+    monkeypatch.chdir(cwd)
+    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result["artifacts"]["trace"] = "artifacts/trace.jsonl"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+
+    report_path = rerender_cleanup_report_from_run_result(run_result_path)
+
+    assert report_path == run_dir / "report.html"
+    assert_cleanup_report_visual_core(
+        report_path.read_text(encoding="utf-8"),
+        require_semantic_subphases=True,
+    )
+
+
+def test_rerender_cleanup_report_from_run_result_rejects_missing_declared_trace(
+    tmp_path: Path,
+) -> None:
+    run_result_path = _write_minimal_run_result(tmp_path / "run")
+    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result["artifacts"]["trace"] = "missing/trace.jsonl"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="trace.*missing/trace.jsonl"):
+        rerender_cleanup_report_from_run_result(run_result_path)
+
+
+def test_rerender_cleanup_report_from_run_result_rejects_empty_declared_trace(
+    tmp_path: Path,
+) -> None:
+    run_result_path = _write_minimal_run_result(tmp_path / "run")
+    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result["artifacts"]["trace"] = ""
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="declared trace artifact is empty"):
+        rerender_cleanup_report_from_run_result(run_result_path)
+
+
+def test_rerender_cleanup_report_from_run_result_rejects_missing_declared_scenario(
+    tmp_path: Path,
+) -> None:
+    run_result_path = _write_minimal_run_result(tmp_path / "run")
+    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result["artifacts"]["scenario"] = "missing/scenario.json"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="scenario.*missing/scenario.json"):
+        rerender_cleanup_report_from_run_result(run_result_path)
 
 
 def test_rerender_cleanup_reports_from_run_results_reuses_single_adapter(

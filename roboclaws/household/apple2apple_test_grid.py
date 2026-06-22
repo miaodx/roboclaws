@@ -12,7 +12,7 @@ from roboclaws.household.realworld_contract import DEFAULT_REALWORLD_TASK
 
 GRID_SCHEMA = "molmo_apple2apple_test_grid_v1"
 ROW_SCHEMA = "molmo_apple2apple_test_grid_row_v1"
-DEFAULT_MAP_BUNDLE = "assets/maps/molmospaces-procthor-val-0-7"
+DEFAULT_MAP_BUNDLE = "assets/maps/molmospaces/procthor-10k-val/0"
 RUNTIME_MAP_PRIOR_PLACEHOLDER = "${ROBOCLAWS_RUNTIME_MAP_PRIOR}"
 
 
@@ -89,7 +89,7 @@ EVIDENCE_LANES: tuple[EvidenceLane, ...] = (
     ),
 )
 
-MAP_MODES = ("online", "offline")
+PRIOR_MODES = ("online", "offline")
 
 
 def build_apple2apple_test_grid(
@@ -115,7 +115,7 @@ def build_apple2apple_test_grid(
         )
     ]
     rows: list[dict[str, Any]] = []
-    for map_mode in MAP_MODES:
+    for prior_mode in PRIOR_MODES:
         for agent_route in AGENT_ROUTES:
             for lane in EVIDENCE_LANES:
                 rows.append(
@@ -125,10 +125,10 @@ def build_apple2apple_test_grid(
                         generated_mess_count=generated_mess_count,
                         task=task,
                         map_bundle=map_bundle,
-                        map_mode=map_mode,
+                        prior_mode=prior_mode,
                         agent_route=agent_route,
                         lane=lane,
-                        runtime_map_prior=prior_value if map_mode == "offline" else "",
+                        runtime_map_prior=prior_value if prior_mode == "offline" else "",
                         visual_grounding_timeout_s=visual_grounding_timeout_s,
                     )
                 )
@@ -149,7 +149,7 @@ def build_apple2apple_test_grid(
         "runtime_map_prior": runtime_map_prior,
         "runtime_map_prior_placeholder": RUNTIME_MAP_PRIOR_PLACEHOLDER,
         "axes": {
-            "map_modes": list(MAP_MODES),
+            "prior_modes": list(PRIOR_MODES),
             "agent_routes": [asdict(item) for item in AGENT_ROUTES],
             "evidence_lanes": [asdict(item) for item in EVIDENCE_LANES],
         },
@@ -249,7 +249,7 @@ def _runtime_map_prior_row(
         command=command,
         output_dir=row_output_dir,
         axes={
-            "map_mode": "offline-prior-build",
+            "prior_mode": "offline-prior-build",
             "agent_route": "direct",
             "evidence_lane": "world-public-labels",
         },
@@ -267,13 +267,13 @@ def _cleanup_grid_row(
     generated_mess_count: int,
     task: str,
     map_bundle: str,
-    map_mode: str,
+    prior_mode: str,
     agent_route: AgentRoute,
     lane: EvidenceLane,
     runtime_map_prior: str,
     visual_grounding_timeout_s: str,
 ) -> dict[str, Any]:
-    row_id = f"{map_mode}-{agent_route.route_id}-{lane.lane_id}"
+    row_id = f"{prior_mode}-{agent_route.route_id}-{lane.lane_id}"
     row_output_dir = output_dir / row_id
     command = [
         "just",
@@ -300,12 +300,12 @@ def _cleanup_grid_row(
         command.append(f"runtime_map_prior={runtime_map_prior}")
     return _row_payload(
         row_id=row_id,
-        label=f"{map_mode} {agent_route.label} {lane.label}",
+        label=f"{prior_mode} {agent_route.label} {lane.label}",
         grid_role="cleanup",
         command=command,
         output_dir=row_output_dir,
         axes={
-            "map_mode": map_mode,
+            "prior_mode": prior_mode,
             "agent_route": agent_route.route_id,
             "evidence_lane": lane.profile,
             "camera_labeler": lane.camera_labeler,
@@ -354,7 +354,7 @@ def _row_payload(
 
 def _thead() -> str:
     return (
-        "<thead><tr><th>Row</th><th>Status</th><th>Map</th><th>Agent</th>"
+        "<thead><tr><th>Row</th><th>Status</th><th>Prior</th><th>Agent</th>"
         "<th>Evidence Lane</th><th>Camera Labeler</th><th>Env</th><th>Command</th>"
         "<th>Report</th><th>Reason</th></tr></thead>"
     )
@@ -378,7 +378,7 @@ def _render_row(row: dict[str, Any]) -> str:
         f"<td>{html.escape(str(row.get('label') or row.get('row_id') or 'row'))}"
         f"<br><code>{html.escape(str(row.get('row_id') or ''))}</code></td>"
         f"<td><code>{html.escape(str(row.get('status') or 'pending'))}</code></td>"
-        f"<td><code>{html.escape(str(axes.get('map_mode') or ''))}</code></td>"
+        f"<td><code>{html.escape(str(axes.get('prior_mode') or ''))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('agent_route') or ''))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('evidence_lane') or ''))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('camera_labeler') or 'none'))}</code></td>"

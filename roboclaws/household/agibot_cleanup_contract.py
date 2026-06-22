@@ -69,7 +69,6 @@ class AgibotCleanupMCPContract:
         self.contract = AgibotCleanupBackendSession(self.scenario)
         self.task_prompt = task_prompt
         self.perception_mode = CAMERA_MODEL_POLICY_MODE
-        self.map_mode = "agibot_minimal_map_context"
         self.visual_grounding_pipeline_id = "agibot_g2_head_color"
         self.adapter = AgibotSDKRunnerAdapter(
             context_json=context_json,
@@ -345,8 +344,6 @@ class AgibotCleanupMCPContract:
             "schema": "runtime_metric_map_v1",
             "contract": REALWORLD_CONTRACT,
             "freshness": "current_run",
-            "map_mode": "agibot_minimal_map_context",
-            "minimal_map_mode": True,
             "source_map_mutated": False,
             "private_truth_included": False,
             "static_map": {
@@ -363,8 +360,6 @@ class AgibotCleanupMCPContract:
                     dict(item) for item in public_metric_map.get("driveable_ways") or []
                 ],
                 "contains_runtime_observations": False,
-                "map_mode": "agibot_minimal_map_context",
-                "minimal_map_mode": True,
             },
             "public_semantic_anchors": [],
             "observed_objects": [],

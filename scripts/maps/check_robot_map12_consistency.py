@@ -14,6 +14,12 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    navigation_memory_point_source,
+    read_navigation_memory,
+)
 from roboclaws.maps.rasterize import load_pgm, world_to_grid
 
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
@@ -78,12 +84,32 @@ def check_robot_map12_consistency(map12_root: Path) -> dict[str, Any]:
     warnings: list[str] = []
     errors.extend(_raw_map_metadata_errors(raw_map, grid=grid, yaw=origin[2]))
 
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    anchors = [
-        _anchor_check(item, grid=grid)
-        for item in _navigation_memory_items(navigation_memory)
-        if isinstance(item, dict)
-    ]
+    map_summary = {
+        "frame_id": "map",
+        "resolution_m": grid.resolution_m,
+        "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": origin[2]},
+        "width": grid.width,
+        "height": grid.height,
+    }
+    try:
+        navigation_memory = read_navigation_memory(navigation_memory_path)
+        anchors = [
+            _anchor_check(
+                navigation_memory_item(raw_item, index=index),
+                index=index,
+                grid=grid,
+            )
+            for index, raw_item in enumerate(navigation_memory_items(navigation_memory), start=1)
+        ]
+    except ValueError as exc:
+        errors.append(str(exc))
+        return _result(
+            map12_root,
+            errors=errors,
+            warnings=warnings,
+            anchors=[],
+            map_summary=map_summary,
+        )
     for anchor in anchors:
         for field in ("pose", "nav_goal"):
             check = anchor.get(field)
@@ -99,13 +125,7 @@ def check_robot_map12_consistency(map12_root: Path) -> dict[str, Any]:
         errors=errors,
         warnings=warnings,
         anchors=anchors,
-        map_summary={
-            "frame_id": "map",
-            "resolution_m": grid.resolution_m,
-            "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": origin[2]},
-            "width": grid.width,
-            "height": grid.height,
-        },
+        map_summary=map_summary,
         navigation_memory_summary={
             "schema_version": navigation_memory.get("schema_version"),
             "updated_at": str(navigation_memory.get("updated_at") or ""),
@@ -186,22 +206,32 @@ def _raw_map_metadata_errors(
     return errors
 
 
-def _anchor_check(item: dict[str, Any], *, grid: Any) -> dict[str, Any]:
+def _anchor_check(item: dict[str, Any], *, index: int, grid: Any) -> dict[str, Any]:
+    item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
     return {
-        "id": str(item.get("id") or ""),
+        "id": item_id,
         "label": str(item.get("label") or ""),
         "kind": str(item.get("kind") or ""),
         # ponytail: in-bounds proves same-frame plausibility; use residual landmarks for Gaussian.
-        "pose": _point_check(item.get("pose"), grid=grid),
-        "nav_goal": _point_check(item.get("nav_goal"), grid=grid),
+        "pose": _point_check(
+            item.get("pose"),
+            grid=grid,
+            label=f"navigation_memory.json item {item_id} pose",
+        ),
+        "nav_goal": _point_check(
+            item.get("nav_goal"),
+            grid=grid,
+            label=f"navigation_memory.json item {item_id} nav_goal",
+        ),
     }
 
 
-def _point_check(raw: Any, *, grid: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict) or "x" not in raw or "y" not in raw:
+def _point_check(raw: Any, *, grid: Any, label: str) -> dict[str, Any]:
+    point = navigation_memory_point_source(raw, label=label, required=False)
+    if not point:
         return {"present": False}
-    x = float(raw["x"])
-    y = float(raw["y"])
+    x = point["x"]
+    y = point["y"]
     col, row = world_to_grid(x, y, grid)
     in_bounds = grid.in_bounds(col, row)
     value = grid.rows[row][col] if in_bounds else None
@@ -214,14 +244,6 @@ def _point_check(raw: Any, *, grid: Any) -> dict[str, Any]:
         "costmap_value": value,
         "free": grid.is_free_cell(col, row) if in_bounds else False,
     }
-
-
-def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
 
 
 def _origin(map_yaml: dict[str, Any]) -> tuple[float, float, float]:

@@ -33,7 +33,7 @@ class OccupancyGrid:
 
 def occupancy_grid_from_metric_map(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> OccupancyGrid:
     resolution = max(float(metric_map.get("resolution_m") or 0.05), 0.001)
     origin = metric_map.get("origin") if isinstance(metric_map.get("origin"), dict) else {}
@@ -43,7 +43,7 @@ def occupancy_grid_from_metric_map(
     height = _metric_map_dimension(metric_map, "height")
     width, height = _expand_dimensions_for_public_geometry(
         metric_map,
-        static_fixture_projection,
+        static_landmarks,
         width=width,
         height=height,
         resolution_m=resolution,
@@ -90,9 +90,9 @@ def occupancy_grid_from_metric_map(
             width=max(3, int(round(0.35 / resolution))),
         )
 
-    for fixture in fixtures_from_static_projection(static_fixture_projection):
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        footprint = fixture.get("footprint") if isinstance(fixture.get("footprint"), dict) else {}
+    for landmark in static_landmarks:
+        pose = landmark.get("pose") if isinstance(landmark.get("pose"), dict) else {}
+        footprint = landmark.get("footprint") if isinstance(landmark.get("footprint"), dict) else {}
         x = float(pose.get("x") or 0.0)
         y = float(pose.get("y") or 0.0)
         width_m = float(footprint.get("width_m") or 0.45)
@@ -159,20 +159,6 @@ def world_to_grid(x: float, y: float, grid: OccupancyGrid) -> tuple[int, int]:
     return col, row
 
 
-def fixtures_from_static_projection(
-    static_fixture_projection: dict[str, Any],
-) -> list[dict[str, Any]]:
-    fixtures: list[dict[str, Any]] = []
-    for room in static_fixture_projection.get("rooms") or []:
-        for fixture in room.get("fixtures") or []:
-            if not isinstance(fixture, dict):
-                continue
-            item = dict(fixture)
-            item.setdefault("room_id", room.get("room_id", ""))
-            fixtures.append(item)
-    return fixtures
-
-
 def _room_centers(metric_map: dict[str, Any]) -> dict[str, tuple[float, float]]:
     centers: dict[str, tuple[float, float]] = {}
     for room in metric_map.get("rooms") or []:
@@ -226,7 +212,7 @@ def _clamped_dimension(value: int, *, lower: int, upper: int) -> int:
 
 def _expand_dimensions_for_public_geometry(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
     *,
     width: int,
     height: int,
@@ -236,7 +222,7 @@ def _expand_dimensions_for_public_geometry(
 ) -> tuple[int, int]:
     max_x = origin_x + (width - 1) * resolution_m
     max_y = origin_y + (height - 1) * resolution_m
-    for x, y in _public_geometry_points(metric_map, static_fixture_projection):
+    for x, y in _public_geometry_points(metric_map, static_landmarks):
         max_x = max(max_x, x)
         max_y = max(max_y, y)
     margin_m = 0.5
@@ -250,16 +236,16 @@ def _expand_dimensions_for_public_geometry(
 
 def _public_geometry_points(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ):
     for room in metric_map.get("rooms") or []:
         for point in room.get("polygon") or []:
             yield float(point.get("x", 0.0)), float(point.get("y", 0.0))
     for waypoint in metric_map.get("inspection_waypoints") or []:
         yield float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))
-    for fixture in fixtures_from_static_projection(static_fixture_projection):
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        footprint = fixture.get("footprint") if isinstance(fixture.get("footprint"), dict) else {}
+    for landmark in static_landmarks:
+        pose = landmark.get("pose") if isinstance(landmark.get("pose"), dict) else {}
+        footprint = landmark.get("footprint") if isinstance(landmark.get("footprint"), dict) else {}
         x = float(pose.get("x") or 0.0)
         y = float(pose.get("y") or 0.0)
         half_width = float(footprint.get("width_m") or 0.45) / 2.0

@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household.apple2apple_test_grid import (
     GRID_SCHEMA,
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
@@ -35,7 +37,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
     grid = build_apple2apple_test_grid(output_dir=tmp_path / "grid", task="clean")
 
     assert grid["schema"] == GRID_SCHEMA
-    assert grid["axes"]["map_modes"] == ["online", "offline"]
+    assert grid["axes"]["prior_modes"] == ["online", "offline"]
     assert [item["route_id"] for item in grid["axes"]["agent_routes"]] == [
         "codex-api-router",
         "claude-kimi",
@@ -60,7 +62,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "evidence_lane=world-public-labels",
     ]
     assert "scenario_setup=baseline" in setup_command
-    assert "map_bundle=assets/maps/molmospaces-procthor-val-0-7" in setup_command
+    assert "map_bundle=assets/maps/molmospaces/procthor-10k-val/0" in setup_command
 
 
 def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) -> None:
@@ -200,6 +202,50 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
     )
 
 
+def test_apple2apple_grid_filtered_execute_fails_on_malformed_existing_manifest(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_malformed_manifest")
+    output_dir = tmp_path / "grid"
+    output_dir.mkdir()
+    (output_dir / "apple2apple_test_grid.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"apple2apple_test_grid\.json.*invalid JSON"):
+        run_grid.main(
+            [
+                "--output-dir",
+                str(output_dir),
+                "--task",
+                "clean",
+                "--execute",
+                "--row",
+                "online-claude-kimi-camera-raw-fpv",
+            ]
+        )
+
+
+def test_apple2apple_grid_filtered_execute_fails_on_non_object_existing_manifest(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_non_object_manifest")
+    output_dir = tmp_path / "grid"
+    output_dir.mkdir()
+    (output_dir / "apple2apple_test_grid.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"apple2apple_test_grid\.json.*non-object JSON"):
+        run_grid.main(
+            [
+                "--output-dir",
+                str(output_dir),
+                "--task",
+                "clean",
+                "--execute",
+                "--row",
+                "online-claude-kimi-camera-raw-fpv",
+            ]
+        )
+
+
 def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
     tmp_path: Path,
 ) -> None:
@@ -313,3 +359,56 @@ def test_apple2apple_grid_execute_discovers_live_status_only_seed_dir(
     assert row["run_dir"] == str(run_dir)
     assert row["live_status"]["phase"] == "finished"
     assert row["status"] == "launched"
+
+
+def test_apple2apple_grid_execute_fails_on_malformed_live_status_source(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_malformed_live_status")
+    output_dir = tmp_path / "grid"
+    run_dir = output_dir / "0528_1200" / "seed-7"
+    run_dir.mkdir(parents=True)
+    (run_dir / "live_status.json").write_text("{bad", encoding="utf-8")
+    row = {
+        "command": [sys.executable, "-c", ""],
+        "env": {},
+        "output_dir": str(output_dir),
+    }
+    args = argparse.Namespace(
+        seed=7,
+        just_bin="just",
+        live_wait_timeout_s=0.1,
+        live_wait_poll_s=0.1,
+    )
+
+    with pytest.raises(ValueError, match=r"live_status\.json.*invalid JSON"):
+        run_grid._execute_row(row, args)
+
+
+def test_apple2apple_grid_live_status_retry_allows_transient_partial_write(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_live_status_retry")
+    status_path = tmp_path / "live_status.json"
+    status_path.write_text("{bad", encoding="utf-8")
+    attempts = {"count": 0}
+    real_read_json_object = run_grid._read_json_object
+
+    def flaky_read_json_object(path: Path, *, source_label: str) -> dict:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise ValueError("transient partial write")
+        status_path.write_text(
+            json.dumps({"phase": "finished", "exit_status": 0}),
+            encoding="utf-8",
+        )
+        return real_read_json_object(path, source_label=source_label)
+
+    run_grid._read_json_object = flaky_read_json_object
+    run_grid._sleep = lambda _seconds: None
+    run_grid._monotonic = iter([0.0, 0.0, 0.01]).__next__
+
+    status = run_grid._read_status(status_path, retry_deadline=1.0)
+
+    assert status == {"phase": "finished", "exit_status": 0}
+    assert attempts["count"] == 2

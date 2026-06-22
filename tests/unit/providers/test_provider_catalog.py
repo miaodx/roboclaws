@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from roboclaws.agents.provider_registry import (
     ROUTE_BLOCKED,
     ROUTE_CAP_UNKNOWN,
@@ -13,13 +15,14 @@ from roboclaws.agents.provider_registry import (
     default_enabled_models,
     default_enabled_provider_routes,
     model_aliases,
-    model_supports_images,
     normalize_provider_route,
+    openai_agents_runtime_settings,
     openclaw_model_id,
     provider_readiness,
     provider_route_spec,
     required_env_keys,
     resolve_model,
+    resolve_route_model,
     route_base_url,
     route_capabilities_for_engine,
 )
@@ -71,9 +74,9 @@ def test_provider_factory_routes_through_catalog(monkeypatch) -> None:
 
 def test_catalog_reports_all_real_models_image_capable() -> None:
     # mimo-v2.5 has native vision; every non-mock catalog model is image-capable.
-    assert model_supports_images("mimo_openai/mimo-v2.5") is True
-    assert model_supports_images("mimo_anthropic/mimo-v2.5") is True
-    assert model_supports_images("anthropic_kimi/k2p5") is True
+    assert resolve_model("mimo_openai/mimo-v2.5").supports_image_input is True
+    assert resolve_model("mimo_anthropic/mimo-v2.5").supports_image_input is True
+    assert resolve_model("anthropic_kimi/k2p5").supports_image_input is True
 
 
 def test_catalog_returns_openclaw_model_identifier() -> None:
@@ -239,6 +242,91 @@ def test_provider_readiness_rejects_unknown_model_override() -> None:
     assert "provider_profile codex-router-responses" in readiness["message"]
 
 
+def test_provider_readiness_rejects_route_incompatible_model_override() -> None:
+    readiness = provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile="minimax-responses",
+        model="gpt-5.5",
+        env={"MM_API_KEY": "key"},
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["missing_env"] == []
+    assert readiness["model"] == "gpt-5.5"
+    assert readiness["model_family"] == "unknown"
+    assert (
+        "model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"
+        in (readiness["message"])
+    )
+    assert "expected one of MiniMax-M3, MiniMax-M2.7-highspeed" in readiness["message"]
+
+
+def test_provider_route_model_allows_route_compatible_explicit_variant() -> None:
+    resolved = resolve_route_model("minimax-responses", "MiniMax-M2.7-highspeed")
+
+    assert resolved.model_id == "MiniMax-M2.7-highspeed"
+
+
+def test_provider_route_model_rejects_same_family_wrong_route_model() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "model 'mimo-1000' is incompatible with provider_profile "
+            "'mimo-mify-responses'; expected one of xiaomi/mimo-v2.5"
+        ),
+    ):
+        resolve_route_model("mimo-mify-responses", "mimo-1000")
+
+
+def test_provider_readiness_rejects_unknown_provider_profile() -> None:
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile="not-a-provider-route",
+        env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["provider_profile"] == "not-a-provider-route"
+    assert readiness["missing_env"] == []
+    assert "provider_profile 'not-a-provider-route' is unknown" in readiness["message"]
+    assert "agent_engine 'codex-cli'" in readiness["message"]
+
+
+def test_openai_agents_runtime_settings_reject_unknown_model_override() -> None:
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting model is unknown, got 'not-in-provider-catalog'",
+    ):
+        openai_agents_runtime_settings(
+            provider_profile="codex-router-responses",
+            request_provider_profile=None,
+            model="not-in-provider-catalog",
+            request_model=None,
+            base_url=None,
+            api_key=None,
+            env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+        )
+
+
+def test_openai_agents_runtime_settings_reject_route_incompatible_model_override() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents SDK setting model is incompatible: model 'gpt-5.5' "
+            "is incompatible with provider_profile 'minimax-responses'"
+        ),
+    ):
+        openai_agents_runtime_settings(
+            provider_profile="minimax-responses",
+            request_provider_profile=None,
+            model="gpt-5.5",
+            request_model=None,
+            base_url=None,
+            api_key=None,
+            env={"MM_API_KEY": "key"},
+        )
+
+
 def test_provider_registry_cli_dispatches_route_and_json_commands(
     tmp_path,
     capsys,
@@ -251,5 +339,15 @@ def test_provider_registry_cli_dispatches_route_and_json_commands(
     assert capsys.readouterr().out.strip() == "MiniMax-M3"
     assert _main(["model-id", "minimax-highspeed"]) == 0
     assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
+    assert _main(["provider-model-id", "minimax-responses", "minimax-highspeed"]) == 0
+    assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
+    with pytest.raises(SystemExit):
+        _main(["provider-model-id", "minimax-responses", "gpt-5.5"])
+    assert "incompatible with provider_profile 'minimax-responses'" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        _main(["public-profile", "not-a-provider-route"])
+    captured = capsys.readouterr()
+    assert "provider_profile 'not-a-provider-route' is unknown" in captured.err
+    assert "Traceback" not in captured.err
     assert _main(["supports-engine", "minimax-responses", "openai-agents-sdk"]) == 0
     assert _main(["supports-engine", "mimo-tp-openai-chat", "codex-cli"]) == 1

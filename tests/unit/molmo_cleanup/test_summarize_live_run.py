@@ -209,6 +209,120 @@ def test_single_run_summary_does_not_print_hard_coded_speedup_baseline(
     assert "normalized model time: unavailable" in output
 
 
+def test_default_run_discovery_ignores_empty_latest_seed_dir(tmp_path: Path, monkeypatch) -> None:
+    summarize = _load_summary_module()
+    search_root = tmp_path / "codex-report"
+    (search_root / "20260619_120000").mkdir(parents=True)
+    evidence_run = _write_run(
+        search_root / "20260619_120000" / "seed-7",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    empty_latest = search_root / "20260619_130000" / "seed-7"
+    empty_latest.mkdir(parents=True)
+    monkeypatch.setattr(summarize, "DEFAULT_SEARCH_ROOT", search_root)
+
+    assert summarize._resolve_run_dir(None) == evidence_run
+
+
+def test_parent_run_discovery_ignores_empty_latest_seed_dir(tmp_path: Path) -> None:
+    summarize = _load_summary_module()
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    evidence_run = _write_run(
+        run_root / "seed-7",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    empty_latest = run_root / "seed-8"
+    empty_latest.mkdir(parents=True)
+
+    assert summarize._resolve_run_dir(run_root) == evidence_run
+
+
+def test_single_run_summary_fails_aloud_on_empty_explicit_run_dir(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = tmp_path / "seed-7"
+    run_dir.mkdir()
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert f"run path has no live-run evidence: {run_dir}" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_malformed_live_timing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "live_timing.json").write_text("{bad-json}\n", encoding="utf-8")
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live_timing.json" in captured.err
+    assert "invalid JSON" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_non_object_run_result(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "run_result.json").write_text('["not", "a", "result"]\n', encoding="utf-8")
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "run_result.json" in captured.err
+    assert "non-object JSON" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_malformed_trace_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"response","tool":"done"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "trace.jsonl:2" in captured.err
+    assert "invalid JSON" in captured.err
+
+
 def test_agent_sdk_comparison_manifest_prints_terminal_classification(
     tmp_path: Path,
     capsys,

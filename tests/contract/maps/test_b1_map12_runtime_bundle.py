@@ -224,6 +224,94 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     )
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json\n",
+            r"review manifest must contain valid JSON object: .*review\.json",
+        ),
+        (
+            "[]\n",
+            r"review manifest must contain a JSON object: .*review\.json",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_bad_review_manifest_source(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    review_path = tmp_path / "review.json"
+    review_path.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=expected_error,
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=review_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+@pytest.mark.parametrize(
+    ("artifact_kind", "source_text", "expected_error"),
+    [
+        (
+            "alignment",
+            "{not-json\n",
+            r"alignment artifact must contain valid JSON object: .*alignment_residuals\.json",
+        ),
+        (
+            "alignment",
+            "[]\n",
+            r"alignment artifact must contain a JSON object: .*alignment_residuals\.json",
+        ),
+        (
+            "navigation",
+            "{not-json\n",
+            r"navigation artifact must contain valid JSON object: .*navigation_smoke\.json",
+        ),
+        (
+            "navigation",
+            "[]\n",
+            r"navigation artifact must contain a JSON object: .*navigation_smoke\.json",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_bad_robot_consumption_proof_artifact_sources(
+    tmp_path: Path,
+    artifact_kind: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    alignment_path = tmp_path / "alignment_residuals.json"
+    navigation_path = tmp_path / "navigation_smoke.json"
+    if artifact_kind == "alignment":
+        alignment_path.write_text(source_text, encoding="utf-8")
+        navigation_artifact_path = None
+    else:
+        alignment_path.write_text(json.dumps(_verified_alignment_artifact()), encoding="utf-8")
+        navigation_path.write_text(source_text, encoding="utf-8")
+        navigation_artifact_path = navigation_path
+
+    with pytest.raises(
+        ValueError,
+        match=expected_error,
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            alignment_artifact_path=alignment_path,
+            navigation_artifact_path=navigation_artifact_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
     tmp_path: Path,
 ) -> None:
@@ -316,6 +404,50 @@ def test_runtime_compiler_rejects_missing_semantic_projection_artifact(
         )
 
 
+def test_runtime_compiler_rejects_malformed_semantic_projection_artifact(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"semantic projection artifact must contain valid JSON object: "
+            r".*semantic_projection\.json"
+        ),
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_non_object_semantic_projection_artifact(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"semantic projection artifact must contain a JSON object: "
+            r".*semantic_projection\.json"
+        ),
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
     tmp_path: Path,
 ) -> None:
@@ -329,6 +461,85 @@ def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
             scene_root=SCENE_ROOT,
             review_manifest_path=REVIEW_MANIFEST,
             semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_malformed_semantic_projection_room(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection = _semantic_projection_artifact(review_manifest_path=REVIEW_MANIFEST)
+    projection["rooms"] = ["meeting_room_a"]
+    projection_path.write_text(json.dumps(projection), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"rooms\[1\]: room must be an object"):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+@pytest.mark.parametrize(
+    ("navigation_memory", "expected_error"),
+    [
+        (
+            [],
+            r"navigation memory must contain a JSON object: .*navigation_memory\.json",
+        ),
+        (
+            {},
+            "navigation_memory.json must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            {"items": []},
+            "navigation_memory.json items must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "navigation_memory.json item 1 must be a JSON object",
+        ),
+        (
+            {"items": [{"id": "bad_anchor", "nav_goal": {"x": "bad", "y": 1.0}}]},
+            "navigation_memory.json item bad_anchor nav_goal x must be a finite number",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_malformed_navigation_memory_sources(
+    tmp_path: Path,
+    navigation_memory: object,
+    expected_error: str,
+) -> None:
+    navigation_memory_path = tmp_path / "navigation_memory.json"
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            navigation_memory_path=navigation_memory_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_malformed_navigation_memory_json(tmp_path: Path) -> None:
+    navigation_memory_path = tmp_path / "navigation_memory.json"
+    navigation_memory_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"navigation memory must contain valid JSON object: .*navigation_memory\.json",
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            navigation_memory_path=navigation_memory_path,
             output_dir=tmp_path / "runtime",
         )
 

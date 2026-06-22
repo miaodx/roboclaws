@@ -75,12 +75,7 @@ def _assert_cleanup_worklist(agent_view: dict[str, Any]) -> None:
     if not worklist:
         return
     assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
-    expected_waypoint_source = (
-        "generated_exploration_candidate"
-        if (agent_view.get("runtime_metric_map") or {}).get("minimal_map_mode") is True
-        else "static_map_fixture_coverage"
-    )
-    assert worklist.get("waypoint_source") == expected_waypoint_source, worklist
+    assert worklist.get("waypoint_source") == "generated_exploration_candidate", worklist
 
 
 def _assert_policy_view(agent_view: dict[str, Any]) -> None:

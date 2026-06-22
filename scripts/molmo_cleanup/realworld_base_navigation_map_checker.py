@@ -5,34 +5,30 @@ from typing import Any
 from roboclaws.household.realworld_contract import forbidden_agent_view_keys
 
 
-def assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
-    assert data.get("map_mode") == "minimal", data
+def assert_base_navigation_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
     metric_map = agent_view.get("metric_map") or {}
     static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     static_map = runtime_map.get("static_map") or {}
-    _assert_minimal_core(metric_map, static_fixture_projection, runtime_map)
-    _assert_minimal_rooms_and_static_map(metric_map, static_fixture_projection, static_map)
-    _assert_minimal_waypoints(metric_map, runtime_map)
-    map_build = data.get("map_build")
-    if map_build is not None:
-        assert map_build.get("minimal_map_mode") is True, data
+    _assert_base_navigation_core(metric_map, static_fixture_projection, runtime_map)
+    _assert_rooms_and_static_map(metric_map, static_fixture_projection, static_map)
+    _assert_waypoints(metric_map, runtime_map)
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(static_fixture_projection)
 
 
-def _assert_minimal_core(
+def _assert_base_navigation_core(
     metric_map: dict[str, Any],
     static_fixture_projection: dict[str, Any],
     runtime_map: dict[str, Any],
 ) -> None:
-    assert metric_map.get("mode") == "minimal", metric_map
-    assert static_fixture_projection.get("mode") == "minimal", static_fixture_projection
-    assert runtime_map.get("map_mode") == "minimal", runtime_map
-    assert runtime_map.get("minimal_map_mode") is True, runtime_map
+    base_map = metric_map.get("base_navigation_map") or {}
+    assert base_map.get("enabled") is True, metric_map
+    assert static_fixture_projection.get("rooms") == [], static_fixture_projection
+    assert runtime_map.get("source_map_mutated") is False, runtime_map
 
 
-def _assert_minimal_rooms_and_static_map(
+def _assert_rooms_and_static_map(
     metric_map: dict[str, Any],
     static_fixture_projection: dict[str, Any],
     static_map: dict[str, Any],
@@ -63,7 +59,7 @@ def _assert_static_map(static_map: dict[str, Any]) -> None:
     assert isinstance(static_driveable_ways, list), static_map
 
 
-def _assert_minimal_waypoints(
+def _assert_waypoints(
     metric_map: dict[str, Any],
     runtime_map: dict[str, Any],
 ) -> None:
@@ -98,7 +94,7 @@ def _assert_public_anchors(runtime_map: dict[str, Any]) -> None:
 def _assert_exploration_waypoint(waypoint: dict[str, Any]) -> None:
     assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
     assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
-    assert waypoint.get("purpose") == "minimal_map_exploration", waypoint
+    assert waypoint.get("purpose") == "base_navigation_map_exploration", waypoint
     provenance = waypoint.get("candidate_provenance") or {}
     assert provenance.get("source") == "public_occupancy_free_space", waypoint
     assert provenance.get("source_room_hidden") is False, waypoint

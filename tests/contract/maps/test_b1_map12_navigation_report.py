@@ -48,10 +48,6 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
             path = view_dir / f"{waypoint['waypoint_id']}.{view_name}.png"
             _write_reviewable_image(path, offset=20 * index)
             views[view_name] = str(path)
-    navigation["b1_scene_usd"] = (
-        "data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
-    )
     navigation["validation"] = {"status": "passed", "errors": []}
     readiness = readiness_artifact_with_navigation(
         static_readiness_payload(),
@@ -161,3 +157,96 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
     assert "navigation_smoke.json" in report
     assert "readiness_with_navigation.json" in report
     assert "waypoint_pose_requests.json" in report
+
+
+def test_b1_map12_navigation_report_rejects_explicit_missing_optional_artifact(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "navigation_smoke.json").write_text(
+        json.dumps(navigation_payload(run_dir), indent=2),
+        encoding="utf-8",
+    )
+
+    missing_readiness = run_dir / "missing_readiness.json"
+
+    message = _assert_render_fails_without_report(
+        [
+            "--run-dir",
+            str(run_dir),
+            "--readiness-artifact",
+            str(missing_readiness),
+        ],
+        run_dir=run_dir,
+    )
+
+    assert f"readiness artifact missing: {missing_readiness}" in message
+    assert not (run_dir / "report.html").exists()
+
+
+def test_b1_map12_navigation_report_rejects_malformed_navigation_artifact(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "navigation_smoke.json").write_text("{not-json\n", encoding="utf-8")
+
+    message = _assert_render_fails_without_report(["--run-dir", str(run_dir)], run_dir=run_dir)
+
+    assert "navigation artifact must contain valid JSON object" in message
+    assert not (run_dir / "report.html").exists()
+
+
+def test_b1_map12_navigation_report_rejects_present_malformed_default_sidecar(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "navigation_smoke.json").write_text(
+        json.dumps(navigation_payload(run_dir), indent=2),
+        encoding="utf-8",
+    )
+    (run_dir / "readiness_with_navigation.json").write_text("{not-json\n", encoding="utf-8")
+
+    message = _assert_render_fails_without_report(["--run-dir", str(run_dir)], run_dir=run_dir)
+
+    assert "readiness artifact must contain valid JSON object" in message
+    assert not (run_dir / "report.html").exists()
+
+
+def test_b1_map12_navigation_report_rejects_non_object_waypoint_pose_requests(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    pose_requests = run_dir / "waypoint_pose_requests.json"
+    (run_dir / "navigation_smoke.json").write_text(
+        json.dumps(navigation_payload(run_dir), indent=2),
+        encoding="utf-8",
+    )
+    pose_requests.write_text("[]\n", encoding="utf-8")
+
+    message = _assert_render_fails_without_report(
+        [
+            "--run-dir",
+            str(run_dir),
+            "--waypoint-pose-requests",
+            str(pose_requests),
+        ],
+        run_dir=run_dir,
+    )
+
+    assert f"waypoint pose request artifact must contain a JSON object: {pose_requests}" in message
+    assert not (run_dir / "report.html").exists()
+
+
+def _assert_render_fails_without_report(argv: list[str], *, run_dir: Path) -> str:
+    try:
+        render_main(argv)
+    except ValueError as exc:
+        message = str(exc)
+    else:  # pragma: no cover - source truth must fail before report writes
+        raise AssertionError("expected navigation report rendering to fail")
+    assert not (run_dir / "report.html").exists()
+    return message

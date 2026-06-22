@@ -101,43 +101,12 @@ def metric_map_from_bundle(
     }
 
 
-def static_fixture_projection_from_bundle(
-    bundle_dir: Path,
-    *,
-    static_fixture_projection_mode: str = "room_only",
-    contract: str = REALWORLD_CONTRACT,
-) -> dict[str, Any]:
+def static_landmarks_from_bundle(bundle_dir: Path) -> list[dict[str, Any]]:
     _validate_projection_source_bundle(bundle_dir)
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
-    fixtures_by_room: dict[str, list[dict[str, Any]]] = {}
-    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
-    semantic_rooms = normalize_spatial_rooms(
-        semantics.get("rooms") or [],
-        frame_id=frame_id,
-        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        alignment_status=ALIGNMENT_STATUS_NATIVE,
-    )
-    for fixture in semantics.get("fixtures") or []:
-        fixtures_by_room.setdefault(str(fixture.get("room_id") or ""), []).append(dict(fixture))
-    rooms = []
-    for room in semantic_rooms:
-        item = dict(room)
-        item["fixtures"] = fixtures_by_room.get(str(room.get("room_id") or ""), [])
-        rooms.append(item)
-    return {
-        "ok": True,
-        "tool": "static_fixture_projection",
-        "status": "ok",
-        "contract": contract,
-        "schema": "static_fixture_projection_v1",
-        "static_fixture_projection_mode": static_fixture_projection_mode,
-        "contains_runtime_observations": False,
-        "public_contract_note": (
-            "Static fixture projection is derived from the selected Nav2 map bundle."
-        ),
-        "rooms": rooms,
-    }
+    return [
+        dict(item) for item in semantics.get("static_landmarks") or [] if isinstance(item, dict)
+    ]
 
 
 def _waypoint_pose(waypoint: dict[str, Any]) -> dict[str, float]:

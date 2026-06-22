@@ -9,6 +9,7 @@ import pytest
 from roboclaws.launch import scene_sampler
 from scripts.operator_console.export_scene_sampler_readiness import (
     _candidate_indices,
+    _write_named_artifacts,
     export_readiness_artifacts,
     main,
 )
@@ -511,6 +512,25 @@ def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_uniqu
     )
 
 
+def test_scene_sampler_readiness_export_rejects_enabled_artifact_without_payload(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="enabled artifact 'source_availability' has no payload"):
+        _write_named_artifacts(
+            tmp_path,
+            (
+                (
+                    "source_availability",
+                    True,
+                    "scene_sampler_source_availability.json",
+                    None,
+                ),
+            ),
+        )
+
+    assert not (tmp_path / "scene_sampler_source_availability.json").exists()
+
+
 def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     tmp_path,
     capsys,
@@ -529,6 +549,20 @@ def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     assert payload["status"] == "failed"
     assert payload["summary"]["eval_projection"]["ready_sample_count"] == 15
     assert payload["threshold_failures"][0]["ready_count"] == 0
+
+
+def test_scene_sampler_readiness_export_cli_rejects_invalid_candidate_range(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    code = main(["--output-dir", str(tmp_path), "--candidate-range", "7:3"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert "candidate-range end must be >= start" in captured.err
+    assert "Traceback" not in captured.err
+    assert not (tmp_path / "scene_sampler_manifest.json").exists()
 
 
 def test_scene_sampler_readiness_export_cli_accepts_scanner_ready_threshold(

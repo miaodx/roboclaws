@@ -20,7 +20,6 @@ from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
     navigation_smoke_has_distinct_pose_evidence,
     navigation_smoke_waypoints,
 )
-from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
 from scripts.maps.build_b1_map12_semantic_anchor_review_packet import (
     build_semantic_anchor_review_packet,
 )
@@ -45,6 +44,9 @@ from scripts.maps.render_b1_map12_correspondence_review import (
     build_review_packet,
     render_review_report,
 )
+from scripts.maps.render_b1_map12_manual_alignment_overlay import (
+    verified_transform as verified_overlay_transform,
+)
 from scripts.maps.render_b1_scene_gaussian_topdown import (
     TOPDOWN_RENDER_SCHEMA,
     build_topdown_camera_request,
@@ -62,8 +64,14 @@ REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence
 PROMOTE_REVIEW_PACKET_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_semantic_review_packet.py"
 )
+PROMOTE_MANUAL_DRAFT_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_manual_draft_for_verification.py"
+)
 CHECK_REVIEW_PACKET_FIT_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
+)
+SEMANTIC_ANCHOR_REVIEW_PACKET_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_anchor_review_packet.py"
 )
 SEMANTIC_PROJECTION_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_projection.py"
@@ -891,6 +899,41 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
     assert "geometry only" in payload["anchors"][0]["evidence"]["verification_note"]
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "manual draft missing"),
+        ("{not-json\n", "manual draft must contain valid JSON object"),
+        ("[]\n", "manual draft must contain a JSON object"),
+    ],
+)
+def test_manual_draft_promotion_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    draft_path = tmp_path / "manual_draft.json"
+    output = tmp_path / "verification-only.json"
+    if source_text is not None:
+        draft_path.write_text(source_text, encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_MANUAL_DRAFT_SCRIPT),
+            "--draft",
+            str(draft_path),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert (completed.returncode, output.exists()) == (2, False)
+    assert expected_error in completed.stderr and str(draft_path) in completed.stderr
+
+
 def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
     draft = correspondence_manifest(
         anchors=[
@@ -1157,6 +1200,61 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
         build_reviewed_correspondence_manifest(packet)
 
 
+@pytest.mark.parametrize(
+    ("source_arg", "source_text", "expected_error"),
+    [
+        (
+            "--review-manifest",
+            "{not-json\n",
+            "review manifest must contain valid JSON object",
+        ),
+        (
+            "--review-manifest",
+            "[]\n",
+            "review manifest must contain a JSON object",
+        ),
+        (
+            "--alignment-artifact",
+            "{not-json\n",
+            "alignment artifact must contain valid JSON object",
+        ),
+        (
+            "--alignment-artifact",
+            "[]\n",
+            "alignment artifact must contain a JSON object",
+        ),
+    ],
+)
+def test_semantic_anchor_review_packet_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_arg: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    bad_path = tmp_path / "bad.json"
+    output_path = tmp_path / "semantic_anchor_review_packet.json"
+    bad_path.write_text(source_text, encoding="utf-8")
+    args = [
+        sys.executable,
+        str(SEMANTIC_ANCHOR_REVIEW_PACKET_SCRIPT),
+        "--review-manifest",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--alignment-artifact",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--output",
+        str(output_path),
+    ]
+    args[args.index(source_arg) + 1] = str(bad_path)
+
+    completed = subprocess.run(args, capture_output=True, text=True)
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(bad_path) in completed.stderr
+
+
 def test_semantic_projection_rejects_current_alignment_only_manifest() -> None:
     correspondences = json.loads(
         (REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json").read_text(
@@ -1199,6 +1297,61 @@ def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
     assert completed.returncode == 2
     assert "accepted semantic anchors are required" in completed.stderr
     assert not output_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("source_arg", "source_text", "expected_error"),
+    [
+        (
+            "--correspondences",
+            "{not-json\n",
+            "correspondence manifest must contain valid JSON object",
+        ),
+        (
+            "--correspondences",
+            "[]\n",
+            "correspondence manifest must contain a JSON object",
+        ),
+        (
+            "--review-manifest",
+            "{not-json\n",
+            "review manifest must contain valid JSON object",
+        ),
+        (
+            "--review-manifest",
+            "[]\n",
+            "review manifest must contain a JSON object",
+        ),
+    ],
+)
+def test_semantic_projection_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_arg: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    bad_path = tmp_path / "bad.json"
+    output_path = tmp_path / "semantic_projection.json"
+    bad_path.write_text(source_text, encoding="utf-8")
+    args = [
+        sys.executable,
+        str(SEMANTIC_PROJECTION_SCRIPT),
+        "--correspondences",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
+        "--review-manifest",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--output",
+        str(output_path),
+    ]
+    args[args.index(source_arg) + 1] = str(bad_path)
+
+    completed = subprocess.run(args, capture_output=True, text=True)
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(bad_path) in completed.stderr
 
 
 def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
@@ -1335,6 +1488,26 @@ def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
     )
 
     with pytest.raises(ValueError, match="must share one navigation_area_id"):
+        build_semantic_projection(
+            correspondences=promoted,
+            review_manifest=review_manifest,
+        )
+
+
+def test_semantic_projection_rejects_malformed_accepted_review_label_polygon() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    label = accepted_room_label(
+        label_id="meeting_room_a",
+        map_area_id="west_corridor",
+        scene_partition_id="meeting_room_a",
+        room_label="Meeting room A",
+    )
+    label["geometry"]["points"][0].pop("y")
+    review_manifest = accepted_room_review_manifest(labels=[label])
+
+    with pytest.raises(ValueError, match="has malformed polygon point"):
         build_semantic_projection(
             correspondences=promoted,
             review_manifest=review_manifest,
@@ -1480,6 +1653,45 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
     assert "no human-accepted anchors" in completed.stderr
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "review packet missing"),
+        ("{not-json\n", "review packet must contain valid JSON object"),
+        ("[]\n", "review packet must contain a JSON object"),
+    ],
+)
+def test_strict_semantic_review_promotion_cli_rejects_bad_packet_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    packet_path = tmp_path / "bad_review_packet.json"
+    output_path = tmp_path / "b1-map12-scene-correspondences.json"
+    if source_text is not None:
+        packet_path.write_text(source_text, encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(output_path),
+            "--check",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(packet_path) in completed.stderr
+
+
 def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
     tmp_path: Path,
 ) -> None:
@@ -1538,81 +1750,44 @@ def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path
     assert "no human-accepted anchors" in completed.stderr
 
 
-def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:
-    review_manifest = {
-        "labels": [
-            {
-                "label_id": "room_a",
-                "map_area_id": "area_a",
-                "scene_partition_id": "partition_a",
-                "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 0.0, "y": 0.0},
-                        {"x": 2.0, "y": 0.0},
-                        {"x": 2.0, "y": 2.0},
-                        {"x": 0.0, "y": 2.0},
-                    ],
-                },
-            },
-            {
-                "label_id": "room_b",
-                "map_area_id": "area_b",
-                "scene_partition_id": "partition_b",
-                "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 4.0, "y": 0.0},
-                        {"x": 6.0, "y": 0.0},
-                        {"x": 6.0, "y": 2.0},
-                        {"x": 4.0, "y": 2.0},
-                    ],
-                },
-            },
-        ]
-    }
-    scene_diagnostic = {
-        "partitions": [
-            {
-                "partition_id": "partition_a",
-                "scene_frame_bounds": {
-                    "min_x": 10.0,
-                    "min_y": 20.0,
-                    "max_x": 12.0,
-                    "max_y": 22.0,
-                },
-            },
-            {
-                "partition_id": "partition_b",
-                "scene_frame_bounds": {
-                    "min_x": 14.0,
-                    "min_y": 20.0,
-                    "max_x": 16.0,
-                    "max_y": 22.0,
-                },
-            },
-        ]
-    }
-    manual_anchors = [
-        {"map_xy": [1.0, 1.0], "scene_xyz": [11.0, 21.0, 0.0]},
-        {"map_xy": [5.0, 1.0], "scene_xyz": [15.0, 21.0, 0.0]},
-        {"map_xy": [3.0, 2.0], "scene_xyz": [13.0, 22.0, 0.0]},
-        {"map_xy": [2.0, -1.0], "scene_xyz": [12.0, 19.0, 0.0]},
-        {"map_xy": [6.0, 3.0], "scene_xyz": [16.0, 23.0, 0.0]},
-        {"map_xy": [0.0, 0.0], "scene_xyz": [10.0, 20.0, 0.0]},
-    ]
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "review packet missing"),
+        ("{not-json\n", "review packet must contain valid JSON object"),
+        ("[]\n", "review packet must contain a JSON object"),
+    ],
+)
+def test_semantic_review_packet_fit_check_rejects_bad_packet_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    packet_path = tmp_path / "bad_review_packet.json"
+    output_dir = tmp_path / "fit-check"
+    if source_text is not None:
+        packet_path.write_text(source_text, encoding="utf-8")
 
-    packet = semantic_label_partition_candidates(
-        review_manifest=review_manifest,
-        scene_diagnostic=scene_diagnostic,
-        manual_anchors=manual_anchors,
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
     )
 
-    assert packet["status"] == "candidate_seed_only"
-    assert packet["best_candidate"]["manual_draft_passes_thresholds"] is True
-    assert packet["best_candidate"]["transform"]["candidate_status"] == "candidate_seed_only"
+    assert completed.returncode == 2
+    assert not output_dir.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(packet_path) in completed.stderr
 
 
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
@@ -1654,6 +1829,19 @@ def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
         "up_axis": "z",
     }
     assert packet["export_manifest_template"]["anchors"] == []
+
+
+def test_manual_alignment_overlay_rejects_non_reviewed_transform_source() -> None:
+    alignment = {
+        "global_alignment_status": "verified",
+        "selected_transform": {
+            "type": "rigid_2d",
+            "source": "auto_contour_min_area_rect_similarity_seed",
+        },
+    }
+
+    with pytest.raises(ValueError, match="reviewed_correspondence_fit"):
+        verified_overlay_transform(alignment)
 
 
 def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Path) -> None:

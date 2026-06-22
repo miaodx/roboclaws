@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from scripts.maps.check_robot_map12_consistency import check_robot_map12_consistency
 
@@ -43,3 +46,87 @@ def test_robot_map12_consistency_script_writes_json() -> None:
     result = json.loads(completed.stdout)
     assert result["ok"] is True
     assert result["navigation_memory"]["item_count"] == 9
+
+
+@pytest.mark.parametrize(
+    ("navigation_memory", "expected_error"),
+    [
+        (
+            [],
+            "navigation_memory.json must contain a JSON object",
+        ),
+        (
+            {},
+            "navigation_memory.json must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            {"items": []},
+            "navigation_memory.json items must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "navigation_memory.json item 1 must be a JSON object",
+        ),
+        (
+            {"items": [{"id": "bad_anchor", "nav_goal": {"x": "bad", "y": 1.0}}]},
+            "navigation_memory.json item bad_anchor nav_goal x must be a finite number",
+        ),
+    ],
+)
+def test_robot_map12_consistency_rejects_malformed_navigation_memory_sources(
+    tmp_path: Path,
+    navigation_memory: object,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_robot_map12_fixture(tmp_path)
+    (map_dir / "navigation_memory.json").write_text(
+        json.dumps(navigation_memory),
+        encoding="utf-8",
+    )
+
+    result = check_robot_map12_consistency(map_dir)
+
+    assert result["ok"] is False
+    assert result["anchors"] == []
+    assert result["navigation_memory"] == {"item_count": 0}
+    assert any(expected_error in error for error in result["errors"])
+
+
+def test_robot_map12_consistency_reports_malformed_navigation_memory_json(
+    tmp_path: Path,
+) -> None:
+    map_dir = _copy_robot_map12_fixture(tmp_path)
+    (map_dir / "navigation_memory.json").write_text("{not-json\n", encoding="utf-8")
+
+    result = check_robot_map12_consistency(map_dir)
+
+    assert result["ok"] is False
+    assert result["anchors"] == []
+    assert any(
+        "navigation_memory.json must contain valid JSON object" in error
+        and str(map_dir / "navigation_memory.json") in error
+        for error in result["errors"]
+    )
+
+
+def test_robot_map12_consistency_accepts_catalog_navigation_memory_items(
+    tmp_path: Path,
+) -> None:
+    map_dir = _copy_robot_map12_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    items = navigation_memory.pop("items")
+    navigation_memory["catalog"] = {"navigation_memory": items}
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    result = check_robot_map12_consistency(map_dir)
+
+    assert result["ok"] is True
+    assert result["navigation_memory"]["item_count"] == 9
+
+
+def _copy_robot_map12_fixture(tmp_path: Path) -> Path:
+    map_dir = tmp_path / "robot_map_12"
+    shutil.copytree(ROBOT_MAP_12_FIXTURE, map_dir)
+    return map_dir

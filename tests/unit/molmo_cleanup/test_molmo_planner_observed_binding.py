@@ -5,17 +5,14 @@ from roboclaws.household.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
     backend_planner_task_binding_from_state,
 )
-from roboclaws.household.realworld_contract import (
-    MINIMAL_MAP_MODE,
-    RealWorldCleanupContract,
-)
+from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 
 
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
+        allow_synthetic_map_projection=True,
     )
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = contract.target_fixture_for_detection(
@@ -49,7 +46,10 @@ def test_realworld_observed_handle_planner_binding_stays_private() -> None:
 
 
 def test_observed_handle_planner_binding_requires_registered_handle() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        allow_synthetic_map_projection=True,
+    )
 
     binding = contract.planner_observed_handle_binding("observed_999", "sink_01")
 

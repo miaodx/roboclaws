@@ -51,13 +51,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    manifest = json.loads(args.correspondences.read_text(encoding="utf-8"))
-    payload = build_alignment_residuals(
-        manifest,
-        map_bundle=args.map_bundle,
-        output_dir=args.output_dir,
-        correspondences_path=args.correspondences,
-    )
+    try:
+        manifest = _read_json_object(args.correspondences, label="correspondence manifest")
+        payload = build_alignment_residuals(
+            manifest,
+            map_bundle=args.map_bundle,
+            output_dir=args.output_dir,
+            correspondences_path=args.correspondences,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     errors = validate_alignment_residual_artifact(payload)
     payload["validation"] = {
         "status": "passed" if not errors else "failed",
@@ -960,6 +964,18 @@ def _dict(value: Any) -> dict[str, Any]:
 def _require(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 if __name__ == "__main__":

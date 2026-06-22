@@ -75,6 +75,7 @@ class ProviderRouteSpec:
     default_use: bool = False
     default_use_note: str = ""
     aliases: tuple[str, ...] = ()
+    compatible_model_ids: tuple[str, ...] = ()
     per_engine_status: dict[str, str] = field(default_factory=dict)
     route_capabilities: dict[str, str] = field(default_factory=dict)
     per_engine_route_capability_overrides: dict[str, dict[str, str]] = field(default_factory=dict)
@@ -279,6 +280,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note="Default Codex router route; uses gpt-5.5.",
+        compatible_model_ids=("gpt-5.5",),
         per_engine_status={
             "codex-cli": ROUTE_HEALTHY,
             "openai-agents-sdk": ROUTE_EXPERIMENTAL,
@@ -304,6 +306,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         default_use_note=(
             "Default-enabled MiMo mify route; uses xiaomi/mimo-v2.5 unless explicitly overridden."
         ),
+        compatible_model_ids=("xiaomi/mimo-v2.5",),
         per_engine_status={
             "codex-cli": ROUTE_DEGRADED,
             "openai-agents-sdk": ROUTE_PROVISIONAL,
@@ -331,6 +334,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note="Default-enabled MiniMax route; uses MiniMax-M3, not M2.7-highspeed.",
+        compatible_model_ids=("MiniMax-M3", "MiniMax-M2.7-highspeed"),
         per_engine_status={
             "codex-cli": ROUTE_BLOCKED,
             "openai-agents-sdk": ROUTE_HEALTHY,
@@ -359,6 +363,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note="Default-enabled MiMo token-plan chat route; uses mimo-v2.5.",
+        compatible_model_ids=("mimo-v2.5",),
         per_engine_status={"openai-agents-sdk": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
@@ -383,6 +388,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
             "explicit text-agent experiments. Not a product cleanup default until "
             "a separate route decision promotes it."
         ),
+        compatible_model_ids=("mimo-1000",),
         per_engine_status={"openai-agents-sdk": ROUTE_PROVISIONAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNKNOWN,
@@ -407,6 +413,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
             "for the new code-model behavior. Default OpenAI Agents SDK payloads "
             "enable thinking through the provider-aware model_thinking_mode policy."
         ),
+        compatible_model_ids=("kimi-k2.7-code",),
         per_engine_status={"openai-agents-sdk": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
@@ -425,6 +432,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.kimi.com/coding/",
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_NATIVE,
+        compatible_model_ids=("kimi-k2.6",),
         per_engine_status={"claude-code": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
@@ -443,6 +451,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://token-plan-cn.xiaomimimo.com/anthropic",
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_SHIM,
+        compatible_model_ids=("mimo-v2.5",),
         per_engine_status={"claude-code": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
@@ -461,6 +470,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.llm.mioffice.cn/anthropic",
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_GATEWAY,
+        compatible_model_ids=("xiaomi/mimo-v2.5",),
         per_engine_status={"claude-code": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
@@ -479,6 +489,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.kimi.com/coding/",
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_NATIVE,
+        compatible_model_ids=("kimi-k2.6",),
         per_engine_status={"openclaw-gateway": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
@@ -539,11 +550,6 @@ def maybe_resolve_model(model_name: str | None) -> ModelSpec | None:
         return resolve_model(model_name)
     except KeyError:
         return None
-
-
-def model_supports_images(model_name: str | None) -> bool:
-    spec = maybe_resolve_model(model_name)
-    return True if spec is None else spec.supports_image_input
 
 
 def required_env_keys(model_name: str) -> tuple[str, ...]:
@@ -615,8 +621,28 @@ def resolve_provider_route_for_engine(
 
 def model_family_for_route_model(provider_profile: str, model_id: str | None = None) -> str:
     route = provider_route_spec(provider_profile)
-    spec = maybe_resolve_model(model_id or route.default_model_id)
-    return spec.family if spec is not None else "unknown"
+    selected_model = model_id or route.default_model_id
+    try:
+        return resolve_route_model(route.public_profile, selected_model).family
+    except KeyError as exc:
+        raise ValueError(
+            f"unknown model {selected_model!r} for provider_profile "
+            f"{route.public_profile}; add it to the provider registry or use a catalog model."
+        ) from exc
+
+
+def resolve_route_model(route_id: str, model_id: str | None) -> ModelSpec:
+    route = provider_route_spec(route_id)
+    selected = resolve_model(model_id or route.default_model_id)
+    compatible_ids = route.compatible_model_ids or (route.default_model_id,)
+    compatible_models = tuple(resolve_model(item) for item in compatible_ids)
+    compatible_model_ids = tuple(model.model_id for model in compatible_models)
+    if selected.model_id not in compatible_model_ids:
+        raise ValueError(
+            f"model {selected.model_id!r} is incompatible with provider_profile "
+            f"{route.public_profile!r}; expected one of {', '.join(compatible_model_ids)}"
+        )
+    return selected
 
 
 def route_capabilities_for_engine(route: ProviderRouteSpec, agent_engine: str) -> dict[str, str]:
@@ -644,7 +670,24 @@ def provider_readiness(
     env_map = os.environ if env is None else env
     try:
         route = resolve_provider_route_for_engine(agent_engine, provider_profile)
-    except (KeyError, ValueError) as exc:
+    except KeyError:
+        selected = str(provider_profile or default_provider_profile(agent_engine) or "")
+        message = (
+            f"provider_profile {selected!r} is unknown for agent_engine {agent_engine!r}; "
+            "add it to the provider registry or use a supported provider profile."
+        )
+        return {
+            "driver": _driver_for_agent_engine(agent_engine),
+            "agent_engine": agent_engine,
+            "provider": selected,
+            "provider_profile": selected,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": message,
+        }
+    except ValueError as exc:
         selected = str(provider_profile or default_provider_profile(agent_engine) or "")
         return {
             "driver": _driver_for_agent_engine(agent_engine),
@@ -667,12 +710,17 @@ def provider_readiness(
         )
     else:
         message = ""
-    model_spec = maybe_resolve_model(selected_model)
-    if model_spec is None:
+    try:
+        model_spec = resolve_route_model(route.public_profile, selected_model)
+    except KeyError:
+        model_spec = None
         message = (
             f"unknown model {selected_model!r} for provider_profile "
             f"{route.public_profile}; add it to the provider registry or use a catalog model."
         )
+    except ValueError as exc:
+        model_spec = None
+        message = str(exc)
     return {
         "driver": _driver_for_agent_engine(agent_engine),
         "agent_engine": agent_engine,
@@ -684,6 +732,7 @@ def provider_readiness(
         "model_capabilities": sorted(model_spec.model_capabilities) if model_spec else [],
         "model_default_use": bool(model_spec.default_use) if model_spec else False,
         "model_default_use_note": model_spec.default_use_note if model_spec else "",
+        "compatible_models": list(route.compatible_model_ids or (route.default_model_id,)),
         "wire_api": route.wire_api,
         "wire_source": route.wire_source,
         "default_use": route.default_use,
@@ -742,6 +791,10 @@ def openai_agents_runtime_settings(
         default=route.default_model_id,
         normalizer=_normal_model_id,
     )
+    try:
+        selected_model = resolve_route_model(route.public_profile, selected_model).model_id
+    except ValueError as exc:
+        raise ValueError(f"OpenAI Agents SDK setting model is incompatible: {exc}") from exc
     return {
         "provider_profile": route.public_profile,
         "wire_api": route.wire_api,
@@ -782,6 +835,7 @@ def route_payload(route: ProviderRouteSpec, *, agent_engine: str) -> dict[str, A
         "model_capabilities": sorted(model.model_capabilities),
         "model_default_use": model.default_use,
         "model_default_use_note": model.default_use_note,
+        "compatible_models": list(route.compatible_model_ids or (route.default_model_id,)),
         "required_env": list(route.required_env_keys),
         "wire_api": route.wire_api,
         "wire_source": route.wire_source,
@@ -855,7 +909,9 @@ def _normal_provider_profile(value: str) -> str:
 
 def _normal_model_id(value: str) -> str:
     model = maybe_resolve_model(value)
-    return model.model_id if model is not None else value
+    if model is None:
+        raise ValueError(f"OpenAI Agents SDK setting model is unknown, got {value!r}")
+    return model.model_id
 
 
 def _explicit_string(value: Any) -> str:
@@ -907,6 +963,7 @@ def _build_registry_parser() -> argparse.ArgumentParser:
             "json",
             "key-env",
             "model-id",
+            "provider-model-id",
             "public-profile",
             "supports-engine",
             "wire-api",
@@ -961,6 +1018,14 @@ def _supports_engine_exit_code(
     return 0 if agent_engine in route.supported_engines else 1
 
 
+def _provider_route_for_cli(parser: argparse.ArgumentParser, route_id: str) -> ProviderRouteSpec:
+    try:
+        return provider_route_spec(route_id)
+    except KeyError:
+        parser.error(f"provider_profile {route_id!r} is unknown; use a supported provider profile.")
+    raise AssertionError("argparse parser.error should exit")
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _build_registry_parser()
     args = parser.parse_args(argv)
@@ -971,12 +1036,27 @@ def _main(argv: list[str] | None = None) -> int:
 
     if not args.route_id:
         parser.error(
-            "model_id is required" if args.command == "model-id" else "route_id is required"
+            "model_id is required"
+            if args.command in {"model-id", "provider-model-id"}
+            else "route_id is required"
         )
     if args.command == "model-id":
         print(_model_command_text(args.route_id))
         return 0
-    route = provider_route_spec(args.route_id)
+    if args.command == "provider-model-id":
+        if not args.agent_engine:
+            parser.error("model_id is required")
+        try:
+            model = resolve_route_model(args.route_id, args.agent_engine)
+        except KeyError as exc:
+            parser.error(
+                f"unknown provider/model id {exc.args[0]!r}; use a provider route and catalog model"
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(model.model_id)
+        return 0
+    route = _provider_route_for_cli(parser, args.route_id)
     if args.command == "supports-engine":
         if not args.agent_engine:
             parser.error("agent_engine is required")

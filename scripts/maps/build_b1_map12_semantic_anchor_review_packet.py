@@ -42,12 +42,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    packet = build_semantic_anchor_review_packet(
-        review_manifest=json.loads(args.review_manifest.read_text(encoding="utf-8")),
-        alignment=json.loads(args.alignment_artifact.read_text(encoding="utf-8")),
-        review_manifest_path=args.review_manifest,
-        alignment_artifact_path=args.alignment_artifact,
-    )
+    try:
+        packet = build_semantic_anchor_review_packet(
+            review_manifest=_read_json_object(args.review_manifest, label="review manifest"),
+            alignment=_read_json_object(args.alignment_artifact, label="alignment artifact"),
+            review_manifest_path=args.review_manifest,
+            alignment_artifact_path=args.alignment_artifact,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
@@ -209,6 +213,18 @@ def polygon_center(label: dict[str, Any]) -> tuple[float, float]:
         sum(float(point["x"]) for point in points) / len(points),
         sum(float(point["y"]) for point in points) / len(points),
     )
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 if __name__ == "__main__":

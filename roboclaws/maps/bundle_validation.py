@@ -37,9 +37,9 @@ def validate_nav2_map_bundle_payload(
         origin,
         errors,
     )
-    rooms, fixtures, waypoints, driveable = _validate_semantics_contract(semantics, errors)
+    rooms, landmarks, waypoints, driveable = _validate_semantics_contract(semantics, errors)
     waypoint_by_id = _validate_inspection_waypoints(waypoints, grid, errors)
-    _validate_fixture_waypoint_references(fixtures, waypoint_by_id, errors)
+    _validate_landmark_waypoint_references(landmarks, waypoint_by_id, errors)
     errors.extend(
         _validate_declared_routes(semantics, grid=grid, default_resolution_m=default_resolution_m)
     )
@@ -47,7 +47,7 @@ def validate_nav2_map_bundle_payload(
         "map_id": semantics.get("map_id"),
         "map_version": semantics.get("map_version"),
         "room_count": len(rooms),
-        "fixture_count": len(fixtures),
+        "static_landmark_count": len(landmarks),
         "waypoint_count": len(waypoints),
         "driveable_way_count": len(driveable),
     }
@@ -102,10 +102,14 @@ def _load_bundle_semantics(
     errors: list[str],
 ) -> dict[str, Any]:
     try:
-        return json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
+        payload = json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         errors.append(f"invalid semantics.json: {exc}")
         return {}
+    if not isinstance(payload, dict):
+        errors.append("semantics.json must contain a JSON object")
+        return {}
+    return payload
 
 
 def _validate_semantics_private_truth(
@@ -169,7 +173,11 @@ def _validate_semantics_contract(
     errors: list[str],
 ) -> tuple[list[Any], list[Any], list[Any], list[Any]]:
     rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
-    fixtures = semantics.get("fixtures") if isinstance(semantics.get("fixtures"), list) else []
+    landmarks = (
+        semantics.get("static_landmarks")
+        if isinstance(semantics.get("static_landmarks"), list)
+        else []
+    )
     waypoints = (
         semantics.get("inspection_waypoints")
         if isinstance(semantics.get("inspection_waypoints"), list)
@@ -178,7 +186,7 @@ def _validate_semantics_contract(
     driveable = (
         semantics.get("driveable_ways") if isinstance(semantics.get("driveable_ways"), list) else []
     )
-    base_navigation_map = not rooms and not fixtures
+    base_navigation_map = not rooms and not landmarks
     if not waypoints:
         errors.append("semantics.json must contain inspection_waypoints")
     if not driveable and not base_navigation_map:
@@ -194,7 +202,7 @@ def _validate_semantics_contract(
         else:
             errors.append(f"semantics.json rooms[{index}] must be an object")
     _validate_semantics_provenance(semantics, errors)
-    return rooms, fixtures, waypoints, driveable
+    return rooms, landmarks, waypoints, driveable
 
 
 def _validate_generated_waypoints(waypoints: list[Any], errors: list[str]) -> None:
@@ -239,26 +247,26 @@ def _validate_inspection_waypoints(
     return waypoint_by_id
 
 
-def _validate_fixture_waypoint_references(
-    fixtures: list[Any],
+def _validate_landmark_waypoint_references(
+    landmarks: list[Any],
     waypoint_by_id: dict[str, Any],
     errors: list[str],
 ) -> None:
-    for fixture in fixtures:
-        fixture_id = str(fixture.get("fixture_id") or "")
-        if not fixture_id:
-            errors.append("fixture missing fixture_id")
-        if not fixture.get("affordances"):
-            errors.append(f"fixture missing affordances: {fixture_id}")
-        if not isinstance(fixture.get("footprint"), dict):
-            errors.append(f"fixture missing footprint: {fixture_id}")
+    for landmark in landmarks:
+        landmark_id = str(landmark.get("landmark_id") or landmark.get("fixture_id") or "")
+        if not landmark_id:
+            errors.append("static landmark missing landmark_id")
+        if not landmark.get("affordances"):
+            errors.append(f"static landmark missing affordances: {landmark_id}")
+        if not isinstance(landmark.get("footprint"), dict):
+            errors.append(f"static landmark missing footprint: {landmark_id}")
         preferred = str(
-            fixture.get("preferred_inspection_waypoint_id")
-            or fixture.get("preferred_manipulation_waypoint_id")
+            landmark.get("preferred_inspection_waypoint_id")
+            or landmark.get("preferred_manipulation_waypoint_id")
             or ""
         )
         if preferred not in waypoint_by_id:
-            errors.append(f"fixture has no reachable preferred waypoint: {fixture_id}")
+            errors.append(f"static landmark has no reachable preferred waypoint: {landmark_id}")
 
 
 def _validate_declared_routes(
@@ -269,15 +277,7 @@ def _validate_declared_routes(
 ) -> list[str]:
     rooms = semantics.get("rooms") or []
     waypoints = semantics.get("inspection_waypoints") or []
-    fixtures = semantics.get("fixtures") or []
-    static_fixture_projection = {"rooms": []}
-    for room in rooms:
-        room_id = str(room.get("room_id") or "")
-        item = dict(room)
-        item["fixtures"] = [
-            fixture for fixture in fixtures if str(fixture.get("room_id") or "") == room_id
-        ]
-        static_fixture_projection["rooms"].append(item)
+    static_landmarks = semantics.get("static_landmarks") or []
     metric_map = {
         "resolution_m": grid.resolution_m if grid is not None else default_resolution_m,
         "origin": {
@@ -305,7 +305,7 @@ def _validate_declared_routes(
             continue
         result = validate_metric_map_route(
             metric_map,
-            static_fixture_projection,
+            static_landmarks,
             start_waypoint_id=start,
             goal_waypoint_id=goal,
         )

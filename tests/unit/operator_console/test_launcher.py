@@ -12,6 +12,7 @@ from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
     _new_run_id,
+    _safe_run_id_suffix,
     _terminate_process_group,
     build_launch_argv,
     load_repo_dotenv,
@@ -289,6 +290,134 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert persisted["lock"]["owner_run_id"] == state["run_id"]
 
 
+def test_launcher_uses_new_run_id_when_existing_run_dir_would_be_reused(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    base_run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    existing_run_dir = console_output_root(tmp_path) / "runs" / base_run_id
+    existing_run_dir.mkdir(parents=True)
+    existing_state_path = existing_run_dir / "operator_state.json"
+    existing_state_path.write_text("{corrupt-existing-state", encoding="utf-8")
+
+    class FakeProcess:
+        pid = 12345
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime") as strftime_mock,
+        patch("roboclaws.operator_console.launcher.subprocess.Popen", return_value=FakeProcess()),
+    ):
+        strftime_mock.side_effect = lambda fmt, *args: (
+            "20260620-101112" if fmt == "%Y%m%d-%H%M%S" else "2026-06-20T10:11:12Z"
+        )
+        state = start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    assert state["run_id"] == f"{base_run_id}-2"
+    assert existing_state_path.read_text(encoding="utf-8") == "{corrupt-existing-state"
+    state_path = console_output_root(tmp_path) / "runs" / state["run_id"] / "operator_state.json"
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted["run_id"] == state["run_id"]
+    assert ResourceLock(tmp_path, route.lock_name).read().owner_run_id == state["run_id"]
+
+
+def test_launcher_fails_when_run_id_reservation_is_exhausted(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    base_run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    runs_dir = console_output_root(tmp_path) / "runs"
+    runs_dir.mkdir(parents=True)
+    for suffix in ("", *(f"-{index}" for index in range(2, 100))):
+        (runs_dir / f"{base_run_id}{suffix}").mkdir()
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(
+            ConsoleLaunchError, match="could not allocate unique operator-console run id"
+        ),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_launcher_removes_empty_reserved_run_dir_when_lock_acquire_fails(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+
+    def fail_acquire(self, *, run_id, pid=None):  # noqa: ANN001, ANN202
+        del self, run_id, pid
+        raise RuntimeError("lock unavailable")
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch("roboclaws.operator_console.launcher.ResourceLock.acquire", fail_acquire),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(RuntimeError, match="lock unavailable"),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert not run_dir.exists()
+
+
+def test_launcher_removes_empty_reserved_run_dir_when_argv_build_fails(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch(
+            "roboclaws.operator_console.launcher.build_launch_argv",
+            side_effect=ConsoleLaunchError("bad argv"),
+        ),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(ConsoleLaunchError, match="bad argv"),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert not run_dir.exists()
+
+
 def test_launcher_rejects_missing_canonical_selection_identity(tmp_path: Path) -> None:
     with pytest.raises(ConsoleLaunchError, match="launch requires"):
         start_console_run(
@@ -415,6 +544,55 @@ def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
     assert readiness["blocker_kind"] == ""
     assert readiness["attachable_run"] is None
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_readiness_blocks_on_malformed_lock_owner_state_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-wrapper-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text("{bad-state", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "source_error"
+    assert "Backend lock owner source error" in readiness["blocker"]
+    assert "operator_state.json contains invalid JSON" in readiness["blocker"]
+    assert readiness["attachable_run"] is None
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
+def test_readiness_blocks_on_malformed_lock_owner_live_status_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-live-status-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0619_1900" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text("[1]", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "source_error"
+    assert "live_status.json must contain a JSON object" in readiness["blocker"]
+    assert readiness["attachable_run"] is None
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
 
 
 def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
@@ -592,6 +770,73 @@ def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(
         stop_console_run(tmp_path, run_id)
 
     assert docker_stops == [["docker", "stop", "--time", "5", "container-b"]]
+
+
+def test_stop_console_run_rejects_malformed_operator_state_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-stop-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{bad-state", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    with pytest.raises(ConsoleLaunchError, match="operator stop source error") as exc_info:
+        stop_console_run(tmp_path, run_id)
+
+    assert "operator_state.json" in str(exc_info.value)
+    assert "contains invalid JSON" in str(exc_info.value)
+    assert state_path.read_text(encoding="utf-8") == "{bad-state"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_reason"),
+    [
+        ("{bad-live-status", "contains invalid JSON"),
+        ("[]\n", "must contain a JSON object"),
+    ],
+)
+def test_stop_console_run_rejects_bad_live_status_source_before_stop(
+    tmp_path: Path,
+    source_text: str,
+    expected_reason: str,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-live-status-stop-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0619_1030" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 123450,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    status_path = attempt_dir / "live_status.json"
+    status_path.write_text(source_text, encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=123450)
+
+    with (
+        patch("roboclaws.operator_console.launcher._stop_live_child_run") as stop_child,
+        patch("roboclaws.operator_console.launcher._terminate_process_group") as stop_wrapper,
+        pytest.raises(ConsoleLaunchError, match="operator stop source error") as exc_info,
+    ):
+        stop_console_run(tmp_path, run_id)
+
+    assert "live_status.json" in str(exc_info.value)
+    assert expected_reason in str(exc_info.value)
+    assert status_path.read_text(encoding="utf-8") == source_text
+    stop_child.assert_not_called()
+    stop_wrapper.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
 
 
 def test_terminate_process_group_falls_back_to_single_pid_when_group_lookup_fails() -> None:

@@ -308,7 +308,7 @@ def capture_one(args: argparse.Namespace) -> int:
 
 def load_or_build_readiness(args: argparse.Namespace) -> dict[str, Any]:
     if args.readiness_artifact is not None:
-        payload = json.loads(Path(args.readiness_artifact).read_text(encoding="utf-8"))
+        payload = _read_json_object(Path(args.readiness_artifact), label="readiness artifact")
         if payload.get("schema") != READINESS_SCHEMA:
             raise ValueError(f"unexpected readiness artifact schema: {payload.get('schema')!r}")
         return payload
@@ -337,7 +337,10 @@ def navigation_smoke_waypoints(
     waypoint_pose_requests: Path | None,
 ) -> tuple[list[dict[str, Any]], str]:
     if waypoint_pose_requests is not None:
-        payload = json.loads(Path(waypoint_pose_requests).read_text(encoding="utf-8"))
+        payload = _read_json_object(
+            Path(waypoint_pose_requests),
+            label="waypoint pose request artifact",
+        )
         if payload.get("schema") != WAYPOINT_POSE_REQUESTS_SCHEMA:
             return [], f"unexpected waypoint pose request schema: {payload.get('schema')!r}"
         validation_errors = validate_waypoint_pose_requests_artifact(payload)
@@ -373,6 +376,18 @@ def navigation_smoke_waypoints(
             "artifact with reviewed-correspondence candidate waypoints"
         )
     return readiness_waypoints, ""
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def navigation_smoke_has_distinct_pose_evidence(waypoint_evidence: list[dict[str, Any]]) -> bool:

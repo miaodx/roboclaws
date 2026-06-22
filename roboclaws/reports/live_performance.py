@@ -58,6 +58,10 @@ SAFE_SCAN_GLOBS = (
 )
 
 
+class ReportPerformanceSourceError(ValueError):
+    """Raised when a present report-performance source artifact is malformed."""
+
+
 def extract_report_performance_metrics(
     run_dir: Path,
     *,
@@ -331,24 +335,45 @@ def read_json(path: Path) -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except OSError as exc:
+        raise ReportPerformanceSourceError(f"failed to read JSON source {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ReportPerformanceSourceError(
+            f"malformed JSON source {path}: line {exc.lineno} column {exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ReportPerformanceSourceError(
+            f"malformed JSON source {path}: expected object, got {type(payload).__name__}"
+        )
+    return payload
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        raise ReportPerformanceSourceError(f"failed to read JSONL source {path}: {exc}") from exc
+    for line_number, line in enumerate(
+        lines,
+        start=1,
+    ):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
+        except json.JSONDecodeError as exc:
+            raise ReportPerformanceSourceError(
+                f"malformed JSONL source {path}: line {line_number}: {exc.msg}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ReportPerformanceSourceError(
+                f"malformed JSONL source {path}: line {line_number}: "
+                f"expected object, got {type(payload).__name__}"
+            )
+        rows.append(payload)
     return rows
 
 

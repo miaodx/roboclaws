@@ -132,7 +132,12 @@ class LiveClaudeCleanupRunner:
             self._release_visual_slot()
             return 1
 
-        self._write_live_timing("finished", 0)
+        source_error = self._write_live_timing("finished", 0)
+        if source_error:
+            self._write_status("failed", 1, reason=source_error)
+            self._cleanup_provider_timing_proxy()
+            self._release_visual_slot()
+            return 1
         self._write_status("finished", 0)
         self._cleanup_provider_timing_proxy()
         self._release_visual_slot()
@@ -433,7 +438,7 @@ class LiveClaudeCleanupRunner:
         retryable: bool | None = None,
         resume_available: bool | None = None,
         detail: str = "",
-    ) -> None:
+    ) -> str:
         finished_at = time.time()
         payload = dict(self.live_timing)
         payload.update(
@@ -454,12 +459,23 @@ class LiveClaudeCleanupRunner:
         if detail:
             payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
-        payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        source_error = ""
+        try:
+            payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        except ValueError as exc:
+            source_error = f"live_timing_source_error: {exc}"
+            payload["live_timing_source_error"] = source_error
+            if phase == "finished" and exit_status == 0:
+                payload["phase"] = "failed"
+                payload["exit_status"] = 1
+                payload["reason"] = source_error
+            payload["mcp_trace_timing"] = {"available": False, "source_error": str(exc)}
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         write_model_call_metrics_jsonl(
             self.run_dir / "model_call_metrics.jsonl",
             extract_model_call_metrics(self.run_dir, live_timing=payload),
         )
+        return source_error
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
@@ -631,15 +647,20 @@ def _read_jsonl_path(path: Path) -> list[dict[str, object]]:
     if not path.is_file():
         return []
     events: list[dict[str, object]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+    ):
         if not line.strip():
             continue
+        source = f"{path}:{line_number}"
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Claude live source {source}: invalid JSON: {exc.msg}") from exc
         if isinstance(item, dict):
             events.append(item)
+        else:
+            raise ValueError(f"Claude live source {source}: non-object JSON: {type(item).__name__}")
     return events
 
 

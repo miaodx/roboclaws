@@ -173,7 +173,7 @@ def _wait_for_live_terminal_status(
     if not status_path.is_file():
         return None
     deadline = _monotonic() + timeout_s
-    last_status = _read_status(status_path)
+    last_status = _read_status(status_path, retry_deadline=min(deadline, _monotonic() + poll_s))
     while True:
         phase = str(last_status.get("phase") or "")
         if phase in {"finished", "failed"} and "exit_status" in last_status:
@@ -185,7 +185,7 @@ def _wait_for_live_terminal_status(
             timed_out["reason"] = "live row did not reach terminal status before timeout"
             return timed_out
         _sleep(max(float(poll_s), 0.1))
-        last_status = _read_status(status_path)
+        last_status = _read_status(status_path, retry_deadline=min(deadline, _monotonic() + poll_s))
 
 
 def _refresh_row_artifacts(row: dict[str, Any], run_dir: Path) -> None:
@@ -197,12 +197,16 @@ def _refresh_row_artifacts(row: dict[str, Any], run_dir: Path) -> None:
         row["run_result_path"] = str(run_result_path)
 
 
-def _read_status(path: Path) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+def _read_status(path: Path, *, retry_deadline: float | None = None) -> dict[str, Any]:
+    if not path.is_file():
         return {"phase": "unknown"}
-    return data if isinstance(data, dict) else {"phase": "unknown"}
+    while True:
+        try:
+            return _read_json_object(path, source_label="apple-to-apple live status")
+        except ValueError:
+            if retry_deadline is None or _monotonic() >= retry_deadline:
+                raise
+            _sleep(0.02)
 
 
 def _merge_existing_grid_state(
@@ -214,12 +218,7 @@ def _merge_existing_grid_state(
     manifest_path = output_dir / "apple2apple_test_grid.json"
     if not manifest_path.is_file():
         return
-    try:
-        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return
-    if not isinstance(existing, dict):
-        return
+    existing = _read_json_object(manifest_path, source_label="apple-to-apple grid manifest")
 
     existing_setup_rows = _rows_by_id(existing.get("setup_rows") or [])
     grid["setup_rows"] = [
@@ -351,6 +350,21 @@ def _sleep(seconds: float) -> None:
     import time
 
     time.sleep(seconds)
+
+
+def _read_json_object(path: Path, *, source_label: str) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{source_label} source {path}: invalid JSON at line {exc.lineno} "
+            f"column {exc.colno}: {exc.msg}"
+        ) from exc
+    except OSError as exc:
+        raise ValueError(f"{source_label} source {path}: cannot be read: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"{source_label} source {path}: non-object JSON: {type(data).__name__}")
+    return data
 
 
 if __name__ == "__main__":

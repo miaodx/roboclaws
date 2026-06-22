@@ -8,7 +8,6 @@ from roboclaws.household import realworld_runtime_map_contract, realworld_runtim
 
 
 class RealWorldPayloadContract(Protocol):
-    map_mode: str
     perception_mode: str
     sanitize_world_labels: bool
     visible_detection_exposure_policy: str
@@ -65,7 +64,6 @@ def runtime_metric_map_payload(
     realworld_contract: str,
     runtime_metric_map_schema: str,
     cleanup_worklist_schema: str,
-    minimal_map_mode: str,
     visible_object_detections_mode: str,
     sanitized_visible_object_detections_provenance: str,
     runtime_map_producer_summary: Callable[..., dict[str, Any]],
@@ -114,7 +112,6 @@ def runtime_metric_map_payload(
                 realworld_runtime_map_targets.public_fixture_reference_id(
                     contract,
                     fixture_id,
-                    minimal_map_mode=minimal_map_mode,
                 )
             ),
             visual_evidence_for_handle=contract._visual_evidence_for_handle,
@@ -132,7 +129,6 @@ def runtime_metric_map_payload(
     ]
     public_semantic_anchors = realworld_runtime_map_targets.runtime_public_semantic_anchors(
         contract,
-        minimal_map_mode=minimal_map_mode,
         assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
     )
     map_update_candidates: list[dict[str, Any]] = []
@@ -146,15 +142,11 @@ def runtime_metric_map_payload(
         "schema": runtime_metric_map_schema,
         "contract": realworld_contract,
         "freshness": "current_run",
-        "map_mode": contract.map_mode,
-        "minimal_map_mode": contract.map_mode == minimal_map_mode,
         "source_map_mutated": False,
         "private_truth_included": False,
         "static_map": realworld_runtime_map_contract.runtime_static_map_payload(
             metric_map=public_metric_map,
             static_fixture_projection=public_static_fixture_projection,
-            map_mode=contract.map_mode,
-            minimal_map_mode=minimal_map_mode,
             assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
         ),
         "rooms": [dict(item) for item in public_metric_map.get("rooms") or []],
@@ -223,20 +215,19 @@ def runtime_metric_map_payload(
             public_metric_map.get("inspection_waypoints") or [],
         )
         payload["static_map"]["rooms"] = [dict(item) for item in payload["rooms"]]
-    if contract.map_mode == minimal_map_mode:
-        payload["generated_exploration_candidates"] = [
-            {
-                **dict(item),
-                "visited": str(item.get("waypoint_id") or "") in contract._observed_waypoint_ids,
-            }
-            for item in contract._public_waypoints
-        ]
-        payload["public_contract_note"] = (
-            "Minimal-map Runtime Metric Map starts from public occupancy/free-space "
-            "geometry and generated exploration candidates, then enriches the run "
-            "with public observations and run-local semantic anchors without "
-            "mutating source-map semantics."
-        )
+    payload["generated_exploration_candidates"] = [
+        {
+            **dict(item),
+            "visited": str(item.get("waypoint_id") or "") in contract._observed_waypoint_ids,
+        }
+        for item in contract._public_waypoints
+    ]
+    payload["public_contract_note"] = (
+        "Runtime Metric Map starts from Base Navigation Map occupancy/free-space "
+        "geometry and generated exploration candidates, then enriches the run "
+        "with public observations and run-local semantic anchors without "
+        "mutating source-map semantics."
+    )
     assert_no_forbidden_agent_view_keys(payload)
     return payload
 
@@ -293,27 +284,11 @@ def agent_visible_detection_payload(
     contract: RealWorldPayloadContract,
     detection: dict[str, Any],
     *,
-    minimal_map_mode: str,
     sanitized_visible_object_detections_provenance: str,
     sanitized_visible_object_detections_policy: str,
     public_destination_policy_for_category: Callable[[Any], dict[str, Any]],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
-    if contract.map_mode != minimal_map_mode:
-        payload = copy.deepcopy(detection)
-        if contract.sanitize_world_labels:
-            payload = sanitized_visible_detection_payload(
-                payload,
-                sanitized_visible_object_detections_provenance=(
-                    sanitized_visible_object_detections_provenance
-                ),
-                sanitized_visible_object_detections_policy=(
-                    sanitized_visible_object_detections_policy
-                ),
-                public_destination_policy_for_category=public_destination_policy_for_category,
-            )
-        assert_no_forbidden_agent_view_keys(payload)
-        return payload
     payload = contract._public_fixture_reference_payload(copy.deepcopy(detection))
     support = dict(payload.get("support_estimate") or {})
     public_fixture_id = str(support.get("fixture_id") or "")
@@ -551,7 +526,6 @@ def cleanup_worklist_payload(
     *,
     static_fixture_projection: dict[str, Any] | None = None,
     cleanup_worklist_schema: str,
-    minimal_map_mode: str,
     non_actionable_handle_states: Collection[str],
     candidate_actionability_status: Callable[[dict[str, Any]], str],
     candidate_state: Callable[[dict[str, Any]], str],
@@ -585,19 +559,16 @@ def cleanup_worklist_payload(
             contract,
             detection,
             public_fixtures,
-            minimal_map_mode=minimal_map_mode,
         )
         candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
         source_fixture_id = str(support.get("fixture_id") or "")
         public_candidate_fixture_id = realworld_runtime_map_targets.public_fixture_reference_id(
             contract,
             str(candidate_fixture_id),
-            minimal_map_mode=minimal_map_mode,
         )
         public_source_fixture_id = realworld_runtime_map_targets.public_fixture_reference_id(
             contract,
             source_fixture_id,
-            minimal_map_mode=minimal_map_mode,
         )
         state = str(lifecycle.get("state", "pending"))
         cleanup_recommended = bool(
@@ -609,7 +580,7 @@ def cleanup_worklist_payload(
         )
         candidate_source = (
             "public_semantic_anchor"
-            if contract.map_mode == minimal_map_mode and candidate_fixture_id
+            if candidate_fixture_id
             else "public_category_fixture_affordance"
         )
         destination_policy_status = "candidate_inferred"
@@ -695,9 +666,7 @@ def cleanup_worklist_payload(
         )
     payload = {
         "schema": cleanup_worklist_schema,
-        "waypoint_source": "generated_exploration_candidate"
-        if contract.map_mode == minimal_map_mode
-        else "static_map_fixture_coverage",
+        "waypoint_source": "generated_exploration_candidate",
         "held_object_id": contract._held_handle,
         "objects": lifecycle_rows,
         "waypoints": waypoint_rows,

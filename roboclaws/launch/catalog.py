@@ -205,6 +205,12 @@ def _resolve_launch(
             raise LaunchError(str(lane_compatibility.reason))
     overrides = _merge_default_overrides(overrides, world.default_overrides)
     overrides = _merge_default_overrides(overrides, backend.default_overrides)
+    _validate_map_bundle_policy(
+        overrides,
+        surface=surface,
+        world=world,
+        profile=profile,
+    )
     overrides, dispatch_setup_overrides = _normalize_scenario_setup_overrides(
         overrides,
         surface=surface,
@@ -596,6 +602,33 @@ def _merge_default_overrides(
         if key and _override_value(merged, key) is None:
             merged = (*merged, item)
     return merged
+
+
+def _validate_map_bundle_policy(
+    overrides: tuple[str, ...],
+    *,
+    surface: TaskSurfaceSpec,
+    world: WorldSpec,
+    profile: str,
+) -> None:
+    if surface.surface_id != "household-world":
+        return
+    if world.resource_kind != "simulator":
+        return
+    if profile == "smoke":
+        return
+    selected = _override_value(overrides, "map_bundle")
+    if selected is None or selected.strip() == "":
+        raise LaunchError(
+            f"world '{world.id}' requires a prebuilt Nav2 map bundle",
+            "generate the canonical scene bundle under "
+            "assets/maps/molmospaces/<scene_source>/<scene_index>",
+        )
+    if selected.strip().lower() in {"none", "false", "off"}:
+        raise LaunchError(
+            f"world '{world.id}' cannot use map_bundle={selected!r}",
+            "generate the canonical scene bundle and pass map_bundle=<bundle-dir>",
+        )
 
 
 def _normalize_scenario_setup_overrides(

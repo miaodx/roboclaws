@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 
+from roboclaws.evals.dependencies import dependency_failure, resolve_artifact_dependencies
 from roboclaws.evals.live_runtime import live_surface_command, live_surface_env
+from roboclaws.evals.models import load_eval_sample
 from roboclaws.evals.regression import (
     promote_regression_from_cli_overrides,
     promote_regression_sample_from_eval_result,
@@ -65,6 +68,83 @@ def test_eval_runner_classifies_missing_product_artifacts(tmp_path: Path) -> Non
     assert result["failure_class"] == "artifact_missing"
     assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 1}
     assert "report" in result["grader_outputs"]["artifacts"]["missing"]
+
+
+@pytest.mark.parametrize(
+    ("artifact_name", "file_name"),
+    [
+        ("run_result", "run_result.json"),
+        ("agent_view", "agent_view.json"),
+        ("runtime_metric_map", "runtime_metric_map.json"),
+        ("private_evaluation", "private_evaluation.json"),
+    ],
+)
+def test_eval_runner_fails_aloud_on_malformed_required_json_artifact(
+    tmp_path: Path,
+    artifact_name: str,
+    file_name: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="success")
+        result = _run_result(run_dir, completion_status="success")
+        (run_dir / file_name).write_text('["not-an-object"]\n', encoding="utf-8")
+        return result
+
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp=f"malformed-{artifact_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 1
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 1}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    artifacts = result["grader_outputs"]["artifacts"]
+    assert artifacts["status"] == "failed"
+    assert artifacts["failure_class"] == "artifact_missing"
+    assert artifacts["source_errors"] == [
+        {
+            "artifact": artifact_name,
+            "path": str(run.output_dir / "runs" / "cleanup_smoke_seed7" / "trial-0000" / file_name),
+            "reason": "invalid_json_object",
+        }
+    ]
+
+
+@pytest.mark.parametrize("sidecar_name", ["live_status.json", "live_timing.json"])
+def test_eval_runner_fails_aloud_on_malformed_efficiency_sidecars(
+    tmp_path: Path,
+    sidecar_name: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / sidecar_name).write_text("{", encoding="utf-8")
+        return _run_result(run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp=f"malformed-{sidecar_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    efficiency = result["grader_outputs"]["efficiency"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert efficiency["status"] == "failed"
+    assert efficiency["failure_class"] == "artifact_missing"
+    assert efficiency["source_errors"][0]["path"].endswith(sidecar_name)
+    assert efficiency["source_errors"][0]["reason"].startswith(
+        "invalid_json:Expecting property name enclosed in double quotes"
+    )
 
 
 def test_eval_runner_classifies_environment_blocked_exception(tmp_path: Path) -> None:
@@ -177,6 +257,66 @@ def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> 
     )
 
 
+def test_eval_runner_rejects_live_result_without_effective_run_dir(tmp_path: Path) -> None:
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        stale_trial_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(stale_trial_dir, completion_status="success")
+        surface_run_dir = stale_trial_dir / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        return _run_result(surface_run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-missing-effective-run-dir",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    runner = result["grader_outputs"]["runner"]
+    assert runner["status"] == "failed"
+    assert runner["error_type"] == "ValueError"
+    assert "missing eval_effective_run_dir" in runner["message"]
+    assert result["artifacts"] == {}
+
+
+def test_eval_runner_rejects_live_effective_run_dir_outside_trial(tmp_path: Path) -> None:
+    external_run_dir = tmp_path / "external-live-route" / "seed-7"
+
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        surface_run_dir = Path(kwargs["output_dir"]) / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        _write_product_artifacts(external_run_dir, completion_status="success")
+        result = _run_result(surface_run_dir, completion_status="success")
+        result["eval_effective_run_dir"] = str(external_run_dir)
+        return result
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-escaped-effective-run-dir",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    runner = payload["results"][0]["grader_outputs"]["runner"]
+    assert runner["error_type"] == "ValueError"
+    assert "eval_effective_run_dir must stay under trial run_dir" in runner["message"]
+
+
 def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path) -> None:
     def live_product_runner(**_kwargs: Any) -> dict[str, Any]:
         raise RuntimeError(
@@ -224,6 +364,9 @@ def test_live_surface_product_discovers_timestamped_run_dir(
         (timestamped_run_dir / "run_result.json").write_text(
             json.dumps(_run_result(timestamped_run_dir, completion_status="success")) + "\n"
         )
+        (timestamped_run_dir / "live_status.json").write_text(
+            '{"phase": "finished", "exit_status": 0}\n'
+        )
         return _completed_process(returncode=0)
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
@@ -233,6 +376,141 @@ def test_live_surface_product_discovers_timestamped_run_dir(
     assert command_log
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0305/seed-7")
     assert (tmp_path / "trial-0000" / "live_eval_command.json").exists()
+
+
+def test_live_surface_product_rejects_stale_sibling_run_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    stale_run_dir = trial_dir / "surface-run" / "old-run" / "seed-7"
+    _write_product_artifacts(stale_run_dir, completion_status="success")
+    (stale_run_dir / "run_result.json").write_text(
+        json.dumps(_run_result(stale_run_dir, completion_status="success")) + "\n"
+    )
+    for artifact in (stale_run_dir, *stale_run_dir.iterdir()):
+        os.utime(artifact, (1.0, 1.0))
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stale live surface run artifacts"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_product_rejects_mixed_fresh_and_stale_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    run_dir = trial_dir / "surface-run" / "seed-7"
+    _write_product_artifacts(run_dir, completion_status="success")
+    (run_dir / "run_result.json").write_text(
+        json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+    )
+    os.utime(run_dir / "run_result.json", (1.0, 1.0))
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stale live surface run artifacts"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_product_rejects_stdout_artifacts_path_outside_surface_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    stale_trial_dir = trial_dir
+    _write_product_artifacts(stale_trial_dir, completion_status="success")
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(
+            returncode=0,
+            stdout=f"Artifacts: {stale_trial_dir}\n",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stdout live surface artifacts path must stay under"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_product_rejects_stdout_artifacts_path_without_seed_leaf(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    wrong_leaf_dir = trial_dir / "surface-run" / "0615_0305"
+    _write_product_artifacts(wrong_leaf_dir, completion_status="success")
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(
+            returncode=0,
+            stdout=f"Artifacts: {wrong_leaf_dir}\n",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(
+        RuntimeError, match="stdout live surface artifacts path must end with seed-7"
+    ):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_discovery_fails_on_ambiguous_current_sibling_artifacts(
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    output_dir = tmp_path / "surface-run"
+    for stamp in ("0615_0305", "0615_0306"):
+        _write_product_artifacts(
+            output_dir / stamp / "seed-7",
+            completion_status="success",
+        )
+
+    with pytest.raises(RuntimeError, match="ambiguous live surface run artifacts"):
+        live_runtime.discover_live_surface_run_dir(
+            {"seed": 7},
+            output_dir=output_dir,
+            fallback_run_dir=output_dir / "seed-7",
+            started_wall_time_s=0.0,
+        )
 
 
 def test_live_surface_product_waits_for_detached_codex_status(
@@ -302,6 +580,7 @@ def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
         (run_dir / "run_result.json").write_text(
             json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
         )
+        (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
         return _completed_process(returncode=0)
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
@@ -309,6 +588,43 @@ def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
     live_runtime.run_live_surface_product(**_live_surface_kwargs(tmp_path / "trial-0000"))
 
     assert seen_timeout is None
+
+
+def test_live_surface_product_fails_aloud_on_malformed_run_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        run_dir = Path(output_arg.removeprefix("output_dir=")) / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text("{", encoding="utf-8")
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-malformed-run-result",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_timeout_s=12.5,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    runner = result["grader_outputs"]["runner"]
+    assert runner["status"] == "failed"
+    assert runner["error_type"] == "ValueError"
+    assert "invalid live eval JSON artifact" in runner["message"]
 
 
 def test_live_surface_product_recovers_completed_artifact_after_timeout(
@@ -438,6 +754,9 @@ def test_live_surface_product_recovers_after_detached_wait_deadline(
             (detached_run_dir / "run_result.json").write_text(
                 json.dumps(_run_result(detached_run_dir, completion_status="success")) + "\n"
             )
+            (detached_run_dir / "live_status.json").write_text(
+                '{"phase": "finished", "exit_status": 0}\n'
+            )
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
     monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
@@ -448,6 +767,78 @@ def test_live_surface_product_recovers_after_detached_wait_deadline(
     )
 
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0312/seed-7")
+
+
+def test_live_surface_product_rejects_detached_run_result_without_terminal_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    clock = {"now": 0.0}
+    detached_run_dir: Path | None = None
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0313" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
+        nonlocal detached_run_dir
+        detached_run_dir = run_dir
+        return _completed_process(returncode=0)
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def fake_sleep(seconds: float) -> None:
+        clock["now"] += seconds
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "0")
+
+    with pytest.raises(
+        TimeoutError,
+        match=r"detached live eval trial did not finish within 1s",
+    ):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+        )
+
+    assert detached_run_dir is not None
+    assert (detached_run_dir / "run_result.json").is_file()
+
+
+def test_live_surface_product_rejects_detached_run_result_with_failed_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0314" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        (run_dir / "live_status.json").write_text(
+            '{"phase": "failed", "exit_status": 1, "reason": "provider failure"}\n'
+        )
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="detached live surface run failed with exit 1"):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+        )
 
 
 def test_live_open_ended_eval_grades_artifacts_after_checker_nonzero_exit(
@@ -685,6 +1076,86 @@ def test_open_ended_authoritative_predicate_failure_is_behavior_failure(
     )
 
 
+@pytest.mark.parametrize(
+    ("sample_id", "field_name", "expected_error"),
+    [
+        (
+            "open_ended.room4_anchor_seed7",
+            "public_semantic_anchors",
+            "public_semantic_anchors:invalid_json_array",
+        ),
+        (
+            "open_ended.living_waypoint_seed7",
+            "generated_exploration_candidates",
+            "generated_exploration_candidates:invalid_json_array",
+        ),
+        (
+            "open_ended.living_waypoint_seed7",
+            "target_search_summary",
+            "target_search_summary:invalid_json_object",
+        ),
+    ],
+)
+def test_open_ended_predicates_reject_wrong_shaped_runtime_map_sources(
+    tmp_path: Path,
+    sample_id: str,
+    field_name: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        current_sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        result = _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+            include_runtime_map=current_sample_id != sample_id,
+        )
+        if current_sample_id == sample_id:
+            runtime_map = json.loads((run_dir / "runtime_metric_map.json").read_text())
+            runtime_map[field_name] = "wrong-shape"
+            (run_dir / "runtime_metric_map.json").write_text(
+                json.dumps(runtime_map) + "\n",
+                encoding="utf-8",
+            )
+        return result
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp=f"wrong-shaped-open-ended-{field_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = {item["identity"]["sample_id"]: item for item in payload["results"]}[sample_id]
+    open_ended = result["grader_outputs"]["open_ended"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert open_ended["status"] == "failed"
+    assert open_ended["failure_class"] == "artifact_missing"
+    assert open_ended["semantic_satisfaction_status"] == "source_error"
+    assert open_ended["success_predicate"]["source_error"] is True
+    assert open_ended["source_errors"] == [
+        {
+            "path": str(
+                run.output_dir
+                / "runs"
+                / sample_id.replace(".", "_")
+                / "trial-0000"
+                / "runtime_metric_map.json"
+            ),
+            "reason": expected_error,
+        }
+    ]
+
+
 def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_anchor(
     tmp_path: Path,
 ) -> None:
@@ -761,6 +1232,103 @@ def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_ancho
     )
 
 
+def test_eval_runner_fails_trajectory_when_trace_contains_malformed_json(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        (run_dir / "trace.jsonl").write_text(
+            "\n".join(
+                [
+                    '{"event": "response", "tool": "metric_map"}',
+                    "{",
+                    '{"event": "response", "tool": "done"}',
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+        )
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="malformed-trace",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    results = {result["identity"]["sample_id"]: result for result in payload["results"]}
+    result = results["open_ended.drink_seed7"]
+    trajectory = result["grader_outputs"]["trajectory"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "trajectory_policy_violation"
+    assert trajectory["missing_required_tools"] == []
+    assert trajectory["violations"] == ["trace_json_invalid"]
+    assert trajectory["trace_parse_errors"][0].startswith(
+        "line 2: invalid_json:Expecting property name enclosed in double quotes"
+    )
+
+
+@pytest.mark.parametrize("sidecar_name", ["advisory_evaluation.json", "runtime_metric_map.json"])
+def test_open_ended_eval_fails_aloud_on_malformed_source_sidecars(
+    tmp_path: Path,
+    sidecar_name: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        result = _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+            include_runtime_map=sidecar_name != "runtime_metric_map.json",
+        )
+        if sample_id == "open_ended.room4_anchor_seed7":
+            if sidecar_name == "advisory_evaluation.json":
+                result.pop("advisory_evaluation")
+            (run_dir / sidecar_name).write_text("{", encoding="utf-8")
+        return result
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp=f"malformed-{sidecar_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = {item["identity"]["sample_id"]: item for item in payload["results"]}[
+        "open_ended.room4_anchor_seed7"
+    ]
+    open_ended = result["grader_outputs"]["open_ended"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert open_ended["status"] == "failed"
+    assert open_ended["failure_class"] == "artifact_missing"
+    assert open_ended["semantic_satisfaction_status"] == "source_error"
+    assert open_ended["source_errors"][0]["path"].endswith(sidecar_name)
+    assert open_ended["source_errors"][0]["reason"].startswith(
+        "invalid_json:Expecting property name enclosed in double quotes"
+    )
+
+
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
@@ -832,6 +1400,83 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
     plan = resolve_surface_launch(command[5:])
     assert plan.intent == "open-ended"
     assert plan.preset is None
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "expected_error"),
+    [
+        ("generated_mess_count", "bad", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", "-1", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", "5.5", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", 5.0, "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", True, "generated_mess_count must be a non-negative integer"),
+        ("scene_index", "bad", "scene_index must be a non-negative integer"),
+        ("scene_index", "-1", "scene_index must be a non-negative integer"),
+        ("scene_index", "5.5", "scene_index must be a non-negative integer"),
+        ("scene_index", 5.0, "scene_index must be a non-negative integer"),
+        ("scene_index", True, "scene_index must be a non-negative integer"),
+        ("scene_source", "", "scene_source must be a non-empty string"),
+        ("scene_source", "  ", "scene_source must be a non-empty string"),
+        ("scene_source", 7, "scene_source must be a non-empty string"),
+        ("scene_source", True, "scene_source must be a non-empty string"),
+    ],
+)
+def test_live_surface_command_rejects_invalid_launch_metadata(
+    tmp_path: Path,
+    field_name: str,
+    value: object,
+    expected_error: str,
+) -> None:
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
+    if field_name == "generated_mess_count":
+        kwargs["evidence_lane"] = "world-public-labels"
+    kwargs[field_name] = value
+
+    with pytest.raises(ValueError, match=expected_error):
+        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
+
+
+@pytest.mark.parametrize(
+    ("case_name", "mutate", "expected_error"),
+    [
+        (
+            "generated-mess-count",
+            lambda sample: sample["private_goal_reference"].__setitem__(
+                "generated_mess_count",
+                "five",
+            ),
+            "private_goal_reference.generated_mess_count must be a non-negative integer",
+        ),
+        (
+            "scene-index",
+            lambda sample: sample["launch_overrides"].__setitem__("scene_index", True),
+            "launch_overrides.scene_index must be a non-negative integer",
+        ),
+        (
+            "scene-source",
+            lambda sample: sample["launch_overrides"].__setitem__("scene_source", ""),
+            "launch_overrides.scene_source must be a non-empty string",
+        ),
+    ],
+)
+def test_eval_runner_rejects_invalid_sample_launch_metadata(
+    tmp_path: Path,
+    case_name: str,
+    mutate: Callable[[dict[str, Any]], None],
+    expected_error: str,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id=f"cleanup.invalid_{case_name.replace('-', '_')}",
+        stamp=f"invalid-{case_name}",
+        mutate=mutate,
+        assertion_message=f"product runner should not launch with invalid {case_name}",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert expected_error in result["grader_outputs"]["runner"]["message"]
 
 
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
@@ -930,6 +1575,95 @@ def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> N
     assert result["status"] == "failed"
     assert result["failure_class"] == "map_actionability_failure"
     assert result["grader_outputs"]["outcome"]["schema_ok"] is False
+
+
+@pytest.mark.parametrize(
+    ("runtime_map_text", "expected_error"),
+    [
+        ("{", "invalid_json:Expecting property name enclosed in double quotes"),
+        ("[]", "invalid_json_object"),
+    ],
+)
+def test_map_build_eval_classifies_malformed_runtime_metric_map_as_invalid_artifact(
+    tmp_path: Path,
+    runtime_map_text: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        (run_dir / "runtime_metric_map.json").write_text(runtime_map_text, encoding="utf-8")
+        return _run_result(
+            run_dir,
+            completion_status="map_build_complete",
+            include_runtime_map=False,
+        )
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp="malformed-map",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert outcome["failure_class"] == "artifact_missing"
+    assert outcome["runtime_metric_map_exists"] is True
+    assert outcome["runtime_metric_map_error"].startswith(expected_error)
+    assert outcome["runtime_metric_map_schema"] == "unavailable"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "expected_error"),
+    [
+        ("public_semantic_anchors", "public_semantic_anchors:invalid_json_array"),
+        (
+            "generated_exploration_candidates",
+            "generated_exploration_candidates:invalid_json_array",
+        ),
+    ],
+)
+def test_map_build_eval_rejects_wrong_shaped_runtime_map_lists(
+    tmp_path: Path,
+    field_name: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        runtime_map = json.loads((run_dir / "runtime_metric_map.json").read_text())
+        runtime_map[field_name] = "looks-like-many-items"
+        (run_dir / "runtime_metric_map.json").write_text(
+            json.dumps(runtime_map) + "\n",
+            encoding="utf-8",
+        )
+        return _run_result(
+            run_dir,
+            completion_status="map_build_complete",
+            include_runtime_map=False,
+        )
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp=f"wrong-shaped-{field_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert outcome["failure_class"] == "artifact_missing"
+    assert outcome["runtime_metric_map_error"] == expected_error
+    assert outcome["runtime_metric_map_schema"] == "runtime_metric_map_v1"
 
 
 def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
@@ -1095,6 +1829,216 @@ def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path:
     ]
 
 
+def test_eval_runner_fails_before_launch_when_explicit_runtime_map_prior_is_missing(
+    tmp_path: Path,
+) -> None:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals/household_world/samples/cleanup/smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = "cleanup.explicit_missing_prior"
+    sample["artifact_dependencies"] = {
+        "runtime_map_prior": str(tmp_path / "missing-runtime-map-prior.json")
+    }
+    sample_path = tmp_path / "explicit_missing_prior_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / "explicit_missing_prior_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.explicit_missing_prior",
+                "version": "2026-06-19",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample["sample_id"]],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("product runner should not launch with missing runtime_map_prior")
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp="explicit-missing-prior",
+        product_runner=product_runner,
+    )
+
+    result = json.loads(run.results_path.read_text())["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
+    assert result["grader_outputs"]["runner"]["message"].startswith(
+        "runtime_map_prior_path does not exist:"
+    )
+    assert (
+        result["grader_outputs"]["artifacts"]["resolved_dependencies"]["runtime_map_prior_source"]
+        == "explicit_path"
+    )
+
+
+def test_eval_dependency_resolver_preserves_empty_explicit_runtime_map_prior() -> None:
+    sample = load_eval_sample(
+        Path(__file__).resolve().parents[3]
+        / "evals/household_world/samples/cleanup/smoke_seed7.json"
+    )
+    sample = sample.__class__.from_mapping(
+        {
+            **sample.to_dict(),
+            "artifact_dependencies": {"runtime_map_prior": ""},
+        }
+    )
+
+    dependencies = resolve_artifact_dependencies(
+        sample,
+        repetition_index=0,
+        sample_artifacts={},
+    )
+    failure = dependency_failure(dependencies)
+
+    assert dependencies == {
+        "runtime_map_prior_path": "",
+        "runtime_map_prior_source": "explicit_path",
+    }
+    assert failure is not None
+    assert failure["message"] == "explicit runtime_map_prior path was empty"
+
+
+@pytest.mark.parametrize("value", [None, True, 7, 1.5, ["prior.json"], {"path": "prior.json"}])
+def test_eval_runner_rejects_invalid_explicit_runtime_map_prior_value(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior",
+        stamp=f"invalid-runtime-map-prior-{type(value).__name__}",
+        mutate=lambda sample: sample.__setitem__(
+            "artifact_dependencies",
+            {"runtime_map_prior": value},
+        ),
+        assertion_message="product runner should not launch with invalid runtime_map_prior",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior must be a string path" in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_eval_runner_rejects_empty_explicit_runtime_map_prior_launch_override(
+    tmp_path: Path,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior_override",
+        stamp="invalid-runtime-map-prior-override-empty",
+        mutate=lambda sample: sample.setdefault("launch_overrides", {}).__setitem__(
+            "runtime_map_prior",
+            "",
+        ),
+        assertion_message="product runner should not launch with empty runtime_map_prior",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
+    assert (
+        result["grader_outputs"]["runner"]["message"] == "explicit runtime_map_prior path was empty"
+    )
+
+
+@pytest.mark.parametrize(
+    ("container_key", "value"),
+    [
+        ("artifact_dependencies", True),
+        ("artifact_dependencies", 7),
+        ("artifact_dependencies", ["map_build.baseline_seed7"]),
+        ("artifact_dependencies", {"sample_id": "map_build.baseline_seed7"}),
+        ("launch_overrides", ""),
+    ],
+)
+def test_eval_runner_rejects_invalid_runtime_map_prior_source_sample(
+    tmp_path: Path,
+    container_key: str,
+    value: object,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior_source",
+        stamp=f"invalid-runtime-map-prior-source-{container_key}-{type(value).__name__}",
+        mutate=lambda sample: sample.setdefault(container_key, {}).__setitem__(
+            "runtime_map_prior_from_sample",
+            value,
+        ),
+        assertion_message=(
+            "product runner should not launch with invalid runtime_map_prior_from_sample"
+        ),
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior_from_sample must be a non-empty string"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("case_name", "artifact_dependencies", "expected_error"),
+    [
+        (
+            "runtime-map-prior",
+            {"runtime_map_prior": ["prior.json"]},
+            "runtime_map_prior must be a string path",
+        ),
+        (
+            "runtime-map-prior-source",
+            {"runtime_map_prior_from_sample": {"id": "map-build"}},
+            "runtime_map_prior_from_sample must be a non-empty string",
+        ),
+    ],
+)
+def test_live_eval_rejects_invalid_runtime_map_dependency_before_launch(
+    tmp_path: Path,
+    case_name: str,
+    artifact_dependencies: dict[str, object],
+    expected_error: str,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id=f"cleanup.live_invalid_{case_name.replace('-', '_')}",
+        stamp=f"live-invalid-{case_name}",
+        mutate=lambda sample: sample.update(
+            {
+                "allowed_agent_engines": ["openai-agents-sdk"],
+                "provider_profiles": ["codex-router-responses"],
+                "artifact_dependencies": artifact_dependencies,
+            }
+        ),
+        assertion_message=f"live product runner should not launch with invalid {case_name}",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert expected_error in result["grader_outputs"]["runner"]["message"]
+
+
 def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
@@ -1178,6 +2122,181 @@ def test_regression_promotion_rejects_passed_results(tmp_path: Path) -> None:
         promote_regression_sample_from_eval_result(run.results_path)
 
 
+def test_regression_promotion_requires_declared_source_sample_ref(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    results_path = tmp_path / "eval_results_without_sample_refs.json"
+    bundle = json.loads(run.results_path.read_text())
+    bundle["suite"].pop("sample_refs")
+    results_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="sample_refs must include source sample"):
+        promote_regression_sample_from_eval_result(
+            results_path,
+            sample_output_path=sample_output,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_rejects_invalid_result_identity_before_writing(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    results_path = tmp_path / "eval_results_with_invalid_identity.json"
+    bundle = json.loads(run.results_path.read_text())
+    bundle["results"][0]["identity"]["trial_id"] = 7
+    results_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="eval result identity trial_id must be a non-empty string"
+    ):
+        promote_regression_sample_from_eval_result(
+            results_path,
+            sample_output_path=sample_output,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_fails_aloud_on_missing_declared_source_sample(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    results_path = tmp_path / "eval_results_with_missing_sample_ref.json"
+    bundle = json.loads(run.results_path.read_text())
+    bundle["suite"]["sample_refs"] = ["evals/household_world/samples/cleanup/missing_sample.json"]
+    results_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source sample ref .* is unreadable"):
+        promote_regression_sample_from_eval_result(
+            results_path,
+            sample_output_path=sample_output,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_fails_aloud_on_invalid_declared_source_sample(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    invalid_sample_path = tmp_path / "invalid_sample.json"
+    invalid_sample_path.write_text('{"schema":"wrong"}\n', encoding="utf-8")
+    suite_path = tmp_path / "suite_with_invalid_sample_ref.json"
+    suite = json.loads(run.results_path.read_text())["suite"]
+    suite["sample_refs"] = [str(invalid_sample_path)]
+    suite_path.write_text(json.dumps(suite), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source sample ref .* is invalid"):
+        promote_regression_sample_from_eval_result(
+            run.results_path,
+            sample_output_path=sample_output,
+            suite_path=suite_path,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_fails_aloud_on_mismatched_declared_source_sample(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    mismatched_sample_path = tmp_path / "mismatched_sample.json"
+    source_sample_path = (
+        Path(__file__).resolve().parents[3]
+        / "evals/household_world/samples/cleanup/smoke_seed7.json"
+    )
+    source_sample = json.loads(source_sample_path.read_text(encoding="utf-8"))
+    source_sample["sample_id"] = "cleanup.different_sample"
+    mismatched_sample_path.write_text(json.dumps(source_sample), encoding="utf-8")
+    suite_path = tmp_path / "suite_with_mismatched_sample_ref.json"
+    suite = json.loads(run.results_path.read_text())["suite"]
+    suite["sample_refs"] = [str(mismatched_sample_path)]
+    suite_path.write_text(json.dumps(suite), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="resolved to sample_id"):
+        promote_regression_sample_from_eval_result(
+            run.results_path,
+            sample_output_path=sample_output,
+            suite_path=suite_path,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_validates_suite_before_writing_sample(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    suite_path = tmp_path / "suite_with_missing_thresholds.json"
+    suite = json.loads(run.results_path.read_text())["suite"]
+    suite.pop("thresholds")
+    suite_path.write_text(json.dumps(suite), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="thresholds"):
+        promote_regression_sample_from_eval_result(
+            run.results_path,
+            sample_output_path=sample_output,
+            suite_path=suite_path,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
 def test_regression_promotion_stop_label_does_not_write_outputs(tmp_path: Path) -> None:
     run = run_eval_suite(
         "smoke_regression",
@@ -1233,6 +2352,61 @@ def _live_surface_kwargs(run_dir: Path, *, live_timeout_s: float | None = None) 
         "model": None,
         "live_timeout_s": live_timeout_s,
     }
+
+
+def _run_invalid_cleanup_sample(
+    tmp_path: Path,
+    *,
+    sample_id: str,
+    stamp: str,
+    mutate: Callable[[dict[str, Any]], None],
+    assertion_message: str,
+    **run_kwargs: Any,
+) -> dict[str, Any]:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals"
+            / "household_world"
+            / "samples"
+            / "cleanup"
+            / "smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = sample_id
+    mutate(sample)
+    path_token = sample_id.replace(".", "_")
+    sample_path = tmp_path / f"{path_token}_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / f"{path_token}_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": f"household_world.{path_token}",
+                "version": "2026-06-20",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample_id],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError(assertion_message)
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp=stamp,
+        product_runner=product_runner,
+        live_product_runner=product_runner,
+        **run_kwargs,
+    )
+    return json.loads(run.results_path.read_text())["results"][0]
 
 
 def _completed_process(*, returncode: int, stdout: str = "", stderr: str = "") -> Any:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = summarize_entries(args.entry)
+    try:
+        result = summarize_entries(args.entry)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     payload = json.dumps(result, indent=2, sort_keys=True)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -77,9 +82,12 @@ def _summarize_path(path: Path) -> dict[str, Any]:
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"artifact is missing: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"artifact must contain valid JSON object: {path}: {exc.msg}") from exc
     if not isinstance(payload, dict):
-        raise ValueError(f"artifact is not a JSON object: {path}")
+        raise ValueError(f"artifact must contain a JSON object: {path}")
     return payload
 
 

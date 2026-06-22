@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-18
+last_verified: 2026-06-20
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,13 +18,326 @@ live only in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`; do not copy
 their full execution notes back here.
 
-Latest quality snapshot from 2026-06-18:
+Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 79.
-- Current emphasis: fail aloud and early for silent fallback, ambiguous env
-  selection, missing runtime/source evidence, stale artifact discovery, and
-  invalid provider/profile/model/config input.
+- Current emphasis: fresh Ruff complexity rows are clear again. The latest
+  fail-aloud slices kept Ruff complexity rows clear again after splitting the
+  live eval artifact selector below the C901 threshold, and surfaced malformed
+  operator-console runtime inventory
+  JSON, eval runtime-map artifacts, eval trace JSONL artifacts, and live eval
+  surface JSON artifacts as explicit source-error evidence. Operator-console
+  prompt previews now reject malformed or negative cleanup `relocation_count`
+  overrides instead of rendering plausible target-count prompts for invalid
+  live-route input. Eval-harness
+  provider readiness now rejects unknown provider profiles through the provider
+  registry instead of treating them like the Codex router when Codex env vars
+  happen to exist, and attached eval-harness `eval_results.json` files now
+  fail rows aloud when present but malformed or non-object. Explicit
+  eval-harness `since=` source refs now fail aloud when `git diff` cannot read
+  them instead of producing an empty recommendation set. Operator-console prompt
+  previews now reject malformed or negative OpenAI Agents numeric prompt-env
+  values instead of rendering default-looking kickoff prompts for bad live-route
+  input. OpenAI Agents SDK performance-profile float settings now reject
+  non-finite timeout/retry values instead of clamping `nan` to zero or writing
+  `inf` into runtime profile metadata, direct OpenAI Agents SDK
+  performance-profile numeric values now reject booleans instead of accepting
+  `True` as `1`, and the live OpenAI Agents runtime now rejects
+  boolean/non-finite max-turn, retry, and MCP-timeout metadata/env values before
+  writing status/timing evidence. OpenAI Agents SDK live timing now fails final
+  timing packets aloud when present MCP timing sources
+  (`run_result.json` or `trace.jsonl`) are malformed or non-object instead of
+  deriving plausible timing from substitute/partial evidence. Planner proof
+  bundle result summaries now surface parseable non-object proof
+  `run_result.json` sources as explicit unreadable result evidence instead of
+  crashing or deriving proof-summary fields from wrong-shaped JSON. The Nav2
+  map-bundle exporter now reports malformed agent-view JSON and non-object
+  run-result JSON as concise CLI source errors instead of surfacing tracebacks
+  or raw type failures. Runtime Map Prior Snapshot conversion now reports
+  malformed or non-object Agibot `navigation_memory.json`, missing, empty, or
+  wrong-shaped Agibot navigation-memory item sources, Agibot `source.json`,
+  Nav2 `semantics.json`, missing, empty, or wrong-shaped Nav2 waypoint sources,
+  and malformed Nav2/Agibot source-map geometry as explicit source-path errors
+  instead of raw parser/type failures, wrong-shaped source packets,
+  valid-looking empty snapshots, or defaulted map geometry. Runtime Map Prior
+  Snapshot conversion also rejects malformed or missing Agibot
+  `nav_goal`/`pose` and Nav2 waypoint `x`/`y`/`yaw` geometry instead of
+  defaulting offline prior coordinates to plausible map-frame zeroes. B1 runtime
+  bundle compilation now rejects malformed, non-object, missing, empty, or
+  wrong-shaped `navigation_memory.json` sources and present malformed
+  `nav_goal`/`pose` point fields before writing runtime semantics, instead of
+  skipping source evidence into a generic no-waypoints failure or partial
+  bundle. B1 Map 12 consistency and label-tool review layers now use the same
+  strict navigation-memory source parser, reject missing, malformed,
+  non-object, empty, wrong-shaped, or bad-point `navigation_memory.json`
+  sources, and bind review packets to the selected map bundle's sibling memory
+  source instead of emitting empty layers or partial consistency packets from
+  corrupt evidence. Runtime Map Prior Snapshot conversion and B1 runtime bundle
+  compilation now reuse that shared parser too, removing their duplicate
+  local readers, item-list parsers, item guards, and point/pose numeric
+  validators while preserving existing source-error diagnostics. B1 Map 12
+  label-tool draft export now rejects missing or invalid `polygon_role` source
+  values instead of defaulting malformed draft labels to `navigation_area`,
+  and explicitly supplied label-tool review manifests must now exist, parse to
+  a JSON object, and use the accepted review schema instead of disappearing
+  into the no-review-manifest path. Explicit label-tool `--semantics` paths
+  now fail on missing, malformed, or non-object JSON sources, and the
+  intentional no-authored-semantics default requires valid map source metadata
+  instead of fabricating a `robot_map_12` identity when `source.json` is absent
+  or corrupt. B1 runtime bundle compilation now also treats explicit
+  `--review-manifest` input as JSON-object source truth, sharing the same
+  source guard as semantic projection artifacts so malformed or non-object
+  review manifests fail before validation or artifact writes. Explicit B1
+  runtime alignment/navigation proof artifacts now use that same guard, so
+  malformed or non-object robot-consumption proof evidence fails before proof
+  validation or runtime bundle writes. B1 semantic projection CLI loading now
+  treats explicit `--correspondences` and `--review-manifest` files as
+  JSON-object source truth too, returning concise CLI source-path errors before
+  projection validation or output writes. B1 semantic-anchor review packet CLI
+  loading now applies the same source-truth rule to explicit
+  `--review-manifest` and `--alignment-artifact` inputs before proposed-anchor
+  packet writes. B1 semantic review packet promotion and fit-check CLIs now
+  apply the same source-truth rule to explicit `--review-packet` inputs before
+  promotion, preview, residual, or committed-manifest writes. B1 manual-draft
+  verification promotion now applies the same source-truth rule to explicit
+  `--draft` inputs before verification-only manifest writes. B1 scene topdown
+  diagnostics now apply the same source-truth rule to explicit
+  `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
+  scene topdown capture now applies the same source-truth rule to explicit
+  hidden `--camera-request` packets before Isaac capture or capture-result
+  writes. B1 waypoint pose request building now treats required
+  `--alignment-artifact` input and explicit `--points` input as source truth,
+  failing missing, malformed, or wrong-shaped sources before pose-request
+  artifact writes. B1 digital-twin readiness now treats explicit
+  `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
+  source truth before writing readiness artifacts. B1 navigation smoke now
+  treats explicit `--readiness-artifact` and `--waypoint-pose-requests` inputs
+  as source truth too, failing missing, malformed, or non-object sources before
+  navigation smoke artifact writes. B1 navigation report rendering now treats the
+  required navigation artifact, explicit optional readiness/waypoint-request
+  artifacts, and present default sidecars as JSON-object source truth before
+  report writes. B1 manual-anchor semantic suggestion loading now treats
+  explicit draft, review-manifest, and scene-diagnostic inputs as JSON-object
+  source truth before suggestion, review-packet, or review-report writes.
+  Robot-camera visual parity summary loading now treats explicit
+  baseline/probe manifests, RAW-FPV run results, calibration manifests,
+  prepared USD summaries, paired comparison manifests, report visual sample
+  manifests, and nested RGB-gain source manifests as JSON-object source truth
+  before writing `visual_parity_summary.json` or `report.html`.
+  B1 asset visual comparisons now treat explicit baseline/candidate navigation
+  artifacts as JSON-object source truth before writing comparison outputs.
+  Semantic map spatial-contract normalization now treats bundle
+  `semantics.json` as JSON-object source truth before in-place writes, and the
+  parity test reflects the current accepted B1 alignment-anchor manifest.
+  Nav2 map-bundle export now treats missing explicit `--agent-view` and
+  `--run-result` sources as source-path errors before bundle writes.
+  B1 correspondence review rendering now treats explicit correspondences and
+  scene-topdown render packets as JSON-object source truth before writing
+  `correspondence_review_packet.json` or `correspondence_review.html`.
+  B1 map-scene alignment fitting now treats explicit correspondences as
+  JSON-object source truth before writing `alignment_residuals.json` or preview
+  artifacts.
+  B1 manual alignment overlay rendering now treats explicit scene-topdown and
+  alignment artifacts as JSON-object source truth before writing overlay
+  metadata or preview images. Isaac segmentation AOV comparisons now treat
+  explicit control/candidate state artifacts as JSON-object source truth before
+  writing comparison outputs, and AOV matrix summaries now treat
+  explicit `--entry LABEL=PATH` artifacts as JSON-object source truth before
+  writing matrix outputs. Prepared semantic USD summary validation now treats
+  the explicit summary path as JSON-object source truth before reporting
+  readiness.
+  The Nav2 map-bundle
+  validator now reports parseable non-object `semantics.json`
+  sources as bundle validation errors instead of raising raw attribute errors
+  during validation or projection. B1 runtime bundle compilation now reports
+  malformed or non-object explicit semantic projection artifacts as source-path
+  errors instead of raw JSON/type failures. MolmoSpaces worker initialization
+  now treats adjacent scene JSON as room-label source truth, so malformed,
+  wrong-shaped, or label-less source packets fail aloud instead of falling
+  through to raw parser/type errors or iTHOR-derived labels. Scene-camera
+  comparison now owns Isaac source artifact loading in
+  `scene_camera_source_artifacts.py`, validates present `scene_metadata.json`
+  packets, and keeps the main comparison file below the hard ceiling instead
+  of degrading corrupt metadata into missing-target evidence. The
+  operator-state payload now
+  reports malformed core
+  `operator_state.json` / `live_status.json` / `run_result.json` sources as
+  explicit failed source errors instead of erasing them into idle or missing
+  state. OpenAI Agents SDK model selection now rejects unknown model overrides,
+  and provider/profile route selection rejects catalog-known models that belong
+  to the wrong route instead of treating family-compatible names as launchable.
+  Coding-agent provider helper and provider-registry CLI route selection now
+  reject unknown provider profiles without raw fallback or Python tracebacks.
+  RAW-FPV Codex event JSONL and observe text-result JSON source errors now fail
+  aloud instead of being skipped into fewer apparent source observations.
+  Operator-console control source JSONL errors now fail aloud before appending
+  new manual-control rows, preserving operator-intervention evidence instead
+  of silently renumbering around corrupt history. Operator-console message
+  inbox JSONL errors now surface as console-state and MCP-visible source-error
+  packets instead of hiding queued steering evidence behind empty inbox state.
+  Operator-console `trace.jsonl` source errors now fail the normalized state
+  explicitly instead of letting latest-action/tool summaries derive from a
+  partially skipped trace. Operator-console agent event JSONL errors now fail
+  the normalized state explicitly instead of letting latest-decision evidence
+  derive from a partially skipped agent log. Operator-console route-lock
+  readiness now blocks on malformed lock-owner `operator_state.json` /
+  `live_status.json` sources instead of treating corrupt owner evidence as
+  absent or startable. Report-performance extraction now fails aloud on present
+  malformed or non-object JSON/JSONL sources instead of deriving false-green
+  performance packets from empty or partial telemetry. Model-latency
+  calibration now fails aloud on present malformed or non-object
+  `model_call_metrics.jsonl` rows instead of fitting calibration packets from
+  silently skipped source evidence. OpenAI Agents SDK event/span/trace metrics
+  now fail aloud on present malformed or non-object JSONL rows instead of
+  deriving context/cache/growth, retry/fallback, racing, input-filter, event,
+  or span metrics from partially skipped source evidence. RAW-FPV OpenAI
+  Agents budget guards now fail aloud on present malformed or non-object
+  `trace.jsonl` rows instead of deciding budget exhaustion from partial trace
+  history. Detached live-run summaries now fail aloud on present malformed or
+  non-object `live_status.json`, `live_timing.json`, `run_result.json`, and
+  `trace.jsonl` sources instead of rendering pending/unknown summaries from
+  corrupt evidence. Agent SDK speedup matrix rows now block on present
+  malformed or non-object baseline/candidate run source artifacts instead of
+  accepting, rejecting, or recommending speedup work from empty or partial
+  performance evidence. Codex and Claude live-run timing writers now surface
+  malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
+  failed timing/status evidence instead of skipping corrupt rows while writing
+  model/timing summaries. Eval-runner graders now fail rows aloud on present
+  malformed or non-object optional sidecars (`live_status.json`,
+  `live_timing.json`, `advisory_evaluation.json`, and open-ended
+  `runtime_metric_map.json`) instead of collapsing corrupt source evidence into
+  unavailable/advisory-neutral grading state. Eval-harness detached live-product
+  polling now blocks rows on malformed `live_status.json` source evidence instead
+  of treating corrupt status as absent while waiting for or accepting terminal
+  artifacts. Eval-runner live surface artifact discovery now rejects stale or
+  ambiguous sibling `seed-*` run directories instead of grading substitute
+  artifacts from a previous or unclear live route. Cleanup report regeneration
+  now treats declared scenario/trace/snapshot artifact values as source truth
+  under the run directory, rejecting missing, empty, or substitute paths instead
+  of reusing CWD files or same-basename colocated files. The Codex cleanup
+  apple-to-apple summary now applies the same run-dir source-truth rule to
+  declared summary artifacts and robot-view samples, rejecting missing declared
+  visual evidence instead of linking CWD substitutes or silently omitting links.
+  Operator-console B1 camera preview promotion now resolves declared relative
+  view paths only under the source artifact directory and rejects `../` escapes,
+  so stale CWD files or sibling run files cannot be promoted as current robot
+  camera evidence. Molmo CI live failure diagnostics now publish only the
+  latest seed directory with recognized diagnostic evidence, so empty newer
+  `seed-*` placeholders no longer hide or replace real failure artifacts.
+  Detached live-run summary auto-discovery now requires live-run evidence in
+  selected seed directories and explicit empty run directories fail aloud,
+  preventing pending/all-missing summaries from placeholder paths. Scene-sampler
+  readiness export now rejects enabled artifacts with missing payloads and
+  malformed candidate-range CLI input instead of writing `{}` artifacts or
+  surfacing tracebacks. Eval HTML reports now render declared missing or
+  output-escaping run/report artifact paths as explicit unavailable source
+  evidence instead of clickable proof links while preserving verified in-output
+  artifact links. Eval dependency resolution now treats explicitly present
+  `runtime_map_prior` metadata as source truth and rejects missing, empty, null,
+  or wrong-shaped values, and also rejects wrong-shaped
+  `runtime_map_prior_from_sample` source-sample ids before direct or live eval
+  product launch instead of passing declared stale priors through to the runner,
+  skipping explicit null values, or stringifying malformed source values. Live
+  eval surface artifact discovery now rejects stdout-declared artifact
+  directories outside the live surface output root or not ending at the
+  expected `seed-*` leaf, so trial-dir or malformed paths cannot become
+  priority live-run evidence. Detached live eval completion now requires
+  terminal live-status evidence for detached Codex routes, so timeout recovery
+  cannot treat a still-running or failed route's `run_result.json` as completed
+  eval proof. Eval-harness detached live-product rows now apply the same
+  terminal live-status rule before marking a row passed, so a running route's
+  early `run_result.json` cannot become harness pass evidence. Operator-console
+  B1 camera preview promotion now rejects absolute artifact view paths, keeping
+  promoted FPV/chase images bound to files declared under the source artifact
+  directory instead of arbitrary stale local files. Eval-harness selector tests
+  now merge repeated changed-file and explicit-intent route-selection checks
+  into two behavior tables, preserving live/blocker/source-error regressions
+  while dropping copied one-field row metadata assertions. Eval-runner tests now
+  consolidate duplicate launch-metadata validation bodies into behavior tables
+  while preserving helper-level, suite-level, and live-before-launch failure
+  surfaces. Operator-console public recipe tests now replace a direct
+  `just/console.just` text-shape assertion with the public `just --dry-run
+  console::run` surface while keeping CLI default coverage separate. OpenAI
+  Agents SDK live-runtime config failure tests now merge duplicate invalid
+  retry-attempt, retry-sleep, and MCP-timeout env/direct bodies into existing
+  validation tables, and performance-profile MCP-timeout tests now fold
+  duplicate malformed-env and negative-direct cases into the same invalid-value
+  table. Provider retry helper tests now merge one-assertion retry/error
+  classification functions into behavior-named parameter tables. Eval
+  regression promotion now treats matched suite `sample_refs` as source truth
+  and fails before writing promoted sample/suite artifacts when the declared
+  source sample is missing, invalid, or resolves to a different sample id.
+  Regression promotion now also validates both the promoted sample payload and
+  updated suite payload before writing either artifact, so invalid suite output
+  can no longer leave an orphan promoted sample behind. Regression promotion
+  now requires declared suite `sample_refs` and validates promotion source
+  identity before writing sample/suite artifacts, so missing refs or malformed
+  source identity can no longer fabricate a plausible regression sample from
+  eval-result fields. Live-agent result
+  grading now requires explicit in-trial `eval_effective_run_dir` source
+  metadata, so stale trial-directory artifacts cannot stand in for live route
+  evidence when a live product runner omits or escapes the effective run
+  directory. Eval artifact grading now validates required persisted JSON
+  artifacts as object JSON, so corrupt `run_result.json`, `agent_view.json`,
+  `runtime_metric_map.json`, or `private_evaluation.json` files cannot pass
+  behind a valid in-memory product result. Map-build outcome grading now rejects
+  wrong-shaped Runtime Metric Map list fields before minimum-count checks, so
+  strings or objects cannot satisfy actionability thresholds via `len()` on the
+  wrong type. Open-ended authoritative predicate grading now treats wrong-shaped
+  Runtime Metric Map predicate source fields as source errors instead of
+  ordinary goal-not-satisfied behavior failures. Live-agent result
+  artifact loading now fails aloud on present malformed or non-object
+  `live_status.json` / `run_result.json` sources instead of erasing corrupt
+  status or completion evidence into unknown or absent state. Eval live-product
+  launch setup now rejects invalid cleanup `generated_mess_count` /
+  `relocation_count` metadata instead of silently dropping scenario setup from
+  the live surface command, and invalid eval sample `scene_index` overrides now
+  fail before selecting a substitute scene. Explicit invalid eval
+  `scene_source` metadata now fails instead of falling back to
+  `procthor-10k-val`. Eval result bundle and HTML report rendering now reject
+  malformed scene-sampler projection summary/source counts and source sample
+  ids instead of publishing default-looking `0` counts or silently dropping
+  bad source rows. Apple-to-apple
+  grid execution now rejects malformed existing grid manifests and stable
+  malformed live-status sources instead of silently discarding previous row
+  evidence or timing out from a fabricated unknown phase. Operator-console
+  latest-run history attachment now surfaces malformed run history, operator
+  state, or live-status sources as source-error payloads instead of attaching a
+  plausible fallback run or metadata-free row. Operator-console manual control
+  now rejects malformed `operator_state.json` sources before route lookup,
+  MCP calls, control-row append, or state rewrite instead of collapsing corrupt
+  state into a missing endpoint or overwriting source evidence. Operator-console
+  interaction commands now reject malformed run `operator_state.json` sources
+  before appending steer messages, next-goal queues, or session-link updates
+  instead of treating corrupt run state as unsupported route/session absence.
+  Operator-console session reads now reject malformed session records as source
+  errors before command writes instead of treating present corrupt files as
+  unknown sessions or dropping session-link evidence. Operator-console
+  request-field readiness now rejects present JSON sources that are not objects
+  before marking Agibot/B1 launch artifacts ready, so arrays or scalar JSON can
+  no longer satisfy required context/proof gates.
+  Operator-console stop requests now reject malformed or non-object
+  `operator_state.json` sources before child-stop, process termination, lock
+  release, or state rewrite, so corrupt stop-state evidence no longer becomes
+  a raw JSON/type failure or gets overwritten during stop handling. Stop
+  requests also reject malformed or non-object child `live_status.json`
+  sources before child-stop, wrapper termination, lock release, or status
+  rewrite, so corrupt live child evidence cannot be replaced by a clean
+  operator-stop payload. Operator-console launch starts now reserve a unique
+  run directory before writing launch logs or `operator_state.json`, so
+  same-second run-id collisions or stale directories cannot overwrite existing
+  run evidence; empty pre-state reservations are cleaned up on launch-build or
+  lock-acquire failure. Operator-console `/artifacts/...` and `/api/raw/...`
+  serving now resolves only files under `output/operator-console`, so raw
+  log/artifact links can no longer expose arbitrary repo files or escaped
+  paths while retaining redaction for valid operator output logs. Runtime
+  inventory artifact rows now follow the same operator-output source boundary:
+  non-console-output files such as eval-harness manifests and logs remain
+  visible by path but no longer advertise dead same-origin artifact/raw links.
+  Continue fail-aloud/runtime-source audits from fresh evidence rather than
+  reopening closed helper splits; route any future test-shape cleanup through
+  `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.
@@ -158,10 +471,35 @@ Good families:
 
 - Provider/env tests that duplicate constants or route tables without
   exercising canonical resolution, readiness failure, or visible diagnostics.
+- Provider retry helper pruning is done for the current duplicated
+  status-code, transient-error classification, and retry-delay one-assertion
+  tests; reopen only with fresh duplicate helper classifications, not route
+  readiness or provider safety retry behavior.
+- OpenAI Agents SDK live-runtime config failure pruning is done for the current
+  duplicate invalid retry-attempt, retry-sleep, and MCP-timeout env/direct
+  bodies; reopen only with fresh duplicated provider/env scaffolding that does
+  not protect a distinct provider route, readiness failure, or visible
+  diagnostic surface.
+- OpenAI Agents SDK performance-profile MCP-timeout validation pruning is done
+  for the current duplicate malformed-env and negative-direct one-off tests;
+  reopen only with fresh duplicate invalid-value scaffolding that does not
+  protect env/direct precedence, route compatibility, or a visible diagnostic
+  surface.
 - Operator-console tests that assert static DOM/route wiring without launch
   readiness, redaction, locks, status transitions, or artifact links.
-- Eval-harness tests that duplicate manifest keys one field at a time instead
-  of proving selected rows, blockers, promotion packets, or result contracts.
+- Operator-console `console::run` public recipe/default-bind pruning is done
+  for the current standalone recipe-text assertion; reopen only with fresh
+  static operator-console recipe/DOM/route wiring tests that are not covered by
+  public `just` behavior, CLI defaults, launch readiness, redaction, locks,
+  status transitions, or artifact links.
+- Eval-harness selector pruning is done for the current duplicate
+  changed-file/explicit-intent shape; reopen only with fresh static manifest-key
+  or row-metadata duplication. Other eval-harness tests remain valid candidates
+  only when they duplicate manifest keys one field at a time instead of proving
+  selected rows, blockers, promotion packets, or result contracts.
+- Eval-runner launch-metadata validation pruning is done for the current
+  duplicate direct/sample/live dependency bodies; reopen only with fresh
+  duplicated validation bodies that do not protect a distinct failure surface.
 - Molmo cleanup worker/report tests that assert helper shape, static file
   names, or copied fixture metadata already covered by stronger tests.
 
@@ -236,6 +574,8 @@ Closed or cohesive owners:
   `robot_camera_apple2apple_camera_contract.py`.
 - Native Isaac render diagnostics:
   `robot_camera_apple2apple_native_render.py`.
+- Scene-camera source artifacts:
+  `scene_camera_source_artifacts.py`.
 
 Preserve runner orchestration, top-level manifest/report attachment, capture
 worker boundaries, and artifact schemas unless explicitly selected.
@@ -290,14 +630,10 @@ confidence without postponing a stronger P1 frontier.
 - B1 preview row:
   `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 - Behavior-test fixture-builder work in selected operator-console tests.
-- Stale small cuts: empty camera-labeler maps, `_task_prefix_legacy`, legacy
-  checker flag `--require-canonical-robot-view-camera-control`, duplicated lane
-  prose, and old `hybrid-phase-pipeline` guidance wording.
+- Stale small cuts: duplicated lane prose.
 
-Treat the legacy checker flag as a checker-contract migration, not an
-opportunistic delete. Keep public `camera_labeler` /
-`visual_grounding_pipeline_id` semantics unless a selected slice explicitly
-migrates them.
+Keep public `camera_labeler` / `visual_grounding_pipeline_id` semantics unless
+a selected slice explicitly migrates them.
 
 ## Cleared Or Parked
 

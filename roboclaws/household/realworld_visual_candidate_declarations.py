@@ -25,7 +25,6 @@ from roboclaws.household.visual_grounding import (
 
 RAW_FPV_ONLY_MODE = "raw_fpv_only"
 CAMERA_MODEL_POLICY_MODE = "camera_model_policy"
-MINIMAL_MAP_MODE = "minimal"
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 SIMULATED_CAMERA_MODEL_PROVENANCE = realworld_visual_candidates.SIMULATED_CAMERA_MODEL_PROVENANCE
@@ -34,7 +33,6 @@ _manual_visual_grounding_pipeline = realworld_visual_candidates._manual_visual_g
 
 class VisualCandidateDeclarationContract(Protocol):
     perception_mode: str
-    map_mode: str
     visual_grounding_pipeline_id: str
     visual_grounding_client: Any
     visual_grounding_run_id: str
@@ -254,8 +252,7 @@ def _registered_visual_candidate_declarations(
     for index, candidate in enumerate(candidate_inputs):
         candidate_error = realworld_visual_candidates._visual_candidate_validation_error(
             candidate,
-            require_target_fixture_id=contract.map_mode != MINIMAL_MAP_MODE,
-            map_mode=contract.map_mode,
+            require_target_fixture_id=False,
             perception_mode=contract.perception_mode,
             producer_type=producer_type,
         )
@@ -298,11 +295,9 @@ def _invalid_visual_candidate_declaration_response(
         candidate_error=candidate_error,
         raw_fpv_candidate_recovery=raw_fpv_visual_candidate_recovery(
             source_observation_id=source_observation_id,
-            map_mode=contract.map_mode,
         ),
         recovery_hint=raw_fpv_visual_candidate_recovery_hint(
             source_observation_id=source_observation_id,
-            map_mode=contract.map_mode,
         ),
     )
 
@@ -343,7 +338,6 @@ def _visual_candidate_declaration_response(
             realworld_runtime_map_targets.public_fixture_reference_payload(
                 contract,
                 item,
-                minimal_map_mode=MINIMAL_MAP_MODE,
             )
             for item in declared
         ],
@@ -384,7 +378,6 @@ def simulated_declaration_inputs_for_waypoint(
             contract,
             detection,
             contract.static_fixture_projection(),
-            minimal_map_mode=MINIMAL_MAP_MODE,
         )
         target_fixture_id = str((target or {}).get("fixture_id") or location_id)
         inputs.append(
@@ -546,7 +539,6 @@ def _resolved_destination_fixture_id(
         contract,
         pseudo_detection,
         contract.static_fixture_projection(),
-        minimal_map_mode=MINIMAL_MAP_MODE,
     )
     return str((target or {}).get("fixture_id") or "")
 

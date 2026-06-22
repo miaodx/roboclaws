@@ -60,6 +60,15 @@ class ConsoleLaunchError(ValueError):
     """User-facing launch validation error."""
 
 
+class _JsonSourceError(ValueError):
+    """Internal source error for present launcher JSON artifacts."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(f"{path}: {reason}")
+
+
 @dataclass(frozen=True)
 class LaunchRequest:
     world_id: str = ""
@@ -241,37 +250,35 @@ def start_console_run(
     if not readiness["can_start"]:
         raise ConsoleLaunchError(str(readiness["blocker"]))
 
-    run_id = _new_run_id(route)
-    run_dir = console_output_root(root) / "runs" / run_id
-    if route.supports_operator_steer:
-        overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
-    selected_intent = request.intent_id or route.intent_id
-    launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
-    preview = build_prompt_preview(
-        route,
-        PromptPreviewRequest(
-            intent_id=selected_intent,
-            prompt=launch_prompt,
-            overrides=overrides,
-            env_overrides=prompt_preview_env(run_env, env_overrides),
-        ),
-    )
-    argv = build_launch_argv(
-        route,
-        root=root,
-        run_id=run_id,
-        intent=selected_intent,
-        prompt=launch_prompt,
-        overrides=overrides,
-    )
-    mcp_host, mcp_port = requested_mcp_endpoint(overrides)
-    mcp_url = f"http://{mcp_host}:{mcp_port}/mcp"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    log_path = run_dir / "console-launch.log"
+    run_id, run_dir = _reserve_new_run_dir(root, route)
     lock = ResourceLock(root, route.lock_name)
-    lock_state = lock.acquire(run_id=run_id)
     process: subprocess.Popen[bytes] | None = None
     try:
+        if route.supports_operator_steer:
+            overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
+        selected_intent = request.intent_id or route.intent_id
+        launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
+        preview = build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                intent_id=selected_intent,
+                prompt=launch_prompt,
+                overrides=overrides,
+                env_overrides=prompt_preview_env(run_env, env_overrides),
+            ),
+        )
+        argv = build_launch_argv(
+            route,
+            root=root,
+            run_id=run_id,
+            intent=selected_intent,
+            prompt=launch_prompt,
+            overrides=overrides,
+        )
+        mcp_host, mcp_port = requested_mcp_endpoint(overrides)
+        mcp_url = f"http://{mcp_host}:{mcp_port}/mcp"
+        log_path = run_dir / "console-launch.log"
+        lock_state = lock.acquire(run_id=run_id)
         with log_path.open("ab") as log_stream:
             process = subprocess.Popen(
                 argv,
@@ -286,6 +293,7 @@ def start_console_run(
         if process is not None:
             process.terminate()
         lock.release(run_id=run_id, force=True)
+        _remove_empty_reserved_run_dir(run_dir)
         raise
     started_at_epoch = time.time()
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -424,20 +432,32 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     state_path = run_dir / "operator_state.json"
     if not state_path.exists():
         raise ConsoleLaunchError(f"unknown run id: {run_id}")
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    try:
+        state = _read_json_source(state_path)
+    except _JsonSourceError as exc:
+        raise _operator_stop_source_error(exc) from exc
     display_run_dir = resolve_display_run_dir(run_dir)
     terminal_phase = "human_takeover_stop" if emergency else "stopped_by_operator"
-    existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)
+    try:
+        existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)
+        existing_terminal_reason = (
+            _existing_terminal_reason(display_run_dir, state) if existing_terminal_phase else ""
+        )
+    except _JsonSourceError as exc:
+        raise _operator_stop_source_error(exc) from exc
     _stop_live_child_run(display_run_dir)
     pid = state.get("pid")
     _terminate_process_group(pid if isinstance(pid, int) else None)
     if existing_terminal_phase:
         state["phase"] = existing_terminal_phase
-        state["terminal_reason"] = _existing_terminal_reason(display_run_dir, state) or (
+        state["terminal_reason"] = existing_terminal_reason or (
             state.get("terminal_reason") or existing_terminal_phase
         )
     else:
-        _mark_live_child_stopped(display_run_dir, terminal_phase)
+        try:
+            _mark_live_child_stopped(display_run_dir, terminal_phase)
+        except _JsonSourceError as exc:
+            raise _operator_stop_source_error(exc) from exc
         state["phase"] = terminal_phase
         state["terminal_reason"] = state["phase"]
     state["stopped_at_epoch"] = time.time()
@@ -450,15 +470,31 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     return state
 
 
+def _operator_stop_source_error(error: _JsonSourceError) -> ConsoleLaunchError:
+    return ConsoleLaunchError(f"operator stop source error: {error.path.name} {error.reason}")
+
+
 def _route_lock_readiness(
     root: Path,
     route: ConsoleLaunchSelection,
 ) -> tuple[Any, dict[str, Any] | None, str, str]:
     lock = ResourceLock(root, route.lock_name)
     lock_state = lock.read()
-    if _release_terminal_owner_lock(root, lock_state):
+    lock_source_error = ""
+    try:
+        released_terminal_lock = _release_terminal_owner_lock(root, lock_state)
+    except _JsonSourceError as exc:
+        released_terminal_lock = False
+        lock_source_error = _lock_source_error_message(exc)
+    if released_terminal_lock:
         lock_state = lock.read()
-    attachable_run = _attachable_run_payload(root, lock_state)
+    try:
+        attachable_run = _attachable_run_payload(root, lock_state)
+    except _JsonSourceError as exc:
+        attachable_run = None
+        lock_source_error = _lock_source_error_message(exc)
+    if lock_source_error:
+        return lock_state, attachable_run, lock_source_error, "source_error"
     lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
     if not lock_active:
         return lock_state, attachable_run, "", ""
@@ -470,6 +506,10 @@ def _route_lock_readiness(
     else:
         blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
     return lock_state, attachable_run, blocker, "locked"
+
+
+def _lock_source_error_message(error: _JsonSourceError) -> str:
+    return f"Backend lock owner source error: {error.path.name} {error.reason}"
 
 
 def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
@@ -658,13 +698,10 @@ def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | Non
     state_path = run_dir / "operator_state.json"
     if not state_path.exists():
         return None
-    try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    state = _read_json_source(state_path)
     route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
     display_run_dir = resolve_display_run_dir(run_dir)
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     if _existing_terminal_phase(display_run_dir, state):
         return None
     active_pid = _live_run_pid(display_run_dir) or lock_state.pid
@@ -723,9 +760,10 @@ def _release_terminal_owner_lock(root: Path, lock_state: Any) -> bool:
     if not lock_state.held or not lock_state.owner_run_id:
         return False
     run_dir = console_output_root(root) / "runs" / lock_state.owner_run_id
-    state = _read_json(run_dir / "operator_state.json")
-    if not state:
+    state_path = run_dir / "operator_state.json"
+    if not state_path.exists():
         return False
+    state = _read_json_source(state_path)
     display_run_dir = resolve_display_run_dir(run_dir)
     if not _existing_terminal_phase(display_run_dir, state):
         return False
@@ -734,7 +772,7 @@ def _release_terminal_owner_lock(root: Path, lock_state: Any) -> bool:
 
 
 def _existing_terminal_phase(display_run_dir: Path, state: dict[str, Any]) -> str:
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     for payload in (live_status, state):
         phase = str(payload.get("phase") or "").strip().lower()
         if phase in TERMINAL_RUN_PHASES:
@@ -743,7 +781,7 @@ def _existing_terminal_phase(display_run_dir: Path, state: dict[str, Any]) -> st
 
 
 def _existing_terminal_reason(display_run_dir: Path, state: dict[str, Any]) -> str:
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     for payload in (live_status, state):
         for key in ("terminal_reason", "reason", "error_reason", "terminate_reason"):
             value = payload.get(key)
@@ -775,7 +813,7 @@ def _stop_live_child_run(display_run_dir: Path) -> None:
 def _mark_live_child_stopped(display_run_dir: Path, phase: str) -> None:
     display_run_dir.mkdir(parents=True, exist_ok=True)
     status_path = display_run_dir / "live_status.json"
-    payload = _read_json(status_path)
+    payload = _read_optional_json_source(status_path)
     payload.update(
         {
             "phase": phase,
@@ -917,6 +955,24 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _read_optional_json_source(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return _read_json_source(path)
+
+
+def _read_json_source(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise _JsonSourceError(path, f"contains invalid JSON at line {exc.lineno}") from exc
+    except OSError as exc:
+        raise _JsonSourceError(path, f"cannot be read: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _JsonSourceError(path, "must contain a JSON object")
+    return payload
+
+
 def _pid_exists(pid: int) -> bool:
     return pid_is_active(pid)
 
@@ -994,6 +1050,28 @@ def _parse_nonnegative_int(raw: str, key: str) -> int:
 def _new_run_id(route: ConsoleLaunchSelection) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     return f"{timestamp}-{_safe_run_id_suffix(route.id)}"
+
+
+def _reserve_new_run_dir(root: Path, route: ConsoleLaunchSelection) -> tuple[str, Path]:
+    runs_dir = console_output_root(root) / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    base_run_id = _new_run_id(route)
+    for suffix in ("", *(f"-{index}" for index in range(2, 100))):
+        run_id = f"{base_run_id}{suffix}"
+        run_dir = runs_dir / run_id
+        try:
+            run_dir.mkdir()
+        except FileExistsError:
+            continue
+        return run_id, run_dir
+    raise ConsoleLaunchError(f"could not allocate unique operator-console run id: {base_run_id}")
+
+
+def _remove_empty_reserved_run_dir(run_dir: Path) -> None:
+    try:
+        run_dir.rmdir()
+    except OSError:
+        pass
 
 
 def _safe_run_id_suffix(raw: str) -> str:

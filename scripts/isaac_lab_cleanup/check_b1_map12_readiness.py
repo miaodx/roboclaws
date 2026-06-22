@@ -72,22 +72,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    payload = build_readiness_artifact(args.b1_root, args.map12_root)
-    if args.alignment_artifact is not None:
-        alignment_payload = json.loads(args.alignment_artifact.read_text(encoding="utf-8"))
-        payload = readiness_artifact_with_alignment(
-            payload,
-            alignment_payload,
-            alignment_artifact_path=args.alignment_artifact,
-        )
-    navigation_payload: dict[str, Any] | None = None
-    if args.navigation_artifact is not None:
-        navigation_payload = json.loads(args.navigation_artifact.read_text(encoding="utf-8"))
-        payload = readiness_artifact_with_navigation(
-            payload,
-            navigation_payload,
-            navigation_artifact_path=args.navigation_artifact,
-        )
+    try:
+        payload = build_readiness_artifact(args.b1_root, args.map12_root)
+        if args.alignment_artifact is not None:
+            alignment_payload = _read_json_object(
+                args.alignment_artifact,
+                label="alignment artifact",
+            )
+            payload = readiness_artifact_with_alignment(
+                payload,
+                alignment_payload,
+                alignment_artifact_path=args.alignment_artifact,
+            )
+        navigation_payload: dict[str, Any] | None = None
+        if args.navigation_artifact is not None:
+            navigation_payload = _read_json_object(
+                args.navigation_artifact,
+                label="navigation artifact",
+            )
+            payload = readiness_artifact_with_navigation(
+                payload,
+                navigation_payload,
+                navigation_artifact_path=args.navigation_artifact,
+            )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     errors = validate_readiness_artifact(
         payload,
         require_navigation_success=bool(args.require_navigation_success),
@@ -120,6 +130,18 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0 if not errors else 2
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
@@ -871,14 +893,42 @@ def validate_navigation_smoke_artifact(
         "navigation waypoint count must be at least two",
         errors,
     )
-    pose_keys = {
-        (
-            round(float(_dict(item.get("robot_pose")).get("x") or 0.0), 3),
-            round(float(_dict(item.get("robot_pose")).get("y") or 0.0), 3),
+    errors.extend(
+        validate_robot_view_waypoint_evidence(
+            waypoints,
+            require_files=require_files,
+            expected_scene_usd=DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+            expected_scene_usd_label="B1_floor2_slow visual route",
+            required_views=("fpv",),
+            reviewable_views=("fpv", "chase"),
+            require_distinct_robot_poses=True,
+            distinct_pose_error="navigation waypoint robot poses must be distinct",
         )
-        for item in waypoints
-    }
-    _require(len(pose_keys) >= 2, "navigation waypoint robot poses must be distinct", errors)
+    )
+    return errors
+
+
+def validate_robot_view_waypoint_evidence(
+    waypoints: list[dict[str, Any]],
+    *,
+    require_files: bool = False,
+    expected_scene_usd: Path | str | None = None,
+    expected_scene_usd_label: str = "",
+    required_views: tuple[str, ...] = ("fpv",),
+    reviewable_views: tuple[str, ...] = ("fpv", "chase"),
+    require_distinct_robot_poses: bool = False,
+    distinct_pose_error: str = "waypoint robot poses must be distinct",
+) -> list[str]:
+    errors: list[str] = []
+    if require_distinct_robot_poses:
+        pose_keys = {
+            (
+                round(float(_dict(item.get("robot_pose")).get("x") or 0.0), 3),
+                round(float(_dict(item.get("robot_pose")).get("y") or 0.0), 3),
+            )
+            for item in waypoints
+        }
+        _require(len(pose_keys) >= 2, distinct_pose_error, errors)
     for index, item in enumerate(waypoints, start=1):
         views = _dict(item.get("views"))
         _require(
@@ -896,23 +946,30 @@ def validate_navigation_smoke_artifact(
             f"waypoint {index} requires reviewed correspondence transform source",
             errors,
         )
-        _require(
-            str(item.get("scene_usd") or "") == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
-            f"waypoint {index} must render B1_floor2_slow visual route",
-            errors,
-        )
-        _require(bool(views.get("fpv")), f"waypoint {index} missing FPV image", errors)
+        if expected_scene_usd is not None:
+            _require(
+                str(item.get("scene_usd") or "") == str(expected_scene_usd),
+                f"waypoint {index} must render {expected_scene_usd_label or expected_scene_usd}",
+                errors,
+            )
+        for view_name in required_views:
+            _require(
+                bool(views.get(view_name)),
+                f"waypoint {index} missing {view_name.upper()} image",
+                errors,
+            )
         if require_files:
             for view_name, raw_path in views.items():
                 if not raw_path:
                     continue
                 path = Path(str(raw_path))
+                exists = path.is_file()
                 _require(
-                    path.is_file(),
+                    exists,
                     f"waypoint {index} view {view_name} missing: {path}",
                     errors,
                 )
-                if view_name in {"fpv", "chase"}:
+                if exists and view_name in set(reviewable_views):
                     errors.extend(
                         f"waypoint {index} {view_name}: {error}"
                         for error in reviewable_image_errors(path)

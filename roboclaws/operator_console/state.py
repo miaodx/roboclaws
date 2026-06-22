@@ -58,6 +58,23 @@ class ArtifactLink:
         }
 
 
+@dataclass(frozen=True)
+class JsonSourceError:
+    """Operator-visible source error for a present JSON artifact."""
+
+    path: Path
+    label: str
+    reason: str
+
+    def to_payload(self, root: Path) -> dict[str, str]:
+        return {
+            "label": self.label,
+            "path": str(self.path),
+            "href": _artifact_href(root, self.path) if self.path.exists() else "",
+            "reason": self.reason,
+        }
+
+
 def derive_operator_state(
     root: Path, run_dir: Path, route: ConsoleLaunchSelection | None = None
 ) -> dict[str, Any]:
@@ -65,14 +82,30 @@ def derive_operator_state(
 
     run_dir = run_dir.resolve()
     display_run_dir = resolve_display_run_dir(run_dir)
-    status = _read_json(run_dir / "operator_state.json")
-    live_status = _read_json(_latest_existing(display_run_dir, ("live_status.json",)))
-    run_result = _read_json(_latest_existing(display_run_dir, ("run_result.json",)))
+    json_sources = (
+        _read_json_source(run_dir / "operator_state.json", label="Operator State"),
+        _read_json_source(
+            _latest_existing(display_run_dir, ("live_status.json",)),
+            label="Live Status",
+        ),
+        _read_json_source(
+            _latest_existing(display_run_dir, ("run_result.json",)),
+            label="Run Result",
+        ),
+    )
+    status = _json_source_payload(json_sources[0])
+    live_status = _json_source_payload(json_sources[1])
+    run_result = _json_source_payload(json_sources[2])
     launch_failure = _wrapper_launch_failure(
         status, live_status, run_result, run_dir, display_run_dir
     )
     trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
-    latest_trace = _last_robot_tool_jsonl(trace_path) or _last_jsonl(trace_path)
+    trace_rows, trace_source_errors = _read_jsonl_source(trace_path, label="Trace")
+    source_errors = (
+        *(source for source in json_sources if isinstance(source, JsonSourceError)),
+        *trace_source_errors,
+    )
+    latest_trace = _last_robot_tool_jsonl(trace_rows) or _last_jsonl(trace_rows)
     camera_state = _camera_angle_summary(trace_path)
     phase = str(
         live_status.get("phase")
@@ -85,18 +118,27 @@ def derive_operator_state(
     stale_live_failure = _stale_live_status_failure(live_status, run_result)
     if stale_live_failure:
         phase = "failed"
+    agent_message, agent_source_errors = _latest_agent_message(display_run_dir)
+    source_errors = (*source_errors, *agent_source_errors)
+    source_failure = _json_source_failure(source_errors)
+    if source_failure:
+        phase = "failed"
     checker = checker_status(
         checker_log=_latest_existing(display_run_dir, ("checker.log",)),
         report=_latest_existing(display_run_dir, ("report.html",)),
         run_result=run_result,
         phase=phase,
         launch_failure_reason=str(
-            stale_live_failure.get("terminal_reason") or launch_failure.get("terminal_reason") or ""
+            source_failure.get("terminal_reason")
+            or stale_live_failure.get("terminal_reason")
+            or launch_failure.get("terminal_reason")
+            or ""
         ),
     )
     terminal_status = dict(status)
     terminal_status.update(launch_failure)
     terminal_status.update(stale_live_failure)
+    terminal_status.update(source_failure)
     terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
     artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
@@ -105,7 +147,6 @@ def derive_operator_state(
         display_run_dir,
     )
     public_result = _public_run_result_summary(run_result)
-    latest_agent_message = _latest_agent_message(display_run_dir)
     prompt_preview = _prompt_preview(status, live_status, run_result, display_run_dir)
     run_id = str(status.get("run_id") or run_dir.name)
     from roboclaws.operator_console.interactions import operator_message_state
@@ -139,7 +180,7 @@ def derive_operator_state(
         "elapsed_seconds": _elapsed_seconds(status),
         "latest_action": _latest_action(latest_trace, run_result),
         "latest_public_decision_evidence": _decision_evidence(
-            latest_trace, run_result, latest_agent_message
+            latest_trace, run_result, agent_message
         ),
         "latest_tool_call": _tool_call_summary(latest_trace),
         "camera_state": camera_state,
@@ -147,6 +188,7 @@ def derive_operator_state(
         "latest_view_assets": latest_view_assets,
         "checker_status": checker,
         "terminal_reason": terminal_reason,
+        "source_errors": [error.to_payload(root) for error in source_errors],
         "public_run_result": public_result,
         "prompt_preview": prompt_preview,
         "operator_prompt": prompt_preview.get("operator_prompt") or "",
@@ -284,13 +326,40 @@ def _live_status_owner_pid(live_status: dict[str, Any]) -> int | None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    source = _read_json_source(path, label=path.name)
+    return _json_source_payload(source)
+
+
+def _read_json_source(path: Path, *, label: str) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except json.JSONDecodeError as exc:
+        return JsonSourceError(
+            path=path.resolve(),
+            label=label,
+            reason=f"invalid JSON at line {exc.lineno} column {exc.colno}",
+        )
+    except OSError as exc:
+        return JsonSourceError(path=path.resolve(), label=label, reason=str(exc))
+    if not isinstance(payload, dict):
+        return JsonSourceError(path=path.resolve(), label=label, reason="expected JSON object")
+    return payload
+
+
+def _json_source_payload(source: dict[str, Any] | JsonSourceError) -> dict[str, Any]:
+    return source if isinstance(source, dict) else {}
+
+
+def _json_source_failure(errors: tuple[JsonSourceError, ...]) -> dict[str, str]:
+    if not errors:
         return {}
-    return payload if isinstance(payload, dict) else {}
+    labels = ", ".join(dict.fromkeys(error.label for error in errors))
+    return {
+        "phase": "failed",
+        "terminal_reason": f"operator state source error: {labels}",
+    }
 
 
 def _prompt_preview(
@@ -347,46 +416,58 @@ def _prompt_preview(
     }
 
 
-def _last_jsonl(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-    for line in reversed(lines):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+def _last_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    for payload in reversed(rows):
         if isinstance(payload, dict):
             return payload
     return {}
 
 
-def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
+def _read_jsonl_source(
+    path: Path,
+    *,
+    label: str,
+) -> tuple[list[dict[str, Any]], tuple[JsonSourceError, ...]]:
     if not path.exists():
-        return {}
+        return [], ()
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-    payloads: list[dict[str, Any]] = []
-    for line in lines:
+    except OSError as exc:
+        return [], (JsonSourceError(path=path.resolve(), label=label, reason=str(exc)),)
+    rows: list[dict[str, Any]] = []
+    source_errors: list[JsonSourceError] = []
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            source_errors.append(
+                JsonSourceError(
+                    path=path.resolve(),
+                    label=label,
+                    reason=f"invalid JSON at line {line_number} column {exc.colno}",
+                )
+            )
             continue
-        if isinstance(payload, dict):
-            payloads.append(payload)
-    for index in range(len(payloads) - 1, -1, -1):
-        payload = payloads[index]
+        if not isinstance(payload, dict):
+            source_errors.append(
+                JsonSourceError(
+                    path=path.resolve(),
+                    label=label,
+                    reason=f"expected JSON object at line {line_number}",
+                )
+            )
+            continue
+        rows.append(payload)
+    return rows, tuple(source_errors)
+
+
+def _last_robot_tool_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    for index in range(len(rows) - 1, -1, -1):
+        payload = rows[index]
         if isinstance(payload, dict) and _is_robot_tool_trace(payload):
-            return _paired_tool_trace(payload, payloads[:index])
+            return _paired_tool_trace(payload, rows[:index])
     return {}
 
 
@@ -457,34 +538,32 @@ def _float_or_zero(value: Any) -> float:
     return round(number, 3)
 
 
-def _latest_agent_message(run_dir: Path) -> str:
+def _latest_agent_message(run_dir: Path) -> tuple[str, tuple[JsonSourceError, ...]]:
     event_paths: list[Path] = []
     for pattern in AGENT_EVENT_GLOBS:
         event_paths.extend(path for path in run_dir.glob(pattern) if path.is_file())
     event_paths = sorted(set(event_paths), key=_safe_mtime)
+    source_errors: list[JsonSourceError] = []
     for path in reversed(event_paths):
-        message = _last_agent_message(path)
+        rows, row_errors = _read_jsonl_source(path, label=_agent_event_label(path))
+        source_errors.extend(row_errors)
+        message = _last_agent_message(rows)
         if message:
-            return message
-    return ""
+            return message, tuple(source_errors)
+    return "", tuple(source_errors)
 
 
-def _last_agent_message(path: Path) -> str:
-    if not path.exists():
-        return ""
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return ""
-    for line in reversed(lines):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
+def _agent_event_label(path: Path) -> str:
+    name = path.name
+    if name.startswith("claude-events"):
+        return "Claude Events"
+    if name.startswith("openai-agents-events"):
+        return "OpenAI Agents Events"
+    return "Agent Events"
+
+
+def _last_agent_message(rows: list[dict[str, Any]]) -> str:
+    for payload in reversed(rows):
         text = _agent_message_text(payload)
         if text:
             return text

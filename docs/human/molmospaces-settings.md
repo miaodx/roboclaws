@@ -52,7 +52,7 @@ for fast contract checks, but it has no robot camera timeline.
 | Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal producer mode behind `evidence_lane=camera-grounded-labels`, using the shared Model-Declared Observation schema. |
 | Visuals | `--include-robot --record-robot-views` | Capture RBY1M robot-view timeline. | Required for FPV/chase/map/verification report. |
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
-| Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
+| Map bundle | `assets/maps/molmospaces/<scene_source>/<scene_index>` | Selected prebuilt Nav2-shaped static map bundle for the exact scene. | Default for non-smoke Molmo lanes. Missing bundles fail before cleanup startup. |
 | Map bundle | `map_bundle=<path-or-assets-id>` | Operator override for a prepared environment bundle. | Fails before cleanup startup if missing or invalid. |
 | Static fixture projection artifact | `room_only` | Public room-level static fixture projection in map/report artifacts. | Current default artifact shape; not an active MCP tool. |
 | Static fixture projection artifact | `exact_fixtures` | Easier exact static fixture projection. | Historical/debug artifact only. |
@@ -458,8 +458,12 @@ script or checker. The `molmo::*` report recipes below are convenience wrappers
 over the private household cleanup implementation runner; they are not a
 separate public cleanup dispatcher.
 Non-smoke cleanup profiles require a selected prebuilt Nav2 map bundle; the
-facade defaults to `assets/maps/molmospaces-procthor-val-0-7`, and `map_bundle=...`
-accepts either a path or an environment id under `assets/maps`.
+facade resolves `map_bundle=auto` to
+`assets/maps/molmospaces/<scene_source>/<scene_index>`, and `map_bundle=...`
+accepts either a path or an environment id under `assets/maps`. Generate a scene
+bundle with `scripts/maps/export_bundle.py --molmospaces-scene-source <source>
+--molmospaces-scene-index <index>` before launching a new scene; `map_bundle=none`
+is not a valid non-smoke simulator path.
 
 Convenience report recipes:
 

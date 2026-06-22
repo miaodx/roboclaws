@@ -99,6 +99,44 @@ def test_eval_harness_row_reflects_failed_eval_aggregate(tmp_path: Path) -> None
     }
 
 
+def test_eval_harness_row_fails_aloud_for_malformed_eval_results_json(
+    tmp_path: Path,
+) -> None:
+    results_path = tmp_path / "eval_results.json"
+    results_path.write_text("{not json", encoding="utf-8")
+    row = {
+        "row_kind": "eval_suite",
+        "status": "ran",
+        "outcome": "passed",
+        "output_artifacts": [str(results_path)],
+    }
+
+    runner._classify_eval_result_row(row)
+
+    assert row["outcome"] == "failed"
+    assert row["failure_class"] == "harness_bug_unclassified"
+    assert "eval_results.json JSON parse error" in row["eval_results_error"]
+
+
+def test_eval_harness_row_fails_aloud_for_non_object_eval_results_json(
+    tmp_path: Path,
+) -> None:
+    results_path = tmp_path / "eval_results.json"
+    results_path.write_text("[]\n", encoding="utf-8")
+    row = {
+        "row_kind": "eval_suite",
+        "status": "ran",
+        "outcome": "passed",
+        "output_artifacts": [str(results_path)],
+    }
+
+    runner._classify_eval_result_row(row)
+
+    assert row["outcome"] == "failed"
+    assert row["failure_class"] == "harness_bug_unclassified"
+    assert "expected object, got list" in row["eval_results_error"]
+
+
 def test_eval_harness_exit_fails_for_failed_eval_outcome() -> None:
     manifest = {
         "rows": [

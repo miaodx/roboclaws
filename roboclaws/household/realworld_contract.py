@@ -49,6 +49,7 @@ from roboclaws.household.visual_scan_guidance import (
     noop_camera_adjustment_hint,
     visual_scan_payload,
 )
+from roboclaws.maps.bundle import static_landmarks_from_fixture_projection
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -58,9 +59,6 @@ INSPECTION_OBSERVATION_SCHEMA = "target_inspection_observation_v1"
 CLEANUP_WORKLIST_SCHEMA = "cleanup_worklist_v1"
 CLEANUP_POLICY_TRACE_SCHEMA = "cleanup_policy_trace_v1"
 REAL_ROBOT_READINESS_SCHEMA = "real_robot_readiness_v1"
-MINIMAL_MAP_MODE = "minimal"
-DEFAULT_MAP_MODE = MINIMAL_MAP_MODE
-REALWORLD_MAP_MODES = frozenset({MINIMAL_MAP_MODE})
 DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
 VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
@@ -200,14 +198,13 @@ class RealWorldCleanupContract:
         visual_grounding_artifact_base_dir: str | Path | None = None,
         visual_grounding_run_id: str = "",
         runtime_map_prior: dict[str, Any] | None = None,
-        map_mode: str = DEFAULT_MAP_MODE,
         evidence_lane: str | None = None,
         public_acceptance_config: dict[str, Any] | None = None,
+        allow_synthetic_map_projection: bool = False,
     ) -> None:
         realworld_contract_init.validate_contract_options(
             static_fixture_projection_mode=static_fixture_projection_mode,
             perception_mode=perception_mode,
-            map_mode=map_mode,
         )
         self.contract = contract
         self.backend = contract.backend
@@ -215,7 +212,6 @@ class RealWorldCleanupContract:
         self.task_prompt = task_prompt
         self.static_fixture_projection_mode = static_fixture_projection_mode
         self.perception_mode = perception_mode
-        self.map_mode = map_mode
         realworld_contract_init.init_profile_and_acceptance(
             self,
             evidence_lane,
@@ -228,7 +224,11 @@ class RealWorldCleanupContract:
             visual_grounding_artifact_base_dir=visual_grounding_artifact_base_dir,
             visual_grounding_run_id=visual_grounding_run_id,
         )
-        realworld_contract_init.init_map_projection(self, map_bundle_dir)
+        realworld_contract_init.init_map_projection(
+            self,
+            map_bundle_dir,
+            allow_synthetic_map_projection=allow_synthetic_map_projection,
+        )
         realworld_contract_init.init_public_map_projection(self)
         self._current_waypoint_id = realworld_contract_init.initial_waypoint_id(self)
         realworld_contract_init.init_runtime_state(self, runtime_map_prior)
@@ -282,15 +282,13 @@ class RealWorldCleanupContract:
         ]
 
     def public_receptacles_by_id(self) -> dict[str, dict[str, Any]]:
-        if self.map_mode == MINIMAL_MAP_MODE:
-            return {
-                str(item["fixture_id"]): dict(item)
-                for item in realworld_runtime_map_targets.public_runtime_fixture_candidates(
-                    self,
-                    assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-                )
-            }
-        return {fixture_id: dict(fixture) for fixture_id, fixture in self._fixtures.items()}
+        return {
+            str(item["fixture_id"]): dict(item)
+            for item in realworld_runtime_map_targets.public_runtime_fixture_candidates(
+                self,
+                assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+            )
+        }
 
     def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None:
         return realworld_runtime_map_targets.internal_fixture_id_for_public_reference(
@@ -298,21 +296,11 @@ class RealWorldCleanupContract:
             fixture_id,
         )
 
-    def _minimal_metric_map(self) -> dict[str, Any]:
-        return realworld_contract_projection._minimal_metric_map(
-            self,
-            realworld_contract=REALWORLD_CONTRACT,
-            real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-            minimal_map_mode=MINIMAL_MAP_MODE,
-            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-        )
-
     def metric_map(self) -> dict[str, Any]:
         return realworld_contract_projection._metric_map(
             self,
             realworld_contract=REALWORLD_CONTRACT,
             real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-            minimal_map_mode=MINIMAL_MAP_MODE,
             assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 
@@ -320,17 +308,11 @@ class RealWorldCleanupContract:
         return realworld_contract_projection._static_fixture_projection(
             self,
             realworld_contract=REALWORLD_CONTRACT,
-            minimal_map_mode=MINIMAL_MAP_MODE,
             assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 
-    def _minimal_static_fixture_projection(self) -> dict[str, Any]:
-        return realworld_contract_projection._minimal_static_fixture_projection(
-            self,
-            realworld_contract=REALWORLD_CONTRACT,
-            minimal_map_mode=MINIMAL_MAP_MODE,
-            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-        )
+    def source_map_static_fixture_projection(self) -> dict[str, Any]:
+        return realworld_contract_projection._source_map_static_fixture_projection(self)
 
     def navigate_to_room(self, room_id: str) -> dict[str, Any]:
         room = next((item for item in self._rooms if item["room_id"] == room_id), None)
@@ -346,7 +328,7 @@ class RealWorldCleanupContract:
         start_waypoint_id = self._current_waypoint_id
         route = validate_metric_map_route(
             self.metric_map(),
-            self.static_fixture_projection(),
+            static_landmarks_from_fixture_projection(self.static_fixture_projection()),
             start_waypoint_id=start_waypoint_id,
             goal_waypoint_id=waypoint_id,
         )
@@ -508,7 +490,6 @@ class RealWorldCleanupContract:
         realworld_runtime_map_targets.seed_public_fixture_anchor_ids_for_waypoint(
             self,
             waypoint,
-            minimal_map_mode=MINIMAL_MAP_MODE,
         )
         if self.perception_mode in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
             raw_observation = self._record_raw_fpv_observation(
@@ -1076,7 +1057,6 @@ class RealWorldCleanupContract:
             realworld_contract=REALWORLD_CONTRACT,
             runtime_metric_map_schema=RUNTIME_METRIC_MAP_SCHEMA,
             cleanup_worklist_schema=CLEANUP_WORKLIST_SCHEMA,
-            minimal_map_mode=MINIMAL_MAP_MODE,
             visible_object_detections_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
             sanitized_visible_object_detections_provenance=(
                 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
@@ -1101,7 +1081,6 @@ class RealWorldCleanupContract:
         return realworld_contract_payloads.agent_visible_detection_payload(
             self,
             detection,
-            minimal_map_mode=MINIMAL_MAP_MODE,
             sanitized_visible_object_detections_provenance=(
                 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
             ),
@@ -1129,7 +1108,6 @@ class RealWorldCleanupContract:
             self,
             internal_fixture_id,
             requested_fixture_id,
-            minimal_map_mode=MINIMAL_MAP_MODE,
         )
 
     def _public_fixture_reference_payload(self, value: Any) -> Any:
@@ -1161,7 +1139,6 @@ class RealWorldCleanupContract:
             self,
             static_fixture_projection=static_fixture_projection,
             cleanup_worklist_schema=CLEANUP_WORKLIST_SCHEMA,
-            minimal_map_mode=MINIMAL_MAP_MODE,
             non_actionable_handle_states=_NON_ACTIONABLE_HANDLE_STATES,
             candidate_actionability_status=_candidate_actionability_status,
             candidate_state=_candidate_state,
@@ -1211,7 +1188,6 @@ class RealWorldCleanupContract:
             self,
             detection,
             static_fixture_projection,
-            minimal_map_mode=MINIMAL_MAP_MODE,
         )
 
     def attach_raw_fpv_observation_artifact(
@@ -1382,7 +1358,7 @@ class RealWorldCleanupContract:
                 and _candidate_state(detection) == CANDIDATE_STATE_NAVIGATION_AUTHORIZED
             ),
             "candidate_source": "public_semantic_anchor"
-            if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
+            if candidate_fixture_id
             else "public_category_fixture_affordance",
             "recommended_tool": _recommended_place_tool(
                 internal_candidate_fixture_id,
@@ -1690,21 +1666,18 @@ class RealWorldCleanupContract:
         generated = self._generated_inspection_waypoints.get(str(waypoint_id))
         if generated is not None:
             return generated
-        if self.map_mode == MINIMAL_MAP_MODE:
-            public_waypoint = next(
-                (item for item in self._public_waypoints if item["waypoint_id"] == waypoint_id),
-                None,
-            )
-            if public_waypoint is not None:
-                return public_waypoint
+        public_waypoint = next(
+            (item for item in self._public_waypoints if item["waypoint_id"] == waypoint_id),
+            None,
+        )
+        if public_waypoint is not None:
+            return public_waypoint
         return next((item for item in self._waypoints if item["waypoint_id"] == waypoint_id), None)
 
     def _private_waypoint_for_public_waypoint(self, waypoint: dict[str, Any]) -> dict[str, Any]:
         if str(waypoint.get("waypoint_source") or "") == "generated_target_inspection_candidate":
             mapped = self._private_waypoint_by_public_id.get(str(waypoint.get("waypoint_id") or ""))
             return mapped or waypoint
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return waypoint
         return (
             self._private_waypoint_by_public_id.get(str(waypoint.get("waypoint_id") or ""))
             or waypoint
@@ -1867,14 +1840,12 @@ def _visual_candidate_validation_error(
     candidate: Any,
     *,
     require_target_fixture_id: bool = True,
-    map_mode: str = MINIMAL_MAP_MODE,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     producer_type: str = "",
 ) -> dict[str, str] | None:
     return realworld_visual_candidates._visual_candidate_validation_error(
         candidate,
         require_target_fixture_id=require_target_fixture_id,
-        map_mode=map_mode,
         perception_mode=perception_mode,
         producer_type=producer_type,
     )
@@ -1914,7 +1885,6 @@ def cleanup_policy_trace_from_events(
         agent_view,
         builder=_cleanup_policy_trace_from_events,
         schema=CLEANUP_POLICY_TRACE_SCHEMA,
-        minimal_map_mode=MINIMAL_MAP_MODE,
     )
 
 

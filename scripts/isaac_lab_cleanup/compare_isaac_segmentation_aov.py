@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,10 +41,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    comparison = compare_states(
-        control_state_path=args.control_state,
-        candidate_state_path=args.candidate_state,
-    )
+    try:
+        comparison = compare_states(
+            control_state_path=args.control_state,
+            candidate_state_path=args.candidate_state,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     payload = json.dumps(comparison, indent=2, sort_keys=True)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -72,9 +77,14 @@ def compare_states(*, control_state_path: Path, candidate_state_path: Path) -> d
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"state artifact is missing: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"state artifact must contain valid JSON object: {path}: {exc.msg}"
+        ) from exc
     if not isinstance(payload, dict):
-        raise ValueError(f"state artifact is not a JSON object: {path}")
+        raise ValueError(f"state artifact must contain a JSON object: {path}")
     return payload
 
 

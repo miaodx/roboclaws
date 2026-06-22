@@ -31,8 +31,8 @@ def assert_waypoint_honesty(
     )
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
 
-    if metric_map.get("mode") == "minimal":
-        _assert_minimal_trace(
+    if _is_base_navigation_map(metric_map):
+        _assert_base_navigation_map_trace(
             trace,
             report_text,
             open_ended_intent=open_ended_intent,
@@ -61,7 +61,7 @@ def _assert_waypoint(metric_map: dict[str, Any], waypoint: dict[str, Any]) -> No
         "static_map_fixture_coverage",
         "agibot_robot_map_9_static_rehearsal",
     }
-    if metric_map.get("mode") == "minimal":
+    if _is_base_navigation_map(metric_map):
         allowed_sources.add("generated_exploration_candidate")
         allowed_sources.add("generated_target_inspection_candidate")
     assert waypoint.get("waypoint_source") in allowed_sources, waypoint
@@ -116,7 +116,11 @@ def _is_scan_only_trace(
     return cleanup_action_count == 0 and (open_ended_intent or map_build)
 
 
-def _assert_minimal_trace(
+def _is_base_navigation_map(metric_map: dict[str, Any]) -> bool:
+    return bool((metric_map.get("base_navigation_map") or {}).get("enabled"))
+
+
+def _assert_base_navigation_map_trace(
     trace: dict[str, Any],
     report_text: str,
     *,
@@ -129,7 +133,7 @@ def _assert_minimal_trace(
     elif open_ended_intent and int(trace.get("cleanup_action_count") or 0) == 0:
         assert trace.get("loop_style") == "scan_only", trace
     else:
-        _assert_minimal_cleanup_trace(trace)
+        _assert_base_navigation_map_cleanup_trace(trace)
     assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
     assert "generated_exploration_candidate" in report_text, report_text[:500]
 
@@ -140,7 +144,7 @@ def _assert_map_build_scan_only_trace(trace: dict[str, Any]) -> None:
     assert trace.get("cleanup_action_count") == 0, trace
 
 
-def _assert_minimal_cleanup_trace(trace: dict[str, Any]) -> None:
+def _assert_base_navigation_map_cleanup_trace(trace: dict[str, Any]) -> None:
     assert trace.get("loop_style") in {
         "survey_first_cleanup_loop",
         "interleaved_cleanup_loop",

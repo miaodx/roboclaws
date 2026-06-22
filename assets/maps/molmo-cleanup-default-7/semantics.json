@@ -18,7 +18,7 @@
     }
   ],
   "environment_id": "molmo-cleanup-default-7",
-  "fixtures": [
+  "static_landmarks": [
     {
       "affordances": [
         "place"

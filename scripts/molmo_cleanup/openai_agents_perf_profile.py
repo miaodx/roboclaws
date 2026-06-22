@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 from typing import Any
 
@@ -741,12 +742,14 @@ def _float_setting(
     if raw is None:
         raw = env_raw if env_raw not in {None, ""} else default
     value = _number_setting_value(attr, raw, float, "a non-negative number")
-    if value < 0:
-        raise ValueError(f"{attr} must be non-negative")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{attr} must be a finite non-negative number")
     return round(max(0.0, value), 3)
 
 
 def _number_setting_value(attr: str, raw: object, parser: Any, expected: str) -> Any:
+    if isinstance(raw, bool):
+        raise ValueError(f"OpenAI Agents SDK setting {attr} must be {expected}, got {raw!r}")
     try:
         return parser(raw)
     except (TypeError, ValueError) as exc:
@@ -770,9 +773,7 @@ def _bool_arg_setting(
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
-    if raw is None:
-        if env_raw not in {None, ""}:
-            raw = env_raw
+    raw = env_raw if raw is None and env_raw not in {None, ""} else raw
     if raw is None:
         return default
     return _bool_setting_value(raw)

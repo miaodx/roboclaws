@@ -268,8 +268,6 @@ def _base_run_result(
         "planner_uses_private_manifest": False,
         "static_fixture_projection_mode": inputs.static_fixture_projection_mode,
         "perception_mode": inputs.perception_mode,
-        "map_mode": payloads.runtime_metric_map.get("map_mode", inputs.contract.map_mode),
-        "minimal_map_mode": payloads.runtime_metric_map.get("minimal_map_mode", False),
         "runtime_metric_map_prior": _runtime_map_prior_payload(inputs, payloads),
         "camera_labeler": _camera_labeler(inputs),
         "visual_grounding_pipeline_id": inputs.contract.visual_grounding_pipeline_id,

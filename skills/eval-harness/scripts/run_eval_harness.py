@@ -10,6 +10,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.parse
 from pathlib import Path
@@ -17,6 +18,8 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
@@ -32,6 +35,7 @@ ROW_BLOCKER_REQUIREMENT_PRIORITY = {
     "runtime_map_prior": 5,
     "docker": 6,
 }
+RUNTIME_MAP_PRIOR_SOURCE_ROW_ID = "direct-map-build-world-public"
 
 spec = importlib.util.spec_from_file_location("eval_harness_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -139,15 +143,8 @@ def _requirement_blocker(
         return _environment_blocker(".venv/bin/python is missing")
     if requirement == "docker" and shutil.which("docker") is None:
         return _environment_blocker("docker is not on PATH")
-    if requirement == "codex_provider" and not _has_codex_provider(axes):
-        return {
-            "category": "model_or_provider_unavailable",
-            "detail": (
-                "codex-router-responses requires CODEX_BASE_URL and CODEX_API_KEY; "
-                "mimo-mify-responses requires XM_LLM_API_KEY; "
-                "minimax-responses requires MM_API_KEY"
-            ),
-        }
+    if requirement == "codex_provider":
+        return _provider_requirement_blocker(axes)
     if requirement == "openai_agents_package" and not _has_module("agents"):
         return _environment_blocker("openai-agents package is not installed")
     if requirement == "dino_sidecar" and not prior_blockers and not _ensure_dino_sidecar(manifest):
@@ -293,17 +290,27 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
     deadline = time.monotonic() + DETACHED_LIVE_PRODUCT_TIMEOUT_S
     while time.monotonic() <= deadline:
         run_result = run_dir / "run_result.json"
-        if run_result.is_file():
+        live_status = run_dir / "live_status.json"
+        status, source_error = _load_live_status_source(live_status)
+        if source_error:
+            row["status"] = "blocked"
+            row["outcome"] = "blocked"
+            row["blocker_category"] = "environment_blocked"
+            row["blockers"] = [
+                _environment_blocker(f"detached live product row source error: {source_error}")
+            ]
+            _append_output_artifacts(row, live_status, run_dir / "driver.log")
+            return
+        if run_result.is_file() and _detached_live_status_is_complete(status):
             row["status"] = "ran"
             row["outcome"] = "passed"
             _append_output_artifacts(
                 row,
                 run_result,
-                run_dir / "live_status.json",
+                live_status,
                 run_dir / "report.html",
             )
             return
-        status = _load_json(run_dir / "live_status.json")
         exit_status = status.get("exit_status")
         phase = str(status.get("phase") or "").lower()
         if exit_status not in {None, 0} or phase in {"failed", "stopped_by_operator"}:
@@ -316,7 +323,7 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
                     f"{phase or exit_status}"
                 )
             ]
-            _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+            _append_output_artifacts(row, live_status, run_dir / "driver.log")
             return
         time.sleep(1.0)
         run_dir = _discover_live_product_run_dir(run_root) or run_dir
@@ -329,6 +336,19 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
         )
     ]
     _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+
+
+def _detached_live_status_is_complete(status: dict[str, Any]) -> bool:
+    return status.get("exit_status") == 0
+
+
+def _load_live_status_source(path: Path) -> tuple[dict[str, Any], str]:
+    if not path.exists():
+        return {}, ""
+    try:
+        return _load_required_json_object(path, label="live_status"), ""
+    except ValueError as exc:
+        return {}, str(exc)
 
 
 def _is_detached_live_product_row(row: dict[str, Any]) -> bool:
@@ -400,7 +420,13 @@ def _classify_eval_result_row(row: dict[str, Any]) -> None:
     ]
     if not result_paths:
         return
-    payload = _load_json(result_paths[-1])
+    try:
+        payload = _load_required_json_object(result_paths[-1], label="eval_results.json")
+    except ValueError as exc:
+        row["outcome"] = "failed"
+        row["failure_class"] = "harness_bug_unclassified"
+        row["eval_results_error"] = str(exc)
+        return
     aggregate = payload.get("aggregate") if isinstance(payload.get("aggregate"), dict) else {}
     failed = int(aggregate.get("failed") or 0)
     blocked = int(aggregate.get("blocked") or 0)
@@ -428,6 +454,21 @@ def _load_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _load_required_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"{label} source error at {_display_path(path)}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON parse error at {_display_path(path)}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"{label} source error at {_display_path(path)}: expected object, got "
+            f"{type(payload).__name__}"
+        )
+    return payload
+
+
 def _first_failure_class(aggregate: dict[str, Any]) -> str:
     failure_classes = aggregate.get("failure_classes")
     if isinstance(failure_classes, dict) and failure_classes:
@@ -444,13 +485,35 @@ def _command_value(row: dict[str, Any], key: str) -> str:
     return ""
 
 
-def _has_codex_provider(axes: dict[str, Any]) -> bool:
-    profile = str(axes.get("provider_profile") or "codex-router-responses")
-    if profile == "mimo-mify-responses":
-        return bool(os.environ.get("XM_LLM_API_KEY"))
-    if profile == "minimax-responses":
-        return bool(os.environ.get("MM_API_KEY"))
-    return bool(os.environ.get("CODEX_BASE_URL") and os.environ.get("CODEX_API_KEY"))
+def _provider_requirement_blocker(axes: dict[str, Any]) -> dict[str, str] | None:
+    from roboclaws.agents.provider_registry import provider_readiness
+
+    readiness = provider_readiness(
+        agent_engine=str(axes.get("agent_engine") or ""),
+        provider_profile=str(axes.get("provider_profile") or "") or None,
+    )
+    if readiness.get("ok"):
+        return None
+    return {
+        "category": "model_or_provider_unavailable",
+        "detail": _provider_readiness_message(readiness),
+    }
+
+
+def _provider_readiness_message(readiness: dict[str, Any]) -> str:
+    message = str(readiness.get("message") or "").strip()
+    if message:
+        return message
+    missing = [str(item) for item in readiness.get("missing_env") or []]
+    if missing:
+        return (
+            f"{readiness.get('provider_profile') or readiness.get('provider')} "
+            f"requires {', '.join(missing)}"
+        )
+    return (
+        f"provider_profile {readiness.get('provider_profile') or readiness.get('provider')!r} "
+        f"is not ready for agent_engine {readiness.get('agent_engine')!r}"
+    )
 
 
 def _has_module(module_name: str) -> bool:
@@ -579,7 +642,7 @@ def _stop_managed_dino_sidecars() -> None:
 
 def _runtime_prior_available(manifest: dict[str, Any]) -> bool:
     for row in manifest.get("rows") or []:
-        if row.get("row_id") != "direct-map-build-world-oracle":
+        if row.get("row_id") != RUNTIME_MAP_PRIOR_SOURCE_ROW_ID:
             continue
         if row.get("status") != "ran" or row.get("outcome") != "passed":
             return False

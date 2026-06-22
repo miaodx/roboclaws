@@ -202,6 +202,8 @@ def test_realworld_cleanup_demo_writes_open_ended_goal_status(
         task_prompt=prompt,
         goal_contract_json=goal_contract.to_json(),
         generated_mess_count=1,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
     )
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     goal_artifact = json.loads((tmp_path / "goal_contract.json").read_text(encoding="utf-8"))
@@ -345,7 +347,12 @@ def test_realworld_cleanup_report_separates_agent_view_and_private_eval(
 ) -> None:
     demo = _load_demo_module()
 
-    demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
+    )
 
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "Agent View" in report
@@ -376,6 +383,8 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
         output_dir=tmp_path,
         seed=7,
         generated_mess_count=5,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
     )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
@@ -403,6 +412,8 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
         output_dir=tmp_path,
         seed=7,
         perception_mode=RAW_FPV_ONLY_MODE,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
     )
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
 
@@ -430,6 +441,8 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
         output_dir=tmp_path,
         seed=7,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
     )
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
 
@@ -464,8 +477,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         record_robot_views=True,
         generated_mess_count=1,
         evidence_lane="world-public-labels",
-        map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
-        require_map_bundle=True,
+        allow_synthetic_map_projection=True,
     )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))

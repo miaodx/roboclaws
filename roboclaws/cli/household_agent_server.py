@@ -26,10 +26,8 @@ from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir
 from roboclaws.household.profiles import evidence_lane_names
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
-    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
-    REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.household.realworld_mcp_server import (
@@ -67,7 +65,6 @@ class _ServerBackendSetup:
     runtime_map_prior: dict[str, Any] | None
     agibot_contract: AgibotCleanupMCPContract | None
     perception_mode: str
-    map_mode: str
     evidence_lane: str | None
 
 
@@ -130,15 +127,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--runtime-map-prior",
         type=Path,
         help="Prior runtime_metric_map.json snapshot to seed as non-actionable priors.",
-    )
-    parser.add_argument(
-        "--map-mode",
-        choices=tuple(sorted(REALWORLD_MAP_MODES)),
-        default=DEFAULT_MAP_MODE,
-        help=(
-            "Agent-facing Base Navigation Map projection: occupancy geometry, "
-            "generated exploration candidates, and public room hints when available."
-        ),
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
@@ -302,7 +290,6 @@ def _prepare_server_backend_setup(
     isaac_scene_usd_path: str | Path | None,
     evidence_lane: str | None,
     runtime_map_prior_path: str | Path | None,
-    map_mode: str,
     context_json: str | Path | None,
     runner_python: str | Path | None,
     runner_script: str | Path | None,
@@ -335,8 +322,6 @@ def _prepare_server_backend_setup(
         include_robot=include_robot,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
-        map_mode=map_mode,
-        allowed_map_modes=REALWORLD_MAP_MODES,
     )
     return _prepare_generic_backend_setup(
         output_dir=output_dir,
@@ -352,7 +337,6 @@ def _prepare_server_backend_setup(
         isaac_scene_usd_path=isaac_scene_usd_path,
         runtime_map_prior=runtime_map_prior,
         perception_mode=perception_mode,
-        map_mode=map_mode,
         evidence_lane=evidence_lane,
     )
 
@@ -400,7 +384,6 @@ def _prepare_agibot_backend_setup(
         runtime_map_prior=runtime_map_prior,
         agibot_contract=agibot_contract,
         perception_mode=agibot_contract.perception_mode,
-        map_mode=agibot_contract.map_mode,
         evidence_lane=None,
     )
 
@@ -420,7 +403,6 @@ def _prepare_generic_backend_setup(
     isaac_scene_usd_path: str | Path | None,
     runtime_map_prior: dict[str, Any] | None,
     perception_mode: str,
-    map_mode: str,
     evidence_lane: str | None,
 ) -> _ServerBackendSetup:
     base_contract = build_cleanup_backend_session(
@@ -443,7 +425,6 @@ def _prepare_generic_backend_setup(
         runtime_map_prior=runtime_map_prior,
         agibot_contract=None,
         perception_mode=perception_mode,
-        map_mode=map_mode,
         evidence_lane=evidence_lane,
     )
 
@@ -524,7 +505,6 @@ def run_molmo_realworld_cleanup_agent_server(
     isaac_scene_usd_path: str | Path | None = None,
     evidence_lane: str | None = None,
     runtime_map_prior_path: str | Path | None = None,
-    map_mode: str = DEFAULT_MAP_MODE,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -562,7 +542,6 @@ def run_molmo_realworld_cleanup_agent_server(
         isaac_scene_usd_path=isaac_scene_usd_path,
         evidence_lane=evidence_lane,
         runtime_map_prior_path=runtime_map_prior_path,
-        map_mode=map_mode,
         context_json=context_json,
         runner_python=runner_python,
         runner_script=runner_script,
@@ -596,7 +575,6 @@ def run_molmo_realworld_cleanup_agent_server(
         evidence_lane=backend_setup.evidence_lane,
         runtime_map_prior=backend_setup.runtime_map_prior,
         runtime_map_prior_source=str(runtime_map_prior_path or ""),
-        map_mode=backend_setup.map_mode,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -652,7 +630,6 @@ def main(argv: list[str] | None = None) -> int:
             isaac_scene_usd_path=args.isaac_scene_usd_path,
             evidence_lane=args.evidence_lane,
             runtime_map_prior_path=args.runtime_map_prior,
-            map_mode=args.map_mode,
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,

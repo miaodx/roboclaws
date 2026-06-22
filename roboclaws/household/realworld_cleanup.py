@@ -38,12 +38,10 @@ from roboclaws.household.profiles import (
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
-    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     MAIN_CLEANUP_AGENT_PRODUCER,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
-    REALWORLD_MAP_MODES,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
@@ -137,15 +135,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--map-mode",
-        choices=tuple(sorted(REALWORLD_MAP_MODES)),
-        default=DEFAULT_MAP_MODE,
-        help=(
-            "Agent-facing Base Navigation Map projection: occupancy geometry, "
-            "generated exploration candidates, and public room hints when available."
-        ),
-    )
-    parser.add_argument(
         "--runtime-map-prior",
         type=Path,
         help="Prior runtime_metric_map.json snapshot to seed this run as non-actionable priors.",
@@ -213,6 +202,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Fail fast if --map-bundle-dir is missing or invalid.",
     )
     parser.add_argument(
+        "--allow-synthetic-map-projection",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--planner-proof-run-result",
         type=Path,
         action="append",
@@ -254,9 +248,9 @@ def run_realworld_cleanup(
     isaac_segmentation_semantic_filter: tuple[str, ...] | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
+    allow_synthetic_map_projection: bool = False,
     evidence_lane: str | None = None,
     map_build: bool = False,
-    map_mode: str = DEFAULT_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
@@ -274,8 +268,6 @@ def run_realworld_cleanup(
         include_robot=include_robot,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
-        map_mode=map_mode,
-        allowed_map_modes=REALWORLD_MAP_MODES,
     )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
@@ -327,9 +319,9 @@ def run_realworld_cleanup(
         visual_grounding_artifact_base_dir=output_dir,
         visual_grounding_run_id=f"seed-{seed}",
         runtime_map_prior=runtime_map_prior,
-        map_mode=map_mode,
         evidence_lane=evidence_lane,
         public_acceptance_config=(goal_contract and {"task_intent": goal_contract.intent}),
+        allow_synthetic_map_projection=allow_synthetic_map_projection,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -398,7 +390,6 @@ def run_realworld_cleanup(
         view_index=view_index,
         record_robot_views=record_robot_views,
         map_build=map_build,
-        map_mode=map_mode,
         perception_mode=perception_mode,
         planner_proof_evidence=(
             planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
@@ -451,7 +442,6 @@ def run_realworld_cleanup(
             goal_contract=goal_contract,
             agent_scratchpad=agent_scratchpad,
             map_build=map_build,
-            map_mode=map_mode,
             runtime_map_prior=runtime_map_prior,
             runtime_map_prior_path=runtime_map_prior_path,
             evidence_lane=evidence_lane,
@@ -1132,9 +1122,9 @@ def main(argv: list[str] | None = None) -> int:
         isaac_segmentation_semantic_filter=tuple(args.isaac_segmentation_semantic_filter or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
+        allow_synthetic_map_projection=args.allow_synthetic_map_projection,
         evidence_lane=args.evidence_lane,
         map_build=args.map_build,
-        map_mode=args.map_mode,
         runtime_map_prior_path=args.runtime_map_prior,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,

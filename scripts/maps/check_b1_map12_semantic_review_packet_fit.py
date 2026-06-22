@@ -19,6 +19,7 @@ from scripts.maps.promote_b1_map12_semantic_review_packet import (  # noqa: E402
     DEFAULT_PACKET,
     PromotionError,
     build_reviewed_correspondence_manifest,
+    read_review_packet,
 )
 
 
@@ -39,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         manifest = build_reviewed_correspondence_manifest(
-            json.loads(args.review_packet.read_text(encoding="utf-8")),
+            read_review_packet(args.review_packet),
             source_packet=args.review_packet,
         )
     except PromotionError as exc:
