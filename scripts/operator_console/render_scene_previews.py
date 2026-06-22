@@ -446,6 +446,11 @@ def render_b1_map12_preview(
             height=height,
         )
         if camera_result.get("status") != "promoted":
+            removed_stale.extend(_unlink_existing_paths(fpv_path, chase_path))
+            metadata_path.write_text(
+                json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             return {
                 "world_id": B1_MAP12_WORLD_ID,
                 "scene_source": "b1-gaussian-digital-twin",
@@ -486,6 +491,15 @@ def render_b1_map12_preview(
     return result
 
 
+def _unlink_existing_paths(*paths: Path) -> list[str]:
+    removed: list[str] = []
+    for path in paths:
+        if path.exists():
+            path.unlink()
+            removed.append(str(path))
+    return removed
+
+
 def _remove_stale_b1_camera_previews(
     *,
     camera_artifact: Path | None,
@@ -494,12 +508,7 @@ def _remove_stale_b1_camera_previews(
 ) -> list[str]:
     if camera_artifact is not None:
         return []
-    removed_stale: list[str] = []
-    for stale_path in (fpv_path, chase_path):
-        if stale_path.exists():
-            stale_path.unlink()
-            removed_stale.append(str(stale_path))
-    return removed_stale
+    return _unlink_existing_paths(fpv_path, chase_path)
 
 
 def _b1_preview_skip_result(
@@ -589,9 +598,30 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     chase = views.get("chase")
     if not isinstance(fpv, dict) or not isinstance(chase, dict):
         return False
-    return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
+    if not str(fpv.get("provenance") or "").startswith("isaac_runtime_") or not str(
         chase.get("provenance") or ""
-    ).startswith("isaac_runtime_")
+    ).startswith("isaac_runtime_"):
+        return False
+    fpv_waypoint = str(fpv.get("waypoint_id") or "").strip()
+    chase_waypoint = str(chase.get("waypoint_id") or "").strip()
+    if not fpv_waypoint or fpv_waypoint != chase_waypoint:
+        return False
+    fpv_alignment = str(fpv.get("alignment_artifact") or "").strip()
+    chase_alignment = str(chase.get("alignment_artifact") or "").strip()
+    if not fpv_alignment or fpv_alignment != chase_alignment:
+        return False
+    fpv_transform = str(fpv.get("alignment_transform_source") or "").strip()
+    chase_transform = str(chase.get("alignment_transform_source") or "").strip()
+    if fpv_transform != "reviewed_correspondence_fit" or chase_transform != fpv_transform:
+        return False
+    artifact = payload.get("camera_preview_artifact")
+    if not isinstance(artifact, dict):
+        return False
+    if str(artifact.get("selected_waypoint_id") or "").strip() != fpv_waypoint:
+        return False
+    if str(artifact.get("alignment_artifact") or "").strip() != fpv_alignment:
+        return False
+    return str(artifact.get("alignment_transform_source") or "").strip() == fpv_transform
 
 
 def _promote_b1_camera_previews(
@@ -859,6 +889,19 @@ def _b1_camera_preview_provenance_errors(
     candidate: dict[str, Any],
 ) -> list[str]:
     errors: list[str] = []
+    waypoint_id = str(candidate.get("waypoint_id") or "").strip()
+    if not waypoint_id:
+        errors.append("missing_waypoint_id")
+    fpv_label = _b1_camera_label_from_view_path(candidate.get("fpv"))
+    chase_label = _b1_camera_label_from_view_path(candidate.get("chase"))
+    if fpv_label and chase_label and fpv_label != chase_label:
+        errors.append("mixed_fpv_chase_view_pair")
+    source_kind = str(candidate.get("source_kind") or "")
+    if source_kind not in {
+        "run_result_robot_view_step",
+        "navigation_smoke_waypoint_evidence",
+    }:
+        errors.append("unsupported_camera_artifact_source")
     if candidate.get("robot_pose_applied") is not True:
         errors.append("robot_pose_not_applied")
     alignment_artifact = candidate.get("alignment_artifact") or payload.get("alignment_artifact")
@@ -869,6 +912,30 @@ def _b1_camera_preview_provenance_errors(
     )
     if str(transform_source or "") != "reviewed_correspondence_fit":
         errors.append("missing_reviewed_correspondence_transform_source")
+    if source_kind == "run_result_robot_view_step":
+        camera_control_contract = candidate.get("camera_control_contract")
+        if not isinstance(camera_control_contract, dict):
+            errors.append("missing_camera_control_contract")
+        else:
+            agent_facing_fpv = camera_control_contract.get("agent_facing_fpv")
+            if not isinstance(agent_facing_fpv, dict):
+                errors.append("missing_agent_facing_fpv_contract")
+            else:
+                if not (
+                    agent_facing_fpv.get("robot_mounted") is True
+                    or agent_facing_fpv.get("head_camera_equivalent") is True
+                ):
+                    errors.append("fpv_not_robot_mounted_or_head_camera_equivalent")
+                fpv_source = str(agent_facing_fpv.get("source") or "")
+                if "scene_probe" in fpv_source or "bbox" in fpv_source:
+                    errors.append("fpv_source_not_robot_runtime")
+            report_chase = camera_control_contract.get("report_chase_view")
+            if not isinstance(report_chase, dict):
+                errors.append("missing_report_chase_contract")
+            else:
+                chase_source = str(report_chase.get("source") or "")
+                if "scene_probe" in chase_source or "bbox" in chase_source:
+                    errors.append("chase_source_not_robot_runtime")
     return errors
 
 
@@ -876,7 +943,7 @@ def _b1_camera_label_from_view_path(raw_path: Any) -> str:
     if not raw_path:
         return ""
     name = Path(str(raw_path)).name
-    for suffix in (".fpv.png", ".fpv.jpg", ".png", ".jpg"):
+    for suffix in (".fpv.png", ".chase.png", ".fpv.jpg", ".chase.jpg", ".png", ".jpg"):
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return name

@@ -25,10 +25,12 @@ KNOWN_POOR_BBOX_SEED_SOURCE = "known_poor_bbox_seed"
 BBOX_FIT_METHOD = "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds"
 SCENE_PROJECTION_HORIZONTAL_AXES = ["x", "y"]
 SCENE_PROJECTION_UP_AXIS = "z"
+ALIGNMENT_ANCHOR_ROLE = "alignment"
+SEMANTIC_ANCHOR_ROLE = "semantic"
+ANCHOR_ROLES = {ALIGNMENT_ANCHOR_ROLE, SEMANTIC_ANCHOR_ROLE}
 
 MIN_GLOBAL_ACCEPTED_ANCHORS = 6
 MIN_GLOBAL_NON_COLLINEAR_ANCHORS = 4
-MIN_GLOBAL_COVERAGE_GROUPS = 3
 GLOBAL_MEAN_THRESHOLD_M = 0.75
 GLOBAL_MAX_THRESHOLD_M = 1.5
 MIN_AREA_ACCEPTED_ANCHORS = 3
@@ -108,10 +110,18 @@ def build_alignment_residuals(
         },
         "accepted_anchor_count": len(anchors),
         "accepted_navigation_area_count": len(
-            {str(anchor.get("navigation_area_id") or "") for anchor in anchors}
+            {
+                str(anchor.get("navigation_area_id") or "")
+                for anchor in anchors
+                if anchor.get("navigation_area_id")
+            }
         ),
         "accepted_asset_partition_count": len(
-            {str(anchor.get("asset_partition_id") or "") for anchor in anchors}
+            {
+                str(anchor.get("asset_partition_id") or "")
+                for anchor in anchors
+                if anchor.get("asset_partition_id")
+            }
         ),
         "object_receptacle_usd_binding_status": "blocked_out_of_scope",
         "manipulation_supported": False,
@@ -269,6 +279,17 @@ def validate_correspondence_manifest(payload: dict[str, Any]) -> list[str]:
         status = str(anchor.get("review_status") or "")
         if status != "accepted":
             continue
+        role = anchor_role(anchor)
+        _require(
+            bool(anchor.get("anchor_role")),
+            f"accepted anchor {anchor_id} needs anchor_role",
+            errors,
+        )
+        _require(
+            role in ANCHOR_ROLES,
+            f"accepted anchor {anchor_id} has invalid anchor_role: {role}",
+            errors,
+        )
         _require(
             valid_xy(anchor.get("map_xy")),
             f"accepted anchor {anchor_id} needs explicit map_xy",
@@ -279,16 +300,17 @@ def validate_correspondence_manifest(payload: dict[str, Any]) -> list[str]:
             f"accepted anchor {anchor_id} needs explicit scene_xyz",
             errors,
         )
-        _require(
-            bool(anchor.get("navigation_area_id")),
-            f"accepted anchor {anchor_id} needs navigation_area_id",
-            errors,
-        )
-        _require(
-            bool(anchor.get("asset_partition_id")),
-            f"accepted anchor {anchor_id} needs asset_partition_id",
-            errors,
-        )
+        if role == SEMANTIC_ANCHOR_ROLE:
+            _require(
+                bool(anchor.get("navigation_area_id")),
+                f"accepted semantic anchor {anchor_id} needs navigation_area_id",
+                errors,
+            )
+            _require(
+                bool(anchor.get("asset_partition_id")),
+                f"accepted semantic anchor {anchor_id} needs asset_partition_id",
+                errors,
+            )
         _require(
             not anchor_uses_known_poor_seed(anchor),
             f"accepted anchor {anchor_id} must not use known-poor bbox seed coordinates",
@@ -386,6 +408,7 @@ def accepted_correspondence_anchors(payload: dict[str, Any]) -> list[dict[str, A
             float(anchor["scene_xyz"][1]),
             float(anchor["scene_xyz"][2]),
         ]
+        anchor["anchor_role"] = anchor_role(anchor)
         anchors.append(anchor)
     return anchors
 
@@ -406,7 +429,6 @@ def threshold_policy() -> dict[str, Any]:
     return {
         "minimum_global_anchors": MIN_GLOBAL_ACCEPTED_ANCHORS,
         "minimum_global_non_collinear_anchors": MIN_GLOBAL_NON_COLLINEAR_ANCHORS,
-        "required_spatial_coverage_groups": MIN_GLOBAL_COVERAGE_GROUPS,
         "global_verified_target": {
             "mean_residual_m": GLOBAL_MEAN_THRESHOLD_M,
             "max_residual_m": GLOBAL_MAX_THRESHOLD_M,
@@ -574,13 +596,6 @@ def spatial_gate_errors(anchors: list[dict[str, Any]], source_points: np.ndarray
         errors.append("global fit requires at least six accepted anchors")
     if non_collinear_count(source_points) < MIN_GLOBAL_NON_COLLINEAR_ANCHORS:
         errors.append("global fit requires at least four non-collinear anchors")
-    coverage = {
-        str(anchor.get("navigation_area_id") or anchor.get("asset_partition_id") or "")
-        for anchor in anchors
-    }
-    coverage.discard("")
-    if len(coverage) < MIN_GLOBAL_COVERAGE_GROUPS:
-        errors.append("global fit requires anchors covering at least three areas or partitions")
     return errors
 
 
@@ -599,6 +614,7 @@ def residual_rows(
             {
                 "anchor_id": str(anchor.get("anchor_id") or ""),
                 "anchor_type": str(anchor.get("anchor_type") or ""),
+                "anchor_role": anchor_role(anchor),
                 "navigation_area_id": str(anchor.get("navigation_area_id") or ""),
                 "asset_partition_id": str(anchor.get("asset_partition_id") or ""),
                 "map_xy": round_list(map_xy),
@@ -650,6 +666,8 @@ def area_alignment_reports(
 ) -> list[dict[str, Any]]:
     by_area: dict[str, list[dict[str, Any]]] = {}
     for anchor in anchors:
+        if anchor_role(anchor) != SEMANTIC_ANCHOR_ROLE:
+            continue
         area_id = str(anchor.get("navigation_area_id") or "")
         if not area_id:
             continue
@@ -897,6 +915,10 @@ def anchor_uses_known_poor_seed(anchor: dict[str, Any]) -> bool:
         for source in sources
         if source is not None
     )
+
+
+def anchor_role(anchor: dict[str, Any]) -> str:
+    return str(anchor.get("anchor_role") or ALIGNMENT_ANCHOR_ROLE)
 
 
 def valid_xy(value: Any) -> bool:

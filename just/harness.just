@@ -691,6 +691,8 @@ b1-map12-navigation-smoke *overrides:
     map12_root="vendors/agibot_sdk/artifacts/maps/robot_map_12"
     output_dir="output/b1-map12/navigation-smoke"
     readiness_output=""
+    alignment_artifact="output/b1-map12/alignment/alignment_residuals.json"
+    waypoint_pose_requests=""
     stamp=""
     robot_name="rby1m"
     prepare_robot_usd="true"
@@ -707,6 +709,7 @@ b1-map12-navigation-smoke *overrides:
       key="${key//-/_}"
       case "$key" in
         runtime_python|b1_root|map12_root|output_dir|readiness_output|stamp|\
+        alignment_artifact|waypoint_pose_requests|\
         robot_name|prepare_robot_usd|require_navigation_success|accept_nvidia_eula)
           ;;
         *)
@@ -730,26 +733,45 @@ b1-map12-navigation-smoke *overrides:
     "$runtime_python" scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
       --b1-root "$b1_root" \
       --map12-root "$map12_root" \
+      --alignment-artifact "$alignment_artifact" \
       --output "$readiness_output"
     if [[ "$prepare_robot_usd" == "true" && ! -s output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda ]]; then
       "$runtime_python" scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py --static-only
     fi
-    "$runtime_python" scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py \
+    smoke_args=(
+      scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py
       --readiness-artifact "$readiness_output" \
       --output-dir "$run_dir" \
       --robot-name "$robot_name"
+    )
+    if [[ -n "$waypoint_pose_requests" ]]; then
+      smoke_args+=(--waypoint-pose-requests "$waypoint_pose_requests")
+    fi
+    "$runtime_python" "${smoke_args[@]}"
     final_args=(
       --b1-root "$b1_root"
       --map12-root "$map12_root"
       --output "${run_dir}/readiness_with_navigation.json"
+      --alignment-artifact "$alignment_artifact"
       --navigation-artifact "${run_dir}/navigation_smoke.json"
     )
     if [[ "$require_navigation_success" == "true" ]]; then
       final_args+=(--require-navigation-success)
     fi
     "$runtime_python" scripts/isaac_lab_cleanup/check_b1_map12_readiness.py "${final_args[@]}"
-    .venv/bin/python scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py \
+    report_args=(
+      scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py
       --run-dir "$run_dir" \
       --navigation-artifact "${run_dir}/navigation_smoke.json" \
       --readiness-artifact "${run_dir}/readiness_with_navigation.json"
+    )
+    if [[ -n "$waypoint_pose_requests" ]]; then
+      report_args+=(--waypoint-pose-requests "$waypoint_pose_requests")
+    fi
+    .venv/bin/python "${report_args[@]}"
+    .venv/bin/python scripts/operator_console/render_scene_previews.py \
+      --world b1-map12 \
+      --b1-camera-artifact "${run_dir}/navigation_smoke.json" \
+      --output-dir "${run_dir}/operator-preview"
     echo "==> report: ${run_dir}/report.html"
+    echo "==> preview: ${run_dir}/operator-preview/b1-map12-preview.json"

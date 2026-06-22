@@ -3,6 +3,7 @@
     {
       "anchor_id": "anchor_001",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -35,6 +36,7 @@
     {
       "anchor_id": "anchor_002",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -67,6 +69,7 @@
     {
       "anchor_id": "anchor_003",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -99,6 +102,7 @@
     {
       "anchor_id": "anchor_004",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -131,6 +135,7 @@
     {
       "anchor_id": "anchor_005",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -163,6 +168,7 @@
     {
       "anchor_id": "anchor_006",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
@@ -195,6 +201,7 @@
     {
       "anchor_id": "anchor_007",
       "anchor_type": "operator_correspondence",
+      "anchor_role": "alignment",
       "navigation_area_id": "",
       "asset_partition_id": "",
       "map_xy": [
