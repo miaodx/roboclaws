@@ -366,7 +366,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 ports.append(int(value))
             except ValueError:
                 continue
-        self._json(runtime_blockers_payload(self.repo_root, ports=ports))
+        self._json(runtime_blockers_payload(self.repo_root, ports=ports or None))
 
     def _serve_route_readiness(self, query_string: str) -> None:
         try:

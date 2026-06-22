@@ -92,7 +92,7 @@ test kind="all":
     case "{{kind}}" in
       fast)
         ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1 {{standalone_pytest}} \
-          -m "not integration" -q --durations=5
+          -m "not integration and not local" -q --durations=5
         ;;
 
       unit)

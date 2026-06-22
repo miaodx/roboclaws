@@ -200,8 +200,8 @@ def test_runtime_inventory_surfaces_corrupt_docker_mount_metadata(tmp_path: Path
         return SimpleNamespace(returncode=1, stdout="")
 
     with patch("roboclaws.operator_console.runtime_inventory.subprocess.run", side_effect=fake_run):
-        payload = runtime_inventory_payload(tmp_path)
-        blockers = runtime_blockers_payload(tmp_path)
+        payload = runtime_inventory_payload(tmp_path, ports=[])
+        blockers = runtime_blockers_payload(tmp_path, ports=[])
 
     task = next(item for item in payload["tasks"] if item["owner"] == "docker")
     assert task["id"] == "source-error:docker:container-a:mounts"
@@ -373,7 +373,10 @@ def test_runtime_inventory_surfaces_invalid_nested_runtime_json_resources(
     assert blockers["summary"]["active"] == 0
 
 
-def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path) -> None:
+def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(
+    tmp_path: Path,
+    free_tcp_port: int,
+) -> None:
     row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "codex-cleanup-live"
     run_dir = row_dir / "run" / "0615_1225" / "seed-7"
     run_dir.mkdir(parents=True)
@@ -384,7 +387,7 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path
     (run_dir / "tmux_session.txt").write_text("roboclaws-molmo-codex-dead\n", encoding="utf-8")
     (run_dir / "server.pid").write_text("99999999\n", encoding="utf-8")
     (run_dir / "visual_backend_slot.json").write_text(
-        json.dumps({"slot_id": 1, "pid": 99999999, "port": 18788}),
+        json.dumps({"slot_id": 1, "pid": 99999999, "port": free_tcp_port}),
         encoding="utf-8",
     )
     (tmp_path / "output" / "eval-harness" / "focused" / "eval_harness.json").write_text(
@@ -411,7 +414,7 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path
         encoding="utf-8",
     )
 
-    payload = runtime_inventory_payload(tmp_path, ports=[18788])
+    payload = runtime_inventory_payload(tmp_path, ports=[free_tcp_port])
 
     task = next(item for item in payload["tasks"] if item["id"] == "eval-row:codex-cleanup-live")
     assert task["status"] == "stale"
