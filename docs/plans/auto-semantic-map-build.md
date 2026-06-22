@@ -586,7 +586,7 @@ grammar:
   consumes that prior as part of its strategy.
 - Backend variants should be expressed as variant/config metadata, not profile
   names: examples include `molmospaces_subprocess`, `api_semantic_synthetic`,
-  `agibot_g2`, and `ros2_nav2`.
+  and `agibot_gdk`.
 - Real-robot deployment should reuse these same layers. A physical
   `surface=household-world intent=map-build` or
   `surface=household-world intent=cleanup` run should differ by backend variant,

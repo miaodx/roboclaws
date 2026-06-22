@@ -49,6 +49,7 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 MUJOCO_CLAUDE_OPEN_TASK = (
     "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
 )
@@ -90,8 +91,13 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         AGIBOT_CODEX_MAP_BUILD,
         MUJOCO_CODEX_MAP_BUILD,
         B1_CODEX_OPEN_TASK,
+        B1_OPENAI_AGENTS_OPEN_TASK,
     }
-    assert {route.agent_engine_id for route in supported} >= {"codex-cli", "claude-code"}
+    assert {route.agent_engine_id for route in supported} >= {
+        "codex-cli",
+        "claude-code",
+        "openai-agents-sdk",
+    }
     assert {route.lock_name for route in supported} == {
         "molmospaces_mujoco",
         "isaac_gpu",
@@ -443,12 +449,8 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert worlds[world_id]["preview_assets"]["chase"]["href"] == (
         "/previews/molmospaces-procthor-objaverse-val-10-chase.png"
     )
-    assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == "/previews/b1-map12-map.png"
-    assert worlds["b1-map12"]["preview_assets"]["topdown"]["href"] == (
-        "/previews/b1-map12-topdown.png"
-    )
-    assert "fpv" not in worlds["b1-map12"]["preview_assets"]
-    assert "chase" not in worlds["b1-map12"]["preview_assets"]
+    assert worlds["b1-map12"]["preview_assets"]["fpv"]["href"] == "/previews/b1-map12-fpv.png"
+    assert worlds["b1-map12"]["preview_assets"]["chase"]["href"] == ("/previews/b1-map12-chase.png")
     assert (
         worlds[world_id]["preview_assets"]["topdown"]["href"]
         != (worlds[world_id]["preview_assets"]["map"]["href"])
@@ -547,9 +549,10 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
 def _assert_registered_scene_preview_assets(registered_previews: set[str]) -> None:
     assert "molmospaces-procthor-objaverse-val-10-map.png" in registered_previews
     assert "molmospaces-procthor-objaverse-val-10-preview.json" in registered_previews
-    assert "b1-map12-map.png" in registered_previews
-    assert "b1-map12-fpv.png" not in registered_previews
-    assert "b1-map12-chase.png" not in registered_previews
+    assert "b1-map12-map.png" not in registered_previews
+    assert "b1-map12-topdown.png" not in registered_previews
+    assert "b1-map12-fpv.png" in registered_previews
+    assert "b1-map12-chase.png" in registered_previews
     assert "b1-map12-preview.json" in registered_previews
     assert "molmospaces-val_6-map.png" not in registered_previews
     assert "molmospaces-val_8-map.png" not in registered_previews
@@ -558,10 +561,10 @@ def _assert_registered_scene_preview_assets(registered_previews: set[str]) -> No
 def _assert_scene_preview_png_assets(base_url: str) -> None:
     for asset_name in (
         "molmospaces-procthor-objaverse-val-10-map.png",
-        "b1-map12-map.png",
         "molmospaces-procthor-objaverse-val-10-topdown.png",
         "molmospaces-procthor-objaverse-val-10-chase.png",
-        "b1-map12-map.png",
+        "b1-map12-fpv.png",
+        "b1-map12-chase.png",
     ):
         with urllib.request.urlopen(f"{base_url}/previews/{asset_name}") as response:
             assert response.headers["Content-Type"] == "image/png"
@@ -576,9 +579,9 @@ def _assert_scene_preview_json_assets(base_url: str) -> None:
         assert preview["views"]["chase"]["view"] == "chase_camera"
     with urllib.request.urlopen(f"{base_url}/previews/b1-map12-preview.json") as response:
         preview = json.loads(response.read().decode("utf-8"))
-        assert preview["renderer"] == "static_b1_map12_digital_twin_overview"
-        assert "fpv" not in preview["views"]
-        assert "chase" not in preview["views"]
+        assert preview["renderer"] == "b1_map12_isaac_runtime_camera_previews"
+        assert preview["views"]["fpv"]["view"] == "raw_fpv"
+        assert preview["views"]["chase"]["view"] == "chase_camera"
 
 
 def _assert_scene_preview_rejects_invalid_paths(base_url: str) -> None:

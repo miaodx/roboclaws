@@ -399,6 +399,24 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             supports_operator_steer=True,
             supports_relative_navigation_control=True,
         ),
+        *_lane_selections(
+            "b1-map12",
+            "isaaclab",
+            "open-ended",
+            "openai-agents-sdk",
+            "codex-router-responses",
+            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=(
+                *common_gates,
+                B1_ALIGNMENT_ARTIFACT_GATE,
+                B1_NAVIGATION_ARTIFACT_GATE,
+            ),
+            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+            supports_relative_navigation_control=True,
+        ),
     )
 
 
@@ -523,6 +541,23 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "isaaclab",
             "open-ended",
             "codex-cli",
+            "codex-router-responses",
+            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            enabled=False,
+            unsupported_reason=(
+                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
+            ),
+            gates=_common_gates(),
+            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
+        *_lane_selections(
+            "b1-map12",
+            "isaaclab",
+            "open-ended",
+            "openai-agents-sdk",
             "codex-router-responses",
             evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,

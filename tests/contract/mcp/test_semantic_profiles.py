@@ -74,7 +74,6 @@ def test_household_world_profile_is_task_neutral_and_world_only() -> None:
     assert metadata["backend_variants"] == [
         "api_semantic_synthetic",
         "molmospaces_subprocess",
-        "nav2_ros2",
         "agibot_gdk",
     ]
     assert set(metadata["capability_families"]).isdisjoint({"manipulation", "episode"})

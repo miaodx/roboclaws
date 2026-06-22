@@ -441,14 +441,34 @@ def _digital_twin_capability_summary(capabilities: dict[str, Any]) -> dict[str, 
         if isinstance(capabilities.get("room_semantic_projection_proof"), dict)
         else {}
     )
+    render_proof = (
+        capabilities.get("render_observation_proof")
+        if isinstance(capabilities.get("render_observation_proof"), dict)
+        else {}
+    )
+    visual_route = (
+        render_proof.get("default_visual_route")
+        if isinstance(render_proof.get("default_visual_route"), dict)
+        else {}
+    )
     return {
         "robot_navigation_supported": bool(robot_proof.get("robot_navigation_supported")),
         "robot_consumption_status": str(robot_proof.get("status") or ""),
+        "planner_backed_navigation_supported": bool(robot_proof.get("planner_backed")),
+        "physical_robot_supported": bool(robot_proof.get("physical_robot")),
         "room_semantics_supported": bool(room_proof.get("room_semantics_supported")),
         "room_semantics_status": str(room_proof.get("status") or ""),
         "object_semantics_supported": bool(room_proof.get("object_semantics_supported")),
         "object_projection_status": str(room_proof.get("object_projection_status") or ""),
         "manipulation_supported": bool(robot_proof.get("manipulation_supported")),
+        "render_observation_supported": bool(render_proof.get("render_observation_supported")),
+        "render_observation_status": str(render_proof.get("status") or ""),
+        "same_pose_fpv_supported": bool(render_proof.get("same_pose_fpv_supported")),
+        "same_pose_chase_supported": bool(render_proof.get("same_pose_chase_supported")),
+        "same_pose_topdown_supported": bool(render_proof.get("same_pose_topdown_supported")),
+        "default_visual_route_status": str(visual_route.get("status") or ""),
+        "default_visual_route_scene": str(visual_route.get("scene_root") or ""),
+        "default_visual_route_selected": bool(visual_route.get("selected")),
     }
 
 

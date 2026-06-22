@@ -68,11 +68,10 @@ Harness recipes
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
   or `direct-runner`) from the model/key route (`provider_profile=codex-router-responses`,
   `mimo-mify-responses`, `mimo-tp-anthropic`, and related profiles).
-  `openclaw-gateway` is registered only as a validation-required maintainer
-  route until off-work-network Gateway proof is green. The active stabilization
-  focus is coding-agent routes and the OpenAI Agents SDK route; OpenClaw,
-  Hermes-style, and similar high-level agent frameworks are later clients after
-  those lower routes are stable.
+  Validation-required maintainer engines stay outside the normal public engine
+  list until their separate proof gates are green. The active stabilization
+  focus is coding-agent routes and the OpenAI Agents SDK route; higher-level
+  agent frameworks are later clients after those lower routes are stable.
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Capability Contract And Tools** are the stable public robot interface:
@@ -100,10 +99,10 @@ provenance, safety gates, operator map context, and blocked-capability status.
 
 ## Major Stacks
 
-Roboclaws currently centers on the household-world demo stack. Retired
-AI2-THOR, direct-VLM, and route-card demos may still appear in historical
-plans or archived reports, but they are not current public launch axes and
-should not be revived without a new architecture decision.
+Roboclaws currently centers on the household-world demo stack. Retired demos
+may still appear in historical plans or archived reports, but they are not
+current public launch axes and should not be revived without a new architecture
+decision.
 
 ### Household World And Cleanup
 
@@ -334,8 +333,10 @@ Real-robot work is incremental:
 4. Promote physical manipulation only when reports can show provenance, safety
    gates, and failure modes.
 
-Agibot G2 and ROS2/Nav2 should be backend variants under the same public
-task/profile shape, not separate robot-only task taxonomies.
+Agibot G2 is the current physical backend variant under the same public
+task/profile shape as simulator and digital-twin runs. ROS2/Nav2 remains a
+future backend candidate or historical proof path; do not advertise it as an
+active launch backend until a catalog route and real operator proof exist.
 
 ## Where To Look
 

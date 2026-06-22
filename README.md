@@ -27,34 +27,18 @@ It answers three practical questions:
 Roboclaws treats reusable robot behavior as **skills first** and MCP tools as a
 bounded public robot capability surface.
 
-| Principle | Practice |
-| --- | --- |
-| Start from open-ended goals | A user asks for work such as "clean the room" or "take useful photos"; an agent selects or creates a skill to do it. |
-| Keep surfaces and presets separate | Public commands use `run::surface` with named `surface=...`, natural-language `prompt=...`, and optional `preset=...` entries for repeated jobs. |
-| Keep strategy in skills | Skills own prompt strategy, scripts, examples, checks, and task-specific loops such as photo capture or cleanup. |
-| Keep MCP bounded | MCP tools expose semantic robot capabilities like observe, move, pick, place, and done; they should not hide a whole task behind one opaque call. |
-| Profile public capabilities | Semantic profiles describe reusable capability environments that skills can require; profiles compose by requirement, not by copying another profile's tools. |
-| Label privileged help | Simulator or demo helpers such as full object inventory and target-relative teleport are useful, but they stay labeled as privileged tools, not canonical robot abilities. |
-| Protect private evaluation truth | Hidden mess sets, acceptable destinations, private manifests, and scoring truth stay out of public profile metadata and agent-facing skill inputs. |
-| Let reports improve skills | Traces, artifacts, and evals feed the skill lifecycle: improve, split, merge, prune, or promote behavior only when the boundary is stable. |
+The short version:
 
-The working abstraction ladder is:
+- Public runs use `just run::surface` with `surface=...`, optional
+  `preset=...`, and natural-language `prompt=...`.
+- Skills own task strategy such as map-build, cleanup, and open household
+  goals.
+- MCP exposes bounded robot capabilities such as observe, navigate, pick,
+  place, and done.
+- Private evaluator truth stays out of agent inputs and public profile
+  metadata.
 
-```text
-open-ended goal
-  -> runnable surface and optional preset
-  -> agent skill
-  -> capability profile requirements
-  -> MCP capability tools
-  -> backend variant
-```
-
-Default decision: improve or add a skill when behavior changes; add or rename a
-surface only when the domain contract changes; add a `preset=` row when a known
-task needs its own skill, capabilities, report, or gates. Promote behavior into
-MCP only when multiple skills need it, the input/output shape is stable,
-public/private boundaries are clear, and traces can preserve the important
-substeps. The detailed profile and skill reference is
+The detailed profile and skill reference is
 [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ## Run Demos With Just
@@ -99,15 +83,14 @@ GitHub Actions publishes the report site at
 check the [CI workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml):
 Pages republishes from successful `main` runs.
 
-| Demo | What it proves | Run it locally | Live CI report |
-| --- | --- | --- | --- |
-| Runtime Metric Map build | A no-cleanup sweep starts from the Base Navigation Map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Runtime Map Prior Snapshot contract. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino seed=7 scenario_setup=baseline` | Local artifact today. |
-| Household cleanup | A cleanup agent tidies a relocated household setup from Base Navigation Map context while private scoring stays hidden. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
-| Open-ended household goal | A coding agent receives a user goal, builds or uses household evidence, and declares task-level completion without cleanup-specific terminal scoring. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"` | Local artifact today. |
-| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-tp-anthropic evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
-| Planner proof | A household cleanup run can hand off planner proof requests for local manipulation evidence without changing the public cleanup contract. | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` | Local artifact today. |
-| Agent operator console | Standalone local browser console for supported Codex, Claude Code, and experimental OpenAI Agents SDK household routes with backend locks, launch-axis gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
-| Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
+| Demo | Run it locally | Report |
+| --- | --- | --- |
+| Map build | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino seed=7 scenario_setup=baseline` | Local artifact today. |
+| Household cleanup | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/) |
+| Open household goal | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"` | Local artifact today. |
+| Planner proof | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` | Local artifact today. |
+| Operator console | `just console::run` | Local-only operator surface. |
+| Maintainer gate | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the code map and the full operating
 mode contract.
@@ -120,6 +103,7 @@ mode contract.
 | Code map and operating modes     | [ARCHITECTURE.md](ARCHITECTURE.md)                                                                         |
 | Human setup/runbooks/domain docs | [docs/human/README.md](docs/human/README.md)                                                               |
 | Detailed MCP profile reference   | [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md)           |
+| Eval suites and validation       | [docs/human/evaluation.md](docs/human/evaluation.md)                                                       |
 | Skill library convention         | [skills/README.md](skills/README.md)                                                                       |
 | Public command grammar           | [just/README.md](just/README.md)                                                                           |
 | Local keys and report artifacts  | [docs/human/local-runtime.md](docs/human/local-runtime.md)                                                 |
@@ -128,13 +112,6 @@ mode contract.
 | Current project focus            | [STATUS.md](STATUS.md)                                                                                     |
 | Agent operating rules            | [AGENTS.md](AGENTS.md)                                                                                     |
 
-
-## Related Projects
-
-- [Roboharness](https://github.com/MiaoDX/roboharness) - visual testing harness for AI coding agents in robot simulation
-- [Robowbc](https://github.com/MiaoDX/robowbc) - whole-body-control experiments
-- [OpenClaw](https://github.com/openclaw/openclaw) - open-source personal AI assistant
-- [ROSClaw](https://github.com/PlaiPin/rosclaw) - OpenClaw to ROS 2 bridge
 
 ## License
 

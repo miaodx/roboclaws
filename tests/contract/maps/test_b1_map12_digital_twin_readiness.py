@@ -6,6 +6,7 @@ from pathlib import Path
 from PIL import Image
 
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
     NAVIGATION_SMOKE_SCHEMA,
     READINESS_SCHEMA,
@@ -61,6 +62,13 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
     return {
         "schema": NAVIGATION_SMOKE_SCHEMA,
         "status": "passed",
+        "b1_scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+        "visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": True,
+            "status": "same_pose_render_verified",
+        },
         "robot_navigation_supported": True,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE,
         "navigation_provenance": "kinematic_pose_driven",
@@ -79,6 +87,7 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
         "waypoint_evidence": [
             {
                 "waypoint_id": "wp_1",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": pose_1,
                 "robot_pose_applied": True,
                 "alignment_artifact": str(tmp_path / "alignment_residuals.json"),
@@ -87,6 +96,7 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
             },
             {
                 "waypoint_id": "wp_2",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": pose_2,
                 "robot_pose_applied": True,
                 "alignment_artifact": str(tmp_path / "alignment_residuals.json"),

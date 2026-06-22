@@ -9,10 +9,9 @@ world/backend/preset/agent-engine combination as a separate recipe.
 - `agent::*` is for maintainer-level dispatch into private implementation
   modules.
 
-Lower modules such as `openclaw::*`, `molmo::*`,
-`harness::*`, `verify::*`, `mcp::*`, `code::*`, `chat::*`,
-and `dev::*` are private. They remain runnable for debugging, but they are
-hidden from `just --summary` and shell completion.
+Lower modules such as `molmo::*`, `harness::*`, `verify::*`, `mcp::*`,
+`code::*`, `chat::*`, and `dev::*` are private. They remain runnable for
+debugging, but they are hidden from `just --summary` and shell completion.
 
 ## Main Grammar
 
@@ -61,8 +60,9 @@ route. Examples include `codex-router-responses`, `mimo-mify-responses`, `kimi-a
 `mimo-tp-anthropic`, and `mimo-mify-anthropic`. Deterministic engines such as
 `direct-runner` do not accept `provider_profile`.
 
-Validation-required maintainer engines, such as `openclaw-gateway`, stay out of
-the normal public engine list. Use the OpenClaw docs before running them.
+Validation-required maintainer engines stay out of the normal public engine
+list. Use the repo-local maintainer docs and network guards before running
+those routes.
 
 Reports for non-Molmo tasks:
 
@@ -76,7 +76,7 @@ Household cleanup input/evidence lanes:
   lane.
 - `world-public-labels` is the deterministic structured-label baseline. The
   agent receives observed object handles and structured labels, while
-  destination/tool hints and pre-confirmed navigation authorization are withheld.
+  destination/tool hints and pre-confirmed navigation permission are withheld.
 - `camera-raw-fpv` withholds structured labels and provides raw camera
   artifacts for model-declared observations.
 - `camera-grounded-labels` registers structured candidates from camera
@@ -129,8 +129,7 @@ The probe summarizes tmux liveness, elapsed time, MCP tool progress,
 available. Only one detached Molmo/Codex cleanup run is allowed at a time
 because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a run is
 active or the requested MCP port is already accepting connections, the launcher
-fails instead of choosing another port. Claude Code and OpenClaw live cleanup
-engines still use their existing interactive launch paths.
+fails instead of choosing another port.
 
 Repo-local `.env` keys route live Codex and Claude launchers without editing
 user-level CLI config. Normal users configure keys only; command shape controls
@@ -151,38 +150,11 @@ exported in the invoking shell at launch time. They also source repo-local
 
 Run `just code::codex-provider-smoke` locally before long Codex visual runs to
 verify the `.env`-configured Responses-compatible endpoint works with the pinned
-Docker-backed Codex CLI. Codex defaults to `codex-router-responses` (`CODEX_BASE_URL` plus
-`CODEX_API_KEY`, Responses API, default model `gpt-5.5`). To use the internal
-multi-model aggregator, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` explicitly with
-`XM_LLM_API_KEY`; that profile uses `xiaomi/mimo-v2.5` and disables web search
-because the gateway phase does not support Codex's web search tool. To use
-MiniMax's Responses-compatible token-plan route, set
-`ROBOCLAWS_PROVIDER_PROFILE=minimax-responses` with `MM_API_KEY`; the default model is
-`MiniMax-M3`. M3 is the default because it is the multimodal/image-capable row
-and the local paired cleanup evidence did not show a speed win for
-`MiniMax-M2.7-highspeed`; `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed`
-selects that explicit non-default text-only variant for comparison. The
-highspeed model still emits reasoning tokens on the Responses route, so tiny
-output-token budgets can stop before assistant text is produced. Hosted CI does
-not run Codex or Codex provider smoke.
-
-Provider/model facts are centralized in
-`roboclaws/agents/provider_registry.py`. Shell helpers and the operator console
-read that registry for default models, required env keys, wire API, route
-status, and route capabilities. Household evidence-lane policy is separate:
-structured lanes can use text-only routes, while `camera-raw-fpv` requires both
-model image input and verified runtime image transport. MiMo inside
-`mimo-1000` is default-enabled for on-demand benchmark and explicit
-OpenAI-Agents-SDK text experiments, not a product cleanup default. Kimi
-`kimi-k2.7-code` is the Kimi OpenAI Chat default. OpenAI Agents SDK routes use
-`ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=default|enabled|disabled`: Responses
-routes map this to the OpenAI `reasoning` body, while Chat-compatible routes
-map it to the `thinking` body. `disabled` is intended for A/B comparison
-because it removes `reasoning_content` on probed Chat routes. MiniMax highspeed
-and routes with unknown image
-transport are blocked from raw-FPV launches until a live route verdict proves
-otherwise. Current live verdicts live in `docs/human/model-route-verdicts.yaml`;
-the narrative audit remains in `docs/human/model-matrix.md`.
+Docker-backed Codex CLI. Provider/model facts are centralized in
+`roboclaws/agents/provider_registry.py`, with current live verdicts in
+`docs/human/model-route-verdicts.yaml` and narrative notes in
+`docs/human/model-matrix.md`. Hosted CI does not run Codex or Codex provider
+smoke.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
@@ -244,52 +216,18 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,omdet-turbo
-just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
 just agent::eval recommend plan=docs/plans/example.md budget=focused
 just agent::eval execute since=origin/main budget=focused
-.venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
-.venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline real-router --adapter-mode real
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 ```
 
-For `pipeline=grounding-dino` visual-grounding runs, start the configurable service.
-Without real sidecar dependencies it returns explicit unavailable evidence instead
-of fake candidates:
+For `pipeline=grounding-dino` visual-grounding runs, start the configurable
+service. Without real sidecar dependencies it returns explicit unavailable
+evidence instead of fake candidates:
 
 ```bash
 .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline grounding-dino
 ```
-
-For real proposer sidecar probes, install the optional model dependencies and
-weights explicitly in the dedicated sidecar environment, then start the same
-service in real-router mode:
-
-```bash
-UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
-  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe --extra omdet
-
-VISUAL_GROUNDING_DEVICE=auto \
-VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
-
-VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
-
-VISUAL_GROUNDING_OMDET_MODEL_ID=omlab/omdet-turbo-swin-tiny-hf \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
-```
-
-Hosted VLM refiner/direct-producer routes are retired from the active
-visual-grounding sidecar contract. ADR-0138 keeps old Gemini/MiMo/Qwen evidence
-as historical context instead of keeping those provider slots runnable here.
 
 To inspect the sidecar adapter slots without starting a service:
 
@@ -297,36 +235,8 @@ To inspect the sidecar adapter slots without starting a service:
 .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --list-adapters
 ```
 
-The adapter catalog includes redacted `runtime` readiness for each slot. Local
-proposers report importable dependencies such as `torch`, `transformers`, and
-`ultralytics`; weights are verified only by a real adapter run.
-
-Benchmark reports include API cost and memory telemetry slots. They are
-populated only when the configured sidecar reports stage usage/cost or memory
-metadata; otherwise the result records `not_reported_by_service`.
-The benchmark result also emits the capped end-to-end probe set: `sim` plus the
-best detector-only proposer pipeline.
-Full cleanup probes stay blocked until every selected non-sim pipeline has real
-detector sidecar provenance. Missing sidecar rows are blocked evidence, not a
-fake validation substitute.
-`--require-success` on the benchmark checker means no pipeline failures; zero
-candidates remain a valid poor-recall result.
-
-To create a local path-backed RAW_FPV benchmark corpus from a stored cleanup run:
-
-```bash
-.venv/bin/python scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py \
-  output/molmo/<run>/seed-7 \
-  --output harness/visual_grounding/local_raw_fpv_corpus.json
-```
-
-Real proposer pipeline ids such as `grounding-dino` and `yoloe` report
-`adapter_unavailable` or dependency failures unless the service is started with
-`--adapter-mode real` with installed sidecar dependencies and model weights.
-Retired hosted VLM ids such as `grounding-dino+mimo-v2.5`, `mimo-v2.5-direct`,
-and `qwen3-vl-direct` are not active adapter slots. The adapter catalog records
-the optional sidecar extra and current redacted runtime readiness for each
-target adapter.
+Detailed sidecar dependency and corpus commands live in
+`docs/human/molmospaces-settings.md`.
 
 Prompt mappings for agents:
 
@@ -348,7 +258,6 @@ just agent::run <dispatch-target> <agent-engine> [report|evidence-lane] [key=val
 just agent::verify <target> [args ...]
 just agent::harness <target> [args ...]
 just agent::mcp up
-just agent::gateway up
 ```
 
 `agent::run` is a private maintainer dispatcher. Public callers should use
@@ -366,4 +275,4 @@ writes JSON, Markdown, and HTML under `output/eval-harness/` and records
 selected, skipped, run, failed, and blocked rows with source-signal rationale.
 
 For tests, set `ROBOCLAWS_JUST_TRACE=1` to print the lower-level command route
-without launching the underlying simulator, Gateway, or agent.
+without launching the underlying simulator or agent.

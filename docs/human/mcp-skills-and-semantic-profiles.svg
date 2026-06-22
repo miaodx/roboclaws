@@ -87,7 +87,7 @@
   <text x="390" y="560" class="card-text">or blocked capability</text>
   <rect x="670" y="488" width="242" height="86" class="card"/>
   <text x="694" y="516" class="card-title">other modules</text>
-  <text x="694" y="540" class="card-text">search, photo capture,</text>
+  <text x="694" y="540" class="card-text">search, inspection,</text>
   <text x="694" y="560" class="card-text">inspection, memory</text>
   <rect x="958" y="488" width="226" height="86" class="warn-chip"/>
   <text x="982" y="520" class="chip-text">No copied profile:</text>
@@ -122,7 +122,7 @@
   <rect x="524" y="860" width="170" height="28" class="chip"/>
   <text x="546" y="879" class="chip-text">agibot_g2</text>
   <rect x="738" y="860" width="170" height="28" class="chip"/>
-  <text x="760" y="879" class="chip-text">ros2_nav2</text>
+  <text x="760" y="879" class="chip-text">agibot_gdk</text>
   <rect x="952" y="860" width="206" height="28" class="ok-chip"/>
   <text x="974" y="879" class="chip-text">safety gates + provenance</text>
   <path class="line" d="M640 752 L640 808"/>

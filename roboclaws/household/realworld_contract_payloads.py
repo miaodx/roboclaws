@@ -28,6 +28,7 @@ class RealWorldPayloadContract(Protocol):
     _public_waypoints: Iterable[dict[str, Any]]
     _runtime_map_priors: Iterable[dict[str, Any]]
     _runtime_map_room_priors: Iterable[dict[str, Any]]
+    _runtime_prior_digital_twin_capabilities: dict[str, Any]
 
     def metric_map(self) -> dict[str, Any]: ...
     def static_fixture_projection(self) -> dict[str, Any]: ...
@@ -204,6 +205,14 @@ def runtime_metric_map_payload(
             for item in contract._generated_inspection_waypoints.values()
         ],
     }
+    digital_twin_capabilities = dict(contract._runtime_prior_digital_twin_capabilities)
+    if digital_twin_capabilities:
+        payload["digital_twin_capabilities"] = digital_twin_capabilities
+        payload["capability_summary"] = (
+            realworld_runtime_map_contract.digital_twin_capability_summary(
+                digital_twin_capabilities
+            )
+        )
     if contract._runtime_map_room_priors:
         payload["rooms"] = merge_public_rooms(
             payload.get("rooms") or [],

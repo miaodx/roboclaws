@@ -115,7 +115,7 @@ Semantics:
   - normalized requested and applied deltas;
   - clamp or safety metadata;
   - `requires_reobserve=true`;
-  - backend provenance such as `api_semantic`, `sim_planner`, `nav2_action`,
+  - backend provenance such as `api_semantic`, `sim_planner`,
     `agibot_gdk_normal_navi`, or `blocked_capability`.
 
 This belongs beside `navigate_to_waypoint` in `household_world` navigation

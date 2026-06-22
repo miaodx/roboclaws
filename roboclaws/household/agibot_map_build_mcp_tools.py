@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
-from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
+from roboclaws.household.manipulation_provenance import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 
 AGIBOT_MAP_BUILD_TOOLS = (

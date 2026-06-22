@@ -1,6 +1,8 @@
-# Real Robot Nav2 Cleanup Pilot
+# Historical Real Robot Nav2 Cleanup Pilot
 
-**Status:** Proposed source plan
+**Status:** Historical source plan; not an active implementation route. The
+direct Nav2 adapter and physical Nav2 pilot code were removed after Agibot GDK
+became the first physical backend integration path.
 **Created:** 2026-05-18
 **Source:** grill-with-docs session on MolmoSpaces cleanup, Nav2 map parity, and
 real robot deployment

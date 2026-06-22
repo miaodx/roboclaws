@@ -585,8 +585,9 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
     ]
     assert "我渴了，帮我找些解渴的东西" in route
     assert route[24:26] == ["household-world", "open-ended"]
-    assert route[26] == ""
-    assert route[27] == "assets/maps/b1-map12-alignment-review.json"
+    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" not in plan_trace
+    assert not any(item.startswith("b1_alignment_artifact=") for item in plan_trace)
+    assert not any(item.startswith("b1_navigation_artifact=") for item in plan_trace)
     assert plan_trace[:6] == [
         "launch-plan",
         "surface=household-world",
@@ -1060,7 +1061,7 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
     assert "direct-runner|openclaw-gateway" not in exc.value.hint
 
 
-def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
+def test_public_engine_docs_keep_guarded_maintainer_routes_out_of_public_list() -> None:
     readme = (JUST_DIR / "README.md").read_text(encoding="utf-8")
     engine_section = readme.split("Agent engines:", 1)[1].split("Provider profiles", 1)[0]
     taxonomy = (REPO_ROOT / "docs" / "human" / "agent-task-command-taxonomy.md").read_text(
@@ -1075,16 +1076,17 @@ def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
     ]
 
     assert "openclaw-gateway" not in engine_section
-    assert "openclaw-gateway" in readme
+    assert "openclaw-gateway" not in readme
     assert "Validation-required maintainer engines" in readme
     assert "- `openclaw-gateway`" not in taxonomy_engine_bullets
     assert "Validation-required maintainer engines" in taxonomy
 
 
-def test_openclaw_demo_doc_stays_validation_required() -> None:
+def test_retired_maintainer_demo_doc_does_not_publish_current_command() -> None:
     demo_doc = (REPO_ROOT / "docs" / "human" / "openclaw" / "demo.md").read_text(encoding="utf-8")
 
-    assert "validation-required maintainer route" in demo_doc
+    assert "historical" in demo_doc
+    assert "agent_engine=openclaw-gateway" not in demo_doc
     assert "same public launch catalog" not in demo_doc
 
 
@@ -1102,7 +1104,7 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
     assert "profile=camera-labels" not in legacy_arch
     assert "openclaw-smoke-report" not in settings
     assert "just molmo::openclaw-report" not in settings
-    assert "OpenClaw report recipes are maintainer-only validation routes" in settings
+    assert "Guarded report recipes are maintainer-only validation routes" in settings
 
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
@@ -1436,7 +1438,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[21] == (
-        "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
+        "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
     assert route[24:26] == ["household-world", "open-ended"]
     assert route[26] == ""
@@ -1449,7 +1451,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/scene_gs.usda"
+        "B1_floor2_slow/usda/F2_all/default.usda"
     ) in target_trace
     assert "world=b1-map12" in target_trace
     assert "backend=isaaclab_subprocess" in target_trace
@@ -1502,6 +1504,22 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
     assert '--output "${output_dir}/runtime_map_prior_snapshot.json"' in b1_branch
     assert '--summary-json "${output_dir}/runtime_map_prior_targets.json"' in b1_branch
     assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch
+
+
+def test_b1_live_agent_run_copies_robot_consumption_artifacts_to_seed_run_dir() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    live_run_setup = molmo_text.split('run_dir="${run_root}/seed-${seed}"', 1)[1].split(
+        'policy="${driver%-live}_agent"',
+        1,
+    )[0]
+
+    assert 'launch_world_id" == "b1-map12"' in live_run_setup
+    assert "b1_robot_consumption_manifest.json" in live_run_setup
+    assert "runtime_map_prior_snapshot.json" in live_run_setup
+    assert "runtime_map_prior_targets.json" in live_run_setup
+    assert 'cp "${output_dir}/${b1_run_artifact}" "${run_dir}/${b1_run_artifact}"' in (
+        live_run_setup
+    )
 
 
 def test_b1_isaac_route_uses_b1_robot_consumption_checker_gate() -> None:

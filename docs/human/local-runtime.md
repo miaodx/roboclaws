@@ -35,11 +35,12 @@ Anthropic route from `XM_LLM_API_KEY` (`mimo-mify-anthropic`,
 `xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
 network.
 
-Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
-workflows. On the work network, OpenClaw and system-provider Claude Code are
-blocked; the repo-local Codex `codex-router-responses` route (`CODEX_BASE_URL` plus
-`CODEX_API_KEY`), explicit Codex mimo-mify-responses override, and Claude `mimo-mify-anthropic` remain
-allowed. Work-network restrictions are documented in
+Run `just dev::network-status` before Claude Code, Codex, or
+validation-required maintainer workflows. On the work network, guarded
+maintainer routes and system-provider Claude Code are blocked; the repo-local
+Codex `codex-router-responses` route (`CODEX_BASE_URL` plus `CODEX_API_KEY`),
+explicit Codex mimo-mify-responses override, and Claude
+`mimo-mify-anthropic` remain allowed. Work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see

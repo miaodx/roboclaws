@@ -14,7 +14,7 @@
   },
   "capability_requirements": {
     "profiles": ["household_world"],
-    "backend_variants": ["agibot_gdk", "nav2_ros2", "api_semantic_synthetic"],
+    "backend_variants": ["agibot_gdk", "api_semantic_synthetic"],
     "notes": "The output is consumed by household-world tasks through runtime_map_prior, not through an Agibot-specific cleanup path."
   },
   "scripts": [

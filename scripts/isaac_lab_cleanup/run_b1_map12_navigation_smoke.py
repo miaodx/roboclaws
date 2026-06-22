@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
 from PIL import Image
 
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
     NAVIGATION_SMOKE_SCHEMA,
     READINESS_SCHEMA,
@@ -55,6 +56,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--render-width", type=_positive_int_arg, default=540)
     parser.add_argument("--render-height", type=_positive_int_arg, default=360)
+    parser.add_argument(
+        "--render-scene-usd",
+        type=Path,
+        default=DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+        help=(
+            "Visual-route scene USD used for same-pose robot FPV/Chase/topdown captures. "
+            "The B1 root remains the registration/readiness source."
+        ),
+    )
     parser.add_argument("--accept-nvidia-eula", action="store_true")
     return parser.parse_args(argv)
 
@@ -110,15 +120,7 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         write_artifact(artifact_path, artifact)
         return 2
 
-    b1_geometry = dict(readiness.get("b1_geometry") or {})
-    scene_usd = Path(
-        str(
-            dict(b1_geometry.get("renderable_robot_view_usd") or {}).get("path")
-            or dict(b1_geometry.get("full_floor_default_usd") or {}).get("path")
-            or dict(b1_geometry.get("local_geometry") or {}).get("path")
-            or ""
-        )
-    )
+    scene_usd = selected_render_scene_usd(args=args, readiness=readiness)
     if not scene_usd.is_file():
         artifact = blocked_artifact(
             readiness=readiness,
@@ -188,6 +190,16 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         "status": "passed" if provisional_passed else "blocked",
         "readiness_schema": readiness.get("schema"),
         "b1_scene_usd": str(scene_usd),
+        "visual_route": {
+            "scene_id": "B1_floor2_slow"
+            if scene_usd == DEFAULT_B1_VISUAL_ROUTE_SCENE_USD
+            else scene_usd.stem,
+            "scene_usd": str(scene_usd),
+            "selected": scene_usd == DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+            "status": "same_pose_render_verified"
+            if scene_usd == DEFAULT_B1_VISUAL_ROUTE_SCENE_USD
+            else "custom_render_scene_verified",
+        },
         "semantic_source": SEMANTIC_SOURCE,
         "semantic_usd_binding_status": SEMANTIC_USD_BLOCKED,
         "semantic_anchors_are_usd_truth": False,
@@ -272,6 +284,7 @@ def capture_one(args: argparse.Namespace) -> int:
     robot_pose_application = dict(capture.get("robot_pose_stage_application") or {})
     result = {
         "waypoint_id": waypoint.get("waypoint_id"),
+        "scene_usd": str(request["scene_usd"]),
         "source_anchor_id": waypoint.get("source_anchor_id"),
         "semantic_source": SEMANTIC_SOURCE,
         "alignment_artifact": waypoint.get("alignment_artifact") or "",
@@ -302,6 +315,20 @@ def load_or_build_readiness(args: argparse.Namespace) -> dict[str, Any]:
     if args.b1_root is None or args.map12_root is None:
         raise ValueError("either --readiness-artifact or both --b1-root/--map12-root are required")
     return build_readiness_artifact(Path(args.b1_root), Path(args.map12_root))
+
+
+def selected_render_scene_usd(*, args: argparse.Namespace, readiness: dict[str, Any]) -> Path:
+    if args.render_scene_usd is not None:
+        return Path(args.render_scene_usd)
+    b1_geometry = dict(readiness.get("b1_geometry") or {})
+    return Path(
+        str(
+            dict(b1_geometry.get("renderable_robot_view_usd") or {}).get("path")
+            or dict(b1_geometry.get("full_floor_default_usd") or {}).get("path")
+            or dict(b1_geometry.get("local_geometry") or {}).get("path")
+            or ""
+        )
+    )
 
 
 def navigation_smoke_waypoints(
