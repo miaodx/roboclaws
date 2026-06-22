@@ -174,13 +174,16 @@ def collect_room_outlines(
             (float(min_xy[1]) + float(max_xy[1])) / 2.0,
         ]
         outlines.append(
-            {
-                "room_id": room_id,
-                "label": room_id.replace("_", " ").title(),
-                "center": [round(center[0], 6), round(center[1], 6)],
-                "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
-                "provenance": "mujoco_room_mesh_world_bounds",
-            }
+            _with_source_room_label(
+                {
+                    "room_id": room_id,
+                    "label": room_id.replace("_", " ").title(),
+                    "center": [round(center[0], 6), round(center[1], 6)],
+                    "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                },
+                state,
+            )
         )
         seen.add(room_id)
     if outlines:
@@ -248,15 +251,42 @@ def fallback_room_outlines(state: dict[str, Any]) -> list[dict[str, Any]]:
             round(max((max(ys) - min(ys)) / 2.0, 0.8), 6),
         ]
         outlines.append(
-            {
-                "room_id": room_id,
-                "label": room_id.replace("_", " ").title(),
-                "center": center,
-                "half_extents": half_extents,
-                "provenance": "public_object_room_area_bounds",
-            }
+            _with_source_room_label(
+                {
+                    "room_id": room_id,
+                    "label": room_id.replace("_", " ").title(),
+                    "center": center,
+                    "half_extents": half_extents,
+                    "provenance": "public_object_room_area_bounds",
+                },
+                state,
+            )
         )
     return sorted(outlines, key=lambda item: item["room_id"])
+
+
+def _with_source_room_label(outline: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    room_id = str(outline.get("room_id") or "")
+    labels = state.get("source_room_labels") or {}
+    label = labels.get(room_id) if isinstance(labels, dict) else None
+    if not isinstance(label, dict):
+        raise RuntimeError(f"missing source room label for {room_id}")
+    room_label = str(label.get("room_label") or "").strip()
+    if not room_label:
+        raise RuntimeError(f"empty source room label for {room_id}")
+    room_type = str(label.get("room_type") or "").strip()
+    if not room_type:
+        raise RuntimeError(f"missing source room type for {room_id}")
+    provenance = str(label.get("room_label_provenance") or "").strip()
+    if not provenance:
+        raise RuntimeError(f"missing source room label provenance for {room_id}")
+    return {
+        **outline,
+        "label": room_label,
+        "room_label": room_label,
+        "room_type": room_type,
+        "room_label_provenance": provenance,
+    }
 
 
 def map_bounds(points: list[list[float]]) -> tuple[float, float, float, float]:

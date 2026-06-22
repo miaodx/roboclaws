@@ -367,7 +367,7 @@ const palette = ["#2563eb", "#16a34a", "#a16207", "#dc2626", "#7c3aed", "#0f766e
 const state = {
   mode: "select",
   shapes: JSON.parse(JSON.stringify(PACKET.shapes || [])),
-  semanticLayers: cloneSemanticLayers(PACKET.semantic_map_layers || {}),
+  sourceMapLayers: cloneSourceMapLayers(PACKET.source_map_layers || {}),
   navigationMemoryLayer: cloneNavigationMemoryLayer(PACKET.navigation_memory_layer || {}),
   layers: {
     rooms: true,
@@ -387,7 +387,7 @@ const canvas = document.getElementById("mapCanvas");
 const ctx = canvas.getContext("2d");
 const exportText = document.getElementById("exportText");
 
-function cloneSemanticLayers(layers) {
+function cloneSourceMapLayers(layers) {
   return JSON.parse(JSON.stringify({
     fixtures: layers.fixtures || [],
     inspection_waypoints: layers.inspection_waypoints || [],
@@ -627,14 +627,14 @@ function rotatePoseAround(pose, center, angleRad) {
   };
 }
 
-function rotateSemanticLayersAround(center, angleRad) {
-  (state.semanticLayers.fixtures || []).forEach((fixture) => {
+function rotateSourceMapLayersAround(center, angleRad) {
+  (state.sourceMapLayers.fixtures || []).forEach((fixture) => {
     fixture.pose = rotatePoseAround(fixture.pose, center, angleRad);
   });
-  (state.semanticLayers.inspection_waypoints || []).forEach((waypoint) => {
+  (state.sourceMapLayers.inspection_waypoints || []).forEach((waypoint) => {
     waypoint.pose = rotatePoseAround(waypoint.pose, center, angleRad);
   });
-  (state.semanticLayers.driveable_ways || []).forEach((way) => {
+  (state.sourceMapLayers.driveable_ways || []).forEach((way) => {
     if (way.from_center) {
       way.from_center = rotatePointAround(way.from_center, center, angleRad);
     }
@@ -665,7 +665,7 @@ function applyGlobalTilt() {
   const angleRad = (angleDeg * Math.PI) / 180;
   targets.forEach((shape) => rotateShapeAround(shape, pivot, angleRad));
   if (scope === "all") {
-    rotateSemanticLayersAround(pivot, angleRad);
+    rotateSourceMapLayersAround(pivot, angleRad);
   }
   renderAll();
 }
@@ -759,7 +759,7 @@ function draw() {
 }
 
 function drawDriveableWays() {
-  const ways = state.semanticLayers.driveable_ways || [];
+  const ways = state.sourceMapLayers.driveable_ways || [];
   ctx.save();
   ctx.strokeStyle = "rgba(15, 118, 110, 0.72)";
   ctx.lineWidth = 3;
@@ -779,7 +779,7 @@ function drawDriveableWays() {
 }
 
 function drawFixtures() {
-  const fixtures = state.semanticLayers.fixtures || [];
+  const fixtures = state.sourceMapLayers.fixtures || [];
   ctx.save();
   fixtures.forEach((fixture) => {
     const center = worldToPixel(fixture.pose || { x: 0, y: 0 });
@@ -796,7 +796,7 @@ function drawFixtures() {
 }
 
 function drawWaypoints() {
-  const waypoints = state.semanticLayers.inspection_waypoints || [];
+  const waypoints = state.sourceMapLayers.inspection_waypoints || [];
   ctx.save();
   waypoints.forEach((waypoint) => {
     const center = worldToPixel(waypoint.pose || { x: 0, y: 0 });
@@ -1320,8 +1320,8 @@ function renderMeta() {
     image: ${PACKET.map.image_width_px} x ${PACKET.map.image_height_px}px<br />
     resolution: ${PACKET.map.resolution_m} m/px<br />
     labels: ${state.shapes.length}<br />
-    fixtures: ${(state.semanticLayers.fixtures || []).length}<br />
-    waypoints: ${(state.semanticLayers.inspection_waypoints || []).length}<br />
+    fixtures: ${(state.sourceMapLayers.fixtures || []).length}<br />
+    waypoints: ${(state.sourceMapLayers.inspection_waypoints || []).length}<br />
     navigation memory: ${(state.navigationMemoryLayer.items || []).length}
   `;
 }
@@ -1408,7 +1408,7 @@ document.getElementById("downloadJson").addEventListener("click", () => {
 });
 document.getElementById("loadInitial").addEventListener("click", () => {
   state.shapes = JSON.parse(JSON.stringify(PACKET.shapes || []));
-  state.semanticLayers = cloneSemanticLayers(PACKET.semantic_map_layers || {});
+  state.sourceMapLayers = cloneSourceMapLayers(PACKET.source_map_layers || {});
   state.navigationMemoryLayer = cloneNavigationMemoryLayer(PACKET.navigation_memory_layer || {});
   state.selectedId = state.shapes[0]?.shape_id || null;
   state.draftPolygon = [];

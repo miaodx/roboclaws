@@ -42,7 +42,7 @@ The household stack starts from a Base Navigation Map: occupancy/free-space
 context, generated exploration candidates, and public room-category hints when
 available. Map-build and observations enrich that context into a Runtime Metric
 Map. Downstream runs can consume either raw `runtime_metric_map.json` or the
-canonical `actionable_semantic_map_snapshot_v1` package.
+canonical `runtime_map_prior_snapshot_v1` package.
 
 Cleanup separates:
 

@@ -14,14 +14,10 @@ from scripts.operator_console.render_scene_previews import (
     _molmospaces_scene_ref,
     _preview_metadata,
     _promote_b1_camera_previews,
-    _render_semantic_map_preview,
     _scene_alignment,
     _scene_center_and_span,
     _topdown_camera_request,
     render_b1_map12_preview,
-)
-from scripts.operator_console.semantic_map_preview import (
-    semantic_map_preview_projection_summary,
 )
 
 
@@ -41,7 +37,7 @@ def test_topdown_preview_request_uses_scene_camera_not_semantic_map() -> None:
     assert request["camera_model"] == "canonical_eye_target_camera_v1"
     assert request["render_resolution"] == {"width": 900, "height": 560}
     assert view["view_id"] == "topdown_scene"
-    assert view["camera_basis"] == "whole_scene_true_topdown_aligned_to_semantic_map"
+    assert view["camera_basis"] == "whole_scene_true_topdown_aligned_to_scene_bounds"
     assert view["eye"][2] > view["target"][2]
     assert view["eye"][:2] == pytest.approx(view["target"][:2])
     assert view["azimuth"] == pytest.approx(90.0)
@@ -124,12 +120,6 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
         },
         topdown_path=topdown_path,
         scene_alignment=scene_alignment,
-        semantic_projection={
-            "schema": "operator_console_semantic_map_projection_v1",
-            "waypoint_count": 2,
-            "rendered_waypoint_count": 2,
-            "room_remapped_waypoint_count": 1,
-        },
     )
 
     assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
@@ -149,13 +139,13 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     assert metadata["views"]["chase"]["camera_diagnostics"]["camera_name"] == (
         "robot_0/camera_follower"
     )
-    assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
-    assert metadata["views"]["map"]["scene_alignment"] == scene_alignment
-    assert metadata["views"]["map"]["semantic_projection"]["room_remapped_waypoint_count"] == 1
+    assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
+    assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
+    assert "scene_alignment" not in metadata["views"]["map"]
+    assert "semantic_projection" not in metadata["views"]["map"]
     assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
     assert metadata["views"]["topdown"]["camera_pose"]["azimuth"] == pytest.approx(90.0)
     assert metadata["views"]["topdown"]["scene_alignment"] == scene_alignment
-    assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
     assert metadata["views"]["topdown"]["path"].endswith("-topdown.png")
     assert metadata["views"]["topdown"]["image_diagnostics"]["visual_status"] == "low_detail"
 
@@ -367,7 +357,7 @@ def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_preserves_prepared_nurec_camera_preview_renderer(
+def test_b1_map12_rewrites_prepared_nurec_scene_probe_camera_previews(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -406,10 +396,12 @@ def test_b1_map12_preserves_prepared_nurec_camera_preview_renderer(
     result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
 
     assert result["status"] == "rendered"
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
-    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
-    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
 
 
 def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
@@ -627,92 +619,3 @@ def test_scene_alignment_expands_bounds_to_preview_aspect() -> None:
     )
     assert alignment["topdown_azimuth_deg"] == pytest.approx(90.0)
     assert alignment["span_x_m"] / alignment["span_y_m"] == pytest.approx(900 / 560)
-
-
-def test_semantic_map_preview_draws_scene_layers() -> None:
-    state = {
-        "room_outlines": [{"room_id": "room_1", "center": [1.0, 1.0], "half_extents": [1.0, 1.0]}],
-        "receptacles": {"sink_01": {"position": [0.2, 0.4]}},
-        "objects": {
-            "mug_01": {"position": [1.4, 1.2]},
-            "plate_01": {"position": [1.7, 0.8]},
-        },
-        "selected_object_ids": ["mug_01"],
-        "robot_trajectory": [{"x": 0.1, "y": 0.1, "theta": 0.0}, {"x": 1.5, "y": 1.5}],
-    }
-    alignment = _scene_alignment(state, width=240, height=160)
-
-    image = _render_semantic_map_preview(
-        state,
-        metric_map={"inspection_waypoints": [{"waypoint_id": "w1", "x": 0.5, "y": 0.5}]},
-        alignment=alignment,
-        world_label="molmospaces/val_0",
-        width=240,
-        height=160,
-    )
-
-    assert image.size == (240, 160)
-    assert image.getbbox() is not None
-    assert len(set(image.getdata())) > 1
-
-
-def test_semantic_map_preview_draws_legend_even_without_scene_layers() -> None:
-    image = _render_semantic_map_preview(
-        {},
-        metric_map={},
-        alignment=_scene_alignment({}, width=320, height=220),
-        world_label="molmospaces/val_0",
-        width=320,
-        height=220,
-    )
-
-    colors = set(image.getdata())
-    assert (99, 102, 241) in colors  # public waypoint
-    assert (86, 103, 140) in colors  # receptacle / surface
-    assert (245, 158, 11) in colors  # movable object
-    assert (239, 68, 68) in colors  # selected movable object
-    assert (37, 99, 235) in colors  # robot path
-
-
-def test_semantic_map_preview_remaps_abstract_waypoints_to_scene_room_bounds() -> None:
-    state = {
-        "room_outlines": [
-            {
-                "room_id": "room_10",
-                "label": "Room 10",
-                "center": [10.0, 10.0],
-                "half_extents": [2.0, 4.0],
-            }
-        ],
-    }
-    metric_map = {
-        "rooms": [
-            {
-                "room_id": "room_10",
-                "polygon": [
-                    {"x": 0.0, "y": 0.0},
-                    {"x": 2.0, "y": 0.0},
-                    {"x": 2.0, "y": 2.0},
-                    {"x": 0.0, "y": 2.0},
-                ],
-            }
-        ],
-        "inspection_waypoints": [
-            {"waypoint_id": "generated_exploration_001", "room_id": "room_10", "x": 1.0, "y": 0.3}
-        ],
-    }
-    alignment = _scene_alignment(state, width=240, height=160)
-
-    summary = semantic_map_preview_projection_summary(
-        state,
-        metric_map=metric_map,
-        alignment=alignment,
-    )
-
-    assert summary["waypoint_count"] == 1
-    assert summary["rendered_waypoint_count"] == 1
-    assert summary["room_remapped_waypoint_count"] == 1
-    assert summary["raw_scene_waypoint_count"] == 0
-    assert summary["skipped_waypoint_count"] == 0
-    assert summary["projected_waypoint_bounds"]["min_x"] == pytest.approx(10.0)
-    assert summary["projected_waypoint_bounds"]["max_y"] == pytest.approx(7.2)

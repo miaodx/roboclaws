@@ -49,7 +49,7 @@ Build from the bottom up, but let the agent enter from the top:
 | --- | --- | --- | --- |
 | Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
 | Runnable surface and optional preset | Public command, parameters, report shape, acceptance gates | `surface=household-world prompt=...`, `surface=household-world preset=map-build`, `surface=household-world preset=cleanup` | Keep it separate from strategy and backend implementation. |
-| Agent skill | Reusable behavior package | `molmo-realworld-cleanup`, `actionable-semantic-map-conversion` | Skills can evolve, merge, split, and be pruned. |
+| Agent skill | Reusable behavior package | `molmo-realworld-cleanup`, `runtime-map-prior-conversion` | Skills can evolve, merge, split, and be pruned. |
 | Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `navigate -> observe -> pick -> place` | Default home for reusable composition before MCP promotion. |
 | Composite action | Describes a skill's internal behavior shape | `navigate -> observe -> pick -> place` | Descriptive by default, not a separate artifact. |
 | Composed semantic capability | Bounded capability or service | localization, navigation, search, transport | Promote only when the boundary is stable. |
@@ -181,7 +181,7 @@ Canonical public capability tools cover household world evidence only:
 - public metric map and fixture context;
 - runtime metric map snapshots, observed-object priors, and update candidates
   exposed through `metric_map()` / Agent View;
-- Actionable Semantic Map Snapshot artifacts that package online
+- Runtime Map Prior Snapshot artifacts that package online
   `runtime_metric_map_v1` output or offline Agibot `navigation_memory.json`
   conversion into one downstream consumer contract;
 - room and waypoint navigation for evidence capture;
@@ -196,7 +196,7 @@ It excludes manipulation and task-completion tools such as `pick`, `place`,
 
 The artifact boundary is task-neutral: `preset=map-build` may emit a raw
 `runtime_metric_map.json`, and map-conversion skills may turn Agibot
-`navigation_memory.json` into `actionable_semantic_map_snapshot_v1`. Cleanup
+`navigation_memory.json` into `runtime_map_prior_snapshot_v1`. Cleanup
 and open household tasks consume the canonical snapshot or its runtime-map
 payload through `runtime_map_prior=...`; they should not add an Agibot-specific
 loading path. Movable-object priors from any snapshot remain `needs_confirm`
@@ -255,10 +255,10 @@ physical proof exists.
 - `metric_map` is the current map-reading path. The Base Navigation Map exposes
   occupancy/free-space context, generated candidates, and public room-category
   hints when available; Runtime Metric Map evidence adds observed anchors and
-  target candidates during a run. Historical `fixture_hints` artifacts may
+  target candidates during a run. Historical `static_fixture_projection` artifacts may
   still be displayed for old reports, but active skills should discover
   destinations through metric-map evidence and target-query resolution rather
-  than a fixture-hints-first tool habit.
+  than reading static fixture projection first.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
   bounded physical navigation actions when enough public grounding is available.
@@ -299,7 +299,7 @@ preset catalog:
 Reusable strategy names belong in skills:
 
 - `molmo-realworld-cleanup`
-- `actionable-semantic-map-conversion`
+- `runtime-map-prior-conversion`
 
 Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`,
 `agibot_g2`, or `ros2_nav2` should be profile metadata or run configuration,
@@ -390,7 +390,7 @@ describe what public robot capabilities the agent is allowed to rely on.
 | Household cleanup MCP server | `roboclaws/household/realworld_mcp_server.py` |
 | Skill library convention | `skills/README.md` |
 | ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
-| Actionable semantic map conversion skill | `skills/actionable-semantic-map-conversion/SKILL.md` |
+| Runtime map prior conversion skill | `skills/runtime-map-prior-conversion/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
 | Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
 | Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |

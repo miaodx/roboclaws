@@ -368,7 +368,7 @@ def test_raw_fpv_probe_builds_visual_labeler_frame_groups(tmp_path: Path) -> Non
         max_frames_per_source=8,
     )
 
-    public_inputs = probe.build_public_inputs(frames, semantic_map_prior={}, max_candidates=3)
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
     groups = public_inputs["variants"]["raw_fpv_visual_labeler"]["frame_groups"]
 
     assert public_inputs["visual_labeler_contract"]["skill_id"] == "raw-fpv-visual-labeler"
@@ -403,7 +403,7 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
         contrast_run_dirs=(),
         max_frames_per_source=8,
     )
-    public_inputs = probe.build_public_inputs(frames, semantic_map_prior={}, max_candidates=3)
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
     calls: list[dict[str, object]] = []
 
     monkeypatch.setenv("CODEX_API_KEY", "test-key")

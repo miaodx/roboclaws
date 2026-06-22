@@ -522,7 +522,7 @@ def test_realworld_mcp_rejects_removed_cleanup_composite(
         server.close()
 
 
-def test_realworld_mcp_rejects_removed_fixture_hints_tool(
+def test_realworld_mcp_rejects_removed_static_fixture_projection_tool(
     tmp_path: Path,
 ) -> None:
     server = make_molmo_realworld_cleanup_mcp(
@@ -532,10 +532,10 @@ def test_realworld_mcp_rejects_removed_fixture_hints_tool(
         evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
     )
     try:
-        assert "fixture_hints" not in _fastmcp_tool_names(server)
-        assert "fixture_hints" not in server._agent_view_payload()["public_tool_names"]
-        with pytest.raises(ValueError, match="fixture_hints"):
-            server.call_tool("fixture_hints")
+        assert "static_fixture_projection" not in _fastmcp_tool_names(server)
+        assert "static_fixture_projection" not in server._agent_view_payload()["public_tool_names"]
+        with pytest.raises(ValueError, match="static_fixture_projection"):
+            server.call_tool("static_fixture_projection")
     finally:
         server.close()
 

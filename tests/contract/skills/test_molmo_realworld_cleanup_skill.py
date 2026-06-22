@@ -95,7 +95,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         detection = _first_detection_by_category(server, "food")
         destination = _first_destination_option(server, str(detection["object_id"]))
         fixture_id = str(destination["candidate_fixture_id"])
-        fixture_hints = {
+        static_fixture_projection = {
             "rooms": [
                 {
                     "room_id": "runtime_semantic_anchors",
@@ -108,7 +108,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
             object_id=detection["object_id"],
             fixture_id=fixture_id,
             placement_tool=destination.get("recommended_tool") or "auto",
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
     finally:
         server.close()
@@ -138,7 +138,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
     assert '"tool": "clean_observed_object"' not in trace_text
 
 
-def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hints(
+def test_trace_preserving_skill_routine_plans_public_open_close_from_static_fixture_projection(
     tmp_path: Path,
 ) -> None:
     routine = _load_routine_module()
@@ -152,7 +152,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
         detection = _first_detection_by_category(server, "food")
         destination = _first_destination_option(server, str(detection["object_id"]))
         fixture_id = str(destination["candidate_fixture_id"])
-        fixture_hints = {
+        static_fixture_projection = {
             "rooms": [
                 {
                     "room_id": "runtime_semantic_anchors",
@@ -167,7 +167,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
     assert routine_plan(
         fixture_id=fixture_id,
         placement_tool="auto",
-        target_fixture=fixture_hints["rooms"][0]["fixtures"][0],
+        target_fixture=static_fixture_projection["rooms"][0]["fixtures"][0],
     ) == [
         "navigate_to_object",
         "pick",
@@ -179,7 +179,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
     assert routine.routine_plan(
         fixture_id="sink_01",
         placement_tool="auto",
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     ) == ["navigate_to_object", "pick", "navigate_to_receptacle", "place"]
 
 

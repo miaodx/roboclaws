@@ -851,33 +851,11 @@ def _preview_statuses(preview: dict[str, Any]) -> dict[str, str]:
 
 
 def _preview_room_count(preview: dict[str, Any]) -> int:
-    return len(_preview_room_ids(preview))
-
-
-def _preview_room_ids(preview: dict[str, Any]) -> tuple[str, ...]:
-    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
-        "semantic_projection"
-    ) or {}
-    waypoints = semantic_projection.get("projected_waypoints") or []
-    return tuple(
-        sorted(
-            {
-                str(item.get("room_id") or "")
-                for item in waypoints
-                if isinstance(item, dict) and item.get("room_id")
-            }
-        )
-    )
+    return int(preview.get("room_count") or 0)
 
 
 def _preview_waypoint_count(preview: dict[str, Any]) -> int:
-    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
-        "semantic_projection"
-    ) or {}
-    return int(
-        semantic_projection.get("rendered_waypoint_count")
-        or len(semantic_projection.get("projected_waypoints") or [])
-    )
+    return int(preview.get("waypoint_count") or 0)
 
 
 def _preview_quality_score(

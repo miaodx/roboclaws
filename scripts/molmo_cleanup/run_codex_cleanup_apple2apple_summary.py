@@ -97,7 +97,7 @@ def _lane_summary(*, lane_id: str, run_result_path: Path, output_dir: Path) -> d
         "scene": _scene_signature(run_result),
         "seed": run_result.get("seed"),
         "map_mode": run_result.get("map_mode"),
-        "fixture_hint_mode": run_result.get("fixture_hint_mode"),
+        "static_fixture_projection_mode": run_result.get("static_fixture_projection_mode"),
         "perception_mode": run_result.get("perception_mode"),
         "visual_grounding_pipeline_id": run_result.get("visual_grounding_pipeline_id"),
         "requested_generated_mess_count": _first_present(

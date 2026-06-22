@@ -113,7 +113,7 @@ def _score_prediction(
     observation: dict[str, Any],
     category_family_map: dict[str, str],
 ) -> _PredictionScore:
-    fixture_hints = list(observation.get("fixture_hints") or [])
+    static_fixture_projection = list(observation.get("static_fixture_projection") or [])
     labels = [
         _private_label(label, category_family_map)
         for label in observation.get("private_labels") or []
@@ -150,7 +150,7 @@ def _score_prediction(
         rejected_proposal_count=int(
             ((prediction.get("diagnostic_evidence") or {}).get("rejected_proposal_count")) or 0
         ),
-        destination=_destination_summary(candidates, fixture_hints),
+        destination=_destination_summary(candidates, static_fixture_projection),
         private_label_detail=_private_label_detail(
             prediction=prediction,
             labels=labels,
@@ -412,11 +412,11 @@ def _duplicate_count(candidates: list[dict[str, Any]]) -> int:
 
 def _destination_summary(
     candidates: list[dict[str, Any]],
-    fixture_hints: list[dict[str, Any]],
+    static_fixture_projection: list[dict[str, Any]],
 ) -> _DestinationSummary:
     summary = _DestinationSummary()
     for candidate in candidates:
-        hint_quality = _destination_hint_quality(candidate, fixture_hints)
+        hint_quality = _destination_hint_quality(candidate, static_fixture_projection)
         summary.hint_count += int(hint_quality["has_hint"])
         summary.known_fixture_count += int(hint_quality["known_fixture"])
         summary.plausible_count += int(hint_quality["plausible"])
@@ -426,14 +426,14 @@ def _destination_summary(
 
 def _destination_hint_quality(
     candidate: dict[str, Any],
-    fixture_hints: list[dict[str, Any]],
+    static_fixture_projection: list[dict[str, Any]],
 ) -> dict[str, bool]:
     hint = candidate.get("destination_hint") or {}
     fixture_id = str(hint.get("candidate_fixture_id") or "")
     known_fixture = next(
         (
             fixture
-            for fixture in fixture_hints
+            for fixture in static_fixture_projection
             if str(fixture.get("fixture_id") or "") == fixture_id
         ),
         None,

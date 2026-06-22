@@ -76,14 +76,14 @@ def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
     assert "Target Candidates" in (tmp_path / "report.html").read_text()
 
 
-def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
+def test_checker_can_require_map_build_mode(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
 
@@ -94,7 +94,7 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_camera_model_policy=True,
     )
     counts = result["tool_event_counts"]
@@ -110,7 +110,7 @@ def test_checker_adaptive_adjust_camera_threshold_is_opt_in(tmp_path: Path) -> N
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
     result["tool_event_counts"]["adjust_camera:request"] = 0
@@ -122,7 +122,7 @@ def test_checker_adaptive_adjust_camera_threshold_is_opt_in(tmp_path: Path) -> N
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_camera_model_policy=True,
     )
     with pytest.raises(AssertionError):
@@ -133,7 +133,7 @@ def test_checker_adaptive_adjust_camera_threshold_is_opt_in(tmp_path: Path) -> N
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_camera_model_policy=True,
             min_adjust_camera_count=1,
         )
@@ -146,7 +146,7 @@ def test_checker_can_require_generated_target_inspection_candidates(tmp_path: Pa
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         map_mode="minimal",
     )
@@ -160,7 +160,7 @@ def test_checker_can_require_generated_target_inspection_candidates(tmp_path: Pa
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_camera_model_policy=True,
     )
     with pytest.raises(AssertionError):
@@ -171,7 +171,7 @@ def test_checker_can_require_generated_target_inspection_candidates(tmp_path: Pa
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_camera_model_policy=True,
             min_generated_target_inspection_candidates=1,
         )
@@ -186,7 +186,7 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         map_mode="minimal",
     )
@@ -212,14 +212,14 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_camera_model_policy=True,
         require_minimal_map=True,
     )
     assert result["runtime_metric_map"]["target_candidates"]
 
 
-def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> None:
+def test_checker_accepts_agibot_map_build_artifact(tmp_path: Path) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     run_dir = _write_agibot_map_build_fixture(tmp_path)
 
@@ -229,13 +229,13 @@ def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> N
         path.parent,
         expect_task=None,
         expect_backend="agibot_gdk",
-        expect_policy="semantic_sweep_baseline",
-        expect_mcp_server="agibot_semantic_map_build",
+        expect_policy="map_build_baseline",
+        expect_mcp_server="agibot_map_build",
         min_generated_mess_count=0,
         require_agent_driven=True,
         require_camera_model_policy=True,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         expect_visual_grounding_pipeline="grounding-dino",
         require_visual_grounding_failure=True,
         min_sweep_coverage=1.0,
@@ -255,20 +255,20 @@ def test_checker_rejects_agibot_rehearsal_as_hardware_validation(
             path.parent,
             expect_task=None,
             expect_backend="agibot_gdk",
-            expect_policy="semantic_sweep_baseline",
-            expect_mcp_server="agibot_semantic_map_build",
+            expect_policy="map_build_baseline",
+            expect_mcp_server="agibot_map_build",
             min_generated_mess_count=0,
             require_agent_driven=True,
             require_camera_model_policy=True,
             require_runtime_metric_map=True,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_agibot_g2_hardware=True,
             expect_visual_grounding_pipeline="grounding-dino",
             min_sweep_coverage=1.0,
         )
 
 
-def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
+def test_checker_accepts_agibot_hardware_map_build_shape(
     tmp_path: Path,
 ) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -281,13 +281,13 @@ def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
         path.parent,
         expect_task=None,
         expect_backend="agibot_gdk",
-        expect_policy="semantic_sweep_baseline",
-        expect_mcp_server="agibot_semantic_map_build",
+        expect_policy="map_build_baseline",
+        expect_mcp_server="agibot_map_build",
         min_generated_mess_count=0,
         require_agent_driven=True,
         require_camera_model_policy=True,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_agibot_g2_hardware=True,
         expect_visual_grounding_pipeline="grounding-dino",
         min_sweep_coverage=1.0,
@@ -321,13 +321,13 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
             path.parent,
             expect_task=None,
             expect_backend="agibot_gdk",
-            expect_policy="semantic_sweep_baseline",
-            expect_mcp_server="agibot_semantic_map_build",
+            expect_policy="map_build_baseline",
+            expect_mcp_server="agibot_map_build",
             min_generated_mess_count=0,
             require_agent_driven=True,
             require_camera_model_policy=True,
             require_runtime_metric_map=True,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_agibot_g2_hardware=True,
             min_sweep_coverage=1.0,
         )
@@ -338,7 +338,7 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
     [
         ("agent_driven", False),
         ("mcp_server", "molmo_cleanup_realworld"),
-        ("policy", "semantic_sweep_baseline"),
+        ("policy", "map_build_baseline"),
         ("evidence_lane", "world-oracle-labels"),
         ("perception_mode", "visible_object_detections"),
     ],
@@ -361,7 +361,7 @@ def test_checker_rejects_non_codex_camera_labels_shape_as_agibot_hardware(
             expect_task=None,
             expect_backend="agibot_gdk",
             min_generated_mess_count=0,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_agibot_g2_hardware=True,
             min_sweep_coverage=1.0,
         )
@@ -386,13 +386,13 @@ def test_checker_rejects_agibot_hardware_without_runtime_metric_map(
             expect_task=None,
             expect_backend="agibot_gdk",
             min_generated_mess_count=0,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_agibot_g2_hardware=True,
             min_sweep_coverage=1.0,
         )
 
 
-def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
+def test_checker_rejects_agibot_map_build_without_map_build_gate(
     tmp_path: Path,
 ) -> None:
     _require_agibot_sdk_runner()
@@ -402,7 +402,7 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     )
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     run_dir = tmp_path / "agibot-map-build"
-    server = agibot.make_agibot_semantic_map_build_mcp(
+    server = agibot.make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",
@@ -422,21 +422,21 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
             path.parent,
             expect_task=None,
             expect_backend="agibot_gdk",
-            expect_policy="codex_agibot_semantic_map_build_pilot",
+            expect_policy="codex_agibot_map_build_pilot",
             min_generated_mess_count=0,
             require_camera_model_policy=True,
             require_runtime_metric_map=True,
         )
 
 
-def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
+def test_checker_can_require_minimal_map_map_build(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         map_mode="minimal",
     )
 
@@ -447,12 +447,12 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_minimal_map=True,
     )
     assert result["agent_view"]["metric_map"]["rooms"]
     assert result["agent_view"]["metric_map"]["room_category_hints"]
-    assert result["agent_view"]["fixture_hints"]["rooms"] == []
+    assert result["agent_view"]["static_fixture_projection"]["rooms"] == []
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
     anchors = result["runtime_metric_map"]["public_semantic_anchors"]
@@ -461,7 +461,7 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
     assert any(item["anchor_type"] in {"fixture", "receptacle"} for item in anchors)
 
 
-def test_checker_allows_semantic_sweep_robot_timeline_without_cleanup_actions(
+def test_checker_allows_map_build_robot_timeline_without_cleanup_actions(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -470,7 +470,7 @@ def test_checker_allows_semantic_sweep_robot_timeline_without_cleanup_actions(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         map_mode="minimal",
     )
     robot_views = tmp_path / "robot_views"
@@ -492,7 +492,7 @@ def test_checker_allows_semantic_sweep_robot_timeline_without_cleanup_actions(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_minimal_map=True,
         require_robot_views=True,
     )
@@ -575,7 +575,7 @@ def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> Non
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         map_mode="minimal",
     )
     result["runtime_metric_map"]["public_semantic_anchors"][0]["promotion_status"] = "promoted"
@@ -589,7 +589,7 @@ def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> Non
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_semantic_sweep=True,
+            require_map_build=True,
             require_minimal_map=True,
         )
 
@@ -601,7 +601,7 @@ def test_checker_rejects_actionable_runtime_map_prior(tmp_path: Path) -> None:
     sweep = demo.run_realworld_cleanup(
         output_dir=tmp_path / "sweep",
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
     result = demo.run_realworld_cleanup(
@@ -698,7 +698,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        semantic_sweep=True,
+        map_build=True,
         map_mode="minimal",
     )
 
@@ -709,7 +709,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_minimal_map=True,
         require_waypoint_honesty=True,
     )
@@ -897,7 +897,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_clea
     )
 
 
-def test_checker_allows_minimal_map_without_semantic_sweep_metadata(
+def test_checker_allows_minimal_map_without_map_build_metadata(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -908,8 +908,8 @@ def test_checker_allows_minimal_map_without_semantic_sweep_metadata(
         seed=7,
         map_mode="minimal",
     )
-    result["semantic_sweep"] = None
-    result["semantic_sweep_mode"] = None
+    result["map_build"] = None
+    result["map_build_mode"] = None
     result["agent_metric_mode"] = "minimal"
     result["agent_runtime_minimal"] = True
 
@@ -1035,12 +1035,12 @@ def test_checker_rejects_stale_prebuilt_map_bundle_for_isaac_scene_index(
     stale_bundle = {
         **data["agent_view"]["metric_map"]["map_bundle"],
         "environment_id": "molmospaces-procthor-val-0-7",
-        "map_id": "molmospaces-procthor-val-0-7_semantic_map",
+        "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
     }
     data["agent_view"]["metric_map"]["map_bundle"] = stale_bundle
     data["runtime_metric_map"]["static_map"]["map_bundle"] = stale_bundle
     data["nav2_map_bundle"]["environment_id"] = "molmospaces-procthor-val-0-7"
-    data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_semantic_map"
+    data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_base_navigation_map"
     data["nav2_map_bundle"]["source_bundle_root"] = "assets/maps/molmospaces-procthor-val-0-7"
 
     with pytest.raises(AssertionError):
@@ -2210,7 +2210,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
 
 
-def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -> None:
+def test_checker_accepts_live_raw_fpv_map_build_shape(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -2219,15 +2219,15 @@ def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -
         seed=7,
         map_mode="minimal",
         perception_mode="raw_fpv_only",
-        semantic_sweep=True,
+        map_build=True,
     )
     result["task_name"] = "household-world.map-build"
     result["task_intent"] = "map-build"
     result["policy"] = "codex_agent"
     result["agent_driven"] = True
     result["mcp_server"] = "molmo_cleanup_realworld"
-    result["semantic_sweep"] = None
-    result["semantic_sweep_mode"] = None
+    result["map_build"] = None
+    result["map_build_mode"] = None
     result["cleanup_actions_disabled"] = None
     result["generated_mess_count"] = 0
     result["semantic_substeps"] = []
@@ -2278,7 +2278,7 @@ def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -
         min_generated_mess_count=0,
         require_agent_driven=True,
         require_runtime_metric_map=True,
-        require_semantic_sweep=True,
+        require_map_build=True,
         require_minimal_map=True,
         require_raw_fpv_observations=True,
         min_sweep_coverage=1.0,
@@ -2897,7 +2897,7 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
             "contract": checker.REALWORLD_CONTRACT,
             "forbidden_private_fields_absent": True,
             "metric_map": {},
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "perception_mode": CAMERA_MODEL_POLICY_MODE,
             "structured_detections_available": False,
             "raw_fpv_observations": result["raw_fpv_observations"],
@@ -2942,7 +2942,7 @@ def test_checker_allows_camera_grounded_label_lane_public_provenance() -> None:
             "contract": checker.REALWORLD_CONTRACT,
             "forbidden_private_fields_absent": True,
             "metric_map": {},
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "perception_mode": CAMERA_MODEL_POLICY_MODE,
             "structured_detections_available": False,
             "raw_fpv_observations": result["raw_fpv_observations"],
@@ -3510,7 +3510,7 @@ def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
         f"agibot_map_build_mcp_server_{id(tmp_path)}",
     )
     run_dir = tmp_path / "agibot-map-build"
-    server = agibot.make_agibot_semantic_map_build_mcp(
+    server = agibot.make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",
@@ -3553,15 +3553,15 @@ def _promote_agibot_fixture_to_hardware_shape(
     image_path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
 
-    data["cleanup_status"] = "physical_agibot_semantic_map_build_complete"
-    data["completion_status"] = "physical_agibot_semantic_map_build_complete"
+    data["cleanup_status"] = "physical_agibot_map_build_complete"
+    data["completion_status"] = "physical_agibot_map_build_complete"
     data["primitive_provenance"] = "agibot_gdk_normal_navi"
     data["sweep_coverage_rate"] = 1.0
     readiness = data["real_robot_readiness"]
     assert isinstance(readiness, dict)
     readiness.update(
         {
-            "status": "physical_agibot_semantic_map_build_complete",
+            "status": "physical_agibot_map_build_complete",
             "movement_enabled": True,
             "navigation_perception_ready": True,
             "human_takeover_stop": False,
@@ -3809,13 +3809,13 @@ def _add_isaac_loaded_scene(
 
 def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
-    map_id = f"{scenario_id}_semantic_map"
+    map_id = f"{scenario_id}_base_navigation_map"
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "static-fixture-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "map_version": "base-navigation-map-v1",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": "rby1m",
         "parameter_hash": "unit-scene-index-map-context",
     }
@@ -3828,8 +3828,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
         "schema": "runtime_metric_map_v1",
         "static_map": {"map_bundle": dict(map_bundle), "rooms": [_isaac_scene_index_room()]},
     }
-    fixture_hints = {
-        "schema": "static_fixture_semantic_map_v1",
+    static_fixture_projection = {
+        "schema": "static_fixture_projection_v1",
         "scene_index_fixture_overlay": {
             "enabled": True,
             "source": "isaac_scene_index",
@@ -3842,7 +3842,7 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
     isaac_runtime["scenario_source"] = "isaac_scene_index"
     data["agent_view"] = {
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "runtime_metric_map": runtime_map,
     }
     data["runtime_metric_map"] = runtime_map
@@ -3854,7 +3854,7 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
                 "schema": "nav2_cleanup_semantics_v1",
                 "environment_id": scenario_id,
                 "map_id": map_id,
-                "map_version": "static-fixture-map-v1",
+                "map_version": "base-navigation-map-v1",
                 "rooms": [_isaac_scene_index_room()],
                 "fixtures": [],
                 "inspection_waypoints": [],
@@ -3867,8 +3867,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
         "schema": "nav2_map_bundle_snapshot_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "static-fixture-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "map_version": "base-navigation-map-v1",
+        "source_provenance": "molmospaces_base_navigation_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},
@@ -3885,7 +3885,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "environment_id": scenario_id,
         "map_id": map_id,
         "map_version": "minimal-navigation-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": "rby1m",
         "parameter_hash": "unit-scene-index-minimal-map-context",
     }
@@ -3955,8 +3955,8 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             }
         ],
     }
-    fixture_hints = {
-        "schema": "static_fixture_semantic_map_v1",
+    static_fixture_projection = {
+        "schema": "static_fixture_projection_v1",
         "mode": "minimal",
         "rooms": [],
     }
@@ -3967,7 +3967,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
     data["map_mode"] = "minimal"
     data["agent_view"] = {
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "runtime_metric_map": runtime_map,
     }
     data["runtime_metric_map"] = runtime_map
@@ -3993,7 +3993,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "environment_id": scenario_id,
         "map_id": map_id,
         "map_version": "minimal-navigation-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},

@@ -1,4 +1,4 @@
 {"event":"response","tool":"metric_map","response":{"ok":true}}
 {"event":"response","tool":"metric_map","response":{"ok":true}}
-{"event":"response","tool":"fixture_hints","response":{"ok":true}}
+{"event":"response","tool":"static_fixture_projection","response":{"ok":true}}
 {"event":"response","tool":"done","response":{"ok":true}}

@@ -13,13 +13,13 @@ from PIL import Image, ImageDraw
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 METRIC_MAP_SCHEMA = "real_robot_map_bundle_v1"
-FIXTURE_HINTS_SCHEMA = "static_fixture_semantic_map_v1"
+STATIC_FIXTURE_PROJECTION_SCHEMA = "static_fixture_projection_v1"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate Roboclaws metric_map/fixture_hints JSON from a completed "
+            "Generate Roboclaws metric_map/static_fixture_projection JSON from a completed "
             "Agibot GDK map-context authoring file."
         )
     )
@@ -56,18 +56,21 @@ def main(argv: list[str] | None = None) -> None:
         context,
         semantic_preview_artifact=preview_path.name,
     )
-    fixture_hints = fixture_hints_from_context(context)
-    agent_view = {"metric_map": metric_map, "fixture_hints": fixture_hints}
+    static_fixture_projection = static_fixture_projection_from_context(context)
+    agent_view = {"metric_map": metric_map, "static_fixture_projection": static_fixture_projection}
 
     _write_json(output_dir / "metric_map.json", metric_map)
-    _write_json(output_dir / "fixture_hints.json", fixture_hints)
+    _write_json(output_dir / "static_fixture_projection.json", static_fixture_projection)
     _write_json(output_dir / "agent_view.json", agent_view)
     _copy_capture_images(context, output_dir, source_root=args.context_json.parent)
 
+    fixture_count = sum(
+        len(room.get("fixtures") or []) for room in static_fixture_projection["rooms"]
+    )
     print(
         "agibot metric_map generated: "
         f"{output_dir} rooms={len(metric_map['rooms'])} "
-        f"fixtures={sum(len(room.get('fixtures') or []) for room in fixture_hints['rooms'])} "
+        f"fixtures={fixture_count} "
         f"waypoints={len(metric_map['inspection_waypoints'])}"
     )
 
@@ -261,16 +264,16 @@ def metric_map_from_context(
     }
 
 
-def fixture_hints_from_context(context: dict[str, Any]) -> dict[str, Any]:
+def static_fixture_projection_from_context(context: dict[str, Any]) -> dict[str, Any]:
     if _minimal_context_mode(context):
         return {
             "ok": True,
-            "tool": "fixture_hints",
+            "tool": "static_fixture_projection",
             "status": "ok",
             "contract": REALWORLD_CONTRACT,
-            "schema": FIXTURE_HINTS_SCHEMA,
+            "schema": STATIC_FIXTURE_PROJECTION_SCHEMA,
             "mode": "minimal",
-            "fixture_hint_mode": "minimal_map_no_fixtures",
+            "static_fixture_projection_mode": "minimal_map_no_fixtures",
             "contains_runtime_observations": False,
             "generated_exploration_candidate_count": len(generated_exploration_candidates(context)),
             "public_contract_note": (
@@ -291,14 +294,14 @@ def fixture_hints_from_context(context: dict[str, Any]) -> dict[str, Any]:
         rooms.append(item)
     return {
         "ok": True,
-        "tool": "fixture_hints",
+        "tool": "static_fixture_projection",
         "status": "ok",
         "contract": REALWORLD_CONTRACT,
-        "schema": FIXTURE_HINTS_SCHEMA,
-        "fixture_hint_mode": "operator_authored_semantic_map",
+        "schema": STATIC_FIXTURE_PROJECTION_SCHEMA,
+        "static_fixture_projection_mode": "operator_authored_static_projection",
         "contains_runtime_observations": False,
         "public_contract_note": (
-            "Static fixture hints are projected from the operator-authored semantic "
+            "Static fixture projection is derived from the operator-authored semantic "
             "overlay, not from runtime observed movable objects."
         ),
         "rooms": rooms,

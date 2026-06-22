@@ -527,7 +527,7 @@ def _request(pipeline_id: str, *, image: dict[str, Any] | None = None) -> dict[s
             "artifact_status": "recorded",
         },
         category_hints=["dish", "book", "toy"],
-        fixture_hints=[
+        static_fixture_projection=[
             {
                 "fixture_id": "sink_01",
                 "room_id": "kitchen",

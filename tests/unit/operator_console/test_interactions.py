@@ -75,7 +75,7 @@ def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Pat
     run_dir = _write_run(tmp_path, phase="running-codex")
 
     with pytest.raises(InteractionError, match="Use Steer"):
-        append_next_goal_request(tmp_path, "run-a", "Now build the semantic map")
+        append_next_goal_request(tmp_path, "run-a", "Now build the Runtime Metric Map")
     messages = list_operator_messages(tmp_path, "run-a")
 
     assert not any(item["command_type"] == "steer" for item in messages["messages"])

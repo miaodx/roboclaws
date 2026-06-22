@@ -22,11 +22,11 @@ class RealWorldPayloadContract(Protocol):
     _runtime_map_room_priors: Iterable[dict[str, Any]]
 
     def metric_map(self) -> dict[str, Any]: ...
-    def fixture_hints(self) -> dict[str, Any]: ...
+    def static_fixture_projection(self) -> dict[str, Any]: ...
     def cleanup_worklist_payload(
         self,
         *,
-        fixture_hints: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
     def _visual_evidence_for_handle(self, handle: str) -> dict[str, Any]: ...
     def internal_fixture_id_for_public_reference(self, fixture_id: str) -> str | None: ...
@@ -37,7 +37,7 @@ def runtime_metric_map_payload(
     contract: RealWorldPayloadContract,
     *,
     metric_map: dict[str, Any] | None = None,
-    fixture_hints: dict[str, Any] | None = None,
+    static_fixture_projection: dict[str, Any] | None = None,
     cleanup_worklist: dict[str, Any] | None = None,
     realworld_contract: str,
     runtime_metric_map_schema: str,
@@ -57,11 +57,17 @@ def runtime_metric_map_payload(
     """Build the current-run map view from public map and observation evidence."""
 
     public_metric_map = metric_map if metric_map is not None else contract.metric_map()
-    public_fixture_hints = fixture_hints if fixture_hints is not None else contract.fixture_hints()
+    public_static_fixture_projection = (
+        static_fixture_projection
+        if static_fixture_projection is not None
+        else contract.static_fixture_projection()
+    )
     public_worklist = (
         cleanup_worklist
         if cleanup_worklist is not None
-        else contract.cleanup_worklist_payload(fixture_hints=public_fixture_hints)
+        else contract.cleanup_worklist_payload(
+            static_fixture_projection=public_static_fixture_projection
+        )
     )
     worklist_by_handle = {
         str(item.get("object_id") or ""): dict(item)
@@ -123,7 +129,7 @@ def runtime_metric_map_payload(
         "private_truth_included": False,
         "static_map": realworld_runtime_map_contract.runtime_static_map_payload(
             metric_map=public_metric_map,
-            fixture_hints=public_fixture_hints,
+            static_fixture_projection=public_static_fixture_projection,
             map_mode=contract.map_mode,
             minimal_map_mode=minimal_map_mode,
             assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
@@ -207,7 +213,7 @@ def runtime_metric_map_payload(
 def cleanup_worklist_payload(
     contract: RealWorldPayloadContract,
     *,
-    fixture_hints: dict[str, Any] | None = None,
+    static_fixture_projection: dict[str, Any] | None = None,
     cleanup_worklist_schema: str,
     minimal_map_mode: str,
     non_actionable_handle_states: Collection[str],
@@ -217,7 +223,11 @@ def cleanup_worklist_payload(
     recommended_place_tool: Callable[[str, dict[str, dict[str, Any]]], str],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
-    public_fixtures = fixture_hints if fixture_hints is not None else contract.fixture_hints()
+    public_fixtures = (
+        static_fixture_projection
+        if static_fixture_projection is not None
+        else contract.static_fixture_projection()
+    )
     lifecycle_rows = []
     for handle in sorted(contract._detections_by_handle):
         detection = contract._detections_by_handle[handle]

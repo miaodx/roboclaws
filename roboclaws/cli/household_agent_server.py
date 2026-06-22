@@ -53,7 +53,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
-from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
+from roboclaws.maps.runtime_prior_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 AGIBOT_GDK_BACKEND = "agibot_gdk"
@@ -589,7 +589,7 @@ def run_molmo_realworld_cleanup_agent_server(
         task_surface=task_surface,
         task_intent=normalized_task_intent,
         task_prompt=task_prompt,
-        fixture_hint_mode="room_only",
+        static_fixture_projection_mode="room_only",
         perception_mode=backend_setup.perception_mode,
         map_bundle_dir=backend_setup.selected_bundle_dir,
         record_robot_views=record_robot_views,

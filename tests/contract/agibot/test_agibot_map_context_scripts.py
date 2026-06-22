@@ -45,7 +45,9 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     generator.main([str(context_path), "--output-dir", str(output_dir)])
 
     metric_map = json.loads((output_dir / "metric_map.json").read_text(encoding="utf-8"))
-    fixture_hints = json.loads((output_dir / "fixture_hints.json").read_text(encoding="utf-8"))
+    static_fixture_projection = json.loads(
+        (output_dir / "static_fixture_projection.json").read_text(encoding="utf-8")
+    )
     agent_view = json.loads((output_dir / "agent_view.json").read_text(encoding="utf-8"))
 
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
@@ -57,9 +59,12 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     assert metric_map["inspection_waypoints"][0]["reachability_status"] == "verified"
     assert "verification" not in metric_map["inspection_waypoints"][0]
     assert metric_map["robot_pose"]["pose_source"] == "operator_recorded_pose"
-    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
-    assert fixture_hints["fixture_hint_mode"] == "operator_authored_semantic_map"
-    assert fixture_hints["contains_runtime_observations"] is False
+    assert static_fixture_projection["schema"] == "static_fixture_projection_v1"
+    assert (
+        static_fixture_projection["static_fixture_projection_mode"]
+        == "operator_authored_static_projection"
+    )
+    assert static_fixture_projection["contains_runtime_observations"] is False
     assert "agibot_gdk" not in json.dumps(agent_view)
     assert (output_dir / "semantic_preview.png").is_file()
 
@@ -73,7 +78,9 @@ def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None
     generator.main([str(context_path), "--output-dir", str(output_dir)])
 
     metric_map = json.loads((output_dir / "metric_map.json").read_text(encoding="utf-8"))
-    fixture_hints = json.loads((output_dir / "fixture_hints.json").read_text(encoding="utf-8"))
+    static_fixture_projection = json.loads(
+        (output_dir / "static_fixture_projection.json").read_text(encoding="utf-8")
+    )
     agent_view = json.loads((output_dir / "agent_view.json").read_text(encoding="utf-8"))
     first_waypoint = metric_map["inspection_waypoints"][0]
     payload_text = json.dumps(agent_view).lower()
@@ -96,9 +103,9 @@ def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None
     assert first_waypoint["candidate_provenance"]["source"] == "public_free_space_sample"
     assert first_waypoint["room_label"] == "Open office"
     assert "verification" not in first_waypoint
-    assert fixture_hints["mode"] == "minimal"
-    assert fixture_hints["fixture_hint_mode"] == "minimal_map_no_fixtures"
-    assert fixture_hints["rooms"] == []
+    assert static_fixture_projection["mode"] == "minimal"
+    assert static_fixture_projection["static_fixture_projection_mode"] == "minimal_map_no_fixtures"
+    assert static_fixture_projection["rooms"] == []
     assert "agibot_gdk" not in payload_text
     assert "map_source" not in payload_text
     assert "verification" not in payload_text
@@ -337,7 +344,10 @@ def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path)
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert waypoint["room_label"] == "Open office"
     assert waypoint["reachability_status"] == "verified"
-    assert agent_view["fixture_hints"]["fixture_hint_mode"] == "minimal_map_no_fixtures"
+    assert (
+        agent_view["static_fixture_projection"]["static_fixture_projection_mode"]
+        == "minimal_map_no_fixtures"
+    )
     assert run_result["summary"]["generated_exploration_candidates"] == 3
     assert run_result["privacy_check"]["ok"] is True
     assert "agibot_gdk" not in payload_text

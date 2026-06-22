@@ -8,7 +8,7 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import validate_nav2_map_bundle, write_nav2_map_bundle
-from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
+from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -24,16 +24,16 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        fixture_hints=agent_view["fixture_hints"],
+        static_fixture_projection=agent_view["static_fixture_projection"],
     )
 
     validation = validate_nav2_map_bundle(bundle_dir)
     projected_map = metric_map_from_bundle(bundle_dir)
-    projected_hints = fixture_hints_from_bundle(bundle_dir)
+    projected_projection = static_fixture_projection_from_bundle(bundle_dir)
     waypoints = projected_map["inspection_waypoints"]
     route = validate_metric_map_route(
         projected_map,
-        projected_hints,
+        projected_projection,
         start_waypoint_id=str(waypoints[0]["waypoint_id"]),
         goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
     )
@@ -42,8 +42,8 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
     assert validation.ok, validation.as_dict()
     assert projected_map["schema"] == "real_robot_map_bundle_v1"
     assert projected_map["map_bundle"]["schema"] == "nav2_map_bundle_v1"
-    assert projected_hints["schema"] == "static_fixture_semantic_map_v1"
-    assert projected_hints["contains_runtime_observations"] is False
+    assert projected_projection["schema"] == "static_fixture_projection_v1"
+    assert projected_projection["contains_runtime_observations"] is False
     assert route.ok is True
     assert route.navigation_backend == SIM_COSTMAP_PLANNER
     assert route.path_length_m > 0
@@ -55,7 +55,7 @@ def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) ->
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        fixture_hints=agent_view["fixture_hints"],
+        static_fixture_projection=agent_view["static_fixture_projection"],
     )
     semantics_path = bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
@@ -82,23 +82,23 @@ def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
     assert (bundle_dir / "semantics.json").is_file()
 
 
-def test_bundle_writer_normalizes_wide_room_only_fixture_hints(tmp_path: Path) -> None:
+def test_bundle_writer_normalizes_wide_room_only_static_fixture_projection(tmp_path: Path) -> None:
     agent_view = _wide_room_only_agent_view()
     bundle_dir = tmp_path / "molmospaces-procthor-val-0-7"
 
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        fixture_hints=agent_view["fixture_hints"],
+        static_fixture_projection=agent_view["static_fixture_projection"],
     )
 
     validation = validate_nav2_map_bundle(bundle_dir)
     projected_map = metric_map_from_bundle(bundle_dir)
-    projected_hints = fixture_hints_from_bundle(bundle_dir)
+    projected_projection = static_fixture_projection_from_bundle(bundle_dir)
     waypoints = projected_map["inspection_waypoints"]
     route = validate_metric_map_route(
         projected_map,
-        projected_hints,
+        projected_projection,
         start_waypoint_id=str(waypoints[0]["waypoint_id"]),
         goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
     )
@@ -117,8 +117,8 @@ def test_bundle_writer_normalizes_wide_room_only_fixture_hints(tmp_path: Path) -
 def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
     agent_view = _wide_room_only_agent_view()
     metric_map = agent_view["metric_map"]
-    fixture_hints = agent_view["fixture_hints"]
-    first_fixture = fixture_hints["rooms"][0]["fixtures"][0]
+    static_fixture_projection = agent_view["static_fixture_projection"]
+    first_fixture = static_fixture_projection["rooms"][0]["fixtures"][0]
     start_waypoint = dict(metric_map["inspection_waypoints"][0])
     start_waypoint["x"] = 1.5
     metric_map = dict(metric_map)
@@ -134,7 +134,7 @@ def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
 
     result = validate_metric_map_route(
         metric_map,
-        fixture_hints,
+        static_fixture_projection,
         start_waypoint_id=str(metric_map["inspection_waypoints"][0]["waypoint_id"]),
         goal_waypoint_id="blocked_goal",
     )
@@ -152,16 +152,16 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     )
 
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
     waypoints = metric_map["inspection_waypoints"]
     navigation = contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
 
     assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
-    assert metric_map["map_id"] == "molmo-cleanup-default-7_semantic_map"
+    assert metric_map["map_id"] == "molmo-cleanup-default-7_base_navigation_map"
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert all(item["visited"] is False for item in waypoints)
-    assert fixture_hints["rooms"] == []
+    assert static_fixture_projection["rooms"] == []
     assert waypoints[0]["waypoint_source"] == "generated_exploration_candidate"
     assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
     assert navigation["route_validation"]["ok"] is True
@@ -175,7 +175,7 @@ def _agent_view() -> dict:
     )
     return {
         "metric_map": contract.metric_map(),
-        "fixture_hints": contract.fixture_hints(),
+        "static_fixture_projection": contract.static_fixture_projection(),
     }
 
 
@@ -253,8 +253,8 @@ def _wide_room_only_agent_view() -> dict:
         "metric_map": {
             "schema": "real_robot_map_bundle_v1",
             "frame_id": "map",
-            "map_id": "molmospaces-procthor-val-0-7_semantic_map",
-            "map_version": "static-fixture-map-v1",
+            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
+            "map_version": "base-navigation-map-v1",
             "resolution_m": 0.05,
             "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
             "width": 240,
@@ -270,9 +270,9 @@ def _wide_room_only_agent_view() -> dict:
                 for index in range(room_count - 1)
             ],
         },
-        "fixture_hints": {
-            "schema": "static_fixture_semantic_map_v1",
-            "fixture_hint_mode": "room_only",
+        "static_fixture_projection": {
+            "schema": "static_fixture_projection_v1",
+            "static_fixture_projection_mode": "room_only",
             "rooms": fixture_rooms,
         },
     }

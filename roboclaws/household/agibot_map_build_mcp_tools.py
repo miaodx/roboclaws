@@ -1,4 +1,4 @@
-"""Agibot semantic map-build MCP tool registration and dispatch."""
+"""Agibot map-build MCP tool registration and dispatch."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 
-AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
+AGIBOT_MAP_BUILD_TOOLS = (
     "metric_map",
     "navigate_to_room",
     "navigate_to_waypoint",
@@ -22,7 +22,7 @@ AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
 )
 
 
-def register_agibot_semantic_map_build_tools(server: Any) -> None:
+def register_agibot_map_build_tools(server: Any) -> None:
     """Register public tools in the same layer order as the shared MCP backend."""
 
     _register_map_tools(server)
@@ -138,7 +138,7 @@ def _register_lifecycle_tools(server: Any) -> None:
         return server.call_tool("done", reason=reason)
 
 
-def dispatch_agibot_semantic_map_build_tool(
+def dispatch_agibot_map_build_tool(
     server: Any,
     name: str,
     request: dict[str, Any],
@@ -161,7 +161,7 @@ def _dispatch_metric_map(server: Any) -> dict[str, Any]:
     response["instruction"] = (
         "Use only public inspection_waypoints. Navigate to each selected waypoint, "
         "then call observe. Use public_semantic_anchors and waypoint metadata for "
-        "map evidence instead of a fixture_hints-first tool habit. Do not invent "
+        "map evidence instead of a static_fixture_projection-first tool habit. Do not invent "
         "coordinates or read Agibot map source."
     )
     return response
@@ -201,7 +201,7 @@ def _dispatch_navigation_tool(
 
 def _dispatch_observation_tool(server: Any, name: str) -> dict[str, Any]:
     if name == "observe":
-        return server.adapter.observe(label=f"semantic_map_build_{server._observe_count() + 1}")
+        return server.adapter.observe(label=f"map_build_{server._observe_count() + 1}")
     return _blocked_response(
         "adjust_camera",
         "agibot_camera_motion_unproven",

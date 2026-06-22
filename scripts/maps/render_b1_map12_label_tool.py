@@ -189,7 +189,7 @@ def build_label_tool_packet(
         frame_id=frame_id,
     )
     attach_room_geometry_conflicts(shapes)
-    semantic_layers = semantic_map_layers_from_semantics(
+    source_map_layers = source_map_layers_from_semantics(
         semantics,
         transform=transform,
         frame_id=frame_id,
@@ -238,7 +238,7 @@ def build_label_tool_packet(
         "valid_polygon_roles": sorted(POLYGON_ROLES),
         "valid_geometry_sources": sorted(POLYGON_GEOMETRY_SOURCES),
         "shapes": shapes,
-        "semantic_map_layers": semantic_layers,
+        "source_map_layers": source_map_layers,
         "navigation_memory_layer": navigation_memory_layer,
         "initial_draft_manifest": draft_manifest_from_shapes(
             shapes,
@@ -505,7 +505,7 @@ def attach_room_geometry_conflicts(shapes: list[dict[str, Any]]) -> None:
             shape["geometry_conflict"] = copy.deepcopy(conflict)
 
 
-def semantic_map_layers_from_semantics(
+def source_map_layers_from_semantics(
     semantics: dict[str, Any],
     *,
     transform: SourceMapTransform,

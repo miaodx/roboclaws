@@ -42,7 +42,7 @@ def _trace_agent_run(*args: str) -> list[str]:
 
 
 def test_agibot_molmospaces_sim_route_passes_open_evidence_refresh_prompt() -> None:
-    prompt = "基于已有语义地图做开放巡检"
+    prompt = "基于已有 Runtime Metric Map 做开放巡检"
 
     route = _trace_agent_run(
         "household-world.map-build",
@@ -62,7 +62,7 @@ def test_agibot_molmospaces_sim_rehearsal_records_open_evidence_refresh_prompt(
     tmp_path: Path,
 ) -> None:
     prompt = (
-        "基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor "
+        "基于当前已有 Runtime Metric Map，自主选择 3 个最值得复核的 public semantic anchor "
         "或 inspection waypoint。"
     )
     run_dir = tmp_path / "map-evidence-refresh"

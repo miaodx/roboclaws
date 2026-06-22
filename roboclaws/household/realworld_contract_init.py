@@ -9,18 +9,18 @@ from roboclaws.household import (
     realworld_runtime_map_targets,
 )
 from roboclaws.maps.bundle import validate_nav2_map_bundle
-from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
+from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
 
 
 def validate_contract_options(
     *,
-    fixture_hint_mode: str,
+    static_fixture_projection_mode: str,
     perception_mode: str,
     map_mode: str,
 ) -> None:
     helpers = _contract_helpers()
-    if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
-        raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
+    if static_fixture_projection_mode not in {"room_only", "exact_fixtures"}:
+        raise ValueError("static_fixture_projection_mode must be room_only or exact_fixtures")
     if perception_mode not in helpers.REALWORLD_PERCEPTION_MODES:
         allowed = ", ".join(sorted(helpers.REALWORLD_PERCEPTION_MODES))
         raise ValueError(f"perception_mode must be one of: {allowed}")
@@ -78,7 +78,7 @@ def init_map_projection(target: Any, map_bundle_dir: str | Path | None) -> None:
     target.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
     target.map_bundle_validation = None
     target._bundle_metric_map_template = None
-    target._bundle_fixture_hints_template = None
+    target._bundle_static_fixture_projection_template = None
     if target.map_bundle_dir is not None:
         _init_bundle_map_projection(target)
     else:
@@ -155,20 +155,22 @@ def _init_bundle_map_projection(target: Any) -> None:
     validation.raise_for_errors()
     target.map_bundle_validation = validation.as_dict()
     target._bundle_metric_map_template = metric_map_from_bundle(target.map_bundle_dir)
-    target._bundle_fixture_hints_template = fixture_hints_from_bundle(
+    target._bundle_static_fixture_projection_template = static_fixture_projection_from_bundle(
         target.map_bundle_dir,
-        fixture_hint_mode=target.fixture_hint_mode,
+        static_fixture_projection_mode=target.static_fixture_projection_mode,
     )
-    target._fixtures = realworld_contract_projection._fixtures_from_bundle_fixture_hints(
-        target._bundle_fixture_hints_template
+    target._fixtures = (
+        realworld_contract_projection._fixtures_from_bundle_static_fixture_projection(
+            target._bundle_static_fixture_projection_template
+        )
     )
     target._rooms = realworld_contract_projection._rooms_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_fixture_hints_template,
+        target._bundle_static_fixture_projection_template,
     )
     target._waypoints = realworld_contract_projection._inspection_waypoints_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_fixture_hints_template,
+        target._bundle_static_fixture_projection_template,
     )
     target._scene_index_fixture_overlay = (
         realworld_contract_projection._scene_index_public_fixture_overlay(

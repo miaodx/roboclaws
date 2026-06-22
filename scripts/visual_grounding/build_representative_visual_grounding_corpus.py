@@ -208,7 +208,7 @@ def build_source_observations(
                     "source_artifact_status": str(raw.get("artifact_status") or ""),
                 },
                 "category_hints": list(VISUAL_GROUNDING_CATEGORY_HINTS),
-                "fixture_hints": fixtures_by_room.get(room_id, []),
+                "static_fixture_projection": fixtures_by_room.get(room_id, []),
                 "image": {
                     "source": "path",
                     "path": str(image_path),

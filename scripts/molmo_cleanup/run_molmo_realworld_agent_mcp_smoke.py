@@ -44,7 +44,9 @@ from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json  # noqa: E402
-from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact  # noqa: E402
+from roboclaws.maps.runtime_prior_snapshot import (
+    runtime_metric_map_from_prior_artifact,  # noqa: E402
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -159,7 +161,7 @@ def run_smoke(
         policy=policy,
         agent_driven=True,
         task_prompt=task,
-        fixture_hint_mode="room_only",
+        static_fixture_projection_mode="room_only",
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,

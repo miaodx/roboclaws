@@ -146,9 +146,9 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     task_identity = intent_helpers.household_task_identity(intent=intent)
-    is_semantic_map_build = intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
+    is_map_build = intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
     default_task_prompt = (
-        "帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"
+        "帮我建立这个房间的 Runtime Metric Map" if is_map_build else "帮我收拾这个房间"
     )
     selected_task_prompt = str(task_prompt or default_task_prompt)
     perception_mode = _prehardware_perception_mode(profile)
@@ -180,14 +180,14 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         visual_grounding=visual_grounding,
         camera_labeler=camera_labeler,
         agibot_map_reference=agibot_map_reference,
-        cleanup_actions_disabled=is_semantic_map_build,
+        cleanup_actions_disabled=is_map_build,
     )
     result = run_realworld_cleanup(
         output_dir=run_dir,
         seed=seed,
         task_prompt=selected_task_prompt,
         backend=backend,
-        fixture_hint_mode="room_only",
+        static_fixture_projection_mode="room_only",
         perception_mode=perception_mode,
         include_robot=include_robot,
         robot_name=robot_name,
@@ -195,7 +195,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
         evidence_lane=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
-        semantic_sweep=is_semantic_map_build,
+        map_build=is_map_build,
         map_mode=MINIMAL_MAP_MODE,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
@@ -271,7 +271,7 @@ def _prehardware_metadata_overrides(
         "schema": REHEARSAL_SCHEMA,
         "report_eyebrow": "Agibot-shaped pre-hardware rehearsal",
         "report_title": (
-            "Agibot MolmoSpaces Semantic Map-Build Rehearsal"
+            "Agibot MolmoSpaces Map-Build Rehearsal"
             if intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
             else "Agibot MolmoSpaces Cleanup Rehearsal"
         ),
@@ -310,7 +310,7 @@ def _prehardware_metadata_overrides(
             ),
             "visual_grounding_pipeline_id": visual_grounding,
             "minimal_map_start": True,
-            "online_semantic_map_build": True,
+            "online_map_build": True,
             "cleanup_actions_included": intent == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
             "cleanup_actions_disabled": cleanup_actions_disabled,
             "source_map_mutation_allowed": False,
@@ -372,7 +372,7 @@ def _write_prehardware_runtime_export(
         "camera_labeler": camera_labeler or "",
         "visual_grounding_pipeline_id": visual_grounding,
         "minimal_map_start": True,
-        "online_semantic_map_build": True,
+        "online_map_build": True,
         "cleanup_actions_included": task_identity["task_intent"]
         == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
         "cleanup_object_count_limit": cleanup_object_count,
@@ -405,14 +405,16 @@ def _write_prehardware_runtime_export(
     )
 
 
-def _agibot_shaped_fixture_hints(fixture_hints: dict[str, Any]) -> dict[str, Any]:
-    payload = copy.deepcopy(fixture_hints)
-    payload["fixture_hint_mode"] = "molmospaces_sim_static_fixture_map"
+def _agibot_shaped_static_fixture_projection(
+    static_fixture_projection: dict[str, Any],
+) -> dict[str, Any]:
+    payload = copy.deepcopy(static_fixture_projection)
+    payload["static_fixture_projection_mode"] = "molmospaces_sim_static_fixture_map"
     payload["execution_backend"] = EXECUTION_BACKEND
     payload["simulated"] = True
     payload["physical_robot"] = False
     payload["public_contract_note"] = (
-        "Agibot-shaped fixture_hints generated from public MolmoSpaces static "
+        "Agibot-shaped static_fixture_projection generated from public MolmoSpaces static "
         "fixture semantics. No private cleanup target truth or real GDK map state "
         "is exposed."
     )
@@ -424,7 +426,7 @@ def _write_preflight_artifacts(
     run_dir: Path,
     scenario: CleanupScenario,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     runtime: str,
     seed: int,
     generated_mess_count: int,
@@ -448,13 +450,13 @@ def _write_preflight_artifacts(
     map_preview = _write_metric_map_preview(
         output_path=preflight_dir / "molmospaces_metric_map.png",
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         scene_identity=scene_identity,
     )
     agent_view = {
         "schema": "agibot_shaped_agent_view_v1",
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "observed_objects": [],
         "raw_fpv_observations": [],
         "perception_mode": "robot_policy_camera",
@@ -514,7 +516,7 @@ def _write_preflight_artifacts(
     }
     paths = {
         "metric_map": preflight_dir / "metric_map.json",
-        "fixture_hints": preflight_dir / "fixture_hints.json",
+        "static_fixture_projection": preflight_dir / "static_fixture_projection.json",
         "agent_view": preflight_dir / "agent_view.json",
         "scene_identity": preflight_dir / "scene_identity.json",
         "map_preview": map_preview,
@@ -524,7 +526,7 @@ def _write_preflight_artifacts(
     }
     values = {
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "agent_view": agent_view,
         "scene_identity": scene_identity,
         "waypoint_sequence": waypoint_sequence,
@@ -637,7 +639,7 @@ def _write_metric_map_preview(
     *,
     output_path: Path,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     scene_identity: dict[str, Any],
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -646,7 +648,7 @@ def _write_metric_map_preview(
     image = Image.new("RGB", (width, height), (246, 248, 251))
     draw = ImageDraw.Draw(image)
     rooms = [room for room in metric_map.get("rooms") or [] if isinstance(room, dict)]
-    fixtures = _fixtures(fixture_hints)
+    fixtures = _fixtures(static_fixture_projection)
     waypoints = [item for item in metric_map.get("inspection_waypoints") or []]
     bounds = _map_bounds(rooms=rooms, fixtures=fixtures, waypoints=waypoints)
 
@@ -865,7 +867,7 @@ def _blocked_manipulation(tool: str) -> dict[str, Any]:
 def _agent_view_with_runtime_observation(
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     observation: dict[str, Any],
 ) -> dict[str, Any]:
     detections = [
@@ -881,7 +883,7 @@ def _agent_view_with_runtime_observation(
     return {
         "schema": "agibot_shaped_agent_view_v1",
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "observed_objects": detections,
         "raw_fpv_observations": [observation["raw_fpv_observation"]],
         "perception_mode": "robot_policy_camera",
@@ -899,13 +901,13 @@ def _agent_view_with_cleanup_actions(
     payload: dict[str, Any],
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     fallback_observation: dict[str, Any],
 ) -> dict[str, Any]:
     agent_view = copy.deepcopy(payload)
     agent_view["schema"] = "agibot_shaped_agent_view_v1"
     agent_view["metric_map"] = metric_map
-    agent_view["fixture_hints"] = fixture_hints
+    agent_view["static_fixture_projection"] = static_fixture_projection
     raw_observations = list(agent_view.get("raw_fpv_observations") or [])
     if not raw_observations and fallback_observation.get("raw_fpv_observation"):
         raw_observations = [fallback_observation["raw_fpv_observation"]]
@@ -949,7 +951,7 @@ def _run_cleanup_action_rehearsal(
     contract: RealWorldCleanupContract,
     base_contract: CleanupBackendSession,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     trace_events: list[dict[str, Any]],
     policy_events: list[dict[str, Any]],
     started_at: float,
@@ -964,7 +966,7 @@ def _run_cleanup_action_rehearsal(
         contract=contract,
         base_contract=base_contract,
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         trace_events=trace_events,
         policy_events=policy_events,
         started_at=started_at,
@@ -1021,7 +1023,7 @@ def _select_cleanup_action_targets(
     contract: RealWorldCleanupContract,
     base_contract: CleanupBackendSession,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     trace_events: list[dict[str, Any]],
     policy_events: list[dict[str, Any]],
     started_at: float,
@@ -1072,7 +1074,7 @@ def _select_cleanup_action_targets(
         observations.append(obs)
         _append_cleanup_action_targets(
             contract=contract,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             selected_targets=selected_targets,
             seen_handles=seen_handles,
             observation=obs,
@@ -1176,7 +1178,7 @@ def _record_cleanup_sweep_observation(
 def _append_cleanup_action_targets(
     *,
     contract: RealWorldCleanupContract,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     selected_targets: list[dict[str, Any]],
     seen_handles: set[str],
     observation: dict[str, Any],
@@ -1189,7 +1191,7 @@ def _append_cleanup_action_targets(
             continue
         target = _cleanup_action_target(
             contract=contract,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             detection=detection,
             observation=observation,
             waypoint_id=waypoint_id,
@@ -1205,13 +1207,13 @@ def _append_cleanup_action_targets(
 def _cleanup_action_target(
     *,
     contract: RealWorldCleanupContract,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     detection: dict[str, Any],
     observation: dict[str, Any],
     waypoint_id: str,
 ) -> dict[str, Any] | None:
     handle = str(detection.get("object_id") or "")
-    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
     if target_fixture is None:
         return None
     target_fixture_id = str(target_fixture.get("fixture_id") or "")
@@ -1303,7 +1305,7 @@ def _cleanup_actions_payload(
         "agibot_gdk_execution": False,
         "public_contract_note": (
             "Cleanup actions are simulated MolmoSpaces state updates selected from "
-            "public observations and fixture hints."
+            "public observations and static fixture projection."
         ),
     }
 
@@ -1495,7 +1497,7 @@ def _run_result(
     generated_mess_count: int,
     started_at: float,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     observation: dict[str, Any],
     navigation: dict[str, Any],
     manipulation_results: list[dict[str, Any]],
@@ -1533,7 +1535,7 @@ def _run_result(
     )
     readiness = _readiness_payload(
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         observation=observation,
         navigation=navigation,
         manipulation_results=manipulation_results,
@@ -1658,7 +1660,7 @@ def _run_result(
             "gdk_imported_by_roboclaws": False,
             "public_tool_boundary": [
                 "metric_map",
-                "fixture_hints",
+                "static_fixture_projection",
                 "observe",
                 "navigate_to_waypoint",
                 *BLOCKED_MANIPULATION_TOOLS,
@@ -1888,9 +1890,9 @@ def _policy_event(index: int, response: dict[str, Any], role: str) -> dict[str, 
     }
 
 
-def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:
+def _fixtures(static_fixture_projection: dict[str, Any]) -> list[dict[str, Any]]:
     fixtures: list[dict[str, Any]] = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         for fixture in room.get("fixtures") or []:
             if isinstance(fixture, dict):
                 fixtures.append(fixture)

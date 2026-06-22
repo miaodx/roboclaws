@@ -35,6 +35,7 @@ class MolmoInitHooks:
     scenario_id: Callable[..., str]
     seed_misplaced_objects: Callable[..., None]
     set_robot_pose: Callable[..., None]
+    source_room_labels: Callable[..., dict[str, dict[str, str]]]
     target_start_receptacle_id: Callable[..., str]
     write_state: Callable[..., None]
 
@@ -81,6 +82,7 @@ def init_state(
     metadata = get_scene_metadata(scene_xml)
     if metadata is None:
         raise RuntimeError(f"missing scene metadata for {scene_xml}")
+    source_room_labels = hooks.source_room_labels(scene_xml)
 
     receptacles = hooks.collect_receptacles(model, data, metadata)
     objects = hooks.collect_dynamic_objects(model, data, metadata)
@@ -113,6 +115,7 @@ def init_state(
         scene_source=scene_source,
         scene_xml=scene_xml,
         seed=seed,
+        source_room_labels=source_room_labels,
         targets=targets,
     )
     hooks.seed_misplaced_objects(model, data, state, targets)
@@ -204,6 +207,7 @@ def _initial_state_payload(
     scene_source: str,
     scene_xml: Path,
     seed: int,
+    source_room_labels: dict[str, dict[str, str]],
     targets: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
@@ -213,6 +217,7 @@ def _initial_state_payload(
         "scene_index": scene_index,
         "scene_xml": str(scene_xml),
         "scene_resolution": scene_resolution,
+        "source_room_labels": source_room_labels,
         "robot_included": include_robot,
         "robot_name": robot_name if include_robot else None,
         "robot_xml": str(robot_xml) if robot_xml is not None else None,

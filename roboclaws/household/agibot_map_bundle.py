@@ -107,7 +107,7 @@ def _semantics_from_context(
     raw_map: dict[str, Any],
 ) -> dict[str, Any]:
     environment_id = str(context.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK)
-    map_id = f"{environment_id}_semantic_map"
+    map_id = f"{environment_id}_base_navigation_map"
     map_source = source_json.get("source_agibot_map") or context.get("map_source") or {}
     frame_id = str(context.get("frame_id") or "map")
     return {
@@ -302,7 +302,8 @@ def _snapshot_payload(
             semantics.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK
         ),
         map_id=str(
-            semantics.get("map_id") or f"{DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK}_semantic_map"
+            semantics.get("map_id")
+            or f"{DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK}_base_navigation_map"
         ),
         map_version=str(semantics.get("map_version") or DEFAULT_AGIBOT_MAP_VERSION_FALLBACK),
     )

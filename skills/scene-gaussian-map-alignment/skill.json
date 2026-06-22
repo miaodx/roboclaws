@@ -1,7 +1,7 @@
 {
   "schema": "roboclaws_skill_manifest_v1",
   "name": "scene-gaussian-map-alignment",
-  "summary": "Guide scene-specific alignment of Gaussian/splat, USD/mesh, and robot semantic-map assets while keeping evidence labels honest.",
+  "summary": "Guide scene-specific alignment of Gaussian/splat, USD/mesh, and robot map assets while keeping evidence labels honest.",
   "abstraction_level": "agent_skill",
   "role": "scene_map_alignment",
   "status": "active",

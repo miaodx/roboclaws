@@ -7,7 +7,7 @@ from typing import Any
 
 from roboclaws.agents.prompts.household_cleanup import (
     render_kickoff_prompt,
-    render_semantic_map_build_prompt,
+    render_map_build_prompt,
 )
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
@@ -79,7 +79,7 @@ def build_prompt_preview(
     source = "operator-task"
     if route.surface == "household-world":
         if selected_intent == "map-build":
-            kickoff_prompt = render_semantic_map_build_prompt(lane, operator_prompt)
+            kickoff_prompt = render_map_build_prompt(lane, operator_prompt)
             source = "household-map-build"
         elif selected_intent in {"cleanup", "open-ended"}:
             kickoff_prompt = render_kickoff_prompt(
@@ -120,7 +120,7 @@ def _operator_prompt(route: ConsoleLaunchSelection, intent_id: str, prompt: str)
 
 def _default_prompt_for_intent(intent_id: str) -> str:
     if intent_id == "map-build":
-        return "帮我建立这个房间的语义地图"
+        return "帮我建立这个房间的 Runtime Metric Map"
     if intent_id == "open-ended":
         return "在这个场景中完成开放性导航任务，并报告你看到的证据。"
     return "帮我收拾这个房间"

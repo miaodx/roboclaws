@@ -40,7 +40,7 @@ default:
 # Private household-world implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
+household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" map_build="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -58,7 +58,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     camera_labeler="{{camera_labeler}}"
     visual_grounding=""
     visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
-    semantic_sweep="{{semantic_sweep}}"
+    map_build="{{map_build}}"
     runtime_map_prior="{{runtime_map_prior}}"
     backend_override="{{backend_override}}"
     map_mode="{{map_mode}}"
@@ -95,7 +95,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     camera_labeler="${camera_labeler#camera-labeler=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout_s=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout=}"
-    semantic_sweep="${semantic_sweep#semantic_sweep=}"
+    map_build="${map_build#map_build=}"
     runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
     backend_override="${backend_override#backend=}"
     backend_override="${backend_override#backend_override=}"
@@ -136,7 +136,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         "$driver" "$profile" "$seeds" "$output_dir" "$task"
         "$generated_mess_count" "$host" "$port" "$map_bundle"
         "$cleanup_routine" "$robot_views" "$camera_labeler"
-        "$visual_grounding_timeout_s" "$semantic_sweep"
+        "$visual_grounding_timeout_s" "$map_build"
         "$runtime_map_prior" "$backend_override" "$map_mode"
         "$scene_source" "$scene_index" "$isaac_scene_usd_path"
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
@@ -237,20 +237,20 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         ;;
     esac
 
-    semantic_sweep_enabled="false"
-    case "$semantic_sweep" in
-      on|true|1|yes|semantic-sweep)
-        semantic_sweep_enabled="true"
+    map_build_enabled="false"
+    case "$map_build" in
+      on|true|1|yes|map-build)
+        map_build_enabled="true"
         ;;
       off|false|0|no|"")
         ;;
       *)
-        echo "error: unsupported semantic_sweep '$semantic_sweep' (expected on|off)" >&2
+        echo "error: unsupported map_build '$map_build' (expected on|off)" >&2
         exit 1
         ;;
     esac
-    if [[ "$semantic_sweep_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" ]]; then
-      echo "error: semantic sweep mode currently supports direct or codex-live driver only" >&2
+    if [[ "$map_build_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" ]]; then
+      echo "error: map-build mode currently supports direct or codex-live driver only" >&2
       exit 1
     fi
     case "$map_mode" in
@@ -368,10 +368,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then
       min_generated_mess_count="$min_generated_mess_count_override"
     fi
-    semantic_sweep_args=()
-    checker_semantic_args=()
-    if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then
-      checker_semantic_args=(--require-runtime-metric-map)
+    map_build_args=()
+    checker_map_build_args=()
+    if [[ "$map_build_enabled" == "true" && "$driver" == "codex-live" ]]; then
+      checker_map_build_args=(--require-runtime-metric-map)
       profile_requires_clean_success="false"
       filtered_checker_visual_args=()
       skip_checker_arg_value="false"
@@ -392,9 +392,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         esac
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
-    elif [[ "$semantic_sweep_enabled" == "true" ]]; then
-      semantic_sweep_args=(--semantic-sweep)
-      checker_semantic_args=(--require-semantic-sweep)
+    elif [[ "$map_build_enabled" == "true" ]]; then
+      map_build_args=(--map-build)
+      checker_map_build_args=(--require-map-build)
       profile_requires_clean_success="false"
       filtered_checker_visual_args=()
       skip_checker_arg_value="false"
@@ -438,9 +438,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
-    semantic_sweep_args+=(--map-mode "$map_mode")
+    map_build_args+=(--map-mode "$map_mode")
     if [[ "$map_mode" == "minimal" ]]; then
-      checker_semantic_args+=(--require-minimal-map)
+      checker_map_build_args+=(--require-minimal-map)
     fi
 
     map_bundle_dir="$map_bundle"
@@ -521,7 +521,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     echo "    map      : ${map_bundle_dir:-not required}"
     echo "    map mode : ${map_mode}"
     echo "    routine  : ${cleanup_routine}"
-    echo "    sweep    : ${semantic_sweep_enabled}"
+    echo "    map build: ${map_build_enabled}"
     echo "    views    : ${robot_views}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
@@ -1049,7 +1049,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
-            --fixture-hint-mode room_only \
+            --static-fixture-projection-mode room_only \
             --perception-mode "$perception_mode" \
             --evidence-lane "$implementation_evidence_lane" \
             "${map_bundle_args[@]}" \
@@ -1060,7 +1060,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \
             "${runtime_map_prior_args[@]}" \
-            "${semantic_sweep_args[@]}" \
+            "${map_build_args[@]}" \
             "${isaac_scene_args[@]}" \
             "${goal_contract_args[@]}" \
             --output-dir "$run_dir"
@@ -1098,7 +1098,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       --min-generated-mess-count "$min_generated_mess_count"
       --require-advisory-scoring
       "${checker_visual_args[@]}"
-      "${checker_semantic_args[@]}"
+      "${checker_map_build_args[@]}"
     )
     case "$driver" in
       mcp-smoke)

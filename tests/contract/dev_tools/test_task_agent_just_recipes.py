@@ -15,7 +15,7 @@ import pytest
 
 from roboclaws.agents.prompts.household_cleanup import (
     render_kickoff_prompt,
-    render_semantic_map_build_prompt,
+    render_map_build_prompt,
 )
 from roboclaws.devtools.commands import CommandError, resolve_surface_run
 from roboclaws.launch import resolve_surface_launch
@@ -1227,7 +1227,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
-def test_semantic_map_build_rejects_public_map_mode_axis() -> None:
+def test_map_build_rejects_public_map_mode_axis() -> None:
     stderr = assert_household_map_build_run_fails(
         "direct",
         "world-public-labels",
@@ -1319,7 +1319,7 @@ def test_agent_run_rejects_legacy_household_dispatch_targets(dispatch_target: st
     assert "unsupported report 'world-public-labels'" in stderr
 
 
-def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
+def test_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
     route = trace_household_map_build_run(
         "direct",
         "camera-grounded-labels",
@@ -1344,14 +1344,14 @@ def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> Non
     assert "agibot-g2-cleanup" not in " ".join(route)
 
 
-def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
+def test_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
     route = trace_household_map_build_run(
         "codex",
         "camera-grounded-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "run_dir=output/agibot/map-build-codex/test-run",
-        "policy=codex_agibot_semantic_map_build_pilot",
+        "policy=codex_agibot_map_build_pilot",
         "camera_labeler=grounding-dino",
         "visual_grounding_timeout_s=12.5",
     )
@@ -1376,12 +1376,12 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     assert "--backend" in route
     assert "agibot_gdk" in route
     assert "--policy" in route
-    assert "codex_agibot_semantic_map_build_pilot" in route
+    assert "codex_agibot_map_build_pilot" in route
     assert str(AGIBOT_MAP_BUILD_CODEX_RUNNER.relative_to(REPO_ROOT)) in route
     assert "molmo::cleanup" not in route
 
 
-def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
+def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
     route = trace_household_map_build_run(
         "codex",
         "world-public-labels",
@@ -1395,7 +1395,7 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
         "world-public-labels",
         "7",
         "output/household/household-world/map-build/codex-world-public-labels",
-        "帮我建立这个房间的语义地图",
+        "帮我建立这个房间的 Runtime Metric Map",
     ]
     assert route[15] == "on"
     assert route[17] == "molmospaces_subprocess"
@@ -1403,7 +1403,7 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
     assert route[-1] == "map-build"
 
 
-def test_semantic_map_build_codex_rejects_molmospaces_isaac_backend_override() -> None:
+def test_map_build_codex_rejects_molmospaces_isaac_backend_override() -> None:
     stderr = assert_agent_run_fails(
         "household-world.map-build",
         "codex-cli",
@@ -1540,7 +1540,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "1" in route
 
 
-def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
+def test_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
     route = trace_agent_run(
         "household-world.map-build",
         "direct-runner",
@@ -1571,7 +1571,7 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
     assert "--record-robot-views" in route
 
 
-def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade() -> None:
+def test_map_build_agibot_sim_defaults_camera_labeler_for_public_facade() -> None:
     route = trace_agent_run(
         "household-world.map-build",
         "direct-runner",
@@ -1683,12 +1683,12 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert "--min-sweep-coverage 1.0" in body
 
 
-def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
+def test_molmo_map_build_strips_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert 'if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
-    assert "checker_semantic_args=(--require-runtime-metric-map)" in text
-    assert 'elif [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
+    assert 'if [[ "$map_build_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
+    assert "checker_map_build_args=(--require-runtime-metric-map)" in text
+    assert 'elif [[ "$map_build_enabled" == "true" ]]; then' in text
     assert (
         "--min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions"
         in text
@@ -1751,7 +1751,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     assert raw_route[11] == "skill"
 
 
-def test_prompt_mapping_semantic_map_build_direct_enables_sweep() -> None:
+def test_prompt_mapping_map_build_direct_enables_sweep() -> None:
     route = trace_household_map_build_run("direct", "smoke")
 
     assert route[:6] == [
@@ -1762,7 +1762,7 @@ def test_prompt_mapping_semantic_map_build_direct_enables_sweep() -> None:
         "7",
         "output/household/household-world/map-build/direct-smoke",
     ]
-    assert route[6] == "帮我建立这个房间的语义地图"
+    assert route[6] == "帮我建立这个房间的 Runtime Metric Map"
     assert route[15] == "on"
 
 
@@ -2106,22 +2106,19 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
 
     assert "This run is surface=household-world intent=cleanup" in prompt
     assert "User task: clean up this room" in prompt
-    assert "exact waypoint checklist" in prompt
-    assert "metric_map.inspection_waypoints" in prompt
-    assert "selected Nav2 map bundle" in prompt
-    assert "not raw occupancy images" in prompt
-    assert "mark a waypoint complete only after" in prompt
+    assert "Call metric_map" in prompt
+    assert "exact inspection_waypoints checklist" in prompt
+    assert "for each unchecked waypoint call navigate_to_waypoint then observe" in prompt
+    assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "place/place_inside" in prompt
-    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
+    assert "Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
     assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
     assert "namespace cleanup" in prompt
     assert "server named cleanup" not in prompt
-    assert "compare the checklist before done" in prompt
+    assert "Call done when every public waypoint has an observe response" in prompt
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
-    assert "visit any missing waypoint_id" in prompt
-    assert "fresh same-handle source FPV observation with a reviewable bbox" in prompt
-    assert "adjust_camera(0, 0) is only a no-op camera command" in prompt
+    assert "Do not call scene_objects" in prompt
 
 
 def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
@@ -2253,15 +2250,15 @@ def test_molmo_live_openai_agents_uses_single_lane_default_prompt() -> None:
     assert '--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"' not in text
 
 
-def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
-    prompt = render_semantic_map_build_prompt(
+def test_map_build_live_prompt_disables_cleanup_actions() -> None:
+    prompt = render_map_build_prompt(
         "camera-grounded-labels",
-        "帮我建立这个房间的语义地图",
+        "帮我建立这个房间的 Runtime Metric Map",
     )
 
     assert "This run is surface=household-world intent=map-build" in prompt
     assert "This is not a cleanup run" in prompt
-    assert "User task: 帮我建立这个房间的语义地图" in prompt
+    assert "User task: 帮我建立这个房间的 Runtime Metric Map" in prompt
     assert "Use the bundled household-open-task skill instructions" in prompt
     assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
     assert "Do not pick, place, place_inside" in prompt
@@ -2285,11 +2282,11 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     assert "roboclaws.cli.agent_server household-cleanup" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in codex_runner_text
-    assert "examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py" not in (
+    assert "examples/molmo_cleanup/agibot_map_build_agent_server.py" not in (
         agibot_runner_text
     )
     assert "household_cleanup_server_argv" in codex_runner_text
-    assert "semantic_map_build_server_argv" in agibot_runner_text
+    assert "map_build_server_argv" in agibot_runner_text
 
 
 def test_agent_server_cli_accepts_canonical_household_targets(
@@ -2469,7 +2466,11 @@ def test_coding_agent_provider_helper_defaults_codex_to_codex_env_without_args()
         text=True,
     )
 
-    assert result.stdout.splitlines() == ["codex-router-responses", "claude_model_args=0", "claude_env_args=0"]
+    assert result.stdout.splitlines() == [
+        "codex-router-responses",
+        "claude_model_args=0",
+        "claude_env_args=0",
+    ]
 
 
 def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> None:
@@ -2717,10 +2718,12 @@ def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> 
             source "$ROBOCLAWS_HELPER"
             ROBOCLAWS_PROVIDER_PROFILE=mimo-tp-openai-chat
             MIMO_TP_KEY=fake-mimo-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+            roboclaws_code_agent_profile_summary \
+              ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
             ROBOCLAWS_PROVIDER_PROFILE=kimi-openai-chat
             KIMI_API_KEY=fake-kimi-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+            roboclaws_code_agent_profile_summary \
+              ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
             """,
         ],
         cwd=REPO_ROOT,
@@ -2843,7 +2846,10 @@ def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets(
 
     assert "--disable" in result.stdout.splitlines()
     assert "responses_websockets" in result.stdout.splitlines()
-    assert 'model_providers.codex-router-responses.wire_api="responses"' in result.stdout.splitlines()
+    assert (
+        'model_providers.codex-router-responses.wire_api="responses"'
+        in result.stdout.splitlines()
+    )
 
 
 def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
@@ -3174,7 +3180,7 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert "output/molmo/.live-codex.lock" not in molmo_text
 
 
-def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker() -> None:
+def test_map_build_codex_live_passes_task_identity_to_server_and_checker() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
     server_args_match = re.search(r"server_args=\(\n(?P<body>.*?)\n\s+\)", molmo_text, re.DOTALL)
@@ -3186,7 +3192,7 @@ def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checke
     assert '"--expect-task-name",' in runner_text
     assert "household_task_name_from_args" in runner_text
     assert "household_intent_id_for_checker" in runner_text
-    assert 'SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
+    assert 'MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
         HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
     )
     assert (

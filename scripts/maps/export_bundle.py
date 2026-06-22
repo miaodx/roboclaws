@@ -24,7 +24,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--run-result", type=Path, help="run_result.json with agent_view.")
     parser.add_argument(
-        "--agent-view", type=Path, help="agent_view.json with metric_map/fixture_hints."
+        "--agent-view", type=Path, help="agent_view.json with metric_map/static_fixture_projection."
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--no-validate", action="store_true")
@@ -39,15 +39,17 @@ def main(argv: list[str] | None = None) -> None:
     metric_map = (
         agent_view.get("metric_map") if isinstance(agent_view.get("metric_map"), dict) else {}
     )
-    fixture_hints = (
-        agent_view.get("fixture_hints") if isinstance(agent_view.get("fixture_hints"), dict) else {}
+    static_fixture_projection = (
+        agent_view.get("static_fixture_projection")
+        if isinstance(agent_view.get("static_fixture_projection"), dict)
+        else {}
     )
-    if not metric_map or not fixture_hints:
-        raise SystemExit("agent view must contain metric_map and fixture_hints")
+    if not metric_map or not static_fixture_projection:
+        raise SystemExit("agent view must contain metric_map and static_fixture_projection")
     snapshot = write_nav2_map_bundle(
         args.output_dir,
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     if not args.no_validate:
         validate_nav2_map_bundle(args.output_dir).raise_for_errors()

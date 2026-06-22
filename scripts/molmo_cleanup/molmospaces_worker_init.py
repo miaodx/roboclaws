@@ -42,6 +42,34 @@ def prepare_molmospaces_scene(
     return scene_xml, resolution
 
 
+def source_room_labels(scene_xml: Path) -> dict[str, dict[str, str]]:
+    scene_json = _source_scene_json_path(scene_xml)
+    if scene_json is not None:
+        payload = json.loads(scene_json.read_text(encoding="utf-8"))
+        labels = {
+            room_id: label
+            for room in payload.get("rooms") or []
+            if isinstance(room, dict)
+            for room_id, label in [_source_room_label(room, scene_json)]
+        }
+        if labels:
+            return labels
+    ithor_label = _ithor_room_label(scene_xml)
+    if ithor_label:
+        return {
+            "room_0": {
+                "room_id": "room_0",
+                "room_label": ithor_label,
+                "room_type": ithor_label,
+                "room_label_provenance": "ithor_floorplan_id",
+            }
+        }
+    raise RuntimeError(
+        "missing source room labels for "
+        f"{scene_xml}; expected adjacent scene JSON with rooms[].roomType"
+    )
+
+
 def resolve_molmospaces_scene_xml(
     *,
     scene_source: str,
@@ -85,6 +113,62 @@ def resolve_molmospaces_scene_xml(
         "path_was_relative": path_was_relative,
         "scene_xml": str(scene_xml),
     }
+
+
+def _source_scene_json_path(scene_xml: Path) -> Path | None:
+    stem = scene_xml.stem
+    for suffix in ("_ceiling", "_physics", "_mesh"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+    candidates = [scene_xml.with_name(f"{stem}.json"), scene_xml.with_suffix(".json")]
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def _source_room_label(room: dict[str, Any], scene_json: Path) -> tuple[str, dict[str, str]]:
+    room_id = _source_room_id(str(room.get("id") or ""))
+    room_type = str(room.get("roomType") or "").strip()
+    if not room_type:
+        raise RuntimeError(f"missing roomType for {room_id} in {scene_json}")
+    return room_id, {
+        "room_id": room_id,
+        "room_label": _display_room_label(room_type),
+        "room_type": room_type,
+        "room_label_provenance": "source_scene_json",
+    }
+
+
+def _source_room_id(raw_id: str) -> str:
+    if raw_id.startswith("room_"):
+        return raw_id
+    if "|" in raw_id:
+        raw_id = raw_id.rsplit("|", 1)[1]
+    else:
+        match = re.match(r"^\D+(\d+)$", raw_id)
+        if match:
+            raw_id = match.group(1)
+    if raw_id.isdigit():
+        return f"room_{int(raw_id)}"
+    raise RuntimeError(f"unsupported source room id: {raw_id!r}")
+
+
+def _display_room_label(room_type: str) -> str:
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", room_type).strip()
+
+
+def _ithor_room_label(scene_xml: Path) -> str | None:
+    match = re.search(r"FloorPlan(\d+)", scene_xml.stem)
+    if not match:
+        return None
+    floorplan = int(match.group(1))
+    if 1 <= floorplan < 200:
+        return "Kitchen"
+    if 200 <= floorplan < 300:
+        return "Living Room"
+    if 300 <= floorplan < 400:
+        return "Bedroom"
+    if 400 <= floorplan < 500:
+        return "Bathroom"
+    return None
 
 
 def scene_xml_path_from_ref(

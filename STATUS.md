@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -10,7 +10,7 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws has implemented the eval-driven architecture plan and the follow-on
 non-cleanup eval support plan. Eval suites are visible as a first-class
 architecture layer, stale launch-axis documentation is cleaned, current
-cleanup/map-build MCP contracts no longer advertise `fixture_hints` as a
+cleanup/map-build MCP contracts no longer advertise `static_fixture_projection` as a
 callable active tool, and repo-native eval suite/sample/trial/result schema
 packets plus direct-runner household fixtures exist. Deterministic eval suites
 are available through `just agent::eval suite=smoke_regression budget=smoke`,
@@ -39,6 +39,12 @@ The household-world launch contract remains the active product shape:
 contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
 the `surface=planner-proof` confidence route.
 
+The sim household map surface simplification is implemented. Current sim
+reports and operator-console map slots distinguish the Base Navigation Map
+preview from Runtime Metric Map evidence, keep Runtime Map Prior Snapshot
+as a prior wrapper, and no longer publish generated `semantic_map.png` /
+`map_overlay.json` previews as current map proof.
+
 The active visual-grounding sidecar contract is now detector-only: hosted VLM
 refiner/direct-producer camera labelers are retired from active code, command
 examples, tests, and benchmark promotion. OpenClaw remains available only as a
@@ -53,13 +59,16 @@ geometry source, and alignment status. B1 scene partition labels bind through
 raw/source-map aligned previews.
 
 The B1 / Map 12 digital-twin map input contract now uses vendor raw Map12 plus a
-human review manifest instead of the deleted authored merged map bundle.
+seed/review placeholder manifest instead of the deleted authored merged map bundle.
 Product and operator-preview routes compile a generated runtime bundle from
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
 `assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
-passing map context to lower-level consumers. Draft/shared south labels stay
-out of runtime semantics until reviewed.
+passing map context to lower-level consumers. No final operator-authored room
+semantic manifest exists yet; manual room labels and residual-backed
+scene-map correspondences still need review before they can be treated as
+accepted semantics. The active blocking plan for making the B1 digital twin
+usable is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -67,6 +76,8 @@ open-ended eval matrix expansion is
 `docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`. The active eval
 architecture source of truth is
 `docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
+implemented sim map surface simplification is
+`docs/plans/2026-06-17-sim-map-surface-simplification.md`. The
 implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
 ADR-0136. The implemented visual-grounding cleanup is
@@ -78,10 +89,10 @@ thin review/runtime contract is
 
 ## Next Action
 
-Pick the next repo maintenance or product slice. The eval-driven architecture
-and non-cleanup eval support plans are implemented; remaining broader
-live-provider and OpenClaw proofs are environment-dependent validation items,
-not active implementation blockers.
+Pick the next repo maintenance or product slice. The eval-driven architecture,
+non-cleanup eval support, and sim map surface simplification plans are
+implemented; remaining broader live-provider and OpenClaw proofs are
+environment-dependent validation items, not active implementation blockers.
 
 ## Current Blocker
 
@@ -111,6 +122,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-15-non-cleanup-eval-support.md`
 - Implemented open-ended eval matrix expansion:
   `docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`
+- Implemented sim map surface simplification:
+  `docs/plans/2026-06-17-sim-map-surface-simplification.md`
 - Active eval-suite ADR:
   `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
 - Implemented household map/launch/open-ended plan:
@@ -123,6 +136,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`
 - Implemented B1 / Map 12 thin review/runtime contract:
   `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`
+- Active B1 / Map 12 two-map alignment blocker:
+  `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 - Implemented VLM-sidecar/OpenClaw status cleanup:
   `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:

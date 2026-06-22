@@ -22,13 +22,16 @@ def normalize_household_intent(value: str | None) -> str:
     """
 
     normalized = str(value or "").strip().lower().replace("_", "-")
-    if normalized in {"open-ended", "open-ended-task", "operator-task", "custom", "custom-task"}:
+    if not normalized:
+        return HOUSEHOLD_INTENT_CLEANUP
+    if normalized in {HOUSEHOLD_INTENT_OPEN_ENDED, "household-world.open-ended"}:
         return HOUSEHOLD_INTENT_OPEN_ENDED
-    if normalized in {"map-build", "household-world.map-build"}:
+    if normalized in {HOUSEHOLD_INTENT_MAP_BUILD, "household-world.map-build"}:
         return HOUSEHOLD_INTENT_MAP_BUILD
     if normalized in {HOUSEHOLD_INTENT_CLEANUP, "household-world.cleanup"}:
         return HOUSEHOLD_INTENT_CLEANUP
-    return HOUSEHOLD_INTENT_CLEANUP
+    expected = ", ".join(sorted(HOUSEHOLD_INTENTS))
+    raise ValueError(f"unsupported household intent {value!r} (expected one of: {expected})")
 
 
 def household_intent_from_goal_contract(goal_contract: Any | None, *, fallback: str = "") -> str:

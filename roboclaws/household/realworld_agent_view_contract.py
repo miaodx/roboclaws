@@ -38,7 +38,7 @@ def real_robot_readiness_from_events(
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
     metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     policy_view = agent_view.get("policy_view") or {}
     navigation_backends: dict[str, int] = {}
     pose_sources: dict[str, int] = {}
@@ -62,9 +62,9 @@ def real_robot_readiness_from_events(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": map_bundle_fields_present(metric_map),
         "pose_stamped_waypoints": pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
+            and static_fixture_projection.get("contains_runtime_observations") is False
         ),
         "policy_view_chase_excluded": policy_view.get("chase_camera_policy_input") is False,
         "report_only_simulation_view_count": report_only_count,
@@ -92,7 +92,7 @@ def real_robot_readiness_from_events(
     evidence["readiness_sections_complete"] = bool(
         evidence["map_bundle_fields_present"]
         and evidence["pose_stamped_waypoints"]
-        and evidence["static_fixture_semantic_map"]
+        and evidence["static_fixture_projection"]
         and evidence["policy_view_chase_excluded"]
         and navigation_backends
     )

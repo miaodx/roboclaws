@@ -47,8 +47,8 @@ DEFAULT_RAW_RUN_DIRS = (
 DEFAULT_CONTRAST_RUN_DIRS = (
     Path("output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7"),
 )
-DEFAULT_SEMANTIC_MAP_PRIOR = Path(
-    "output/household/semantic-map-build/direct-camera-grounded-labels/"
+DEFAULT_RUNTIME_MAP_PRIOR = Path(
+    "output/household/direct-map-build/direct-camera-grounded-labels/"
     "seed-7/runtime_metric_map.json"
 )
 DEFAULT_OUTPUT_ROOT = Path("output/molmo/raw-fpv-perception-probe")
@@ -192,7 +192,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--raw-run-dir", action="append", type=Path, default=[])
     parser.add_argument("--contrast-run-dir", action="append", type=Path, default=[])
-    parser.add_argument("--semantic-map-prior", type=Path, default=DEFAULT_SEMANTIC_MAP_PRIOR)
+    parser.add_argument("--runtime-map-prior", type=Path, default=DEFAULT_RUNTIME_MAP_PRIOR)
     parser.add_argument("--private-labels", action="append", type=Path, default=[])
     parser.add_argument(
         "--all-visible-labels",
@@ -223,7 +223,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "all",
             "both",
             "baseline_json",
-            "skill_json_semantic_map",
+            "skill_json_runtime_map",
             "raw_fpv_visual_labeler",
         ),
         default="both",
@@ -247,10 +247,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         contrast_run_dirs=contrast_run_dirs,
         max_frames_per_source=max(1, int(args.max_frames_per_source)),
     )
-    semantic_map_prior = _load_json_if_exists(args.semantic_map_prior)
+    runtime_map_prior = _load_json_if_exists(args.runtime_map_prior)
     public_inputs = build_public_inputs(
         frames,
-        semantic_map_prior=semantic_map_prior,
+        runtime_map_prior=runtime_map_prior,
         max_candidates=max(1, min(3, int(args.max_candidates))),
     )
     labels = load_probe_labels(
@@ -353,9 +353,9 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "all_visible_movable_label_count": sum(1 for item in labels if not item.hidden_target),
         "missing_label_frame_count": _missing_label_frame_count(frames, labels),
         "truth_scope": _truth_scope_summary(labels),
-        "semantic_map_context": {
-            "provided": bool(semantic_map_prior),
-            "source": str(args.semantic_map_prior) if semantic_map_prior else "",
+        "runtime_map_context": {
+            "provided": bool(runtime_map_prior),
+            "source": str(args.runtime_map_prior) if runtime_map_prior else "",
             "compressed_context_only": True,
             "needs_current_frame_confirm": True,
         },
@@ -402,7 +402,7 @@ def collect_observation_frames(
 def build_public_inputs(
     frames: list[ObservationFrame],
     *,
-    semantic_map_prior: dict[str, Any],
+    runtime_map_prior: dict[str, Any],
     max_candidates: int,
 ) -> dict[str, Any]:
     frame_groups = build_frame_groups(frames)
@@ -461,14 +461,14 @@ def build_public_inputs(
         },
         "variants": {
             "baseline_json": {
-                "description": "Strict JSON RAW-FPV prompt without semantic-map planning context.",
+                "description": "Strict JSON RAW-FPV prompt without runtime-map planning context.",
                 "frames": [
                     _prompt_payload_for_frame(frame, semantic_context={}) for frame in frames
                 ],
             },
-            "skill_json_semantic_map": {
+            "skill_json_runtime_map": {
                 "description": (
-                    "Skill-shaped strict JSON prompt with compressed semantic-map planning "
+                    "Skill-shaped strict JSON prompt with compressed runtime-map planning "
                     "context only. Prior context is not executable."
                 ),
                 "frames": [
@@ -476,7 +476,7 @@ def build_public_inputs(
                         frame,
                         semantic_context=_compressed_semantic_context(
                             frame,
-                            semantic_map_prior=semantic_map_prior,
+                            runtime_map_prior=runtime_map_prior,
                         ),
                     )
                     for frame in frames
@@ -1029,9 +1029,9 @@ def render_prompt(frame_payload: dict[str, Any], *, variant_id: str) -> str:
         "world-label detections, detector outputs, or cleanup action commands."
     )
     target_text = "; ".join(RAW_FPV_HIGH_CONFIDENCE_TARGETS)
-    context = frame_payload.get("semantic_map_context") or {}
+    context = frame_payload.get("runtime_map_context") or {}
     semantic_text = ""
-    if variant_id == "skill_json_semantic_map":
+    if variant_id == "skill_json_runtime_map":
         semantic_text = (
             "\nCompressed public planning context, not executable handles: "
             + json.dumps(context, sort_keys=True)
@@ -1316,7 +1316,7 @@ def _prompt_payload_for_frame(
 ) -> dict[str, Any]:
     payload = frame.public_payload()
     payload["image_path"] = str(frame.image_path)
-    payload["semantic_map_context"] = semantic_context
+    payload["runtime_map_context"] = semantic_context
     payload["needs_confirm"] = True
     payload["private_truth_included"] = False
     payload["executable_prior_handles_included"] = False
@@ -1326,16 +1326,16 @@ def _prompt_payload_for_frame(
 def _compressed_semantic_context(
     frame: ObservationFrame,
     *,
-    semantic_map_prior: dict[str, Any],
+    runtime_map_prior: dict[str, Any],
 ) -> dict[str, Any]:
     categories = set()
     historical_directions = []
-    for item in semantic_map_prior.get("observed_objects") or []:
+    for item in runtime_map_prior.get("observed_objects") or []:
         if item.get("source_observation_id") == frame.source_observation_id:
             category = str(item.get("category") or "")
             if category:
                 categories.add(category.lower())
-    for anchor in semantic_map_prior.get("public_semantic_anchors") or []:
+    for anchor in runtime_map_prior.get("public_semantic_anchors") or []:
         if anchor.get("waypoint_id") != frame.waypoint_id:
             continue
         category = str(anchor.get("category") or "")
@@ -1701,9 +1701,9 @@ def _json_object_from_text(text: str) -> dict[str, Any]:
 
 def _selected_variants(value: str) -> tuple[str, ...]:
     if value == "all":
-        return ("baseline_json", "skill_json_semantic_map", "raw_fpv_visual_labeler")
+        return ("baseline_json", "skill_json_runtime_map", "raw_fpv_visual_labeler")
     if value == "both":
-        return ("baseline_json", "skill_json_semantic_map")
+        return ("baseline_json", "skill_json_runtime_map")
     return (value,)
 
 

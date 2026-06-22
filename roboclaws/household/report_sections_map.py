@@ -88,7 +88,7 @@ def _is_map_evidence_refresh_run(run_result: dict[str, Any]) -> bool:
         return True
     prompt_markers = (
         "开放巡检",
-        "语义地图",
+        "Runtime Metric Map",
         "public semantic anchor",
         "evidence refresh",
         "map evidence",
@@ -175,7 +175,7 @@ def _map_evidence_refresh_driver_note(run_result: dict[str, Any]) -> str:
         return "The run is marked agent-driven, so target choice should be reviewed in trace."
     return (
         "The run is not agent-driven; it validates prompt/report plumbing and "
-        "direct semantic sweep evidence, not autonomous target choice."
+        "direct runtime-map sweep evidence, not autonomous target choice."
     )
 
 

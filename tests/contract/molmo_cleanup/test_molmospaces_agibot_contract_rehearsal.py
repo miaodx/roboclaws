@@ -31,14 +31,14 @@ def _require_robot_map_9_artifact() -> None:
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
 
 
-def _assert_fixture_hints_artifact_only(run_dir: Path, run_result: dict) -> None:
+def _assert_static_fixture_projection_artifact_only(run_dir: Path, run_result: dict) -> None:
     assert [item["stage"] for item in run_result["agibot_sdk_runner"]["subphase_reports"]] == [
         "agent_view_export",
         "observe",
         "navigate_waypoint",
         "blocked_manipulation",
     ]
-    assert (run_dir / "preflight" / "fixture_hints.json").is_file()
+    assert (run_dir / "preflight" / "static_fixture_projection.json").is_file()
     runner_task_input = json.loads(
         (run_dir / "preflight" / "runner_task_input.json").read_text(encoding="utf-8")
     )
@@ -47,16 +47,19 @@ def _assert_fixture_hints_artifact_only(run_dir: Path, run_result: dict) -> None
         for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert "fixture_hints" not in runner_task_input["public_tool_sequence"]
-    assert "fixture_hints" not in runner_task_input["stage_mapping"]["agent_view_export"]
-    assert not any(event.get("tool") == "fixture_hints" for event in trace_events)
+    assert "static_fixture_projection" not in runner_task_input["public_tool_sequence"]
+    assert (
+        "static_fixture_projection"
+        not in runner_task_input["stage_mapping"]["agent_view_export"]
+    )
+    assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 
 
 def _assert_contract_rehearsal_artifacts(run_dir: Path) -> None:
     for relpath in (
         "preflight/agent_view.json",
         "preflight/metric_map.json",
-        "preflight/fixture_hints.json",
+        "preflight/static_fixture_projection.json",
         "preflight/scene_identity.json",
         "preflight/molmospaces_metric_map.png",
         "preflight/waypoint_sequence.json",
@@ -116,7 +119,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
         item["status"] == "blocked_capability"
         for item in runtime_export["blocked_manipulation_results"]
     )
-    _assert_fixture_hints_artifact_only(run_dir, run_result)
+    _assert_static_fixture_projection_artifact_only(run_dir, run_result)
     _assert_contract_rehearsal_artifacts(run_dir)
 
     assert "MolmoSpaces Agibot Contract Rehearsal" in report_text
@@ -265,7 +268,7 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     assert "agibot_gdk_normal_navi" not in report_text
 
 
-def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_map(
+def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()
@@ -294,7 +297,7 @@ def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_m
     assert run_result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
     assert run_result["task_name"] == "household-world.map-build"
     assert run_result["cleanup_actions_disabled"] is True
-    assert run_result["semantic_sweep_mode"] is True
+    assert run_result["map_build_mode"] is True
     assert run_result["map_mode"] == "minimal"
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
@@ -308,7 +311,7 @@ def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_m
     assert agent_view["metric_map"]["inspection_waypoints"]
     assert agent_view["forbidden_private_fields_absent"] is True
     assert runtime_export["minimal_map_start"] is True
-    assert runtime_export["online_semantic_map_build"] is True
+    assert runtime_export["online_map_build"] is True
     assert runtime_export["cleanup_actions_included"] is False
     assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
     assert runtime_export["runtime_metric_map_summary"]["source_map_mutated"] is False
@@ -341,7 +344,7 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
     assert result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
     assert result["task_name"] == "household-world.cleanup"
     assert result["cleanup_actions_disabled"] is False
-    assert result["semantic_sweep_mode"] is False
+    assert result["map_build_mode"] is False
     assert result["map_mode"] == "minimal"
     assert result["perception_mode"] == "raw_fpv_only"
     assert runtime_metric_map["minimal_map_mode"] is True

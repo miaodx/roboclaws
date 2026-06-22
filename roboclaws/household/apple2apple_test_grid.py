@@ -106,7 +106,7 @@ def build_apple2apple_test_grid(
     output_dir = Path(output_dir)
     prior_value = runtime_map_prior or RUNTIME_MAP_PRIOR_PLACEHOLDER
     setup_rows = [
-        _semantic_map_prior_row(
+        _runtime_map_prior_row(
             output_dir=output_dir,
             seed=seed,
             generated_mess_count=generated_mess_count,
@@ -218,7 +218,7 @@ def row_rerun_command(row: dict[str, Any]) -> str:
     return f"{env_prefix} {command}".strip()
 
 
-def _semantic_map_prior_row(
+def _runtime_map_prior_row(
     *,
     output_dir: Path,
     seed: int,
@@ -226,7 +226,7 @@ def _semantic_map_prior_row(
     task: str,
     map_bundle: str,
 ) -> dict[str, Any]:
-    row_output_dir = output_dir / "_offline-semantic-map-prior"
+    row_output_dir = output_dir / "_offline-runtime-map-prior"
     command = [
         "just",
         "run::surface",
@@ -243,7 +243,7 @@ def _semantic_map_prior_row(
         f"map_bundle={map_bundle}",
     ]
     return _row_payload(
-        row_id="setup-offline-semantic-map-prior",
+        row_id="setup-offline-runtime-map-prior",
         label="Offline Runtime Metric Map prior",
         grid_role="setup",
         command=command,

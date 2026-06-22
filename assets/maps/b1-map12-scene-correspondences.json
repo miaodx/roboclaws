@@ -3,15 +3,16 @@
   "bbox_seed_policy": "known_poor_seed_only",
   "notes": [
     "Residual-backed transform anchors are intentionally separate from the human label review manifest.",
-    "No accepted anchors are checked in yet; run the correspondence review/fitter workflow after operator picks are available."
+    "No accepted anchors are checked in yet; this file is a fail-loud placeholder, not a previous alignment result.",
+    "Regenerate anchors from explicit operator map picks and explicit 2rd_floor_seperated scene picks before running the fitter."
   ],
   "scene_projection_policy": {
     "horizontal_axes": [
       "x",
-      "z"
+      "y"
     ],
-    "source": "usd_stage_up_axis_and_robot_pose_convention",
-    "up_axis": "y"
+    "source": "pending_operator_review_for_2rd_floor_seperated",
+    "up_axis": "z"
   },
   "schema": "b1_map12_scene_correspondences_v1",
   "source_map_frame": "robot_map_12_map",

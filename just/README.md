@@ -94,7 +94,7 @@ These lanes do not choose online/offline map behavior. Base Navigation Map is
 the current start-of-run map context: occupancy geometry, generated exploration
 candidates, and public room-category hints when available. Use
 `runtime_map_prior=...` when a cleanup run should consume a prebuilt Runtime
-Metric Map snapshot or canonical Actionable Semantic Map Snapshot. Historical
+Metric Map snapshot or canonical Runtime Map Prior Snapshot. Historical
 `minimal` / `rich` map artifacts may remain readable, but they are not current
 product choices for operators or agents.
 
@@ -332,8 +332,8 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the semantic map build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
-| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the map-build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the map-build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
 | "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels` |
 | "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"` |
 | "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |

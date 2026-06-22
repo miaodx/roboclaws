@@ -198,11 +198,11 @@ def _visual_grounding_overlay_for_candidate(
     return str(rel_path)
 
 
-def _fixture_hints_for_visual_grounding_request(
-    fixture_hints: dict[str, Any],
+def _static_fixture_projection_for_visual_grounding_request(
+    static_fixture_projection: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         room_id = str(room.get("room_id") or "")
         for fixture in room.get("fixtures") or []:
             rows.append(

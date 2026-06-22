@@ -41,7 +41,7 @@ def run_cleanup_routine(
     placement_tool: str = "auto",
     source_receptacle_id: str = "",
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
     call_tool: ToolCall | None = None,
     record_tool_view: ToolViewRecorder | None = None,
     target_request_key: str = "fixture_id",
@@ -60,14 +60,14 @@ def run_cleanup_routine(
         placement_tool,
         fixture_id=fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     incompatible = explicit_placement_incompatibility(
         placement_tool,
         selected_tool=selected_tool,
         fixture_id=fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     if incompatible:
         return _routine_response(
@@ -118,7 +118,7 @@ def run_cleanup_routine(
     requires_open = fixture_requires_open(
         fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     if selected_tool == PLACE_INSIDE_PHASE and requires_open:
         request = _target_request(
@@ -281,14 +281,14 @@ def normalize_placement_tool(
     *,
     fixture_id: str,
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
 ) -> str:
     requested = str(placement_tool or "auto").strip()
     if requested in {"", "auto"}:
         fixture = _fixture_for_policy(
             fixture_id,
             target_fixture=target_fixture,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
         if fixture is None:
             return PLACE_PHASE
@@ -305,26 +305,26 @@ def routine_plan(
     fixture_id: str,
     placement_tool: str = "auto",
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
 ) -> list[str]:
     selected_tool = normalize_placement_tool(
         placement_tool,
         fixture_id=fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     plan = [NAVIGATE_TO_OBJECT_PHASE, PICK_PHASE, NAVIGATE_TO_RECEPTACLE_PHASE]
     if selected_tool == PLACE_INSIDE_PHASE and fixture_requires_open(
         fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     ):
         plan.append(OPEN_RECEPTACLE_PHASE)
     plan.append(selected_tool)
     if selected_tool == PLACE_INSIDE_PHASE and fixture_requires_open(
         fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     ):
         plan.append(CLOSE_RECEPTACLE_PHASE)
     return plan
@@ -334,12 +334,12 @@ def fixture_requires_open(
     fixture_id: str,
     *,
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
 ) -> bool:
     fixture = _fixture_for_policy(
         fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     if fixture is None:
         return False
@@ -354,7 +354,7 @@ def explicit_placement_incompatibility(
     selected_tool: str,
     fixture_id: str,
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
 ) -> str:
     requested = str(placement_tool or "auto").strip()
     if requested in {"", "auto"}:
@@ -362,7 +362,7 @@ def explicit_placement_incompatibility(
     fixture = _fixture_for_policy(
         fixture_id,
         target_fixture=target_fixture,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
     )
     if fixture is None:
         return ""
@@ -684,13 +684,13 @@ def _fixture_for_policy(
     fixture_id: str,
     *,
     target_fixture: Mapping[str, Any] | None = None,
-    fixture_hints: Mapping[str, Any] | None = None,
+    static_fixture_projection: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any] | None:
     if target_fixture is not None:
         return target_fixture
-    if not fixture_hints:
+    if not static_fixture_projection:
         return None
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, Mapping):
             continue
         for fixture in room.get("fixtures") or []:

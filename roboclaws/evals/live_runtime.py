@@ -455,14 +455,14 @@ def product_run_kwargs(
     """Return shared cleanup product-run kwargs for direct and live eval trials."""
 
     launch_overrides = sample.launch_overrides or {}
-    semantic_sweep = sample.intent == "map-build" or sample.preset == "map-build"
+    map_build = sample.intent == "map-build" or sample.preset == "map-build"
     kwargs: dict[str, Any] = {
         "output_dir": run_dir,
         "seed": sample.seed,
         "task_prompt": task_prompt(sample),
         "backend": implementation_backend(sample, budget=budget),
         "evidence_lane": evidence_lane(sample, budget=budget),
-        "semantic_sweep": semantic_sweep,
+        "map_build": map_build,
         "generated_mess_count": generated_mess_count(sample),
         "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
         "scene_index": int(launch_overrides.get("scene_index") or 0),
@@ -500,7 +500,7 @@ def task_prompt(sample: EvalSample) -> str:
     if sample.prompt not in {"", MISSING_NOT_APPLICABLE, MISSING_UNAVAILABLE}:
         return sample.prompt
     if sample.intent == "map-build":
-        return "帮我建立这个房间的语义地图"
+        return "帮我建立这个房间的 Runtime Metric Map"
     return "帮我收拾这个房间"
 
 

@@ -270,14 +270,14 @@ def _validate_declared_routes(
     rooms = semantics.get("rooms") or []
     waypoints = semantics.get("inspection_waypoints") or []
     fixtures = semantics.get("fixtures") or []
-    fixture_hints = {"rooms": []}
+    static_fixture_projection = {"rooms": []}
     for room in rooms:
         room_id = str(room.get("room_id") or "")
         item = dict(room)
         item["fixtures"] = [
             fixture for fixture in fixtures if str(fixture.get("room_id") or "") == room_id
         ]
-        fixture_hints["rooms"].append(item)
+        static_fixture_projection["rooms"].append(item)
     metric_map = {
         "resolution_m": grid.resolution_m if grid is not None else default_resolution_m,
         "origin": {
@@ -305,7 +305,7 @@ def _validate_declared_routes(
             continue
         result = validate_metric_map_route(
             metric_map,
-            fixture_hints,
+            static_fixture_projection,
             start_waypoint_id=start,
             goal_waypoint_id=goal,
         )

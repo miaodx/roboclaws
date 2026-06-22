@@ -95,8 +95,8 @@ def _validate_base64(raw: Any) -> None:
 def _validate_request_hints(payload: dict[str, Any]) -> None:
     if not isinstance(payload.get("category_hints"), list):
         raise VisualGroundingContractError("category_hints must be a list")
-    if not isinstance(payload.get("fixture_hints"), list):
-        raise VisualGroundingContractError("fixture_hints must be a list")
+    if not isinstance(payload.get("static_fixture_projection"), list):
+        raise VisualGroundingContractError("static_fixture_projection must be a list")
 
 
 def _validate_pipeline_request(pipeline_request: Any) -> None:

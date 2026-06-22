@@ -18,7 +18,7 @@ from roboclaws.maps.bundle_validation import (
 )
 from roboclaws.maps.rasterize import (
     OccupancyGrid,
-    fixtures_from_hints,
+    fixtures_from_static_projection,
     load_pgm,
     occupancy_grid_from_metric_map,
     world_to_grid,
@@ -116,7 +116,7 @@ def metric_map_bundle_metadata(
         "environment_id": environment_id,
         "map_id": map_id,
         "map_version": map_version,
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
         "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
         "artifact_paths": _bundle_relative_paths(artifact_root=artifact_root),
@@ -134,10 +134,14 @@ def write_nav2_map_bundle_snapshot(
     *,
     run_dir: Path,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> dict[str, Any]:
     bundle_dir = run_dir / "map_bundle"
-    snapshot = write_nav2_map_bundle(bundle_dir, metric_map=metric_map, fixture_hints=fixture_hints)
+    snapshot = write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=metric_map,
+        static_fixture_projection=static_fixture_projection,
+    )
     snapshot["schema"] = NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA
     snapshot["snapshot_root"] = "map_bundle"
     snapshot["artifact_paths"] = {
@@ -178,21 +182,24 @@ def write_nav2_map_bundle(
     bundle_dir: Path,
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> dict[str, Any]:
-    metric_map, fixture_hints = _normalized_bundle_inputs(metric_map, fixture_hints)
+    metric_map, static_fixture_projection = _normalized_bundle_inputs(
+        metric_map,
+        static_fixture_projection,
+    )
     profiles_dir = bundle_dir / "profiles"
     costmaps_dir = bundle_dir / "costmaps"
     profiles_dir.mkdir(parents=True, exist_ok=True)
     costmaps_dir.mkdir(parents=True, exist_ok=True)
 
-    map_id = str(metric_map.get("map_id") or "realworld_cleanup_semantic_map")
-    map_version = str(metric_map.get("map_version") or "static-fixture-map-v1")
+    map_id = str(metric_map.get("map_id") or "realworld_cleanup_navigation_map")
+    map_version = str(metric_map.get("map_version") or "base-navigation-map-v1")
     environment_id = str(
         (metric_map.get("map_bundle") or {}).get("environment_id")
         if isinstance(metric_map.get("map_bundle"), dict)
         else ""
-    ) or map_id.removesuffix("_semantic_map")
+    ) or map_id.removesuffix("_base_navigation_map")
     metadata = (
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
     )
@@ -213,11 +220,14 @@ def write_nav2_map_bundle(
     costmap_params_path = bundle_dir / paths["costmap_params"]
     preview_path = bundle_dir / paths["preview_png"]
 
-    grid = occupancy_grid_from_metric_map(metric_map, fixture_hints)
+    grid = occupancy_grid_from_metric_map(metric_map, static_fixture_projection)
     write_pgm(map_pgm_path, grid)
     map_yaml_path.write_text(_map_yaml(metric_map), encoding="utf-8")
     semantics_path.write_text(
-        json.dumps(_semantics_payload(metric_map, fixture_hints), indent=2, sort_keys=True) + "\n",
+        json.dumps(
+            _semantics_payload(metric_map, static_fixture_projection), indent=2, sort_keys=True
+        )
+        + "\n",
         encoding="utf-8",
     )
     robot_profile_path.write_text(_simple_yaml(DEFAULT_ROBOT_PROFILE), encoding="utf-8")
@@ -239,7 +249,7 @@ def write_nav2_map_bundle(
         "environment_id": environment_id,
         "map_id": map_id,
         "map_version": map_version,
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
         "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
         "parameter_hash": parameter_hash,
@@ -265,8 +275,8 @@ def _existing_bundle_snapshot(
 ) -> dict[str, Any]:
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
     environment_id = str(semantics.get("environment_id") or bundle_dir.name)
-    map_id = str(semantics.get("map_id") or f"{environment_id}_semantic_map")
-    map_version = str(semantics.get("map_version") or "static-fixture-map-v1")
+    map_id = str(semantics.get("map_id") or f"{environment_id}_base_navigation_map")
+    map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
     metadata = metric_map_bundle_metadata(
         environment_id=environment_id,
         map_id=map_id,
@@ -378,17 +388,17 @@ def _costmap_yaml(metric_map: dict[str, Any]) -> str:
 
 def _normalized_bundle_inputs(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     normalized_map = copy.deepcopy(metric_map)
-    normalized_hints = copy.deepcopy(fixture_hints)
-    _normalize_room_only_fixture_poses(normalized_map, normalized_hints)
-    return normalized_map, normalized_hints
+    normalized_projection = copy.deepcopy(static_fixture_projection)
+    _normalize_room_only_fixture_poses(normalized_map, normalized_projection)
+    return normalized_map, normalized_projection
 
 
 def _normalize_room_only_fixture_poses(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> None:
     rooms_by_id = {str(room.get("room_id") or ""): room for room in metric_map.get("rooms") or []}
     waypoints_by_room: dict[str, list[dict[str, Any]]] = {}
@@ -396,15 +406,15 @@ def _normalize_room_only_fixture_poses(
         waypoints_by_room.setdefault(str(waypoint.get("room_id") or ""), []).append(waypoint)
 
     next_slot_by_room: dict[str, int] = {}
-    for hint_room in fixture_hints.get("rooms") or []:
-        if not isinstance(hint_room, dict):
+    for projection_room in static_fixture_projection.get("rooms") or []:
+        if not isinstance(projection_room, dict):
             continue
-        room_id = str(hint_room.get("room_id") or "")
-        room = rooms_by_id.get(room_id) or hint_room
+        room_id = str(projection_room.get("room_id") or "")
+        room = rooms_by_id.get(room_id) or projection_room
         waypoints = waypoints_by_room.get(room_id, [])
         if not waypoints:
             continue
-        for fixture in hint_room.get("fixtures") or []:
+        for fixture in projection_room.get("fixtures") or []:
             if not isinstance(fixture, dict):
                 continue
             if str(fixture.get("position_detail") or "") != "room_only":
@@ -514,7 +524,9 @@ def _room_bounds(room: dict[str, Any]) -> tuple[float, float, float, float]:
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def _semantics_payload(metric_map: dict[str, Any], fixture_hints: dict[str, Any]) -> dict[str, Any]:
+def _semantics_payload(
+    metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
+) -> dict[str, Any]:
     metadata = (
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
     )
@@ -541,11 +553,11 @@ def _semantics_payload(metric_map: dict[str, Any], fixture_hints: dict[str, Any]
             geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
             alignment_status=ALIGNMENT_STATUS_NATIVE,
         ),
-        "fixtures": fixtures_from_hints(fixture_hints),
+        "fixtures": fixtures_from_static_projection(static_fixture_projection),
         "inspection_waypoints": metric_map.get("inspection_waypoints") or [],
         "driveable_ways": metric_map.get("driveable_ways") or [],
         "provenance": {
-            "source": "molmospaces_public_semantic_map",
+            "source": "molmospaces_base_navigation_map",
             "contains_runtime_observations": False,
             "contains_private_scoring_truth": False,
         },
@@ -632,13 +644,15 @@ def _pad_preview_canvas(image: Image.Image) -> Image.Image:
     return output
 
 
-def _write_preview(path: Path, metric_map: dict[str, Any], fixture_hints: dict[str, Any]) -> None:
+def _write_preview(
+    path: Path, metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
+) -> None:
     image = Image.new("RGB", (900, 560), (247, 249, 252))
     draw = ImageDraw.Draw(image)
     draw.rectangle((18, 18, 882, 542), outline=(175, 184, 196), width=2)
     draw.text((34, 32), "Nav2 static map bundle preview", fill=(28, 35, 48))
     draw.text((34, 52), "Raw/source-map aligned; display_frame absent", fill=(86, 95, 112))
-    bounds = _coordinate_bounds(metric_map, fixture_hints)
+    bounds = _coordinate_bounds(metric_map, static_fixture_projection)
     for room in metric_map.get("rooms") or []:
         polygon = room.get("polygon") or []
         if len(polygon) >= 3:
@@ -652,7 +666,7 @@ def _write_preview(path: Path, metric_map: dict[str, Any], fixture_hints: dict[s
                 str(room.get("room_label", ""))[:22],
                 fill=(45, 55, 70),
             )
-    for fixture in fixtures_from_hints(fixture_hints):
+    for fixture in fixtures_from_static_projection(static_fixture_projection):
         pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
         x, y = _project(pose.get("x", 0.0), pose.get("y", 0.0), bounds)
         draw.rectangle((x - 18, y - 12, x + 18, y + 12), fill=(120, 132, 150), outline=(54, 63, 78))
@@ -673,7 +687,7 @@ def _write_preview(path: Path, metric_map: dict[str, Any], fixture_hints: dict[s
 
 
 def _coordinate_bounds(
-    metric_map: dict[str, Any], fixture_hints: dict[str, Any]
+    metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
 ) -> tuple[float, float, float, float]:
     xs: list[float] = []
     ys: list[float] = []
@@ -684,7 +698,7 @@ def _coordinate_bounds(
     for waypoint in metric_map.get("inspection_waypoints") or []:
         xs.append(float(waypoint.get("x", 0.0)))
         ys.append(float(waypoint.get("y", 0.0)))
-    for fixture in fixtures_from_hints(fixture_hints):
+    for fixture in fixtures_from_static_projection(static_fixture_projection):
         pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
         xs.append(float(pose.get("x", 0.0)))
         ys.append(float(pose.get("y", 0.0)))

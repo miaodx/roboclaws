@@ -72,7 +72,7 @@ class RealWorldRunArtifactInputs:
     generated_mess_count: int
     goal_contract: GoalContract | None
     agent_scratchpad: dict[str, Any]
-    semantic_sweep: bool
+    map_build: bool
     map_mode: str
     runtime_map_prior: dict[str, Any] | None
     runtime_map_prior_path: str | Path | None
@@ -82,7 +82,7 @@ class RealWorldRunArtifactInputs:
     selected_bundle_dir: Path | None
     planner_proof_evidence: dict[str, Any] | None
     use_planner_proof_for_cleanup_primitives: bool
-    semantic_sweep_camera_schedule: tuple[dict[str, float], ...]
+    map_build_camera_schedule: tuple[dict[str, float], ...]
     run_metadata_overrides: dict[str, Any] | None = None
 
 
@@ -225,7 +225,7 @@ def _base_run_result(
 ) -> dict[str, Any]:
     task_intent = str(
         payloads.goal_contract_payload.get("intent")
-        or ("map-build" if inputs.semantic_sweep else "cleanup")
+        or ("map-build" if inputs.map_build else "cleanup")
     )
     cleanup_status = inputs.done["cleanup_status"]
     final_status = "success" if task_intent == "open-ended" else cleanup_status
@@ -256,11 +256,11 @@ def _base_run_result(
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
         "planner_proof_cleanup_executor_enabled": (inputs.use_planner_proof_for_cleanup_primitives),
-        "fixture_hint_mode": inputs.contract.fixture_hint_mode,
+        "static_fixture_projection_mode": inputs.contract.static_fixture_projection_mode,
         "perception_mode": inputs.perception_mode,
         "map_mode": inputs.map_mode,
-        "semantic_sweep_mode": inputs.semantic_sweep,
-        "cleanup_actions_disabled": inputs.semantic_sweep,
+        "map_build_mode": inputs.map_build,
+        "cleanup_actions_disabled": inputs.map_build,
         "runtime_metric_map_prior": _runtime_map_prior_summary(inputs),
         "camera_labeler": _camera_labeler(inputs),
         "visual_grounding_pipeline_id": inputs.contract.visual_grounding_pipeline_id,
@@ -283,7 +283,7 @@ def _base_run_result(
         "model_declared_observation_evidence": payloads.agent_view.get(
             "model_declared_observation_evidence", {}
         ),
-        "semantic_sweep": _semantic_sweep_payload(inputs, artifacts),
+        "map_build": _map_build_payload(inputs, artifacts),
         "agent_scratchpad": inputs.agent_scratchpad,
         "private_evaluation": payloads.private_evaluation,
         "advisory_evaluation": payloads.advisory_evaluation,
@@ -436,19 +436,19 @@ def _runtime_map_prior_summary(inputs: RealWorldRunArtifactInputs) -> dict[str, 
     }
 
 
-def _semantic_sweep_payload(
+def _map_build_payload(
     inputs: RealWorldRunArtifactInputs,
     artifacts: _RunArtifactPaths,
 ) -> dict[str, Any]:
     return {
-        "enabled": inputs.semantic_sweep,
+        "enabled": inputs.map_build,
         "map_mode": inputs.map_mode,
         "minimal_map_mode": inputs.map_mode == MINIMAL_MAP_MODE,
         "camera_schedule": (
-            list(inputs.semantic_sweep_camera_schedule) if inputs.semantic_sweep else []
+            list(inputs.map_build_camera_schedule) if inputs.map_build else []
         ),
-        "snapshot_artifact": str(artifacts.runtime_metric_map) if inputs.semantic_sweep else "",
-        "cleanup_actions_disabled": inputs.semantic_sweep,
+        "snapshot_artifact": str(artifacts.runtime_metric_map) if inputs.map_build else "",
+        "cleanup_actions_disabled": inputs.map_build,
     }
 
 

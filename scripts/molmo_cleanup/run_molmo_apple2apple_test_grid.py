@@ -30,7 +30,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Create or execute the MolmoSpaces apple-to-apple cleanup test grid "
-            "for online/offline semantic-map comparison."
+            "for online/offline Runtime Metric Map comparison."
         )
     )
     parser.add_argument("--output-dir", type=Path, default=Path("output/molmo/apple2apple-grid"))
@@ -120,8 +120,8 @@ def _execute_prior_build(grid: dict[str, Any], args: argparse.Namespace) -> str:
     prior = _latest_runtime_map(Path(row["output_dir"]), seed=args.seed)
     if prior is None:
         if status != 0:
-            raise RuntimeError("offline semantic-map prior build failed")
-        raise RuntimeError("semantic-map prior build produced no runtime_metric_map.json")
+            raise RuntimeError("offline runtime-map prior build failed")
+        raise RuntimeError("runtime-map prior build produced no runtime_metric_map.json")
     if status != 0:
         row["status"] = "artifact_success"
         row["reason"] = (

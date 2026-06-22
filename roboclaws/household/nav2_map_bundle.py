@@ -66,15 +66,15 @@ def attach_nav2_map_bundle_snapshot(
         metric_map = (
             agent_view.get("metric_map") if isinstance(agent_view.get("metric_map"), dict) else {}
         )
-        fixture_hints = (
-            agent_view.get("fixture_hints")
-            if isinstance(agent_view.get("fixture_hints"), dict)
+        static_fixture_projection = (
+            agent_view.get("static_fixture_projection")
+            if isinstance(agent_view.get("static_fixture_projection"), dict)
             else {}
         )
         snapshot = write_nav2_map_bundle_snapshot(
             run_dir=run_dir,
             metric_map=metric_map,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
     run_result["nav2_map_bundle"] = snapshot
     artifacts = run_result.setdefault("artifacts", {})

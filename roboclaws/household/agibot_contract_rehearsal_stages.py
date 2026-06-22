@@ -14,8 +14,8 @@ from roboclaws.household.agibot_contract_rehearsal import (
     RUNTIME_MOLMOSPACES_SUBPROCESS,
     _agent_view_with_cleanup_actions,
     _agent_view_with_runtime_observation,
-    _agibot_shaped_fixture_hints,
     _agibot_shaped_metric_map,
+    _agibot_shaped_static_fixture_projection,
     _blocked_manipulation,
     _empty_cleanup_actions_result,
     _first_waypoint_id_from_sequence,
@@ -88,7 +88,7 @@ class _ContractRehearsalSession:
 @dataclass(frozen=True)
 class _RehearsalPreflightState:
     metric_map: dict[str, Any]
-    fixture_hints: dict[str, Any]
+    static_fixture_projection: dict[str, Any]
     preflight: dict[str, Path]
     waypoint_sequence: dict[str, Any]
     subphase_reports: list[dict[str, Any]]
@@ -208,7 +208,7 @@ def _build_contract_rehearsal_session(
     contract = RealWorldCleanupContract(
         base_contract,
         task_prompt=scenario.task,
-        fixture_hint_mode="exact_fixtures",
+        static_fixture_projection_mode="exact_fixtures",
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
     )
     return _ContractRehearsalSession(
@@ -259,12 +259,14 @@ def _prepare_rehearsal_preflight(
     options: _ContractRehearsalOptions,
 ) -> _RehearsalPreflightState:
     metric_map = _agibot_shaped_metric_map(session.contract.metric_map(), seed=options.seed)
-    fixture_hints = _agibot_shaped_fixture_hints(session.contract.fixture_hints())
+    static_fixture_projection = _agibot_shaped_static_fixture_projection(
+        session.contract.static_fixture_projection()
+    )
     preflight = _write_preflight_artifacts(
         run_dir=run_dir,
         scenario=session.scenario,
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         runtime=options.runtime,
         seed=options.seed,
         generated_mess_count=options.generated_mess_count,
@@ -275,7 +277,7 @@ def _prepare_rehearsal_preflight(
     preflight_agent_view = _load_json(preflight["agent_view"])
     waypoint_sequence = _load_json(preflight["waypoint_sequence"])
     metric_map = dict(preflight_agent_view["metric_map"])
-    fixture_hints = dict(preflight_agent_view["fixture_hints"])
+    static_fixture_projection = dict(preflight_agent_view["static_fixture_projection"])
     subphase_reports = [
         _agent_view_stage_report(
             run_dir=run_dir,
@@ -286,7 +288,7 @@ def _prepare_rehearsal_preflight(
     _record(state.trace_events, state.started_at, "metric_map", {}, metric_map)
     return _RehearsalPreflightState(
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         preflight=preflight,
         waypoint_sequence=waypoint_sequence,
         subphase_reports=subphase_reports,
@@ -308,7 +310,7 @@ def _agent_view_stage_report(
         tool_response=metric_map,
         artifacts={
             "metric_map": _relpath(preflight["metric_map"], run_dir),
-            "fixture_hints": _relpath(preflight["fixture_hints"], run_dir),
+            "static_fixture_projection": _relpath(preflight["static_fixture_projection"], run_dir),
             "agent_view": _relpath(preflight["agent_view"], run_dir),
             "scene_identity": _relpath(preflight["scene_identity"], run_dir),
             "map_preview": _relpath(preflight["map_preview"], run_dir),
@@ -555,7 +557,7 @@ def _run_cleanup_actions_stage(
         contract=session.contract,
         base_contract=session.base_contract,
         metric_map=preflight.metric_map,
-        fixture_hints=preflight.fixture_hints,
+        static_fixture_projection=preflight.static_fixture_projection,
         trace_events=state.trace_events,
         policy_events=state.policy_events,
         started_at=state.started_at,
@@ -691,12 +693,12 @@ def _top_level_agent_view(
         return _agent_view_with_cleanup_actions(
             session.contract.agent_view_payload(),
             metric_map=preflight.metric_map,
-            fixture_hints=preflight.fixture_hints,
+            static_fixture_projection=preflight.static_fixture_projection,
             fallback_observation=observation,
         )
     return _agent_view_with_runtime_observation(
         metric_map=preflight.metric_map,
-        fixture_hints=preflight.fixture_hints,
+        static_fixture_projection=preflight.static_fixture_projection,
         observation=observation,
     )
 
@@ -752,7 +754,7 @@ def _build_and_write_rehearsal_result(
         generated_mess_count=options.generated_mess_count,
         started_at=state.started_at,
         metric_map=preflight.metric_map,
-        fixture_hints=preflight.fixture_hints,
+        static_fixture_projection=preflight.static_fixture_projection,
         observation=observe_navigation.observation,
         navigation=observe_navigation.navigation,
         manipulation_results=action_result.manipulation_results,
