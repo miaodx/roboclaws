@@ -119,8 +119,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--old-scene", type=Path, default=DEFAULT_OLD_SCENE)
     parser.add_argument("--new-scene", type=Path, default=DEFAULT_NEW_SCENE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--width", type=int, default=960)
-    parser.add_argument("--height", type=int, default=540)
+    parser.add_argument("--width", type=_positive_int_arg, default=960)
+    parser.add_argument("--height", type=_positive_int_arg, default=540)
     parser.add_argument(
         "--scene-bounds",
         default=",".join(str(value) for value in DEFAULT_SCENE_XY_BOUNDS),
@@ -559,6 +559,16 @@ def _parse_bounds(value: str) -> tuple[float, float, float, float]:
     if min_x >= max_x or min_y >= max_y:
         raise ValueError("--scene-bounds min values must be less than max values")
     return min_x, min_y, max_x, max_y
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 def _bounds_payload(bounds: tuple[float, float, float, float]) -> dict[str, float]:

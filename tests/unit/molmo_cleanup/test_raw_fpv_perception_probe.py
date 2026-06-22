@@ -44,6 +44,47 @@ def _load_sweep_module():
     return module
 
 
+def test_raw_fpv_probe_rejects_invalid_numeric_config() -> None:
+    probe = _load_module()
+
+    for flag, value in (
+        ("--max-frames-per-source", "0"),
+        ("--threshold", "0"),
+        ("--max-candidates", "0"),
+        ("--max-candidates", "4"),
+        ("--timeout-s", "0"),
+        ("--timeout-s", "nan"),
+    ):
+        try:
+            probe.parse_args([flag, value])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag}={value} to fail at parse time")
+
+
+def test_raw_fpv_probe_accepts_valid_numeric_config() -> None:
+    probe = _load_module()
+
+    args = probe.parse_args(
+        [
+            "--max-frames-per-source",
+            "1",
+            "--threshold",
+            "1",
+            "--max-candidates",
+            "3",
+            "--timeout-s",
+            "0.5",
+        ]
+    )
+
+    assert args.max_frames_per_source == 1
+    assert args.threshold == 1
+    assert args.max_candidates == 3
+    assert args.timeout_s == 0.5
+
+
 def test_raw_fpv_probe_keeps_private_labels_out_of_prompt_inputs(tmp_path: Path) -> None:
     probe = _load_module()
     run_dir = _raw_run_dir(tmp_path)
@@ -301,6 +342,280 @@ def test_raw_fpv_probe_merges_multiple_private_label_manifests(tmp_path: Path) -
     ]
 
 
+def test_raw_fpv_probe_rejects_missing_private_label_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--private-labels",
+                    str(tmp_path / "missing_private_labels.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-labels",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV private label manifest does not exist" in str(exc)
+        assert "missing_private_labels.json" in str(exc)
+    else:  # pragma: no cover - missing explicit scorer truth should fail before scoring
+        raise AssertionError("expected missing private label manifest to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_malformed_private_label_manifest_rows(
+    tmp_path: Path,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    for name, payload, expected in (
+        (
+            "non_list_labels",
+            {"schema": "raw_fpv_private_label_manifest_v1", "labels": {"frame_id": "run/frame"}},
+            "must contain a list in 'labels'",
+        ),
+        (
+            "non_object_label",
+            {"schema": "raw_fpv_private_label_manifest_v1", "labels": ["not-a-label"]},
+            "label row 0 must be an object",
+        ),
+        (
+            "missing_frame_identity",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "object_id": "private_plate_001",
+                        "category": "plate",
+                        "bbox": [0.1, 0.2, 0.2, 0.2],
+                    }
+                ],
+            },
+            "label row 0 is missing frame_id or source_observation_id",
+        ),
+        (
+            "missing_object_id",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "frame_id": frames[0].frame_id,
+                        "category": "plate",
+                        "bbox": [0.1, 0.2, 0.2, 0.2],
+                    }
+                ],
+            },
+            "label row 0 is missing object_id",
+        ),
+        (
+            "missing_locality",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "frame_id": frames[0].frame_id,
+                        "object_id": "private_plate_001",
+                        "category": "plate",
+                    }
+                ],
+            },
+            "label row 0 must include bbox/image_bbox or coarse_regions",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+        try:
+            probe.load_probe_labels(
+                (path,),
+                frames=frames,
+                contrast_run_dirs=(),
+                default_hidden_target=True,
+            )
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert name in str(exc)
+        else:  # pragma: no cover - malformed explicit labels should fail aloud
+            raise AssertionError(f"expected malformed labels {name} to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_missing_all_visible_label_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--all-visible-labels",
+                    str(tmp_path / "missing_visible_labels.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-visible-labels",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV private label manifest does not exist" in str(exc)
+        assert "missing_visible_labels.json" in str(exc)
+    else:  # pragma: no cover - missing explicit scorer truth should fail before scoring
+        raise AssertionError("expected missing all-visible label manifest to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_missing_prediction_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--predictions",
+                    str(tmp_path / "missing_predictions.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-predictions",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV prediction manifest does not exist" in str(exc)
+        assert "missing_predictions.json" in str(exc)
+    else:  # pragma: no cover - missing explicit offline predictions should fail before scoring
+        raise AssertionError("expected missing prediction manifest to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_malformed_prediction_manifest_rows(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    for name, payload, expected in (
+        (
+            "non_list_rows",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": {"frame_id": "raw_fpv_001"}},
+            "must contain a list in 'predictions' or 'runs'",
+        ),
+        (
+            "non_object_row",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": ["not-a-row"]},
+            "prediction row 0 must be an object",
+        ),
+        (
+            "missing_frame",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": [{"response": {}}]},
+            "prediction row 0 is missing frame_id",
+        ),
+        (
+            "non_object_response",
+            {
+                "schema": "raw_fpv_probe_predictions_v1",
+                "predictions": [
+                    {
+                        "variant_id": "baseline_json",
+                        "frame_id": "run/raw_fpv_001",
+                        "response": ["not-a-response-object"],
+                    }
+                ],
+            },
+            "prediction row 0 response must be an object",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+        try:
+            probe.load_predictions(path)
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert name in str(exc)
+        else:  # pragma: no cover - malformed explicit predictions should fail aloud
+            raise AssertionError(f"expected malformed predictions {name} to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_missing_raw_source_run_dir(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(tmp_path / "missing-raw-run"),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-raw-run",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV source run directory does not exist" in str(exc)
+        assert "missing-raw-run" in str(exc)
+    else:  # pragma: no cover - missing source evidence should fail before scoring
+        raise AssertionError("expected missing RAW-FPV source run directory to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_raw_source_without_usable_frames(tmp_path: Path) -> None:
+    probe = _load_module()
+    empty_run_dir = tmp_path / "empty-raw-run"
+    empty_run_dir.mkdir()
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(empty_run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "empty-raw-run",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except ValueError as exc:
+        assert "RAW-FPV source run directories did not yield any usable FPV frames" in str(exc)
+        assert "empty-raw-run" in str(exc)
+    else:  # pragma: no cover - empty source evidence should fail before scoring
+        raise AssertionError("expected empty RAW-FPV source run directory to fail aloud")
+
+
 def test_raw_fpv_probe_aliases_unique_sweep_frame_labels_by_observation_id(
     tmp_path: Path,
 ) -> None:
@@ -406,6 +721,7 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
     public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
     calls: list[dict[str, object]] = []
 
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
     monkeypatch.setenv("CODEX_API_KEY", "test-key")
 
     def fake_call_responses_api(**kwargs):
@@ -444,17 +760,147 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
         public_inputs=public_inputs,
         output_dir=tmp_path / "responses",
         provider="codex-router-responses",
-        model="test-model",
+        model="gpt-5.5",
         timeout_s=1.0,
     )
 
     assert status == "provider_ok"
     assert errors == []
     assert len(calls) == 1
+    assert calls[0]["model"] == "gpt-5.5"
     assert set(predictions) == {frame.frame_id for frame in frames}
     assert len(predictions[frames[0].frame_id]["labels"]) == 1
     assert len(predictions[frames[1].frame_id]["labels"]) == 1
     assert predictions[frames[2].frame_id]["labels"] == []
+
+
+def test_raw_fpv_visual_labeler_rejects_unknown_provider_model(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path, observation_ids=("raw_fpv_001",))
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=1,
+    )
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+    monkeypatch.setattr(probe, "_call_responses_api", lambda **kwargs: calls.append(kwargs))
+
+    status, errors, predictions = probe.execute_provider_variant(
+        variant_id="raw_fpv_visual_labeler",
+        public_inputs=public_inputs,
+        output_dir=tmp_path / "responses",
+        provider="codex-router-responses",
+        model="not-in-provider-catalog",
+        timeout_s=1.0,
+    )
+
+    assert status == "provider_config_error"
+    assert predictions == {}
+    assert calls == []
+    assert errors == [
+        {
+            "type": "unknown_model",
+            "provider": "codex-router-responses",
+            "model": "not-in-provider-catalog",
+            "message": (
+                "unknown model 'not-in-provider-catalog' for provider_profile "
+                "codex-router-responses; add it to the provider registry or use a catalog model."
+            ),
+        }
+    ]
+
+
+def test_raw_fpv_visual_labeler_reports_unknown_model_before_missing_env(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.delenv("CODEX_BASE_URL", raising=False)
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+
+    assert probe._provider_config("codex-router-responses", model="not-in-provider-catalog") == {
+        "error": {
+            "type": "unknown_model",
+            "provider": "codex-router-responses",
+            "model": "not-in-provider-catalog",
+            "message": (
+                "unknown model 'not-in-provider-catalog' for provider_profile "
+                "codex-router-responses; add it to the provider registry or use a catalog model."
+            ),
+        }
+    }
+
+
+def test_raw_fpv_visual_labeler_uses_provider_default_for_blank_model(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path, observation_ids=("raw_fpv_001",))
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=1,
+    )
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+
+    def fake_call_responses_api(**kwargs):
+        calls.append(kwargs)
+        return {
+            "output_text": json.dumps(
+                {
+                    "schema": "raw_fpv_visual_labeler_response_v1",
+                    "labels": [],
+                }
+            )
+        }
+
+    monkeypatch.setattr(probe, "_call_responses_api", fake_call_responses_api)
+
+    status, errors, predictions = probe.execute_provider_variant(
+        variant_id="raw_fpv_visual_labeler",
+        public_inputs=public_inputs,
+        output_dir=tmp_path / "responses",
+        provider="codex-router-responses",
+        model="",
+        timeout_s=1.0,
+    )
+
+    assert status == "provider_ok"
+    assert errors == []
+    assert calls[0]["model"] == "gpt-5.5"
+    assert predictions[frames[0].frame_id]["labels"] == []
+
+
+def test_raw_fpv_visual_labeler_requires_codex_base_url(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.delenv("CODEX_BASE_URL", raising=False)
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+
+    assert probe._provider_config("codex-router-responses", model="gpt-5.5") == {
+        "error": {"type": "missing_env", "env": "CODEX_BASE_URL"}
+    }
+
+
+def test_raw_fpv_visual_labeler_requires_codex_api_key(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+
+    assert probe._provider_config("codex-router-responses", model="gpt-5.5") == {
+        "error": {"type": "missing_env", "env": "CODEX_API_KEY"}
+    }
 
 
 def test_raw_fpv_visual_labeler_scores_split_visible_quality(tmp_path: Path) -> None:
@@ -677,6 +1123,64 @@ def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) ->
     assert observations[0]["image_artifact"] == "robot_views/0001_raw_fpv_001.fpv.png"
 
 
+def test_private_label_generator_rejects_non_positive_render_dimensions() -> None:
+    labels = _load_label_module()
+
+    try:
+        labels.parse_args(["--render-width", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render width to fail at parse time")
+
+    try:
+        labels.parse_args(["--render-height", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render height to fail at parse time")
+
+
+def test_private_label_generator_rejects_invalid_pixel_and_observation_limits() -> None:
+    labels = _load_label_module()
+
+    try:
+        labels.parse_args(["--min-object-pixels", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid pixel threshold to fail at parse time")
+
+    try:
+        labels.parse_args(["--max-observations", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid observation limit to fail at parse time")
+
+
+def test_private_label_generator_accepts_valid_numeric_config() -> None:
+    labels = _load_label_module()
+
+    args = labels.parse_args(
+        [
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+            "--min-object-pixels",
+            "5",
+            "--max-observations",
+            "0",
+        ]
+    )
+
+    assert args.render_width == 1280
+    assert args.render_height == 720
+    assert args.min_object_pixels == 5
+    assert args.max_observations == 0
+
+
 def test_private_label_generator_full_trace_keeps_later_observations(tmp_path: Path) -> None:
     labels = _load_label_module()
     trace_path = tmp_path / "trace.jsonl"
@@ -869,6 +1373,64 @@ def test_raw_fpv_sweep_corpus_public_observation_excludes_private_target_ids() -
     assert "private_plate_001" not in text
     assert "observed_" not in text
     assert "anchor_fixture_" not in text
+
+
+def test_raw_fpv_sweep_corpus_rejects_non_positive_render_dimensions() -> None:
+    sweep = _load_sweep_module()
+
+    try:
+        sweep.parse_args(["--render-width", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render width to fail at parse time")
+
+    try:
+        sweep.parse_args(["--render-height", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render height to fail at parse time")
+
+
+def test_raw_fpv_sweep_corpus_rejects_invalid_pixel_and_waypoint_limits() -> None:
+    sweep = _load_sweep_module()
+
+    try:
+        sweep.parse_args(["--min-object-pixels", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid pixel threshold to fail at parse time")
+
+    try:
+        sweep.parse_args(["--max-waypoints", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid waypoint limit to fail at parse time")
+
+
+def test_raw_fpv_sweep_corpus_accepts_valid_numeric_config() -> None:
+    sweep = _load_sweep_module()
+
+    args = sweep.parse_args(
+        [
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+            "--min-object-pixels",
+            "5",
+            "--max-waypoints",
+            "0",
+        ]
+    )
+
+    assert args.render_width == 1280
+    assert args.render_height == 720
+    assert args.min_object_pixels == 5
+    assert args.max_waypoints == 0
 
 
 def test_raw_fpv_sweep_corpus_labels_from_private_focus_only() -> None:

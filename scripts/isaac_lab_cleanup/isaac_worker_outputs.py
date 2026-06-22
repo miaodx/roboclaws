@@ -134,7 +134,7 @@ def write_robot_views(
         views,
         width=args.render_width,
         height=args.render_height,
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
+        render_settle_frames=int(args.render_settle_frames or 0),
         isaac_aa_op=args.isaac_aa_op,
         isaac_tonemap_op=args.isaac_tonemap_op,
         isaac_exposure_bias=args.isaac_exposure_bias,
@@ -216,7 +216,7 @@ def write_robot_views(
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
         render_resolution={"width": args.render_width, "height": args.render_height},
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
+        render_settle_frames=int(args.render_settle_frames or 0),
     )
 
 

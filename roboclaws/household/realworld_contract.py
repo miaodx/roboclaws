@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import re
 from pathlib import Path
 from typing import Any
@@ -50,7 +49,6 @@ from roboclaws.household.visual_scan_guidance import (
     noop_camera_adjustment_hint,
     visual_scan_payload,
 )
-from roboclaws.maps.bundle import metric_map_bundle_metadata
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -94,13 +92,7 @@ VISUAL_EVIDENCE_REVIEWABLE_STATUS = realworld_visual_candidates.VISUAL_EVIDENCE_
 VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = (
     realworld_visual_candidates.VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS
 )
-VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY = (
-    realworld_visual_candidates.VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY
-)
 CANDIDATE_STATE_SEMANTIC = realworld_visual_candidates.CANDIDATE_STATE_SEMANTIC
-CANDIDATE_STATE_VISUAL_SCAN_REQUIRED = (
-    realworld_visual_candidates.CANDIDATE_STATE_VISUAL_SCAN_REQUIRED
-)
 CANDIDATE_STATE_VISUALLY_CONFIRMED = realworld_visual_candidates.CANDIDATE_STATE_VISUALLY_CONFIRMED
 CANDIDATE_STATE_NAVIGATION_AUTHORIZED = (
     realworld_visual_candidates.CANDIDATE_STATE_NAVIGATION_AUTHORIZED
@@ -119,14 +111,8 @@ _INSIDE_DESTINATION_CATEGORY_TERMS = (
     realworld_contract_projection._INSIDE_DESTINATION_CATEGORY_TERMS
 )
 _anchor_affordances_for_fixture = realworld_contract_projection._anchor_affordances_for_fixture
-_driveable_ways = realworld_contract_projection._driveable_ways
 _first_fixture_for_waypoint = realworld_contract_projection._first_fixture_for_waypoint
 _first_matching_fixture = realworld_contract_projection._first_matching_fixture
-_fixture_affordances = realworld_contract_projection._fixture_affordances
-_fixture_footprint = realworld_contract_projection._fixture_footprint
-_static_fixture_projection_with_scene_index_overlay = (
-    realworld_contract_projection._static_fixture_projection_with_scene_index_overlay
-)
 _fixture_prefers_inside = realworld_contract_projection._fixture_prefers_inside
 _fixture_requires_open = realworld_contract_projection._fixture_requires_open
 _fixture_is_open_container = realworld_contract_projection._fixture_is_open_container
@@ -136,7 +122,6 @@ _inspection_waypoints = realworld_contract_projection._inspection_waypoints
 _is_place_anchor = realworld_contract_projection._is_place_anchor
 _map_bundle_fields_present = realworld_contract_projection._map_bundle_fields_present
 _merge_public_rooms = realworld_contract_projection._merge_public_rooms
-_metric_map_room_payload = realworld_contract_projection._metric_map_room_payload
 _polygon_center_world = realworld_contract_projection._polygon_center_world
 _polygon_from_room_outline = realworld_contract_projection._polygon_from_room_outline
 _point_overlaps_fixture_obstacle = realworld_contract_projection._point_overlaps_fixture_obstacle
@@ -144,7 +129,6 @@ _pose_stamped_waypoints_present = realworld_contract_projection._pose_stamped_wa
 _public_destination_policy_for_category = (
     realworld_contract_projection._public_destination_policy_for_category
 )
-_public_driveable_ways = realworld_contract_projection._public_driveable_ways
 _public_room_hint_payload = realworld_contract_projection._public_room_hint_payload
 _recommended_place_tool = realworld_contract_projection._recommended_place_tool
 _room_category_from_label = realworld_contract_projection._room_category_from_label
@@ -159,9 +143,6 @@ _room_outline_center = realworld_contract_projection._room_outline_center
 _room_outline_metadata = realworld_contract_projection._room_outline_metadata
 _room_polygon_bounds = realworld_contract_projection._room_polygon_bounds
 _rooms_from_fixtures = realworld_contract_projection._rooms_from_fixtures
-_scene_index_static_fixture_projection_row = (
-    realworld_contract_projection._scene_index_static_fixture_projection_row
-)
 _scene_index_fixture_pose = realworld_contract_projection._scene_index_fixture_pose
 _scene_outline_waypoint_candidates = (
     realworld_contract_projection._scene_outline_waypoint_candidates
@@ -318,329 +299,38 @@ class RealWorldCleanupContract:
         )
 
     def _minimal_metric_map(self) -> dict[str, Any]:
-        source = (
-            copy.deepcopy(self._bundle_metric_map_template)
-            if self._bundle_metric_map_template is not None
-            else self._fallback_metric_map_template()
+        return realworld_contract_projection._minimal_metric_map(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
-        frame_id = str(source.get("frame_id") or "map")
-        map_id = str(source.get("map_id") or f"{self.scenario.scenario_id}_minimal_map")
-        map_version = str(source.get("map_version") or "minimal-navigation-map-v1")
-        metric_map = {
-            "ok": True,
-            "tool": "metric_map",
-            "status": "ok",
-            "contract": REALWORLD_CONTRACT,
-            "schema": REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-            "mode": MINIMAL_MAP_MODE,
-            "frame_id": frame_id,
-            "map_id": map_id,
-            "map_version": map_version,
-            "resolution_m": float(source.get("resolution_m") or 0.05),
-            "origin": dict(source.get("origin") or {"x": 0.0, "y": 0.0, "yaw": 0.0}),
-            "width": int(source.get("width") or 240),
-            "height": int(source.get("height") or 180),
-            "occupancy_values": dict(
-                source.get("occupancy_values") or {"unknown": -1, "free": 0, "occupied": 100}
-            ),
-            "occupancy_grid_artifact": source.get("occupancy_grid_artifact"),
-            "map_bundle": dict(
-                source.get("map_bundle")
-                or metric_map_bundle_metadata(
-                    environment_id=self.scenario.scenario_id,
-                    map_id=map_id,
-                    map_version=map_version,
-                )
-            ),
-            "rooms": [dict(item) for item in self._public_rooms],
-            "room_category_hints": _room_category_hints_from_public_rooms(
-                self._public_rooms,
-                self._public_waypoints,
-            ),
-            "driveable_ways": _public_driveable_ways(source, self._public_rooms),
-            "robot_pose": {
-                "frame_id": frame_id,
-                **self._current_pose(),
-                "room_id": self._current_room_id(),
-                "waypoint_id": self._current_waypoint_id,
-                "pose_source": "generated_exploration_candidate",
-            },
-            "inspection_waypoints": [
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in self._public_navigation_waypoints()
-            ],
-            "generated_exploration_candidates": [
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in self._public_waypoints
-            ],
-            "generated_target_inspection_candidates": [
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in self._generated_inspection_waypoints.values()
-            ],
-            "minimal_map": {
-                "enabled": True,
-                "source": "public_occupancy_free_space",
-                "generated_candidate_count": len(self._public_waypoints),
-                "source_rooms_hidden": False,
-                "source_room_labels_visible": bool(self._public_rooms),
-                "source_fixtures_hidden": True,
-                "source_inspection_waypoints_hidden": True,
-                "public_contract_note": (
-                    "Minimal map mode exposes occupancy geometry and generated "
-                    "exploration candidates plus public room labels, not authored "
-                    "fixture or movable-object semantics."
-                ),
-            },
-            "public_contract_note": (
-                "Base Navigation Map projection: public room labels and generated "
-                "exploration candidates are visible. Static fixture tables, source "
-                "inspection waypoint ids, movable-object inventory, and private scoring "
-                "truth are hidden; Runtime Metric Map observations enrich the run."
-            ),
-        }
-        metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
-            metric_map=metric_map,
-            static_fixture_projection=self.static_fixture_projection(),
-        )
-        _assert_no_forbidden_agent_view_keys(metric_map)
-        return metric_map
 
     def metric_map(self) -> dict[str, Any]:
-        if self.map_mode == MINIMAL_MAP_MODE:
-            return self._minimal_metric_map()
-        if self._bundle_metric_map_template is not None:
-            metric_map = copy.deepcopy(self._bundle_metric_map_template)
-            frame_id = str(metric_map.get("frame_id") or "map")
-            metric_map["robot_pose"] = {
-                "frame_id": frame_id,
-                **self._current_pose(),
-                "room_id": self._current_room_id(),
-                "waypoint_id": self._current_waypoint_id,
-                "pose_source": "selected_nav2_map_bundle_waypoint",
-            }
-            metric_map["inspection_waypoints"] = [
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in [
-                    *(metric_map.get("inspection_waypoints") or []),
-                    *self._generated_inspection_waypoints.values(),
-                ]
-            ]
-            metric_map["generated_target_inspection_candidates"] = [
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in self._generated_inspection_waypoints.values()
-            ]
-            metric_map["contract"] = REALWORLD_CONTRACT
-            metric_map["tool"] = "metric_map"
-            metric_map["status"] = "ok"
-            metric_map["ok"] = True
-            metric_map["public_contract_note"] = (
-                "Metric map projection was derived from the selected prebuilt Nav2 "
-                "map bundle. Runtime movable objects and private scoring truth are "
-                "not encoded."
-            )
-            metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
-                metric_map=metric_map,
-                static_fixture_projection=self.static_fixture_projection(),
-            )
-            _assert_no_forbidden_agent_view_keys(metric_map)
-            return metric_map
-
-        frame_id = "map"
-        map_id = f"{self.scenario.scenario_id}_base_navigation_map"
-        map_version = "base-navigation-map-v1"
-        metric_map = self._ok(
-            "metric_map",
-            contract=REALWORLD_CONTRACT,
-            schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-            frame_id=frame_id,
-            map_id=map_id,
-            map_version=map_version,
-            resolution_m=0.05,
-            origin={"x": 0.0, "y": 0.0, "yaw": 0.0},
-            width=240,
-            height=180,
-            occupancy_values={
-                "unknown": -1,
-                "free": 0,
-                "occupied": 100,
-            },
-            occupancy_grid_artifact=None,
-            map_bundle=metric_map_bundle_metadata(
-                environment_id=self.scenario.scenario_id,
-                map_id=map_id,
-                map_version=map_version,
-            ),
-            rooms=[_metric_map_room_payload(room) for room in self._rooms],
-            driveable_ways=_driveable_ways(self._rooms),
-            robot_pose={
-                "frame_id": frame_id,
-                **self._current_pose(),
-                "room_id": self._current_room_id(),
-                "waypoint_id": self._current_waypoint_id,
-                "pose_source": "metric_map_semantic_waypoint",
-            },
-            inspection_waypoints=[
-                {
-                    "waypoint_id": item["waypoint_id"],
-                    "frame_id": frame_id,
-                    "x": item["x"],
-                    "y": item["y"],
-                    "yaw": item["yaw"],
-                    "room_id": item["room_id"],
-                    "label": item["label"],
-                    "purpose": item["purpose"],
-                    "waypoint_source": item["waypoint_source"],
-                    "coverage_estimate": item["coverage_estimate"],
-                    "visited": item["waypoint_id"] in self._observed_waypoint_ids,
-                }
-                for item in self._public_navigation_waypoints()
-            ],
-            generated_target_inspection_candidates=[
-                {
-                    **dict(item),
-                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
-                }
-                for item in self._generated_inspection_waypoints.values()
-            ],
-            public_contract_note=(
-                "Inspection waypoints are static map/fixture coverage candidates, "
-                "not generated from movable-object locations, generated mess set, "
-                "target count, or acceptable destination sets."
-            ),
+        return realworld_contract_projection._metric_map(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
-        metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
-            metric_map=metric_map,
-            static_fixture_projection=self.static_fixture_projection(),
-        )
-        _assert_no_forbidden_agent_view_keys(metric_map)
-        return metric_map
 
     def static_fixture_projection(self) -> dict[str, Any]:
-        if self.map_mode == MINIMAL_MAP_MODE:
-            return self._minimal_static_fixture_projection()
-        if self._bundle_static_fixture_projection_template is not None:
-            static_fixture_projection = copy.deepcopy(
-                self._bundle_static_fixture_projection_template
-            )
-            if self._scene_index_fixture_overlay:
-                static_fixture_projection["rooms"] = (
-                    _static_fixture_projection_with_scene_index_overlay(
-                        static_fixture_projection.get("rooms") or [],
-                        self._scene_index_fixture_overlay,
-                        static_fixture_projection_mode=self.static_fixture_projection_mode,
-                    )
-                )
-                static_fixture_projection["scene_index_fixture_overlay"] = {
-                    "enabled": True,
-                    "source": "isaac_scene_index",
-                    "fixture_count": len(self._scene_index_fixture_overlay),
-                    "public_contract_note": (
-                        "Scene-index fixtures are public USD-stage receptacle candidates "
-                        "used to keep cleanup routing aligned with the loaded Isaac scene. "
-                        "They do not include private acceptable-destination sets."
-                    ),
-                }
-            static_fixture_projection["contract"] = REALWORLD_CONTRACT
-            static_fixture_projection["tool"] = "static_fixture_projection"
-            static_fixture_projection["status"] = "ok"
-            static_fixture_projection["ok"] = True
-            static_fixture_projection["static_fixture_projection_mode"] = (
-                self.static_fixture_projection_mode
-            )
-            overlay_note = (
-                " A public Isaac scene-index fixture overlay is preferred for "
-                "backend-generated scene-specific cleanup scenarios."
-                if self._scene_index_fixture_overlay
-                else ""
-            )
-            static_fixture_projection["public_contract_note"] = (
-                "Static fixture projection is derived from the selected prebuilt Nav2 "
-                "map bundle. Runtime movable-object observations remain separate "
-                f"observed_* handles.{overlay_note}"
-            )
-            _assert_no_forbidden_agent_view_keys(static_fixture_projection)
-            return static_fixture_projection
-
-        rooms = []
-        for room in self._rooms:
-            fixtures = []
-            for fixture_id in room["fixture_ids"]:
-                fixture = self._fixtures[fixture_id]
-                item = {
-                    "fixture_id": fixture_id,
-                    "category": fixture.get("category") or fixture.get("name", ""),
-                    "name": fixture.get("name", fixture_id),
-                    "room_id": room["room_id"],
-                    "affordances": _fixture_affordances(fixture),
-                    "footprint": _fixture_footprint(fixture_id),
-                    "pose": self._fixture_pose(fixture_id),
-                    "manipulation_frame": f"{fixture_id}_manipulation",
-                    "preferred_inspection_waypoint_id": self._preferred_waypoint_for_fixture(
-                        fixture_id
-                    ),
-                    "preferred_manipulation_waypoint_id": self._preferred_waypoint_for_fixture(
-                        fixture_id
-                    ),
-                    "position_detail": self.static_fixture_projection_mode,
-                }
-                if self.static_fixture_projection_mode == "exact_fixtures":
-                    item["room_position"] = "operator_selected_exact_fixture"
-                fixtures.append(item)
-            rooms.append(
-                {
-                    "room_id": room["room_id"],
-                    "room_label": room["room_label"],
-                    "polygon": room.get("polygon", []),
-                    "fixtures": fixtures,
-                }
-            )
-        return self._ok(
-            "static_fixture_projection",
-            contract=REALWORLD_CONTRACT,
-            schema="static_fixture_projection_v1",
-            static_fixture_projection_mode=self.static_fixture_projection_mode,
-            contains_runtime_observations=False,
-            public_contract_note=(
-                "Static fixture projection describes rooms, fixed receptacles, and affordances. "
-                "Runtime movable-object observations remain separate observed_* handles."
-            ),
-            rooms=rooms,
+        return realworld_contract_projection._static_fixture_projection(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 
     def _minimal_static_fixture_projection(self) -> dict[str, Any]:
-        payload = self._ok(
-            "static_fixture_projection",
-            contract=REALWORLD_CONTRACT,
-            schema="static_fixture_projection_v1",
-            mode=MINIMAL_MAP_MODE,
-            static_fixture_projection_mode=self.static_fixture_projection_mode,
-            contains_runtime_observations=False,
-            rooms=[],
-            generated_exploration_candidate_count=len(self._public_waypoints),
-            public_contract_note=(
-                "Base Navigation Map mode intentionally hides authored fixture tables. "
-                "Public room labels live on metric_map.rooms and room_category_hints. "
-                "Runtime observed handles and map update candidates must come from "
-                "public observations, not source-map semantics."
-            ),
+        return realworld_contract_projection._minimal_static_fixture_projection(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
-        _assert_no_forbidden_agent_view_keys(payload)
-        return payload
 
     def navigate_to_room(self, room_id: str) -> dict[str, Any]:
         room = next((item for item in self._rooms if item["room_id"] == room_id), None)
@@ -993,157 +683,18 @@ class RealWorldCleanupContract:
         producer_type: str = MAIN_CLEANUP_AGENT_PRODUCER,
         producer_id: str = "cleanup_agent",
     ) -> dict[str, Any]:
-        declaration_response = self.declare_visual_candidates(
+        return realworld_visual_candidate_lifecycle.navigate_to_visual_candidate(
+            self,
             source_observation_id,
-            candidates=[
-                {
-                    "category": category,
-                    "target_fixture_id": target_fixture_id,
-                    "evidence_note": evidence_note,
-                    "image_region": image_region,
-                    "source_fixture_id": source_fixture_id,
-                    "confidence": confidence,
-                }
-            ],
+            category=category,
+            target_fixture_id=target_fixture_id,
+            evidence_note=evidence_note,
+            image_region=image_region,
+            source_fixture_id=source_fixture_id,
+            confidence=confidence,
             producer_type=producer_type,
             producer_id=producer_id,
-        )
-        if not declaration_response.get("ok"):
-            return self._error(
-                "navigate_to_visual_candidate",
-                str(declaration_response.get("error_reason") or "declaration_failed"),
-                candidate_error=declaration_response.get("candidate_error", {}),
-                raw_fpv_candidate_recovery=declaration_response.get(
-                    "raw_fpv_candidate_recovery", {}
-                ),
-                recovery_hint=declaration_response.get("recovery_hint", ""),
-            )
-        declarations = declaration_response.get("model_declared_observations") or []
-        declaration = declarations[0] if declarations else {}
-        handle = str(declaration.get("object_id") or "")
-        if declaration.get("actionability_status") == "already_handled":
-            return self._error(
-                "navigate_to_visual_candidate",
-                VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
-                model_declared_observation=self._public_fixture_reference_payload(declaration),
-                object_id=handle,
-                grounding_status=declaration.get("grounding_status", "unresolved"),
-                actionability_status="already_handled",
-                required_next_tool="observe",
-                recovery_hint=declaration.get(
-                    "recovery_hint",
-                    "This observed handle was already handled; continue the waypoint sweep.",
-                ),
-            )
-        if declaration.get("grounding_status") != "resolved":
-            return self._error(
-                "navigate_to_visual_candidate",
-                "visual_candidate_not_resolved",
-                model_declared_observation=self._public_fixture_reference_payload(declaration),
-                object_id=handle,
-                grounding_status=declaration.get("grounding_status", "unresolved"),
-                grounding_confidence=declaration.get("grounding_confidence", 0.0),
-                required_next_tool="observe",
-                recovery_hint=declaration.get(
-                    "recovery_hint",
-                    "If one retry with a tighter image_region still does not resolve, "
-                    "treat this visible item as non-actionable public clutter and "
-                    "continue to another waypoint.",
-                ),
-            )
-        detection = self._detections_by_handle.get(handle, {})
-        candidate_fixture_id = self._public_fixture_reference_id(
-            str(detection.get("candidate_fixture_id") or "")
-        )
-        cleanup_recommended = bool(detection.get("cleanup_recommended", False))
-        recommended_tool = str(detection.get("recommended_tool") or "")
-        visual_evidence_error = self._visual_evidence_actionability_error(
-            "navigate_to_visual_candidate",
-            handle,
-        )
-        if visual_evidence_error is not None:
-            return self._error(
-                "navigate_to_visual_candidate",
-                str(visual_evidence_error.get("error_reason") or "visual_evidence_not_reviewable"),
-                model_declared_observation=self._public_fixture_reference_payload(declaration),
-                object_id=handle,
-                candidate_fixture_id=candidate_fixture_id,
-                candidate_fixture_category=detection.get("candidate_fixture_category", ""),
-                cleanup_recommended=False,
-                recommended_tool="",
-                grounding_status=declaration.get("grounding_status", "resolved"),
-                required_next_tool="observe",
-                recovery_tool_options=visual_evidence_error.get("recovery_tool_options", []),
-                actionability_status=visual_evidence_error.get(
-                    "actionability_status",
-                    VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY,
-                ),
-                visual_grounding_evidence=visual_evidence_error.get(
-                    "visual_grounding_evidence",
-                    {},
-                ),
-                recovery_hint=visual_evidence_error.get("recovery_hint", ""),
-            )
-        if not candidate_fixture_id or not recommended_tool:
-            return self._error(
-                "navigate_to_visual_candidate",
-                "visual_candidate_not_actionable",
-                model_declared_observation=self._public_fixture_reference_payload(declaration),
-                object_id=handle,
-                candidate_fixture_id=candidate_fixture_id,
-                candidate_fixture_category=detection.get("candidate_fixture_category", ""),
-                cleanup_recommended=cleanup_recommended,
-                recommended_tool=recommended_tool,
-                grounding_status=declaration.get("grounding_status", "resolved"),
-                required_next_tool="observe",
-                recovery_hint=(
-                    "This grounded object has no public cleanup destination from the current "
-                    "map context. Do not pick it; continue the waypoint sweep and observe for "
-                    "other cleanup objects."
-                ),
-            )
-        navigation = self.navigate_to_object(handle)
-        if not navigation.get("ok"):
-            return self._error(
-                "navigate_to_visual_candidate",
-                str(navigation.get("error_reason") or "navigation_failed"),
-                model_declared_observation=self._public_fixture_reference_payload(declaration),
-                object_id=handle,
-                visual_grounding_evidence=navigation.get("visual_grounding_evidence", {}),
-                actionability_status=navigation.get("actionability_status", ""),
-                recovery_hint=navigation.get("recovery_hint", ""),
-            )
-        payload = {
-            key: value
-            for key, value in navigation.items()
-            if key
-            not in {
-                "tool",
-                "ok",
-                "status",
-                "object_id",
-                "visual_grounding_evidence",
-                "actionability_status",
-                "candidate_state",
-            }
-        }
-        detection = self._detections_by_handle.get(handle, {})
-        return self._ok(
-            "navigate_to_visual_candidate",
-            **payload,
-            object_id=handle,
-            model_declared_observation=self._public_fixture_reference_payload(declaration),
-            candidate_fixture_id=self._public_fixture_reference_id(
-                str(detection.get("candidate_fixture_id") or "")
-            ),
-            candidate_fixture_category=detection.get("candidate_fixture_category", ""),
-            cleanup_recommended=cleanup_recommended,
-            recommended_tool=recommended_tool,
-            visual_grounding_evidence=self._visual_evidence_for_handle(handle),
-            actionability_status="actionable",
-            candidate_state=CANDIDATE_STATE_NAVIGATION_AUTHORIZED,
-            declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
-            required_next_tool="pick",
+            raw_fpv_declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
         )
 
     def inspect_visible_object(self, object_id: str) -> dict[str, Any]:
@@ -1503,45 +1054,12 @@ class RealWorldCleanupContract:
         return realworld_done_readiness.open_ended_task_intent(self)
 
     def agent_view_payload(self) -> dict[str, Any]:
-        observed_objects = [
-            self._agent_visible_detection_payload(dict(self._detections_by_handle[handle]))
-            for handle in sorted(self._detections_by_handle)
-        ]
-        metric_map = self.metric_map()
-        static_fixture_projection = self.static_fixture_projection()
-        cleanup_worklist = self.cleanup_worklist_payload(
-            static_fixture_projection=static_fixture_projection
+        return realworld_contract_payloads.agent_view_payload(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            visible_object_detections_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
-        model_declared = self.model_declared_observations_payload()
-        runtime_metric_map = dict(metric_map.get("runtime_metric_map") or {})
-        if not runtime_metric_map:
-            runtime_metric_map = self.runtime_metric_map_payload(
-                metric_map=metric_map,
-                static_fixture_projection=static_fixture_projection,
-                cleanup_worklist=cleanup_worklist,
-            )
-        payload = {
-            "contract": REALWORLD_CONTRACT,
-            "perception_mode": self.perception_mode,
-            "detection_exposure_policy": self.visible_detection_exposure_policy,
-            "structured_detections_available": self.perception_mode
-            == VISIBLE_OBJECT_DETECTIONS_MODE,
-            "metric_map": metric_map,
-            "runtime_metric_map": runtime_metric_map,
-            "static_fixture_projection": static_fixture_projection,
-            "observed_objects": observed_objects,
-            "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
-            "camera_model_policy_evidence": self.camera_model_policy_payload(),
-            "model_declared_observations": model_declared["observations"],
-            "model_declared_observation_evidence": model_declared,
-            "policy_view": self.policy_view_payload(),
-            "cleanup_worklist": cleanup_worklist,
-            "observed_waypoint_ids": sorted(self._observed_waypoint_ids),
-            "public_tool_names": self.public_tool_names(),
-            "forbidden_private_fields_absent": True,
-        }
-        _assert_no_forbidden_agent_view_keys(payload)
-        return payload
 
     def runtime_metric_map_payload(
         self,
@@ -1580,48 +1098,27 @@ class RealWorldCleanupContract:
         return f"waypoint_observation:{waypoint_id}"
 
     def _agent_visible_detection_payload(self, detection: dict[str, Any]) -> dict[str, Any]:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            payload = copy.deepcopy(detection)
-            if self.sanitize_world_labels:
-                payload = self._sanitized_visible_detection_payload(payload)
-            _assert_no_forbidden_agent_view_keys(payload)
-            return payload
-        payload = self._public_fixture_reference_payload(copy.deepcopy(detection))
-        support = dict(payload.get("support_estimate") or {})
-        public_fixture_id = str(support.get("fixture_id") or "")
-        if public_fixture_id:
-            support["source_fixture_hidden"] = True
-            support["source"] = "public_semantic_anchor"
-            payload["support_estimate"] = support
-        if self.sanitize_world_labels:
-            payload = self._sanitized_visible_detection_payload(payload)
-        _assert_no_forbidden_agent_view_keys(payload)
-        return payload
+        return realworld_contract_payloads.agent_visible_detection_payload(
+            self,
+            detection,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+            sanitized_visible_object_detections_provenance=(
+                SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            ),
+            sanitized_visible_object_detections_policy=(SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY),
+            public_destination_policy_for_category=_public_destination_policy_for_category,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def _sanitized_visible_detection_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        payload = copy.deepcopy(payload)
-        for key in (
-            "candidate_fixture_id",
-            "candidate_fixture_category",
-            "cleanup_recommended",
-            "recommended_tool",
-        ):
-            payload.pop(key, None)
-        payload["producer_type"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-        payload["producer_id"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-        payload["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-        payload["detection_exposure_policy"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
-        payload["destination_policy_status"] = "policy_required"
-        payload["destination_policy"] = _public_destination_policy_for_category(
-            payload.get("category")
+        return realworld_contract_payloads.sanitized_visible_detection_payload(
+            payload,
+            sanitized_visible_object_detections_provenance=(
+                SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            ),
+            sanitized_visible_object_detections_policy=(SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY),
+            public_destination_policy_for_category=_public_destination_policy_for_category,
         )
-        support = dict(payload.get("support_estimate") or {})
-        if support:
-            support["source"] = "public_support_evidence"
-            support["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-            support["model_provenance"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-            payload["support_estimate"] = support
-        return payload
 
     def _public_fixture_response_id(
         self,
@@ -1651,31 +1148,9 @@ class RealWorldCleanupContract:
         )
 
     def policy_view_payload(self) -> dict[str, Any]:
-        payload = {
-            "schema": "realworld_cleanup_policy_view_v1",
-            "allowed_inputs": [
-                "metric_map",
-                "runtime_metric_map",
-                "static_fixture_projection",
-                "observed_objects",
-                "raw_fpv_observations",
-                "camera_model_policy_evidence",
-                "model_declared_observations",
-                "navigation_status",
-            ],
-            "excluded_report_only_views": [
-                "chase_camera",
-                "third_person_simulation_view",
-                "private_evaluation",
-            ],
-            "chase_camera_policy_input": False,
-            "public_contract_note": (
-                "Policy inputs are robot-local or static-map data. Chase and "
-                "third-person simulation views are report-only evidence."
-            ),
-        }
-        _assert_no_forbidden_agent_view_keys(payload)
-        return payload
+        return realworld_contract_payloads.policy_view_payload(
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def cleanup_worklist_payload(
         self,
@@ -1696,69 +1171,21 @@ class RealWorldCleanupContract:
         )
 
     def camera_model_policy_payload(self) -> dict[str, Any]:
-        events = [dict(item) for item in self._camera_model_policy_events]
-        pipeline_ids = [
-            str((item.get("visual_grounding_pipeline") or {}).get("pipeline_id") or "")
-            for item in events
-        ]
-        pipeline_ids = [item for item in pipeline_ids if item]
-        failure_count = sum(
-            1
-            for item in events
-            if (item.get("visual_grounding_pipeline") or {}).get("status") == "failed"
+        return realworld_contract_payloads.camera_model_policy_payload(
+            self,
+            camera_model_policy_schema=CAMERA_MODEL_POLICY_SCHEMA,
+            camera_model_policy_mode=CAMERA_MODEL_POLICY_MODE,
+            simulated_camera_model_provenance=SIMULATED_CAMERA_MODEL_PROVENANCE,
+            sim_visual_grounding_pipeline_id=SIM_VISUAL_GROUNDING_PIPELINE_ID,
+            external_visual_grounding_provenance=EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+            average_duplicate_rate=_average_duplicate_rate,
         )
-        model_provenance = (
-            SIMULATED_CAMERA_MODEL_PROVENANCE
-            if not pipeline_ids or set(pipeline_ids) == {SIM_VISUAL_GROUNDING_PIPELINE_ID}
-            else EXTERNAL_VISUAL_GROUNDING_PROVENANCE
-        )
-        return {
-            "schema": CAMERA_MODEL_POLICY_SCHEMA,
-            "perception_mode": self.perception_mode,
-            "enabled": self.perception_mode == CAMERA_MODEL_POLICY_MODE,
-            "model_provenance": model_provenance
-            if self.perception_mode == CAMERA_MODEL_POLICY_MODE
-            else "",
-            "visual_grounding_pipeline_id": pipeline_ids[-1]
-            if pipeline_ids
-            else SIM_VISUAL_GROUNDING_PIPELINE_ID,
-            "visual_grounding_pipeline_ids": sorted(set(pipeline_ids)),
-            "visual_grounding_failure_count": failure_count,
-            "event_count": len(events),
-            "candidate_count": sum(int(item.get("candidate_count") or 0) for item in events),
-            "unresolved_count": sum(
-                int((item.get("visual_grounding_pipeline") or {}).get("unresolved_count") or 0)
-                for item in events
-            ),
-            "duplicate_rate": _average_duplicate_rate(events),
-            "events": events,
-            "private_truth_included": False,
-            "policy_note": (
-                "Camera-model policy candidates must be explicitly labelled and "
-                "must not include private scoring truth."
-            ),
-        }
 
     def model_declared_observations_payload(self) -> dict[str, Any]:
-        observations = [dict(item) for item in self._model_declared_observations]
-        acted_handles = {
-            handle
-            for handle, lifecycle in self._object_lifecycle.items()
-            if lifecycle.get("state") in {"navigating_to_object", "held", "placed", "placed_closed"}
-        }
-        for item in observations:
-            item["acted_on"] = str(item.get("object_id") or "") in acted_handles
-        return {
-            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
-            "perception_mode": self.perception_mode,
-            "observation_count": len(observations),
-            "resolved_count": sum(
-                1 for item in observations if item.get("grounding_status") == "resolved"
-            ),
-            "acted_count": sum(1 for item in observations if item.get("acted_on")),
-            "observations": observations,
-            "private_truth_included": False,
-        }
+        return realworld_contract_payloads.model_declared_observations_payload(
+            self,
+            model_declared_observations_schema=MODEL_DECLARED_OBSERVATIONS_SCHEMA,
+        )
 
     def private_evaluation_payload(self, score: dict[str, Any]) -> dict[str, Any]:
         targets = self.scenario.private_manifest.targets
@@ -1903,89 +1330,14 @@ class RealWorldCleanupContract:
         source_observation_id: str,
         visual_confirmation: bool,
     ) -> list[dict[str, Any]]:
-        public_waypoint = waypoint
-        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
-        locations = self.backend.object_locations()
-        fixture_ids = set(waypoint.get("fixture_ids") or [])
-        detections = []
-        for obj in self.scenario.objects:
-            location_id = locations.get(obj.object_id)
-            if not location_id or location_id == "held_by_agent":
-                continue
-            fixture = self._fixtures.get(location_id)
-            if fixture is None:
-                continue
-            room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
-                continue
-            if fixture_ids and location_id not in fixture_ids:
-                continue
-            handle = self._handle_for_object(obj.object_id)
-            image_region = (
-                {"type": "bbox", "value": _image_bbox(handle)}
-                if visual_confirmation
-                else {
-                    "type": "verbal_region",
-                    "value": (
-                        "structured semantic candidate; run adjust_camera then observe "
-                        "to bind a source FPV bbox before navigation"
-                    ),
-                }
-            )
-            candidate_state = (
-                CANDIDATE_STATE_NAVIGATION_AUTHORIZED
-                if visual_confirmation
-                else CANDIDATE_STATE_VISUAL_SCAN_REQUIRED
-            )
-            detection = {
-                "object_id": handle,
-                "category": obj.category,
-                "name": obj.name,
-                "current_room_id": room_id,
-                "visibility_confidence": _visibility_confidence(handle),
-                "image_bbox": _image_bbox(handle) if visual_confirmation else [],
-                "image_region": image_region,
-                "perception_source": "visible_detection",
-                "producer_type": "visible_object_detections",
-                "producer_id": "simulator_visible_object_detections",
-                "source_observation_id": source_observation_id,
-                "waypoint_id": str(public_waypoint.get("waypoint_id") or ""),
-                "candidate_state": candidate_state,
-                "candidate_state_history": _candidate_state_history(candidate_state),
-                "visual_scan": visual_scan_payload(visual_confirmation),
-                "locality_status": "same_waypoint_source_observation"
-                if visual_confirmation
-                else "semantic_hint_requires_source_fpv_scan",
-                "support_estimate": {
-                    "fixture_id": location_id,
-                    "relation": _location_relation(obj.object_id, self.backend),
-                    "confidence": 0.74,
-                    "source": "visible_detection",
-                    "perception_source": "visible_detection",
-                    "model_provenance": "visible_object_detections",
-                    "source_observation_id": source_observation_id,
-                },
-            }
-            previous_state = str(
-                (self._detections_by_handle.get(handle) or {}).get("candidate_state") or ""
-            )
-            detection["visual_grounding_evidence"] = _visual_grounding_evidence_for_candidate(
-                detection
-            )
-            detection["candidate_state"] = _candidate_state(detection)
-            detection["candidate_state_changed"] = previous_state != detection["candidate_state"]
-            detection["previous_candidate_state"] = previous_state
-            detection["candidate_state_history"] = _candidate_state_history(
-                detection["candidate_state"]
-            )
-            detection["actionability_status"] = _candidate_actionability_status(detection)
-            detection.update(self._public_candidate_hint(detection))
-            if detection["candidate_state"] == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
-                self._ensure_generated_inspection_waypoint_for_detection(handle, detection)
-            self._detections_by_handle[handle] = detection
-            self._record_detection_lifecycle(handle, detection, public_waypoint)
-            detections.append(dict(detection))
-        return sorted(detections, key=lambda item: str(item["object_id"]))
+        return realworld_visual_candidate_lifecycle.visible_detections_for_waypoint(
+            self,
+            waypoint,
+            source_observation_id=source_observation_id,
+            visual_confirmation=visual_confirmation,
+            visual_scan_payload=visual_scan_payload,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def _camera_model_candidates_for_waypoint(
         self,
@@ -1994,65 +1346,14 @@ class RealWorldCleanupContract:
         observation_id: str,
         model_provenance: str,
     ) -> list[dict[str, Any]]:
-        public_waypoint = waypoint
-        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
-        locations = self.backend.object_locations()
-        fixture_ids = set(waypoint.get("fixture_ids") or [])
-        candidates = []
-        for obj in self.scenario.objects:
-            location_id = locations.get(obj.object_id)
-            if not location_id or location_id == "held_by_agent":
-                continue
-            fixture = self._fixtures.get(location_id)
-            if fixture is None:
-                continue
-            room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
-                continue
-            if fixture_ids and location_id not in fixture_ids:
-                continue
-            handle = self._handle_for_object(obj.object_id)
-            detection = {
-                "object_id": handle,
-                "category": obj.category,
-                "name": obj.name,
-                "current_room_id": room_id,
-                "visibility_confidence": _visibility_confidence(handle),
-                "image_bbox": _image_bbox(handle),
-                "image_region": {"type": "bbox", "value": _image_bbox(handle)},
-                "perception_source": CAMERA_MODEL_POLICY_MODE,
-                "model_provenance": model_provenance,
-                "source_observation_id": observation_id,
-                "candidate_source": "raw_fpv_observation",
-                "candidate_state": CANDIDATE_STATE_NAVIGATION_AUTHORIZED,
-                "candidate_state_history": _candidate_state_history(
-                    CANDIDATE_STATE_NAVIGATION_AUTHORIZED
-                ),
-                "locality_status": "same_waypoint_source_observation",
-                "support_estimate": {
-                    "fixture_id": location_id,
-                    "relation": _location_relation(obj.object_id, self.backend),
-                    "confidence": 0.68,
-                    "source": CAMERA_MODEL_POLICY_MODE,
-                    "perception_source": CAMERA_MODEL_POLICY_MODE,
-                    "model_provenance": model_provenance,
-                    "source_observation_id": observation_id,
-                },
-            }
-            detection["visual_grounding_evidence"] = _visual_grounding_evidence_for_candidate(
-                detection
-            )
-            detection["candidate_state"] = _candidate_state(detection)
-            detection["candidate_state_history"] = _candidate_state_history(
-                detection["candidate_state"]
-            )
-            detection["actionability_status"] = _candidate_actionability_status(detection)
-            detection.update(self._public_candidate_hint(detection))
-            _assert_no_forbidden_agent_view_keys(detection)
-            self._detections_by_handle[handle] = detection
-            self._record_detection_lifecycle(handle, detection, public_waypoint)
-            candidates.append(dict(detection))
-        return sorted(candidates, key=lambda item: str(item["object_id"]))
+        return realworld_visual_candidate_lifecycle.camera_model_candidates_for_waypoint(
+            self,
+            waypoint,
+            observation_id=observation_id,
+            model_provenance=model_provenance,
+            camera_model_policy_mode=CAMERA_MODEL_POLICY_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]:
         candidate = self.target_fixture_for_detection(detection, self.static_fixture_projection())
@@ -2095,24 +1396,11 @@ class RealWorldCleanupContract:
         *,
         perception_mode: str = RAW_FPV_ONLY_MODE,
     ) -> dict[str, Any]:
-        observation_id = f"raw_fpv_{len(self._raw_fpv_observations) + 1:03d}"
-        item = {
-            "observation_id": observation_id,
-            "waypoint_id": str(waypoint["waypoint_id"]),
-            "room_id": str(waypoint["room_id"]),
-            "held_object_id": self._held_handle,
-            "perception_mode": perception_mode,
-            "structured_detections_available": False,
-            "camera_offset": self._camera_offset(),
-            "image_artifacts": {},
-            "artifact_status": "pending_robot_view_capture",
-            "public_contract_note": (
-                "No structured movable-object detections, categories, support estimates, "
-                "target labels, or private scoring truth are included."
-            ),
-        }
-        self._raw_fpv_observations.append(item)
-        return dict(item)
+        return realworld_contract_payloads.record_raw_fpv_observation(
+            self,
+            waypoint,
+            perception_mode=perception_mode,
+        )
 
     def _record_inspection_observation(
         self,
@@ -2121,41 +1409,17 @@ class RealWorldCleanupContract:
         detections: list[dict[str, Any]],
         source_observation_id: str,
     ) -> None:
-        state_counts: dict[str, int] = {}
-        actionability_counts: dict[str, int] = {}
-        changed = 0
-        for detection in detections:
-            state = str(detection.get("candidate_state") or "")
-            if state:
-                state_counts[state] = state_counts.get(state, 0) + 1
-            actionability = str(detection.get("actionability_status") or "")
-            if actionability:
-                actionability_counts[actionability] = actionability_counts.get(actionability, 0) + 1
-            if detection.get("candidate_state_changed") is True:
-                changed += 1
-        observation = {
-            "schema": INSPECTION_OBSERVATION_SCHEMA,
-            "observation_id": str(source_observation_id),
-            "waypoint_id": str(response.get("waypoint_id") or self._current_waypoint_id),
-            "room_id": str(response.get("current_room_id") or ""),
-            "perception_mode": self.perception_mode,
-            "evidence_lane": realworld_runtime_map_targets.target_candidate_evidence_lane(self),
-            "camera_offset": self._camera_offset(),
-            "camera_adjusted": bool(
-                self._camera_offset().get("yaw_delta_deg")
-                or self._camera_offset().get("pitch_delta_deg")
+        realworld_contract_payloads.record_inspection_observation(
+            self,
+            response,
+            detections=detections,
+            source_observation_id=source_observation_id,
+            inspection_observation_schema=INSPECTION_OBSERVATION_SCHEMA,
+            target_candidate_evidence_lane=(
+                realworld_runtime_map_targets.target_candidate_evidence_lane
             ),
-            "structured_detections_available": bool(
-                response.get("structured_detections_available")
-            ),
-            "candidate_count": len(detections),
-            "candidate_state_counts": state_counts,
-            "actionability_status_counts": actionability_counts,
-            "changed_candidate_state_count": changed,
-            "private_truth_included": False,
-        }
-        _assert_no_forbidden_agent_view_keys(observation)
-        self._inspection_observations.append(observation)
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def _unresolved_visual_candidate_error(
         self,
@@ -2298,48 +1562,11 @@ class RealWorldCleanupContract:
         return str(waypoint["room_id"]) if waypoint is not None else ""
 
     def _fallback_metric_map_template(self) -> dict[str, Any]:
-        frame_id = "map"
-        map_id = f"{self.scenario.scenario_id}_minimal_map"
-        map_version = "minimal-navigation-map-v1"
-        return {
-            "ok": True,
-            "tool": "metric_map",
-            "status": "ok",
-            "contract": REALWORLD_CONTRACT,
-            "schema": REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-            "frame_id": frame_id,
-            "map_id": map_id,
-            "map_version": map_version,
-            "resolution_m": 0.05,
-            "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-            "width": 240,
-            "height": 180,
-            "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
-            "occupancy_grid_artifact": None,
-            "map_bundle": metric_map_bundle_metadata(
-                environment_id=self.scenario.scenario_id,
-                map_id=map_id,
-                map_version=map_version,
-            ),
-            "rooms": [_metric_map_room_payload(room) for room in self._rooms],
-            "driveable_ways": _driveable_ways(self._rooms),
-            "inspection_waypoints": [
-                {
-                    "waypoint_id": item["waypoint_id"],
-                    "frame_id": frame_id,
-                    "x": item["x"],
-                    "y": item["y"],
-                    "yaw": item["yaw"],
-                    "room_id": item["room_id"],
-                    "label": item["label"],
-                    "purpose": item["purpose"],
-                    "waypoint_source": item["waypoint_source"],
-                    "coverage_estimate": item["coverage_estimate"],
-                    "fixture_ids": list(item.get("fixture_ids") or []),
-                }
-                for item in self._waypoints
-            ],
-        }
+        return realworld_contract_projection._fallback_metric_map_template(
+            self,
+            realworld_contract=REALWORLD_CONTRACT,
+            real_robot_map_bundle_schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+        )
 
     def _current_pose(self) -> dict[str, float]:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)
@@ -2512,49 +1739,15 @@ class RealWorldCleanupContract:
         handle: str,
         detection: dict[str, Any],
     ) -> dict[str, Any]:
-        existing = self._generated_inspection_waypoint_for_object(handle)
-        if existing:
-            return existing
-        source_waypoint_id = str(detection.get("waypoint_id") or self._current_waypoint_id)
-        source_waypoint = self._waypoint_by_id(source_waypoint_id) or {}
-        if not source_waypoint:
-            return {}
-        index = len(self._generated_inspection_waypoints) + 1
-        waypoint_id = f"generated_inspection_{index:03d}"
-        pose = self._waypoint_pose(source_waypoint)
-        waypoint = {
-            "waypoint_id": waypoint_id,
-            "frame_id": str(source_waypoint.get("frame_id") or "map"),
-            "x": pose["x"],
-            "y": pose["y"],
-            "yaw": round(pose["yaw"] + 15.0, 3),
-            "room_id": str(source_waypoint.get("room_id") or self._current_room_id()),
-            "label": f"Generated inspection candidate {index}",
-            "purpose": "target_inspection",
-            "waypoint_source": "generated_target_inspection_candidate",
-            "coverage_estimate": 0.0,
-            "source_observation_id": str(detection.get("source_observation_id") or ""),
-            "source_target_candidate_id": f"target_candidate_object_{_safe_anchor_id(handle)}",
-            "source_object_id": handle,
-            "verified_navigation": True,
-            "candidate_provenance": {
-                "source": "server_verified_standoff_from_visible_evidence",
-                "source_waypoint_id": source_waypoint_id,
-                "source_observation_id": str(detection.get("source_observation_id") or ""),
-                "visible_candidate_state": str(detection.get("candidate_state") or ""),
-                "backend_verification": "same_public_waypoint_standoff_pose",
-            },
-            "public_contract_note": (
-                "Generated Target Inspection Candidate was produced by the server from "
-                "public visible evidence and projected as a bounded waypoint for "
-                "navigate_to_waypoint."
-            ),
-        }
-        _assert_no_forbidden_agent_view_keys(waypoint)
-        self._generated_inspection_waypoints[waypoint_id] = waypoint
-        private_source = self._private_waypoint_for_public_waypoint(source_waypoint)
-        self._private_waypoint_by_public_id[waypoint_id] = private_source
-        return dict(waypoint)
+        return (
+            realworld_visual_candidate_lifecycle.ensure_generated_inspection_waypoint_for_detection(
+                self,
+                handle,
+                detection,
+                safe_anchor_id=_safe_anchor_id,
+                assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+            )
+        )
 
     def _generated_inspection_waypoint_for_object(self, handle: str) -> dict[str, Any]:
         for waypoint in self._generated_inspection_waypoints.values():
@@ -2627,10 +1820,6 @@ def _relative_pose_delta(
     }
 
 
-def _target_candidate_type_for_waypoint(waypoint: dict[str, Any]) -> str:
-    return realworld_runtime_map_contract.target_candidate_type_for_waypoint(waypoint)
-
-
 def _runtime_map_producer_summary(
     observed_objects: list[dict[str, Any]],
     *,
@@ -2643,26 +1832,6 @@ def _runtime_map_producer_summary(
         public_semantic_anchors=public_semantic_anchors,
         map_update_candidates=map_update_candidates,
         target_candidates=target_candidates,
-    )
-
-
-def _runtime_observed_confidence(
-    detection: dict[str, Any],
-    declaration: dict[str, Any],
-) -> float:
-    return realworld_runtime_map_contract.runtime_observed_confidence(detection, declaration)
-
-
-def _runtime_actionability(
-    *,
-    state: str,
-    grounding_status: str,
-    cleanup_recommended: bool,
-) -> str:
-    return realworld_runtime_map_contract.runtime_actionability(
-        state=state,
-        grounding_status=grounding_status,
-        cleanup_recommended=cleanup_recommended,
     )
 
 
@@ -2680,21 +1849,11 @@ def _visual_grounding_evidence_for_candidate(
     )
 
 
-_bbox_reviewability = realworld_visual_candidates._bbox_reviewability
-_numeric_bbox = realworld_visual_candidates._numeric_bbox
 _candidate_state = realworld_visual_candidates._candidate_state
-_candidate_state_history = realworld_visual_candidates._candidate_state_history
-_float_or_none = realworld_visual_candidates._float_or_none
 _float_or_zero = realworld_visual_candidates._float_or_zero
 _clamp = realworld_visual_candidates._clamp
-_normalize_image_region = realworld_visual_candidates._normalize_image_region
-_manual_visual_grounding_pipeline = realworld_visual_candidates._manual_visual_grounding_pipeline
 _average_duplicate_rate = realworld_visual_candidates._average_duplicate_rate
-_image_region_validation_error = realworld_visual_candidates._image_region_validation_error
-_grounding_confidence = realworld_visual_candidates._grounding_confidence
 _declared_category_matches_object = realworld_visual_candidates._declared_category_matches_object
-_category_alias_family = realworld_visual_candidates._category_alias_family
-_category_alias_families = realworld_visual_candidates._category_alias_families
 
 
 def _candidate_actionability_status(candidate: dict[str, Any]) -> str:
@@ -2719,10 +1878,6 @@ def _visual_candidate_validation_error(
         perception_mode=perception_mode,
         producer_type=producer_type,
     )
-
-
-def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
-    return realworld_runtime_map_contract.synthetic_observation_id(handle, waypoint_id)
 
 
 def infer_target_fixture_for_detection(
@@ -2780,18 +1935,6 @@ def real_robot_readiness_from_events(
         pose_stamped_waypoints_present=_pose_stamped_waypoints_present,
         assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
     )
-
-
-def _location_relation(object_id: str, backend: Any) -> str:
-    return realworld_visual_candidate_lifecycle.location_relation(object_id, backend)
-
-
-def _visibility_confidence(handle: str) -> float:
-    return realworld_visual_candidate_lifecycle.visibility_confidence(handle)
-
-
-def _image_bbox(handle: str) -> list[int]:
-    return realworld_visual_candidate_lifecycle.image_bbox(handle)
 
 
 def _safe_anchor_id(value: str) -> str:

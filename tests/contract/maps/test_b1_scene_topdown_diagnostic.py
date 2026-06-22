@@ -72,6 +72,28 @@ def test_b1_scene_topdown_diagnostic_cli_writes_packet_and_report(tmp_path: Path
     assert packet["validation"]["status"] == "passed"
 
 
+def test_b1_scene_topdown_diagnostic_cli_rejects_non_positive_dimensions(
+    tmp_path: Path,
+) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--scene-root",
+            str(SCENE_ROOT),
+            "--output-dir",
+            str(tmp_path),
+            "--height",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
+
+
 def test_b1_scene_topdown_diagnostic_draws_scene_bounds_on_gaussian_topdown(
     tmp_path: Path,
     monkeypatch,

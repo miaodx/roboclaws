@@ -1436,8 +1436,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[21] == (
-        "data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/scene_gs.usda"
+        "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
     )
     assert route[24:26] == ["household-world", "open-ended"]
     assert route[26] == ""
@@ -2282,9 +2281,7 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     assert "roboclaws.cli.agent_server household-cleanup" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in codex_runner_text
-    assert "examples/molmo_cleanup/agibot_map_build_agent_server.py" not in (
-        agibot_runner_text
-    )
+    assert "examples/molmo_cleanup/agibot_map_build_agent_server.py" not in (agibot_runner_text)
     assert "household_cleanup_server_argv" in codex_runner_text
     assert "map_build_server_argv" in agibot_runner_text
 
@@ -2706,6 +2703,62 @@ def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
     assert 'model_providers.minimax-responses.wire_api="responses"' in result.stdout.splitlines()
 
 
+def test_coding_agent_codex_provider_args_reject_unknown_model_override() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            ROBOCLAWS_CODEX_MODEL=not-in-provider-catalog
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "unknown coding-agent model 'not-in-provider-catalog'" in result.stderr
+
+
+def test_coding_agent_shared_model_override_must_be_catalog_model() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            ROBOCLAWS_CODE_AGENT_MODEL=not-in-provider-catalog
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "unknown coding-agent model 'not-in-provider-catalog'" in result.stderr
+
+
 def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
@@ -2847,8 +2900,7 @@ def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets(
     assert "--disable" in result.stdout.splitlines()
     assert "responses_websockets" in result.stdout.splitlines()
     assert (
-        'model_providers.codex-router-responses.wire_api="responses"'
-        in result.stdout.splitlines()
+        'model_providers.codex-router-responses.wire_api="responses"' in result.stdout.splitlines()
     )
 
 

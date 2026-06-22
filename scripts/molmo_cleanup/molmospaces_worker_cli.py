@@ -50,8 +50,8 @@ def _add_snapshot_parser(
     snapshot = subparsers.add_parser("snapshot")
     snapshot.add_argument("--output-path", type=Path, required=True)
     snapshot.add_argument("--title", default="")
-    snapshot.add_argument("--render-width", type=int, default=default_width)
-    snapshot.add_argument("--render-height", type=int, default=default_height)
+    snapshot.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    snapshot.add_argument("--render-height", type=_positive_int_arg, default=default_height)
 
 
 def _add_robot_views_parser(
@@ -66,8 +66,8 @@ def _add_robot_views_parser(
     robot_views.add_argument("--focus-receptacle-id")
     robot_views.add_argument("--camera-yaw-offset-deg", type=float, default=0.0)
     robot_views.add_argument("--camera-pitch-offset-deg", type=float, default=0.0)
-    robot_views.add_argument("--render-width", type=int, default=default_width)
-    robot_views.add_argument("--render-height", type=int, default=default_height)
+    robot_views.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    robot_views.add_argument("--render-height", type=_positive_int_arg, default=default_height)
 
 
 def _add_camera_views_parser(
@@ -79,8 +79,8 @@ def _add_camera_views_parser(
     camera_views.add_argument("--output-dir", type=Path, required=True)
     camera_views.add_argument("--view-specs-path", type=Path)
     camera_views.add_argument("--camera-request-path", type=Path)
-    camera_views.add_argument("--render-width", type=int, default=default_width)
-    camera_views.add_argument("--render-height", type=int, default=default_height)
+    camera_views.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    camera_views.add_argument("--render-height", type=_positive_int_arg, default=default_height)
 
 
 def _add_action_parsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -120,3 +120,13 @@ def _add_action_parsers(subparsers: argparse._SubParsersAction[argparse.Argument
     done.add_argument("--reason", default="")
 
     subparsers.add_parser("serve")
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed

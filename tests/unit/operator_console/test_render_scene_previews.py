@@ -21,6 +21,27 @@ from scripts.operator_console.render_scene_previews import (
 )
 
 
+def test_render_scene_previews_rejects_non_positive_dimensions() -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    for flag in ("--width", "--height"):
+        try:
+            render_scene_previews.parse_args([flag, "0"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_render_scene_previews_accepts_positive_dimensions() -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    args = render_scene_previews.parse_args(["--width", "1", "--height", "1"])
+
+    assert args.width == 1
+    assert args.height == 1
+
+
 def test_topdown_preview_request_uses_scene_camera_not_semantic_map() -> None:
     state = {
         "room_outlines": [
@@ -518,6 +539,66 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
     assert "chase" not in metadata["views"]
 
 
+def test_b1_map12_static_preview_does_not_carry_forward_real_camera_previews(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    metadata_path = _write_stale_b1_real_camera_preview_metadata(
+        tmp_path,
+        artifact_path=tmp_path / "old-run" / "run_result.json",
+    )
+
+    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
+
+    assert result["status"] == "rendered"
+    assert set(result["removed_stale"]) == {
+        str(tmp_path / "b1-map12-fpv.png"),
+        str(tmp_path / "b1-map12-chase.png"),
+    }
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "camera_preview_artifact" not in metadata
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+
+
+def test_b1_map12_skip_existing_requires_matching_camera_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    old_artifact = tmp_path / "old-run" / "run_result.json"
+    new_artifact = _write_b1_camera_artifact(tmp_path / "new-run", label="fresh_observe")
+    metadata_path = _write_stale_b1_real_camera_preview_metadata(
+        tmp_path,
+        artifact_path=old_artifact,
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        skip_existing=True,
+        camera_artifact=new_artifact,
+    )
+
+    assert result["status"] == "rendered"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["camera_preview_artifact"]["path"] == str(new_artifact)
+    assert metadata["camera_preview_artifact"]["selected_label"] == "fresh_observe"
+    assert metadata["views"]["fpv"]["label"] == "fresh_observe"
+    assert metadata["views"]["chase"]["label"] == "fresh_observe"
+
+
 def _patch_b1_preview_inputs(
     render_scene_previews,
     monkeypatch,
@@ -643,6 +724,78 @@ def _write_b1_review_manifest(tmp_path: Path, bundle: Path) -> Path:
         encoding="utf-8",
     )
     return review
+
+
+def _write_stale_b1_real_camera_preview_metadata(
+    tmp_path: Path,
+    *,
+    artifact_path: Path,
+) -> Path:
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
+    Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
+    Image.new("RGB", (16, 16), (120, 130, 140)).save(tmp_path / "b1-map12-fpv.png")
+    Image.new("RGB", (16, 16), (80, 90, 100)).save(tmp_path / "b1-map12-chase.png")
+    metadata_path = tmp_path / "b1-map12-preview.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema": PREVIEW_METADATA_SCHEMA,
+                "renderer": "static_b1_map12_with_isaac_runtime_camera_previews",
+                "camera_preview_artifact": {"path": str(artifact_path)},
+                "views": {
+                    "fpv": {
+                        "path": "b1-map12-fpv.png",
+                        "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
+                    },
+                    "chase": {
+                        "path": "b1-map12-chase.png",
+                        "provenance": "isaac_runtime_report_chase_camera",
+                    },
+                    "map": {"path": "b1-map12-map.png"},
+                    "topdown": {"path": "b1-map12-topdown.png"},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return metadata_path
+
+
+def _write_b1_camera_artifact(run_dir: Path, *, label: str) -> Path:
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    _write_pattern_image(views_dir / f"{label}.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(views_dir / f"{label}.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "robot_view_steps": [
+                    {
+                        "label": label,
+                        "waypoint_id": "generated_exploration_002",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
+                        "views": {
+                            "fpv": f"robot_views/{label}.fpv.png",
+                            "chase": f"robot_views/{label}.chase.png",
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return artifact
 
 
 def _write_pattern_image(path: Path, *, accent: tuple[int, int, int]) -> None:

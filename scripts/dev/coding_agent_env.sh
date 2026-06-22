@@ -147,18 +147,39 @@ roboclaws_code_agent_profile_wire_api() {
   roboclaws_provider_registry wire-api "$provider"
 }
 
+roboclaws_code_agent_model_id() {
+  local model="$1"
+  local resolved
+  if resolved="$(roboclaws_provider_registry model-id "$model" 2>/dev/null)"; then
+    printf '%s\n' "$resolved"
+    return 0
+  fi
+  echo "error: unknown coding-agent model '${model}'; add it to roboclaws.agents.provider_registry or use a catalog model" >&2
+  return 2
+}
+
 roboclaws_code_agent_model() {
   local primary_var="$1"
   local provider_var="${2:-}"
   local default_provider="${3:-codex-router-responses}"
   local model="${!primary_var:-}"
+  local explicit_model=0
   if [[ -z "$model" ]]; then
     model="${ROBOCLAWS_CODE_AGENT_MODEL:-}"
+    if [[ -n "$model" ]]; then
+      explicit_model=1
+    fi
+  else
+    explicit_model=1
   fi
-  if [[ -z "$model" && -n "$provider_var" ]]; then
+  if [[ -n "$provider_var" ]]; then
     local provider
     provider="$(roboclaws_code_agent_provider "$provider_var" "$default_provider")" || return
-    model="$(roboclaws_code_agent_profile_default_model "$provider")" || return
+    if [[ -z "$model" ]]; then
+      model="$(roboclaws_code_agent_profile_default_model "$provider")" || return
+    elif [[ "$provider" != "system" && "$explicit_model" == "1" ]]; then
+      model="$(roboclaws_code_agent_model_id "$model")" || return
+    fi
   fi
   printf '%s\n' "$model"
 }

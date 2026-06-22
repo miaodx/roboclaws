@@ -106,6 +106,30 @@ def test_visual_grounding_benchmark_rejects_fake_http_pipeline(tmp_path: Path) -
     assert "retired fake visual-grounding pipeline 'fake-http'" in result.stderr
 
 
+def test_visual_grounding_benchmark_rejects_non_positive_timeout(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--corpus",
+            str(CORPUS),
+            "--output-dir",
+            str(tmp_path),
+            "--pipeline",
+            "grounding-dino",
+            "--timeout-s",
+            "0",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "visual grounding benchmark timeout must be a positive finite number" in result.stderr
+    assert not (tmp_path / "visual_grounding_benchmark_result.json").exists()
+
+
 def test_visual_grounding_benchmark_rejects_contract_fake_matrix_row(
     tmp_path: Path,
 ) -> None:

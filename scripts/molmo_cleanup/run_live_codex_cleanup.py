@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import shutil
 import signal
@@ -1013,12 +1014,23 @@ def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:
     if configured is not None:
         return configured
     env_value = os.environ.get(CODEX_TURN_IDLE_TIMEOUT_ENV)
-    if env_value:
-        try:
-            return float(env_value)
-        except ValueError:
-            return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
+    if env_value not in {None, ""}:
+        return _non_negative_timeout_value(env_value, CODEX_TURN_IDLE_TIMEOUT_ENV)
     return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
+
+
+def _non_negative_timeout_value(value: object, setting_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed < 0:
+        raise ValueError(
+            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
+        )
+    return parsed
 
 
 def _base_url_from_codex_args(args: list[str]) -> str:

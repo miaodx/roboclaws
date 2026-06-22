@@ -147,6 +147,19 @@ def _goal_contract(
     raw_prompt: str,
     overrides: dict[str, str],
 ) -> Any:
+    args = _goal_contract_launch_args(route, intent_id, raw_prompt, overrides)
+    try:
+        return resolve_surface_launch(args).goal_contract
+    except LaunchError:
+        return None
+
+
+def _goal_contract_launch_args(
+    route: ConsoleLaunchSelection,
+    intent_id: str,
+    raw_prompt: str,
+    overrides: dict[str, str],
+) -> list[str]:
     args = [
         f"surface={route.surface}",
         f"world={route.world_id}",
@@ -164,21 +177,26 @@ def _goal_contract(
         args.append(f"provider_profile={provider_profile}")
     if raw_prompt:
         args.append(f"prompt={raw_prompt}")
+    _append_missing_launch_defaults(args, route.launch_default_overrides)
+    _append_prompt_preview_overrides(args, overrides)
+    return args
+
+
+def _append_missing_launch_defaults(args: list[str], defaults: tuple[str, ...]) -> None:
     present_keys = {_override_key(item) for item in args}
-    for item in route.launch_default_overrides:
+    for item in defaults:
         key = _override_key(item)
         if key and key not in present_keys:
             args.append(item)
             present_keys.add(key)
+
+
+def _append_prompt_preview_overrides(args: list[str], overrides: dict[str, str]) -> None:
     for key, value in sorted(overrides.items()):
         if key in {"scenario_setup", "provider_profile"}:
             continue
         if value:
             args.append(f"{key}={value}")
-    try:
-        return resolve_surface_launch(args).goal_contract
-    except LaunchError:
-        return None
 
 
 def _target_cleanup_count(

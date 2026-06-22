@@ -111,8 +111,8 @@ def _add_snapshot_parser(
     snapshot = subparsers.add_parser("snapshot")
     snapshot.add_argument("--output-path", type=Path, required=True)
     snapshot.add_argument("--title", required=True)
-    snapshot.add_argument("--render-width", type=int, default=default_width)
-    snapshot.add_argument("--render-height", type=int, default=default_height)
+    snapshot.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    snapshot.add_argument("--render-height", type=_positive_int_arg, default=default_height)
 
 
 def _add_robot_views_parser(
@@ -126,11 +126,11 @@ def _add_robot_views_parser(
     robot_views.add_argument("--label", required=True)
     robot_views.add_argument("--focus-object-id")
     robot_views.add_argument("--focus-receptacle-id")
-    robot_views.add_argument("--render-width", type=int, default=default_width)
-    robot_views.add_argument("--render-height", type=int, default=default_height)
+    robot_views.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    robot_views.add_argument("--render-height", type=_positive_int_arg, default=default_height)
     robot_views.add_argument(
         "--render-settle-frames",
-        type=int,
+        type=_non_negative_int_arg,
         default=0,
         help=(
             "Extra Isaac render frames to advance after the first nonblank RGB tensor before "
@@ -183,8 +183,8 @@ def _add_camera_views_parser(
     camera_views.add_argument("--output-dir", type=Path, required=True)
     camera_views.add_argument("--view-specs-path", type=Path)
     camera_views.add_argument("--camera-request-path", type=Path)
-    camera_views.add_argument("--render-width", type=int, default=default_width)
-    camera_views.add_argument("--render-height", type=int, default=default_height)
+    camera_views.add_argument("--render-width", type=_positive_int_arg, default=default_width)
+    camera_views.add_argument("--render-height", type=_positive_int_arg, default=default_height)
 
 
 def _add_action_parsers(
@@ -235,6 +235,28 @@ def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
     if any(item <= 0.0 for item in gain):
         raise argparse.ArgumentTypeError("RGB gain values must be positive")
     return gain
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _non_negative_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a non-negative integer; got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected a non-negative integer; got {value!r}")
+    return parsed
 
 
 def _parse_json_object(value: str) -> dict[str, object]:

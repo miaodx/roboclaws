@@ -25,6 +25,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     build_readiness_artifact,
     validate_navigation_smoke_artifact,
 )
+from scripts.isaac_lab_cleanup.isaac_worker_cli import _positive_int_arg
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -41,8 +42,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--readiness-artifact", type=Path)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--robot-name", default="rby1m")
-    parser.add_argument("--render-width", type=int, default=540)
-    parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument("--render-width", type=_positive_int_arg, default=540)
+    parser.add_argument("--render-height", type=_positive_int_arg, default=360)
     parser.add_argument("--accept-nvidia-eula", action="store_true")
     return parser.parse_args(argv)
 

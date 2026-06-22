@@ -16,14 +16,16 @@ from roboclaws.operator_console.interactions import (
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_CODEX_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+)
 
 
 def _write_run(
     root: Path,
     *,
     run_id: str = "run-a",
-    selection_id: str = MUJOCO_CODEX_CLEANUP,
+    selection_id: str = MUJOCO_CODEX_OPEN_TASK,
     phase: str = "running-codex",
     run_result: dict[str, object] | None = None,
 ) -> Path:
@@ -93,7 +95,7 @@ def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path
     assert request["auto_start_allowed"] is True
     assert request["queue_reason"] == "parent_terminal_and_result_available"
     assert request["operator_session_id"].startswith("session-")
-    assert request["selection_id"] == MUJOCO_CODEX_CLEANUP
+    assert request["selection_id"] == MUJOCO_CODEX_OPEN_TASK
     assert request["next_goal_packet"]["instruction"].startswith(
         "This is a linked follow-up Robot Run"
     )

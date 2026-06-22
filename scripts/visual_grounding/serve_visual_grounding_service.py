@@ -30,6 +30,11 @@ from scripts.visual_grounding.adapters import (  # noqa: E402
 )
 
 ENDPOINT = "/v1/visual-grounding/candidates"
+ADAPTER_MODES = (
+    ADAPTER_MODE_AUTO,
+    ADAPTER_MODE_REAL,
+    ADAPTER_MODE_UNAVAILABLE,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -52,12 +57,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--adapter-mode",
-        choices=(
-            ADAPTER_MODE_AUTO,
-            ADAPTER_MODE_REAL,
-            ADAPTER_MODE_UNAVAILABLE,
-        ),
-        default=os.environ.get("VISUAL_GROUNDING_ADAPTER_MODE", ADAPTER_MODE_AUTO),
+        choices=ADAPTER_MODES,
+        default=_adapter_mode_default(),
         help=(
             "auto reports adapters according to local model readiness; "
             "real loads optional sidecar model adapters; unavailable forces "
@@ -71,6 +72,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Print the lightweight sidecar adapter catalog as JSON and exit.",
     )
     return parser.parse_args(argv)
+
+
+def _adapter_mode_default() -> str:
+    value = os.environ.get("VISUAL_GROUNDING_ADAPTER_MODE", ADAPTER_MODE_AUTO)
+    if value in ADAPTER_MODES:
+        return value
+    expected = ", ".join(ADAPTER_MODES)
+    raise SystemExit(f"VISUAL_GROUNDING_ADAPTER_MODE must be one of {expected}, got {value!r}")
 
 
 def make_handler(

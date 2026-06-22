@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "summarize_robot_camera_visual_parity.py"
 TINY_PNG = (
@@ -1076,6 +1078,156 @@ def test_visual_parity_summary_does_not_treat_native_quality_metadata_as_probe(
     assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
         "native_default_candidate": 1,
     }
+
+
+def test_visual_parity_summary_infers_legacy_capture_quality_dimensions(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_legacy_capture_quality_dimensions",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+        render_width="540",
+        render_height="360",
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "legacy_1080_downsample540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.5,
+        location_count=4,
+        render_width="1080",
+        render_height="720",
+        saved_report_width="540",
+        saved_report_height="360",
+        metric_width="540",
+        metric_height="360",
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"legacy_1080_downsample540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["legacy_1080_downsample540"]["capture_quality_probe"]["status"] == (
+        "inferred_from_manifest"
+    )
+    assert rows["legacy_1080_downsample540"]["render_resolution_requested"] == {
+        "width": 1080,
+        "height": 720,
+    }
+    assert rows["legacy_1080_downsample540"]["metric_resolution"] == {
+        "width": 540,
+        "height": 360,
+    }
+
+
+def test_visual_parity_summary_rejects_invalid_capture_quality_resolution(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_invalid_capture_quality_resolution",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "invalid_capture_quality" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.5,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": False, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="render_resolution_requested.width must be a positive integer",
+    ):
+        summary.build_summary(
+            output_dir=tmp_path / "summary",
+            baseline_manifest_paths=[baseline],
+            probe_specs=[f"invalid_capture_quality={probe}"],
+            raw_fpv_run_result_paths=[],
+            calibration_manifest_paths=[],
+            required_scene_count=1,
+            required_seed_count=1,
+        )
+
+
+def test_visual_parity_summary_rejects_half_specified_legacy_metric_resolution(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_half_metric_resolution",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "half_metric_resolution" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.5,
+        location_count=4,
+        metric_width=540,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="scene.metric_width and scene.metric_height must be set together",
+    ):
+        summary.build_summary(
+            output_dir=tmp_path / "summary",
+            baseline_manifest_paths=[baseline],
+            probe_specs=[f"half_metric_resolution={probe}"],
+            raw_fpv_run_result_paths=[],
+            calibration_manifest_paths=[],
+            required_scene_count=1,
+            required_seed_count=1,
+        )
 
 
 def test_visual_parity_summary_treats_requested_aa_as_capture_quality_probe(

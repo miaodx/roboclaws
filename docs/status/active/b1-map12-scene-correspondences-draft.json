@@ -1,37 +1,253 @@
 {
-  "schema": "b1_map12_scene_correspondences_v1",
-  "source_map_frame": "robot_map_12_map",
-  "target_scene_frame": "b1_rebuilt_scene_usd_world",
+  "anchors": [
+    {
+      "anchor_id": "anchor_001",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        1.213078,
+        8.103456
+      ],
+      "scene_xyz": [
+        3.987318,
+        3.737825,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          726.261592,
+          107.930872
+        ],
+        "scene_pixel_xy": [
+          697.302675,
+          191.920245
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_002",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        3.18009,
+        1.819197
+      ],
+      "scene_xyz": [
+        4.179233,
+        -3.074028,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          765.601826,
+          233.616051
+        ],
+        "scene_pixel_xy": [
+          701.063167,
+          322.732225
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_003",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        -3.436223,
+        -3.175001
+      ],
+      "scene_xyz": [
+        -4.238836,
+        -6.289519,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          633.275584,
+          333.500004
+        ],
+        "scene_pixel_xy": [
+          539.361996,
+          384.512009
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_004",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        9.796402,
+        -3.762554
+      ],
+      "scene_xyz": [
+        8.186399,
+        -10.64976,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          897.928068,
+          345.25106
+        ],
+        "scene_pixel_xy": [
+          778.15326,
+          468.317633
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_005",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        -6.118511,
+        -3.200547
+      ],
+      "scene_xyz": [
+        -6.881121,
+        -5.53467,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          579.629811,
+          334.010917
+        ],
+        "scene_pixel_xy": [
+          488.59535,
+          370.007188
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_006",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        -7.996113,
+        -1.156885
+      ],
+      "scene_xyz": [
+        -8.055611,
+        -3.004114,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          542.077769,
+          293.137687
+        ],
+        "scene_pixel_xy": [
+          466.032396,
+          321.389182
+        ],
+        "operator_note": ""
+      }
+    },
+    {
+      "anchor_id": "anchor_007",
+      "anchor_type": "operator_correspondence",
+      "navigation_area_id": "",
+      "asset_partition_id": "",
+      "map_xy": [
+        4.789463,
+        12.573966
+      ],
+      "scene_xyz": [
+        8.395864,
+        6.94253,
+        0
+      ],
+      "review_status": "proposed",
+      "confidence": null,
+      "map_coordinate_source": "operator_map_pick",
+      "scene_coordinate_source": "rendered_gaussian_scene_topdown_ray_plane_pick",
+      "evidence": {
+        "source": "two_map_anchor_picker",
+        "scene_pick_policy": "perspective_ray_plane_z0",
+        "map_pixel_xy": [
+          797.78929,
+          18.520676
+        ],
+        "scene_pixel_xy": [
+          781.913753,
+          130.409062
+        ],
+        "operator_note": ""
+      }
+    }
+  ],
   "bbox_seed_policy": "known_poor_seed_only",
+  "notes": [
+    "This tracked draft snapshots the operator-picked tmp anchors so the local alignment probe is reproducible.",
+    "Anchors remain proposed because navigation_area_id and asset_partition_id are not reviewed.",
+    "Do not use this file as the final accepted correspondence manifest without explicit review."
+  ],
   "scene_projection_policy": {
     "horizontal_axes": [
       "x",
       "y"
     ],
-    "up_axis": "z",
-    "source": "2rd_floor_seperated_scene_topdown_policy"
+    "source": "pending_operator_review_for_2rd_floor_seperated",
+    "up_axis": "z"
   },
+  "schema": "b1_map12_scene_correspondences_v1",
+  "source_map_frame": "robot_map_12_map",
+  "target_scene_frame": "b1_rebuilt_scene_usd_world",
   "review_lifecycle": {
     "draft_location": "docs/status/active/b1-map12-scene-correspondences-draft.json",
+    "source_tmp_snapshot": "tmp/b1-map12-scene-correspondences.draft.json",
     "accepted_asset_location": "assets/maps/b1-map12-scene-correspondences.json",
-    "accepted_anchor_rule": "Only human/operator-reviewed picks may use review_status=accepted.",
-    "bbox_seed_rule": "The bbox-fit overlay may seed coarse visual search only; it must not prefill accepted scene coordinates."
-  },
-  "anchors": [
-    {
-      "anchor_id": "draft_central_floor_doorway_example",
-      "anchor_type": "door_center",
-      "navigation_area_id": "central_floor",
-      "asset_partition_id": "meeting_room_b",
-      "map_xy": null,
-      "scene_xyz": null,
-      "evidence": {
-        "map_image": "",
-        "scene_image": "",
-        "operator_note": "Replace with explicit map pick and explicit scene pick during review."
-      },
-      "confidence": 0.0,
-      "review_status": "proposed"
-    }
-  ]
+    "accepted_anchor_rule": "Only explicit human/operator acceptance may change these anchors from proposed to accepted.",
+    "bbox_seed_rule": "The bbox-fit overlay may seed coarse visual search only; it must not prefill accepted scene coordinates.",
+    "current_use": "manual_draft_reference_for_local_alignment_probe"
+  }
 }

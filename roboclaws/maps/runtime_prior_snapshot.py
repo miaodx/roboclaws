@@ -221,13 +221,24 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
 def runtime_metric_map_from_prior_artifact(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     """Accept either raw runtime_metric_map.json or the canonical snapshot wrapper."""
 
-    if not payload:
+    if payload is None:
         return None
-    if payload.get("schema") == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA:
+    schema = payload.get("schema")
+    if schema == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA:
         runtime_metric_map = payload.get("runtime_metric_map")
         if not isinstance(runtime_metric_map, dict):
             raise ValueError("runtime map prior snapshot lacks runtime_metric_map")
+        if runtime_metric_map.get("schema") != RUNTIME_METRIC_MAP_SCHEMA:
+            raise ValueError(
+                "runtime map prior snapshot runtime_metric_map must use schema "
+                f"{RUNTIME_METRIC_MAP_SCHEMA}, got {runtime_metric_map.get('schema')!r}"
+            )
         return copy.deepcopy(runtime_metric_map)
+    if schema != RUNTIME_METRIC_MAP_SCHEMA:
+        raise ValueError(
+            "runtime map prior artifact must be raw "
+            f"{RUNTIME_METRIC_MAP_SCHEMA} or {RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA}, got {schema!r}"
+        )
     return copy.deepcopy(payload)
 
 

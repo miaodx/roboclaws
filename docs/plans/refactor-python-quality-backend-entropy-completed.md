@@ -2,7 +2,7 @@
 refactor_scope: python-quality-backend-entropy
 status: COMPLETED_LEDGER
 active_plan: docs/plans/refactor-python-quality-backend-entropy.md
-last_compacted: 2026-06-17
+last_compacted: 2026-06-18
 ---
 
 # Completed Ledger: Python Quality And Backend Entropy
@@ -33,6 +33,1045 @@ logs before choosing the next slice.
   the 800-line ratchet threshold.
 
 ## Completed Bundles
+
+- 2026-06-18: Active plan compaction completed. The active plan was rewritten
+  from an execution ledger mirror into a concise continuation control doc with
+  resume checklist, operating rules, slice selector, active candidates, proof
+  ladder, commit-note template, and stop condition. Completed slice detail stays
+  in this ledger. Owner layer: process documentation for the refactor stream.
+  Behavior-change class: docs/process cleanup only. Metric: active plan reduced
+  from 1861 lines to 385 lines. Proof: markdown diff review and
+  `git diff --check`.
+
+- 2026-06-18: Live eval product-route timeout configuration now fails aloud.
+  Explicit `live_timeout_s` values must be positive finite seconds before the
+  live product route is launched or detached completion polling computes a
+  deadline, instead of allowing zero, negative, non-finite, or malformed values
+  to become immediate/ambiguous wait behavior or late subprocess errors. Owner
+  layer: Eval suites and live-run polling. Behavior-change class: fail-aloud
+  eval live-run configuration; omitted `live_timeout_s` still leaves the
+  blocking subprocess unbounded while using the existing detached-poll default,
+  and valid positive timeouts, timeout recovery, completion grace, provider/env
+  routing, product commands, grading, and artifact discovery are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `test_eval_runner.py` is 1406 lines and remains oversized. Leave test
+  pruning/splitting for an `$intuitive-tests` pass. Proof: focused
+  invalid-timeout and omitted-timeout regression tests, full eval runner unit
+  file, touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: OpenAI Agents SDK performance-profile enabled feature counts now
+  fail aloud. Enabled private profile features reject explicit non-positive
+  `model_racing_arm_count`, `raw_fpv_image_memory_retain`, and
+  `camera_grounded_history_retain` values instead of silently clamping them to
+  plausible defaults. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud SDK profile configuration; disabled
+  feature zero-count metadata, default enabled-profile counts, valid positive
+  overrides, CLI/env conflict checks, provider route/default selection, SDK
+  model settings, run config payloads, and live runtime behavior are unchanged.
+  Same-slice cleanup removed an unused private wire-API wrapper and consolidated
+  duplicated private-artifact policy strings without changing payload text.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 799 lines and `test_live_runtime.py` is
+  5410 lines. The test file remains oversized; leave pruning/splitting for an
+  `$intuitive-tests` pass. Proof: focused non-positive enabled-feature-count
+  regression tests, full live-runtime unit test file, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe private label manifests now fail aloud.
+  Explicit `--private-labels` and `--all-visible-labels` manifests require a
+  list of object rows with frame identity, object id, category, and bbox/coarse
+  locality instead of producing unhelpful attribute errors or silently
+  filtering malformed scorer truth out of the report. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud scorer-truth
+  input; omitted label inputs, valid hidden/all-visible labels, frame aliasing,
+  contrast-derived labels, offline scoring, provider execution, prompt privacy,
+  and report artifacts are unchanged. Metric: ratchet remains at 0 complexity
+  rows and 79 oversized modules; `run_raw_fpv_perception_probe.py` is 1950
+  lines and `test_raw_fpv_perception_probe.py` is 1677 lines. The test file
+  remains oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused malformed label-manifest tests, full RAW-FPV perception probe
+  test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe prediction manifests now fail aloud.
+  Explicit `--predictions` manifests require list rows, object rows, frame ids,
+  and object responses instead of skipping malformed rows or fabricating empty
+  candidate responses. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud probe prediction input; omitted
+  predictions, valid `predictions` and legacy `runs` rows, JSON-string response
+  parsing, offline scoring, provider execution, prompt privacy, and report
+  artifacts are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `run_raw_fpv_perception_probe.py` is 1921 lines and
+  `test_raw_fpv_perception_probe.py` is 1595 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused malformed prediction-manifest tests, full RAW-FPV perception probe
+  test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe source evidence now fails aloud.
+  The probe fails before report generation when an explicit `--raw-run-dir` is
+  missing or when all selected RAW-FPV source directories contain no usable FPV
+  frames, instead of producing plausible zero-frame prompt/score artifacts.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud probe input evidence; optional contrast-run opt-out, valid raw
+  source loading, frame grouping, scorer truth loading, provider execution,
+  prompt privacy, scoring, and report artifacts are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules;
+  `run_raw_fpv_perception_probe.py` is 1917 lines and
+  `test_raw_fpv_perception_probe.py` is 1549 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused missing/empty RAW-FPV source regression tests, full RAW-FPV
+  perception probe test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe provider model input now fails aloud.
+  The probe validates `codex-router-responses` model input through the provider
+  registry before request execution, rejects unknown explicit model ids as
+  `provider_config_error`, and resolves blank model input to the route default
+  `gpt-5.5`. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: fail-aloud probe provider configuration; missing provider env errors,
+  valid catalog models, provider route semantics, prompt privacy, scoring, and
+  report artifacts are unchanged. Metric: ratchet remains at 0 complexity rows
+  and 79 oversized modules; `run_raw_fpv_perception_probe.py` is 1907 lines and
+  `test_raw_fpv_perception_probe.py` is 1493 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused RAW-FPV provider-model tests, full RAW-FPV perception probe test
+  file, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe explicit input files now fail aloud.
+  Explicit `--private-labels`, `--all-visible-labels`, and `--predictions`
+  paths fail before scoring when the file is absent instead of being treated
+  like omitted optional inputs and producing truth-sparse or not-run offline
+  reports. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud probe configuration; omitted optional label/prediction
+  inputs, valid scorer truth loading, valid prediction loading, provider
+  readiness errors, prompt privacy, scoring, and report artifacts are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_raw_fpv_perception_probe.py` is 1878 lines and
+  `test_raw_fpv_perception_probe.py` is 1385 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused missing-input regression tests, full RAW-FPV perception probe test
+  file, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
+- 2026-06-18: Visual-parity capture-quality summary metadata now fails aloud.
+  The visual-parity summary payload owner rejects missing, malformed, bool,
+  non-integer, non-positive, explicit-non-object, or half-specified
+  capture-quality resolutions instead of erasing bad values into empty
+  resolution metadata and still ranking the row as probe evidence. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  manifest/report summary configuration; valid explicit capture-quality probes,
+  valid legacy scene dimension inference, saved/metric dimension inheritance,
+  report rendering, probe ranking, and native-render metadata classification
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `robot_camera_visual_parity_payloads.py` is 411 lines,
+  `summarize_robot_camera_visual_parity.py` is 1976 lines, and
+  `test_robot_camera_visual_parity_summary.py` is 2262 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused visual-parity capture-quality tests, full visual-parity
+  summary test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Robot-camera capture-quality legacy manifests now fail aloud.
+  Refresh-report-only capture-quality inference requires explicit legacy scene
+  render dimensions and rejects missing, malformed, bool, or non-positive
+  dimensions instead of fabricating `540x360` proof metadata. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud legacy
+  manifest/report configuration; explicit current-run capture-quality probes,
+  valid legacy scene dimensions, saved/metric dimension inheritance, report
+  rendering, object-parity skipping, and renderer subprocess routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `robot_camera_apple2apple_capture_quality.py` is 258 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 3134 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera capture-quality and parser tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Shared camera-control request resolution now fails aloud.
+  Camera-control request builders and normalizers reject missing, malformed,
+  bool, or non-positive render dimensions instead of fabricating `1x1` render
+  requests for malformed payloads. Owner layer: Backend Runtime / Environment
+  Primitive, with artifact impact on MuJoCo/Isaac scene-probe request
+  execution. Behavior-change class: fail-aloud camera-control request
+  configuration; explicit valid overrides, valid request payloads, camera model
+  defaults, orbit/lens/lighting/color normalization, worker command routing,
+  and request artifact schemas are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules; `camera_control.py` is 650 lines
+  and `test_camera_control.py` is 83 lines. Proof: focused camera-control unit
+  tests, selected MuJoCo/Isaac camera-control caller tests, touched-file ruff
+  and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Isaac worker render command numeric configuration now fails
+  aloud. The worker CLI rejects non-positive snapshot/robot-view/camera-view
+  render dimensions and negative robot-view settle frames at argument parsing
+  time instead of allowing invalid dimensions through or clamping settle frames
+  to zero in the output hooks. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: fail-aloud Isaac worker render
+  configuration; default dimensions, valid positive dimensions,
+  zero-as-no-extra-settle behavior, worker command names, output packet schemas,
+  placeholder/real-render routing, and higher-level backend argv construction
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `isaac_worker_cli.py` is 269 lines,
+  `isaac_worker_outputs.py` is 429 lines, and
+  `test_relative_navigation_worker_routing.py` is 247 lines. Proof: focused
+  worker-routing tests, `test_isaac_lab_backend.py`, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: MolmoSpaces worker render dimensions now fail aloud. The worker
+  CLI rejects non-positive snapshot/robot-view/camera-view `--render-width` /
+  `--render-height` values at argument parsing time instead of accepting
+  invalid dimensions until worker dispatch validation. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  MolmoSpaces worker render configuration; default dimensions, valid positive
+  dimensions, existing dispatch-layer validation, worker command names, output
+  packet schemas, and backend routing are unchanged. Metric: ratchet remains at
+  0 complexity rows and 79 oversized modules; `molmospaces_worker_cli.py` is
+  132 lines and `test_relative_navigation_worker_routing.py` is 302 lines.
+  Proof: focused worker-routing tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 / Map 12 navigation-smoke render dimensions now fail aloud.
+  The navigation-smoke CLI rejects non-positive `--render-width` /
+  `--render-height` values at argument parsing time instead of passing invalid
+  dimensions into waypoint capture requests and child render subprocesses.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change class:
+  fail-aloud B1 navigation-smoke render configuration; default dimensions,
+  valid positive dimensions, readiness artifact loading/building, waypoint
+  selection, smoke artifact schema, and child capture command routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_b1_map12_navigation_smoke.py` is 342 lines and
+  `test_b1_map12_navigation_report.py` is 98 lines. Proof: focused B1
+  navigation-smoke contract tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Robot-camera apple-to-apple comparison target count now fails
+  aloud. The comparison CLI rejects non-positive `--location-count` at argument
+  parsing time instead of clamping zero or negative values to one target before
+  selecting render comparison locations. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud comparison artifact
+  configuration; default target count, valid positive counts,
+  refresh-report-only behavior, target selection ordering, manifest/report
+  schemas, and renderer subprocess routing are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules;
+  `run_robot_camera_apple2apple_comparison.py` is 1813 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 2986 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Robot-camera apple-to-apple comparison render dimensions now fail
+  aloud. The comparison CLI rejects non-positive `--render-width` /
+  `--render-height` values at argument parsing time instead of passing invalid
+  dimensions into MuJoCo and Isaac render subprocesses. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  comparison render configuration; default dimensions, valid positive
+  dimensions, `--refresh-report-only` behavior, target-count validation,
+  manifest/report schemas, and renderer subprocess routing are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `run_robot_camera_apple2apple_comparison.py` is 1813 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 3043 lines. The test file
+  is already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Robot-camera apple-to-apple capture-quality settle frames now
+  fail aloud. The comparison CLI rejects negative `--render-settle-frames` at
+  argument parsing time instead of clamping it to zero in capture-quality
+  configuration. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud comparison capture-quality configuration;
+  default zero settle frames, explicit zero-as-no-extra-settle behavior,
+  positive settle-frame forwarding, render dimensions, target-count validation,
+  manifest/report schemas, and renderer subprocess routing are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `run_robot_camera_apple2apple_comparison.py` is 1825 lines,
+  `robot_camera_apple2apple_capture_quality.py` is 226 lines, and
+  `test_robot_camera_apple2apple_comparison.py` is 3097 lines. The test file
+  is already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Scene-camera comparison render dimensions now fail aloud. The
+  scene-camera comparison CLI rejects non-positive `--render-width` /
+  `--render-height` values at argument parsing time instead of passing invalid
+  dimensions into the shared MuJoCo and Isaac scene-camera comparison artifact
+  pipeline. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud scene-camera comparison render
+  configuration; default dimensions, valid positive dimensions,
+  prepared-USD checks, generated-mess inputs, lighting-profile selection,
+  manifest/report schemas, and renderer routing are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules;
+  `scene_camera_comparison.py` is 2011 lines and
+  `test_scene_camera_comparison.py` is 2085 lines. The test file is already
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused scene-camera comparison contract tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 / Map 12 waypoint-capture render dimensions now fail aloud.
+  The waypoint capture CLI rejects non-positive `--width` / `--height` values
+  at argument parsing time instead of passing invalid dimensions into
+  deterministic camera requests and optional old/new Gaussian scene capture
+  subprocesses. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 waypoint capture configuration; default
+  dimensions, valid positive dimensions, waypoint/extra-point selection,
+  approximate bbox transform metadata, capture manifest schema, and capture
+  routing are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `capture_b1_map12_waypoint_views.py` is 605 lines and
+  `test_b1_map12_waypoint_capture.py` is 101 lines. Proof: focused B1 waypoint
+  capture unit tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 scene topdown and operator preview render dimensions now fail
+  aloud. The Gaussian topdown, scene topdown diagnostic, and operator-console
+  scene preview CLIs reject non-positive `--width` / `--height` values at
+  argument parsing time instead of clamping them to one pixel and emitting
+  plausible but unusable review artifacts. Owner layers: Artifacts, reports,
+  and eval suites; operator console preview artifacts. Behavior-change class:
+  fail-aloud render artifact configuration; default dimensions, valid positive
+  dimensions, camera request/report schemas, B1 static preview behavior,
+  MolmoSpaces preview routing, and rendered artifact names are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `render_b1_scene_gaussian_topdown.py` is 539 lines,
+  `render_b1_scene_topdown_diagnostic.py` is 877 lines, and
+  `render_scene_previews.py` is 1387 lines. Proof: targeted B1 topdown and
+  operator preview tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 Gaussian topdown camera configuration now fails aloud. The
+  Gaussian topdown CLI and camera request builder reject non-positive/non-finite
+  camera height, non-positive or non-finite near-vertical camera Y offset,
+  non-finite target Z, and vertical FOV values outside 1-179 degrees instead of
+  writing invalid camera request geometry or silently flipping negative offsets
+  positive. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud B1 Gaussian topdown camera configuration; default camera
+  settings, valid custom positive settings, render dimensions, scene bounds,
+  NuRec crop handling, request/report schemas, and capture routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `render_b1_scene_gaussian_topdown.py` is 596 lines and
+  `test_b1_scene_gaussian_topdown.py` is 289 lines. Proof: focused B1 Gaussian
+  topdown contract tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: RAW-FPV perception probe numeric configuration now fails
+  aloud. The probe CLI rejects non-positive `max_frames_per_source`,
+  non-positive score thresholds, out-of-contract candidate limits, and
+  non-positive/non-finite provider timeouts at argument parsing time instead of
+  clamping invalid values before collecting frames, building prompt inputs, or
+  scoring reports. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud perception probe configuration; defaults,
+  valid candidate limits from one to three, prompt/report schemas, public
+  prompt privacy boundaries, offline scoring, and provider execution flow are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_raw_fpv_perception_probe.py` is 1873 lines and
+  `test_raw_fpv_perception_probe.py` is 1295 lines. Focused regression tests
+  grow the existing RAW-FPV test file; leave test pruning/splitting for an
+  `$intuitive-tests` pass. Proof: focused RAW-FPV probe parser/unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: RAW-FPV corpus generator numeric configuration now fails aloud.
+  Private-label and public-sweep corpus CLIs reject non-positive render
+  dimensions, non-positive `min_object_pixels`, and negative observation /
+  waypoint limits at argument parsing time instead of clamping invalid values to
+  one and generating plausible but misconfigured scorer artifacts. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud corpus
+  generation configuration; default values, valid positive dimensions,
+  zero-as-unlimited observation/waypoint limits, privacy boundaries,
+  manifest/report schemas, and replay/corpus generation flow are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `generate_raw_fpv_private_labels.py` is 798 lines and
+  `generate_raw_fpv_sweep_corpus.py` is 559 lines. Focused regression tests grow
+  `test_raw_fpv_perception_probe.py` to 1254 lines; leave test pruning for an
+  `$intuitive-tests` pass. Proof: focused RAW-FPV parser/unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: MolmoSpaces JSON worker numeric command kwargs now fail aloud.
+  Served worker requests reject malformed, boolean, non-finite, or non-positive
+  render dimensions and malformed, boolean, or non-finite camera/relative-motion
+  floats instead of silently substituting default dimensions or zero motion
+  before rendering or navigation. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: fail-aloud worker command configuration;
+  omitted worker kwargs, CLI-parsed numeric args, valid numeric strings, render
+  output shape, relative-pose dispatch, worker response/error packet structure,
+  public launch axes, and backend wrapper commands are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules;
+  `molmospaces_subprocess_worker.py` is 1880 lines and remains below the hard
+  ceiling. Proof: focused MolmoSpaces worker routing tests, adjacent subprocess
+  backend CLI/render tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Provider timing proxy bind-port configuration now fails aloud.
+  `start_provider_timing_proxy()` and the direct proxy CLI reject malformed or
+  out-of-range `ROBOCLAWS_TIMING_PROXY_BIND_PORT` / `--bind-port` values instead
+  of treating invalid env as omitted and silently choosing a free local port.
+  Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud live-agent timing-proxy configuration; omitted bind-port values,
+  valid explicit ports, free-port selection, loopback host validation, provider
+  URL rewriting, request metric schemas, and live-runner proxy metadata are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `provider_timing_proxy.py` is 493 lines. Proof: focused provider
+  timing proxy tests, focused live-runner provider-proxy tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Launch-catalog blank-axis selection now fails aloud.
+  `resolve_surface_launch()` rejects explicit blank optional axes for `world=`,
+  `backend=`, `intent=`, `preset=`, and `provider_profile=` instead of treating
+  them as omitted and silently selecting defaults. Owner layers: Runnable
+  Surfaces And Presets, and Agent Engines And Provider Profiles. Behavior-change
+  class: fail-aloud launch-axis configuration; omitted axes, valid axis values
+  and aliases, unsupported non-empty provider profile errors, public launch
+  axes, provider env export, and runner argv construction are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules; `catalog.py` is
+  716 lines. Proof: focused launch-catalog blank-axis/provider-profile tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: OpenAI Agents SDK direct provider/model/env precedence now fails
+  aloud. Provider profile, model, base URL, and API key selection for the direct
+  SDK runtime rejects conflicting explicit request/metadata and env settings
+  instead of silently letting one source retarget the route. The conflict policy
+  lives in `provider_registry.py`, while `openai_agents_live.py` only applies
+  selected runtime settings and missing-setting checks. Owner layer: Agent
+  Engines And Provider Profiles. Behavior-change class: fail-aloud OpenAI
+  Agents SDK provider/model/env configuration; omitted defaults, matching
+  env/request values, canonical provider/model aliases, base-url trailing-slash
+  normalization, public launch axes, normalized live-status packets, and event
+  schemas are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `openai_agents_live.py` is 1911 lines and
+  `provider_registry.py` is 989 lines. Proof: focused OpenAI Agents live runtime
+  and provider catalog tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK model-racing observability numeric config now
+  fails aloud. Direct `model_racing_observability.arm_count` and
+  `model_racing_observability.racing_multiplier` metadata reject malformed,
+  boolean, non-positive, or non-finite values instead of silently clamping
+  `arm_count` to the default or surfacing raw float conversion failures.
+  Behavior-change class: fail-aloud OpenAI Agents SDK numeric/profile
+  configuration; omitted values, empty-string defaults, profile-owned
+  model-racing packets, public launch axes, normalized live-status packets, and
+  event schemas are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `openai_agents_live.py` is 1943 lines. Proof: focused
+  OpenAI Agents model-racing runtime tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK model-racing observability boolean config now
+  fails aloud. Direct `model_racing_observability.enabled` and
+  `model_racing_observability.unknown_loser_billing` metadata accept only
+  explicit true/false spellings instead of treating arbitrary non-false strings
+  as enabled. Behavior-change class: fail-aloud OpenAI Agents SDK
+  boolean/profile configuration; omitted values, empty-string defaults, valid
+  true/false values, profile-owned model-racing packets, public launch axes,
+  normalized live-status packets, and event schemas are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_live.py` is 1899 lines. Proof: focused OpenAI Agents
+  model-racing/cache-tools runtime tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK model-input compaction boolean config now fails
+  aloud. Direct `model_input_compaction.enabled`,
+  `raw_fpv_image_memory.enabled`, and `camera_grounded_history.enabled`
+  metadata accept only explicit true/false spellings instead of treating
+  arbitrary non-false strings as enabled. Behavior-change class: fail-aloud
+  OpenAI Agents SDK boolean/profile configuration; omitted values,
+  empty-string defaults, valid true/false values, profile-owned compaction
+  packets, public launch axes, normalized live-status packets, and event schemas
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `openai_agents_model_input.py` stays at 990 lines. Proof: focused
+  OpenAI Agents model-input compaction runtime tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK cache-tools-list boolean config now fails
+  aloud. Direct runtime metadata, `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST`,
+  and performance-profile resolution accept only explicit true/false spellings
+  instead of treating arbitrary non-false strings as enabled. Behavior-change
+  class: fail-aloud OpenAI Agents SDK boolean/profile configuration; omitted
+  values, default enabled behavior, valid true/false values, matching CLI/env
+  values, provider profiles, public launch axes, normalized live-status packets,
+  and event schemas are unchanged. Metric: ratchet remains at 0 complexity rows
+  and 79 oversized modules; `openai_agents_perf_profile.py` is 796 lines,
+  `openai_agents_live.py` is 1887 lines, and
+  `run_live_openai_agents_cleanup.py` is 1974 lines. Proof: focused OpenAI
+  Agents live runtime/profile tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Visual-grounding benchmark timeout configuration now fails aloud.
+  `run_visual_grounding_benchmark.py` validates `--timeout-s` and
+  `VISUAL_GROUNDING_TIMEOUT_S` as positive finite seconds during argument
+  parsing instead of accepting zero/non-finite values or surfacing raw float
+  conversion failures before benchmark setup. Behavior-change class: fail-aloud
+  visual-grounding benchmark configuration; default timeout, valid CLI/env
+  overrides, visual-grounding client config shape, benchmark result/report
+  schemas, public launch axes, and sidecar service behavior are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py` is 1278 lines.
+  Proof: focused visual-grounding benchmark contract tests, touched-file ruff
+  and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Visual-grounding sidecar adapter-mode env configuration now
+  fails aloud. `serve_visual_grounding_service.py` validates
+  `VISUAL_GROUNDING_ADAPTER_MODE` against `auto`, `real`, and `unavailable`
+  before listing adapters or starting the service, instead of allowing an
+  unsupported env default to bypass the CLI choices. Behavior-change class:
+  fail-aloud visual-grounding sidecar service configuration; valid CLI/env
+  values, list-adapter output, service startup with supported modes, sidecar
+  request/response schemas, public launch axes, and benchmark behavior are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `scripts/visual_grounding/serve_visual_grounding_service.py` is 170
+  lines. Proof: focused visual-grounding service contract tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Shared worker timeout env overrides now fail aloud.
+  `worker_timeout_s()` rejects malformed, non-finite, or non-positive
+  `ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S` /
+  `ROBOCLAWS_ISAACLAB_WORKER_TIMEOUT_S` style overrides before subprocess
+  launch instead of surfacing raw float conversion failures or passing invalid
+  timeout values to the runner. Behavior-change class: fail-aloud worker
+  runtime configuration; absent env overrides, valid positive overrides,
+  command-specific timeout defaults, MolmoSpaces/Isaac worker commands, public
+  launch axes, and worker response schemas are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules; `worker_runner.py` is
+  130 lines. Proof: focused worker-runner unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Codex live-runner idle-timeout env overrides now fail aloud.
+  `_codex_turn_idle_timeout_s()` rejects malformed, non-finite, or negative
+  `ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S` values instead of silently reusing the
+  300s default. Behavior-change class: fail-aloud live-agent runner
+  configuration; omitted env values, explicit configured timeout metadata,
+  valid non-negative env values including zero as disable, Codex live-run
+  commands, public launch axes, live-status packets, and report artifacts are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_live_codex_cleanup.py` is 1250 lines. Proof: focused Codex
+  live-report unit test, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Live-eval timeout-completion-grace env overrides now fail aloud.
+  `live_timeout_completion_grace_s()` rejects malformed, non-finite, or
+  negative `ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S` values instead of
+  silently reusing the 30s default. Behavior-change class: fail-aloud eval
+  runner configuration; omitted env values, valid non-negative grace overrides
+  including zero, detached live-run polling, `live_eval_command.json` records,
+  public launch axes, live-status packets, and product artifacts are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `live_runtime.py` is 728 lines. Proof: focused eval live-runtime unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
+  aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
+  OmDet-Turbo, and sidecar candidate limits reject malformed,
+  boolean-as-number, non-finite, or out-of-range values with an
+  `invalid_runtime_parameter` failure packet instead of silently falling back to
+  env or adapter defaults. Behavior-change class: fail-aloud visual-grounding
+  sidecar runtime configuration; valid defaults, valid request/env overrides,
+  adapter-unavailable responses, missing-dependency responses, visual-grounding
+  request/response schemas, public launch axes, and benchmark row construction
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `scripts/visual_grounding/adapters.py` is 1914 lines. Proof: focused
+  visual-grounding service, client, and benchmark contract tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK performance-profile integer parsing now uses
+  the same fail-aloud setting style as the runtime config paths. Malformed
+  integer env/direct settings such as
+  `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`, and non-positive
+  positive-only settings such as `max_turns`, produce actionable
+  `OpenAI Agents SDK setting ...` errors instead of raw conversion failures or
+  terse constraint messages. Behavior-change class: fail-aloud
+  runner/provider-profile configuration; valid integer defaults, matching
+  CLI/env values, existing conflicts, and profile output schemas are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 800 lines and stays below the oversized
+  threshold. Proof: focused OpenAI Agents live runtime/profile tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: Metric-map rasterization now fails aloud when declared
+  projection dimensions are absent or malformed. `occupancy_grid_from_metric_map()`
+  requires `metric_map.width` and `metric_map.height` to be present, integer,
+  and within the existing 16..4096 bounds instead of silently fabricating the
+  default 240x180 grid for invalid map evidence. Behavior-change class:
+  fail-aloud source-map/costmap projection; valid metric-map projection, public
+  launch axes, Nav2 bundle artifact schemas, and computed geometry expansion
+  clamping are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `rasterize.py` is 268 lines. Proof: focused Nav2
+  map-bundle contract tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Runtime Map Prior artifact loading now rejects malformed
+  non-empty prior payloads. `runtime_metric_map_from_prior_artifact()` accepts
+  only raw `runtime_metric_map_v1` payloads or `runtime_map_prior_snapshot_v1`
+  wrappers whose nested runtime map is also `runtime_metric_map_v1`; unknown
+  prior artifact schemas fail with a clear schema error instead of being treated
+  as usable runtime-map evidence. Behavior-change class: fail-aloud runtime
+  artifact/source truth; omitted prior paths, valid raw runtime maps, valid
+  snapshot wrappers, public launch axes, and downstream Runtime Map Prior
+  Snapshot contracts are unchanged. Metric: ratchet remains at 0 complexity rows
+  and 79 oversized modules; `runtime_prior_snapshot.py` is 844 lines and remains
+  a justified warning-band owner. Proof: focused Runtime Map Prior contract
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
+- 2026-06-18: External visual-grounding timeout configuration now fails aloud.
+  `visual_grounding_client_from_env()` rejects malformed, non-finite, or
+  non-positive `VISUAL_GROUNDING_TIMEOUT_S` / direct
+  `visual_grounding_timeout_s` values instead of silently reusing the 20s
+  default for non-sim sidecar routes. Behavior-change class: fail-aloud
+  external sidecar configuration; the `sim` no-client path, omitted timeout
+  default, valid positive timeout values, visual-grounding request/response
+  schemas, and public launch axes are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules; `visual_grounding.py` is 414 lines.
+  Proof: focused visual-grounding client tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: External visual-grounding sidecar calls now require raw image
+  evidence. Non-sim camera labelers report a failed `missing_raw_fpv_image`
+  visual-grounding pipeline before invoking the sidecar when the raw FPV image
+  artifact is absent or unreadable, instead of sending an empty image payload to
+  the detector. Behavior-change class: fail-aloud runtime evidence/source truth;
+  sim camera-model declarations, missing-client status, valid image-backed
+  sidecar requests, visual-grounding schemas, and public launch axes are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `realworld_visual_candidate_declarations.py` is 570 lines. Proof:
+  focused RealWorldCleanupContract visual-grounding tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Visual-grounding HTTP request validation now rejects empty image
+  evidence. `validate_visual_grounding_request()` requires non-empty
+  `image.bytes_base64` plus positive `image.width` / `image.height` values
+  instead of allowing zero-sized image payloads through the sidecar boundary.
+  Behavior-change class: fail-aloud visual-grounding contract validation; valid
+  image-backed requests, response schema validation, sim camera-model
+  declarations, missing-client status, public launch axes, and upstream
+  `missing_raw_fpv_image` classification are unchanged. Metric: ratchet remains
+  at 0 complexity rows and 79 oversized modules; `visual_grounding_contract.py`
+  is 183 lines. Proof: focused visual-grounding client and service contract
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
+  default/env validation moved into `openai_agents_perf_profile.py`. Malformed
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct
+  timeout values, and CLI/env timeout conflicts now fail through the same
+  performance-profile resolver as the other SDK runtime settings instead of
+  being parsed early by argparse or silently clamped to zero. Behavior-change
+  class: fail-aloud runner/provider-profile configuration; default 30s timeout,
+  matching CLI/env values, valid positive values, and explicit zero-as-disable
+  profile output are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `run_live_openai_agents_cleanup.py` is down to 1972
+  lines. Proof: focused OpenAI Agents live runtime/profile tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK direct `max_turns` metadata now fails aloud for
+  malformed runtime settings. Invalid or non-positive direct `max_turns`
+  metadata produces normalized `provider_config_failure` live-status packets
+  instead of silently reusing the default SDK turn budget or clamping to one.
+  Behavior-change class: fail-aloud SDK runtime configuration; omitted
+  metadata, validated `LiveAgentRequest.max_turns`, and positive profile-owned
+  `max_turns` values are unchanged. Metric: ratchet remains at 0 complexity
+  rows and 79 oversized modules. Proof: focused OpenAI Agents live runtime
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK MCP client-session timeout config now fails
+  aloud for malformed runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S` values and negative
+  direct `mcp_client_session_timeout_s` metadata produce normalized
+  `provider_config_failure` live-status packets instead of being treated as
+  absent or disabled timeout configuration. Behavior-change class: fail-aloud
+  SDK runtime configuration; omitted values, valid positive timeout values, and
+  explicit zero-as-disable behavior are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: OpenAI Agents SDK retry config now fails aloud for malformed
+  numeric runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS` values and invalid
+  direct `model_service_retry_sleep_s` metadata produce normalized
+  `provider_config_failure` live-status packets instead of silently reusing
+  defaults. Behavior-change class: fail-aloud SDK runtime configuration;
+  omitted values, valid non-negative retry attempts/sleep values,
+  profile-owned retry packets, public launch axes, event schemas, and retry
+  observability are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules. Proof: focused OpenAI Agents live runtime tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: OpenAI Agents SDK model-input compaction config now fails aloud for
+  malformed numeric runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS` values and invalid direct
+  `raw_fpv_image_memory.retained_full_frame_limit` /
+  `camera_grounded_history.retained_recent_outputs` metadata produce normalized
+  `provider_config_failure` live-status packets instead of silently reusing
+  defaults or passing malformed direct policies through to the filter. Behavior-
+  change class: fail-aloud SDK runtime configuration; omitted values, valid
+  defaults, profile-owned compaction packets, public launch axes, event schemas,
+  and valid compaction output are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Active-plan Candidate D guidance now matches the closed code and
+  completed-ledger state. Stale prompts that still made runner-side OpenAI
+  Agents SDK performance-profile/default extraction the next Candidate D slice
+  now point to `openai_agents_perf_profile.py` as the owner and say to reopen
+  only if the runner starts rebuilding profile/default/config packets inline
+  again. Behavior-change class: planning/ledger consistency only; no runtime,
+  artifact, profile, or test behavior changed. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused call-site scan,
+  active-plan stale-guidance scan, markdown diff review, and ratchet.
+
+- 2026-06-18: Operator-console runtime artifact discovery now fails honest for
+  grounding overlays. `_latest_view_assets()` only treats
+  `visual_grounding/overlays/**` images as current grounding overlays;
+  report-only `*.bbox*`, `*.detection*`, or loose `*grounding*` images elsewhere
+  in the run directory no longer replace the FPV slot or appear as live
+  grounding evidence. Behavior-change class: fail-aloud runtime artifact/status
+  honesty; real visual-grounding overlays still surface as both `grounding` and
+  FPV display source, while report-rendered bbox evidence remains available
+  through report artifacts. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules. Proof: focused operator-console state tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Nav2 map-bundle projection now fails aloud before emitting
+  projected map evidence from invalid source bundles. `metric_map_from_bundle()`
+  and `static_fixture_projection_from_bundle()` call the existing Nav2 bundle
+  validator first, so missing `map.yaml` image metadata, missing inspection
+  waypoints, missing source-frame metadata, or other bundle-validation errors
+  no longer become `ok=true` projected artifacts through direct callers.
+  Behavior-change class: fail-aloud source-map artifact projection; valid bundle
+  projection, public launch axes, artifact schemas, map report shape, and
+  product callers that already validate selected bundles are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof: focused
+  Nav2 map-bundle contract tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: MiMo inside provider readiness now requires the base URL as well
+  as the API key. `mimo-inside-openai-chat` declares both `MIMO_BASE_URL` and
+  `MIMO_API_KEY` as required env keys, matching its no-default-base-url
+  provider contract. Provider readiness and operator-console readiness now
+  block when only `MIMO_API_KEY` is present instead of reporting the on-demand
+  route startable with an empty base URL. Behavior-change class: fail-aloud
+  provider readiness; provider profile ids, route default model, public launch
+  axes, and documented operator setup are unchanged. Metric: ratchet remains at
+  0 complexity rows and 79 oversized modules. Proof: focused provider catalog
+  and operator-console provider/readiness tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Coding-agent shell helpers now fail aloud for explicit unknown
+  model overrides before launch config generation. `provider_registry.py`
+  exposes a `model-id` lookup command, and `scripts/dev/coding_agent_env.sh`
+  resolves `ROBOCLAWS_CODEX_MODEL` / `ROBOCLAWS_CODE_AGENT_MODEL` through the
+  catalog for non-system provider routes. Known aliases such as
+  `minimax-highspeed` still normalize to their catalog model id; omitted model
+  input still uses route defaults. Behavior-change class: fail-aloud env
+  cleanup; provider profiles, route defaults, system Claude behavior,
+  key/base-url precedence, and public launch axes are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof:
+  focused provider catalog and dev-tool shell helper tests, touched-file ruff
+  and format check, `bash -n`, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Provider readiness now fails aloud for explicit unknown model
+  overrides. `provider_readiness()` no longer reports `ok=true` with
+  `model_family=unknown` when required provider env vars are present; unknown
+  model ids produce an actionable readiness message while omitted model input
+  still uses the route's documented default model. Behavior-change class:
+  fail-aloud provider readiness only; provider profiles, route defaults, model
+  aliases, launch args, and base-url/key precedence are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof:
+  focused provider catalog and operator-console provider/readiness tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
+- 2026-06-18: Operator-console provider/evidence-lane compatibility lookup
+  drift now fails aloud during readiness. `_with_evidence_lane_compatibility()`
+  no longer swallows `KeyError` / `ValueError`; lookup failures mark the
+  provider packet `ok=false` and block start through the existing
+  `needs_provider` gate with the agent engine, provider profile, evidence lane,
+  and lookup error visible to the operator. Behavior-change class: fail-aloud
+  readiness only; provider route semantics, launch args, model defaults, and
+  supported evidence-lane policy are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused operator-console
+  provider/readiness tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Real-world contract public map/projection construction moved from
+  `realworld_contract.py` to `realworld_contract_projection.py`; top-level
+  agent-view/policy evidence, visible-detection sanitization, camera-model
+  policy summaries, model-declared observation evidence, raw-FPV observations,
+  and inspection-observation packets moved to `realworld_contract_payloads.py`;
+  visible/camera candidate materialization, generated inspection waypoint
+  creation, and `navigate_to_visual_candidate()` response assembly moved to
+  `realworld_visual_candidate_lifecycle.py`. Dead facade aliases for
+  already-owned helpers were removed instead of preserved as compatibility
+  shims. Behavior-change class: internal owner split; public tool names,
+  agent-view/runtime-map schemas, visual-candidate navigation responses, and
+  private-truth guards are unchanged. Metric: `realworld_contract.py` is 1989
+  lines, projection is 1074 lines, payloads are 703 lines, lifecycle is 1188
+  lines, and the ratchet reports 0 complexity rows and 79 oversized modules.
+  Proof: focused real-world contract/MCP/runtime-map-prior contract tests,
+  touched-file ruff and format check, py_compile for all tracked Python files,
+  `git diff --check`, and ratchet. Global `ruff check .` / format-check remain
+  blocked by unrelated pre-existing files outside this slice.
+
+- 2026-06-18: Scene-camera canonical camera geometry contracts moved from
+  `scene_camera_comparison.py` to `scene_camera_geometry_contract.py`,
+  including camera pose/intrinsics, room-scale, scene-frame-transform, and
+  projection diagnostics. Dead facade aliases for already-owned
+  USD/render/lighting helpers were removed instead of preserved as compatibility
+  shims. Behavior-change class: internal artifact-construction cleanup; public
+  comparison run orchestration, report rendering, and diagnostic payload schemas
+  are unchanged. Metric: `scene_camera_comparison.py` is 1999 lines, the new
+  geometry owner is 744 lines, and the ratchet reports 0 complexity rows and 77
+  oversized modules. Proof: full scene-camera contract test file, ruff, format
+  check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Operator-console control endpoint assertions moved running-state
+  fixture setup, allowlisted transport, blocked-action transport,
+  too-large-movement transport, response checks, and persisted operator-artifact
+  checks out of
+  `test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows()`
+  into focused local helpers. Behavior-change class: test-only cleanup; control
+  route allowlisting, movement bounds, MCP call payload, and operator artifact
+  persistence are unchanged. Metric: ratchet reports 0 complexity rows and 77
+  oversized modules, and the remaining
+  `test_operator_console.py::test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows`
+  PLR0915 row dropped from the complexity list. Proof: focused
+  operator-console control endpoint test, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Operator-console scene-preview asset endpoint assertions moved
+  registered-asset checks, PNG response checks, JSON response checks, and
+  invalid-path rejection checks out of
+  `test_operator_console_serves_scene_preview_assets()` into focused local
+  helpers. Behavior-change class: test-only cleanup; preview asset route
+  behavior and registered preview names are unchanged. Metric: ratchet reports
+  1 complexity row and 77 oversized modules, and
+  `test_operator_console.py::test_operator_console_serves_scene_preview_assets`
+  dropped from the complexity list. Proof: focused operator-console
+  scene-preview endpoint test, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Scene-sampler next-flow readiness assertions moved summary,
+  artifact-path, source-status, and scanner-plan checks out of
+  `_assert_next_flow()` into focused local assertion helpers. Behavior-change
+  class: test-only cleanup; generated readiness artifact contracts are
+  unchanged. Metric: ratchet reports 2 complexity rows and 77 oversized
+  modules, and `test_scene_sampler_readiness_export.py::_assert_next_flow`
+  dropped from the complexity list. Proof: focused scene-sampler readiness
+  export test, ruff, format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Cleanup-checker fixture-id lookup moved semantic-substep,
+  cleanup-primitive, agent-view worklist, and destination-option lookup out of
+  `_candidate_fixture_id_for_object()` into local fixture-vocabulary helpers.
+  Behavior-change class: test-only cleanup; checker semantics and fixture
+  artifacts are unchanged. Metric: ratchet reports 3 complexity rows and 77
+  oversized modules, and
+  `test_check_molmo_realworld_cleanup_result.py::_candidate_fixture_id_for_object`
+  dropped from the complexity list. Proof: focused cleanup checker contract
+  tests, ruff, format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Semantic cleanup MCP registration moved map/navigation,
+  observation, visual-grounding, and target-resolution tool registration out of
+  `register_semantic_cleanup_tools()` into focused capability-local helpers.
+  Behavior-change class: internal cleanup; public tool names, FastMCP schemas,
+  dispatch handlers, and response shapes are unchanged. Metric: ratchet reports
+  4 complexity rows and 77 oversized modules, and
+  `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools` dropped
+  from the complexity list. Proof: focused MCP server contract tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Operator-console prompt preview goal-contract launch arguments
+  moved out of `_goal_contract()` into focused helpers for launch axes, missing
+  default overrides, and explicit overrides. Behavior-change class: internal
+  cleanup; prompt text, launch args, override precedence, and `LaunchError`
+  recovery are unchanged. Metric: ratchet reports 5 complexity rows and 77
+  oversized modules, and `prompt_preview.py::_goal_contract` dropped from the
+  complexity list. Proof: focused operator-console prompt/launcher tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Eval-harness row blocker routing moved requirement priority and
+  per-requirement blocker construction out of `_row_blockers()` into focused
+  helpers. Behavior-change class: internal cleanup; selected-row schema,
+  blocker details, DINO sidecar autostart behavior, runtime-map-prior gating,
+  and execution order are unchanged. Metric: ratchet reports 6 complexity rows
+  and 77 oversized modules, and `run_eval_harness.py::_row_blockers` dropped
+  from the complexity list. Proof: focused eval-harness selector tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Live-eval detached-route polling moved early completion checks,
+  timeout normalization/deadline calculation, per-poll completion handling, and
+  post-deadline artifact recovery out of `wait_for_live_surface_completion()`
+  into focused helpers. Behavior-change class: internal cleanup; live surface
+  commands, artifact discovery, timeout/grace behavior, and `live_status.json`
+  semantics are unchanged. Metric: ratchet reports 7 complexity rows and 77
+  oversized modules, and `live_runtime.py::wait_for_live_surface_completion`
+  dropped from the complexity list. Proof: focused eval-runner tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Provider-registry CLI dispatch moved parser setup, JSON payload
+  construction/write, route text output, and supports-engine exit-code handling
+  out of `_main()` into focused helpers. Behavior-change class: internal
+  cleanup; provider route semantics, env precedence, public profile names,
+  command names, and model metadata are unchanged. Metric: ratchet reports 8
+  complexity rows and 77 oversized modules, and `provider_registry.py::_main`
+  dropped from the complexity list. Proof: focused provider catalog tests,
+  ruff, format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: MolmoSpaces robot-map rendering moved projection, frame, room
+  outline, focus marker, object marker, trajectory, heading, and legend drawing
+  out of `render_robot_map()` into focused helpers inside the existing map
+  owner. Behavior-change class: internal cleanup; map dimensions, colors,
+  labels, bounds, artifact names, and callers are unchanged. Metric: ratchet
+  reports 9 complexity rows and 77 oversized modules, and
+  `molmospaces_room_map.py` dropped from the complexity list while staying small
+  at 414 lines. Proof: focused map-rendering unit test, ruff, format check,
+  py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 camera preview candidate evaluation moved out of
+  `_promote_b1_camera_previews()` into focused helpers for candidate
+  diagnostics and accepted-score calculation. The promotion function keeps
+  artifact readability, highest-score selection, image writes, and promoted
+  metadata assembly. Behavior-change class: internal cleanup. Metric: ratchet
+  reports 11 complexity rows and 77 oversized modules; the remaining B1 preview
+  PLR0915 row is cleared, while `render_scene_previews.py` remains oversized at
+  1377 lines. Proof: focused operator-console preview/static tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 preview cache/stale policy moved out of
+  `render_b1_map12_preview()` into focused helpers for stale camera-preview
+  deletion and `--skip-existing` eligibility. Runtime bundle compilation,
+  static map/topdown rendering, and camera promotion remain in the main
+  renderer. Behavior-change class: internal cleanup. Metric: ratchet reports
+  12 complexity rows and 77 oversized modules; `render_scene_previews.py`
+  remains oversized at 1335 lines, but the `render_b1_map12_preview()` C901 row
+  is cleared. Proof: focused operator-console preview/static tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 / Map 12 `--skip-existing --b1-camera-artifact <path>` now
+  skips only when existing preview metadata records real Isaac camera previews
+  from the same requested artifact path. Stale camera previews from a different
+  artifact are regenerated from the supplied artifact instead of being treated
+  as current evidence. Metric: ratchet reports 13 complexity rows and 76
+  oversized modules after the prior slice and 77 with this regression test
+  added. Proof: focused operator-console preview tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: B1 / Map 12 static preview generation no longer carries forward
+  stale Isaac runtime FPV/chase previews when no fresh `--b1-camera-artifact` is
+  supplied. The renderer now removes stale camera preview files and rewrites
+  static map/topdown-only metadata, keeping real camera promotion explicit.
+  Metric: ratchet reports 13 complexity rows and 76 oversized modules. Proof:
+  focused operator-console preview tests, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
+- 2026-06-18: Operator-console route fixtures and scene-sampler stress eval
+  artifacts now match the current source-aware MolmoSpaces catalog. The console
+  registry no longer exposes legacy default cleanup rows, disabled Claude
+  map-build rows are derived from the console-visible worlds, operator-console
+  tests assert current `procthor-objaverse-val` route IDs, and the generated
+  scene-sampler stress suite has 15 samples with `procthor-10k-val` recorded as
+  partial. Metric: ratchet reports 14 complexity rows and 76 oversized modules.
+  Proof: focused operator-console tests, focused eval/model/scene-sampler tests,
+  ruff, format check, py_compile, `git diff --check`, and ratchet.
+
+- 2026-06-18: Operator-console provider env override selection moved into the
+  existing `launch_support.py` owner and now fails loudly on conflicting
+  `provider_profile` / `ROBOCLAWS_PROVIDER_PROFILE` input. Readiness and
+  `start_console_run()` resolve one canonical provider profile, apply that same
+  value to the child environment, and keep launch state aligned with the argv
+  provider profile so ambient `.env` values cannot silently retarget a selected
+  route. Metric: `launcher.py` stays below the warning ceiling at 994 lines;
+  ratchet reports 14 complexity rows and 75 oversized modules. Proof: focused
+  provider-profile selection tests, ruff, format check, py_compile,
+  `git diff --check`, and ratchet. Parked: the broader launcher test module has
+  pre-existing stale `molmospaces/val_0` cleanup route constants and should be
+  migrated separately.
+
+- 2026-06-17: Cleanup report Agibot section rendering moved from
+  `report.py` into `report_sections_agibot.py`. The new owner covers
+  MolmoSpaces Agibot contract rehearsal rendering, Agibot SDK runner rendering,
+  backend-stage/public-tool mapping, and subphase status labels; `report.py`
+  keeps the cleanup report section sequence, shared report helpers, generic
+  tables, state snapshots, and HTML shell. Two stale private table/format
+  helpers left behind by previous section splits were removed. Metric:
+  `report.py` 2175 -> 1995 lines, clearing the hard ceiling; new owner is 193
+  lines; ratchet reports 14 complexity rows and 74 oversized modules. Owning
+  layer: Artifacts, reports, and eval suites. Behavior-change class: internal
+  owner split plus stale private helper removal. Proof: focused cleanup-report
+  and MolmoSpaces Agibot contract report tests, ruff, touched-file format
+  check, py_compile, and ratchet.
+
+- 2026-06-17: Robot-camera visual-parity summary ownership split into focused
+  report and payload owners. HTML report rendering now lives in
+  `robot_camera_visual_parity_report.py`; object/capture-quality payload
+  compaction, native Isaac render diagnostic summaries, metric scene
+  signatures, capture-quality probe classification, and status-count helpers
+  now live in `robot_camera_visual_parity_payloads.py`. The summarizer keeps
+  CLI orchestration, manifest loading, gate/check assembly, probe matrix
+  ranking, visual-sample collection, and artifact writes. Metric:
+  `summarize_robot_camera_visual_parity.py` 2808 -> 1976 lines, clearing the
+  hard ceiling; new owners are 517 and 349 lines; ratchet reports 14
+  complexity rows and 74 oversized modules. Owning layer: Artifacts, reports,
+  and eval suites. Behavior-change class: internal owner split. Proof: focused
+  visual-parity unit tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: OpenAI Agents SDK perf-profile source ambiguity now fails
+  aloud. `--agent-sdk-perf-profile` and `ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE`
+  may both be present only when they name the same profile; conflicting values
+  raise before live-run startup, and matching duplicate configuration is
+  surfaced as `source=cli+environment`. Owning layers: Agent Engines And
+  Provider Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
+  profile tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: OpenAI Agents SDK profile setting helpers now reject ambiguous
+  CLI/env conflicts across string, integer, positive-integer, float, and boolean
+  knobs while still accepting the launch recipe's env-to-CLI pass-through when
+  both sources resolve to the same value. This covers continuation mode,
+  turn/context/budget limits, model-service retry settings, model racing, image
+  memory, camera-grounded history, composite tools, and robot-view capture
+  policy through the shared helper layer. Owning layers: Agent Engines And
+  Provider Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
+  profile tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: RAW-FPV visual-labeler provider config now requires explicit
+  `CODEX_BASE_URL` in addition to `CODEX_API_KEY` for
+  `codex-router-responses`; it no longer silently defaults to
+  `https://api.openai.com/v1`. Owning layers: Agent Engines And Provider
+  Profiles plus Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud provider/base-url cleanup. Proof: focused RAW-FPV visual-labeler
+  provider tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: OpenAI Agents SDK runner-side performance-profile/default
+  resolution moved from `run_live_openai_agents_cleanup.py` into
+  `openai_agents_perf_profile.py`. The new owner covers profile defaults,
+  CLI/env conflict checks, SDK model settings/run config, compaction and
+  racing policy packets, camera-grounded composite-tool gating, robot-view
+  capture policy, retry settings, and context-limit validation; the live runner
+  keeps skill-context loading, stable-prefix hashing, prompt/server/timing, and
+  artifact orchestration. Metric: live runner 2711 -> 1981 lines, clearing the
+  hard ceiling; new owner is 786 lines; ratchet reports 14 complexity rows and
+  74 oversized modules. Owning layers: Agent Engines And Provider Profiles plus
+  Thin Runtime / Server Adapters. Behavior-change class: internal owner split.
+  Proof: focused OpenAI Agents perf-profile tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: OpenAI Agents SDK sanitized span capture moved from
+  `openai_agents_live.py` into `openai_agents_spans.py`. The new owner covers
+  SDK span recording, span capture-unavailable packets, sanitized span export
+  parsing, safe span names, MCP/tool-name extraction, usage/model extraction,
+  sanitized error projection, ISO duration parsing, and span JSONL writes.
+  Metric: SDK driver 2020 -> 1825 lines, clearing the hard ceiling; new owner
+  is 240 lines; ratchet reports 14 complexity rows and 74 oversized modules.
+  Owning layer: Agent Engines And Provider Profiles. Behavior-change class:
+  internal owner split. Proof: focused OpenAI Agents span/retry/runtime tests,
+  ruff, format check, py_compile, and ratchet.
 
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
@@ -1169,6 +2208,23 @@ logs before choosing the next slice.
   diagnostics, FPV pose/lens delta summaries, compact camera metadata,
   robot-pose delta, Isaac robot import diagnostics, head-articulation
   diagnostics, or chase-contract diagnostics directly.
+- OpenAI Agents SDK runner-side performance-profile/default resolution is
+  owned by `openai_agents_perf_profile.py`. Metric: live runner 2711 -> 1981
+  lines; new owner is 786 lines; ratchet reports 14 complexity rows and 74
+  oversized modules. Proof: focused OpenAI Agents perf-profile tests, ruff,
+  format check, py_compile, and ratchet. Reopen only if
+  `run_live_openai_agents_cleanup.py` starts rebuilding profile id/default
+  selection, provider route/model-family packets, SDK settings/run config,
+  CLI/env precedence checks, compaction/racing/camera-grounded/robot-view/retry
+  profile packets, or context-limit validation inline.
+- OpenAI Agents SDK sanitized span capture is owned by
+  `openai_agents_spans.py`. Metric: SDK driver 2020 -> 1825 lines; new owner
+  is 240 lines; ratchet reports 14 complexity rows and 74 oversized modules.
+  Proof: focused OpenAI Agents span/retry/runtime tests, ruff, format check,
+  py_compile, and ratchet. Reopen only if `openai_agents_live.py` starts
+  rebuilding sanitized span packets, span capture-unavailable records, span
+  export parsing, safe span names, MCP/tool-name extraction, usage/model
+  extraction, sanitized error projection, or ISO duration parsing inline.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

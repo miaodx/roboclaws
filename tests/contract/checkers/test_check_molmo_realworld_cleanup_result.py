@@ -4682,34 +4682,66 @@ def _seed7_cleanup_bindings(anchor_probe: dict[str, object]) -> list[dict[str, o
 
 
 def _candidate_fixture_id_for_object(result: dict[str, object], object_id: str) -> str:
-    for item in result.get("semantic_substeps", []):
-        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
-            continue
-        candidate_fixture_id = str(item.get("target_receptacle_id") or "")
+    for candidate_fixture_id in (
+        _semantic_substep_target_fixture_id(result, object_id),
+        _primitive_evidence_target_fixture_id(result, object_id),
+        _agent_view_worklist_candidate_fixture_id(result, object_id),
+    ):
         if candidate_fixture_id:
             return candidate_fixture_id
+    raise AssertionError(f"expected candidate fixture for {object_id}")
+
+
+def _semantic_substep_target_fixture_id(result: dict[str, object], object_id: str) -> str:
+    return _target_fixture_id_from_rows(
+        result.get("semantic_substeps", []),
+        object_id=object_id,
+        field="target_receptacle_id",
+    )
+
+
+def _primitive_evidence_target_fixture_id(result: dict[str, object], object_id: str) -> str:
     primitive_evidence = result.get("cleanup_primitive_evidence")
     primitive_evidence = primitive_evidence if isinstance(primitive_evidence, dict) else {}
-    for item in primitive_evidence.get("objects", []):
-        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
-            continue
-        candidate_fixture_id = str(item.get("target_receptacle_id") or "")
-        if candidate_fixture_id:
-            return candidate_fixture_id
+    return _target_fixture_id_from_rows(
+        primitive_evidence.get("objects", []),
+        object_id=object_id,
+        field="target_receptacle_id",
+    )
+
+
+def _agent_view_worklist_candidate_fixture_id(result: dict[str, object], object_id: str) -> str:
     agent_view = result.get("agent_view") if isinstance(result.get("agent_view"), dict) else {}
     worklist = agent_view.get("cleanup_worklist") if isinstance(agent_view, dict) else {}
-    for item in worklist.get("objects", []) if isinstance(worklist, dict) else []:
-        if isinstance(item, dict) and str(item.get("object_id") or "") == object_id:
-            candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
-            if candidate_fixture_id:
-                return candidate_fixture_id
-            for option in item.get("destination_options") or []:
-                if not isinstance(option, dict):
-                    continue
-                candidate_fixture_id = str(option.get("candidate_fixture_id") or "")
-                if candidate_fixture_id:
-                    return candidate_fixture_id
-    raise AssertionError(f"expected candidate fixture for {object_id}")
+    rows = worklist.get("objects", []) if isinstance(worklist, dict) else []
+    for item in rows:
+        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
+            continue
+        candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+        if candidate_fixture_id:
+            return candidate_fixture_id
+        return _first_destination_option_fixture_id(item.get("destination_options") or [])
+    return ""
+
+
+def _target_fixture_id_from_rows(rows: object, *, object_id: str, field: str) -> str:
+    for item in rows if isinstance(rows, list) else []:
+        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
+            continue
+        candidate_fixture_id = str(item.get(field) or "")
+        if candidate_fixture_id:
+            return candidate_fixture_id
+    return ""
+
+
+def _first_destination_option_fixture_id(destination_options: object) -> str:
+    for option in destination_options if isinstance(destination_options, list) else []:
+        if not isinstance(option, dict):
+            continue
+        candidate_fixture_id = str(option.get("candidate_fixture_id") or "")
+        if candidate_fixture_id:
+            return candidate_fixture_id
+    return ""
 
 
 def _cleanup_binding(

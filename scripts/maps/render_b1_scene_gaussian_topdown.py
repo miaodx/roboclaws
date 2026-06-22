@@ -39,16 +39,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--scene-usd", type=Path, default=DEFAULT_SCENE_USD)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--width", type=int, default=960)
-    parser.add_argument("--height", type=int, default=640)
+    parser.add_argument("--width", type=_positive_int_arg, default=960)
+    parser.add_argument("--height", type=_positive_int_arg, default=640)
     parser.add_argument(
         "--scene-xy-bounds",
         help="Scene XY bounds as min_x,min_y,max_x,max_y. Required; no inferred fallback.",
     )
-    parser.add_argument("--camera-height-m", type=float, default=28.0)
-    parser.add_argument("--camera-y-offset-m", type=float, default=0.05)
-    parser.add_argument("--target-z-m", type=float, default=0.6)
-    parser.add_argument("--fov-deg", type=float, default=65.0)
+    parser.add_argument("--camera-height-m", type=_positive_float_arg, default=28.0)
+    parser.add_argument("--camera-y-offset-m", type=_positive_float_arg, default=0.05)
+    parser.add_argument("--target-z-m", type=_finite_float_arg, default=0.6)
+    parser.add_argument("--fov-deg", type=_vertical_fov_arg, default=65.0)
     parser.add_argument(
         "--camera-mode",
         choices=("near-vertical-topdown", "high-oblique"),
@@ -91,8 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     request = build_topdown_camera_request(
         scene_bounds=scene_bounds,
-        width=max(1, int(args.width)),
-        height=max(1, int(args.height)),
+        width=int(args.width),
+        height=int(args.height),
         camera_height_m=float(args.camera_height_m),
         camera_y_offset_m=float(args.camera_y_offset_m),
         target_z_m=float(args.target_z_m),
@@ -117,8 +117,8 @@ def main(argv: list[str] | None = None) -> int:
             camera_request=request_path,
             output_dir=output_dir / "views",
             result_path=result_path,
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
+            width=int(args.width),
+            height=int(args.height),
         )
         packet = topdown_render_packet(
             scene_usd=scene_usd,
@@ -157,6 +157,9 @@ def build_topdown_camera_request(
     camera_mode: str,
 ) -> dict[str, Any]:
     min_x, min_y, max_x, max_y = scene_bounds
+    _require_positive_finite(camera_height_m, "--camera-height-m")
+    _require_finite(target_z_m, "--target-z-m")
+    _require_vertical_fov(fov_deg)
     center_x = (min_x + max_x) / 2.0
     center_y = (min_y + max_y) / 2.0
     span = max(max_x - min_x, max_y - min_y)
@@ -165,9 +168,8 @@ def build_topdown_camera_request(
         camera_mode_label = "high_oblique_topdown_perspective"
         label = "B1 Gaussian scene high-oblique top-down"
     elif camera_mode == "near-vertical-topdown":
-        camera_y_offset = abs(float(camera_y_offset_m))
-        if camera_y_offset <= 0:
-            raise ValueError("--camera-y-offset-m must be positive for near-vertical topdown")
+        camera_y_offset = float(camera_y_offset_m)
+        _require_positive_finite(camera_y_offset, "--camera-y-offset-m")
         camera_mode_label = "near_vertical_topdown_perspective"
         label = "B1 Gaussian scene near-vertical top-down"
     else:
@@ -451,8 +453,8 @@ def _capture_one_scene_cli(args: argparse.Namespace) -> int:
             scene_usd=args.scene_usd,
             camera_request=request,
             output_dir=args.views_dir,
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
+            width=int(args.width),
+            height=int(args.height),
             semantic_pose_state={},
         )
         payload = {"ok": True, "scene_usd": str(args.scene_usd), "capture": capture}
@@ -518,6 +520,71 @@ def image_size(path: Path) -> tuple[int, int]:
             return int(image.width), int(image.height)
     except Exception:
         return 0, 0
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _positive_float_arg(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}") from None
+    try:
+        _require_positive_finite(parsed, "value")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}") from None
+    return parsed
+
+
+def _finite_float_arg(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a finite float; got {value!r}") from None
+    try:
+        _require_finite(parsed, "value")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a finite float; got {value!r}") from None
+    return parsed
+
+
+def _vertical_fov_arg(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a vertical FOV in degrees from 1 to 179; got {value!r}"
+        ) from None
+    try:
+        _require_vertical_fov(parsed)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a vertical FOV in degrees from 1 to 179; got {value!r}"
+        ) from None
+    return parsed
+
+
+def _require_positive_finite(value: float, label: str) -> None:
+    if not math.isfinite(float(value)) or float(value) <= 0.0:
+        raise ValueError(f"{label} must be a positive finite number")
+
+
+def _require_finite(value: float, label: str) -> None:
+    if not math.isfinite(float(value)):
+        raise ValueError(f"{label} must be finite")
+
+
+def _require_vertical_fov(value: float) -> None:
+    if not math.isfinite(float(value)) or not 1.0 <= float(value) <= 179.0:
+        raise ValueError("--fov-deg must be a finite value from 1 to 179 degrees")
 
 
 if __name__ == "__main__":

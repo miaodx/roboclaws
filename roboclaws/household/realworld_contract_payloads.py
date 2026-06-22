@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any, Protocol
 
@@ -10,10 +11,17 @@ class RealWorldPayloadContract(Protocol):
     map_mode: str
     perception_mode: str
     sanitize_world_labels: bool
+    visible_detection_exposure_policy: str
+    public_acceptance_config: dict[str, Any]
     _detections_by_handle: Mapping[str, dict[str, Any]]
     _fixtures: dict[str, dict[str, Any]]
     _generated_inspection_waypoints: Mapping[str, dict[str, Any]]
     _held_handle: str
+    _raw_fpv_observations: list[dict[str, Any]]
+    _camera_model_policy_events: Iterable[dict[str, Any]]
+    _model_declared_observations: Iterable[dict[str, Any]]
+    _inspection_observations: list[dict[str, Any]]
+    _current_waypoint_id: str
     _object_lifecycle: Mapping[str, dict[str, Any]]
     _observed_waypoint_ids: Collection[str]
     _public_rooms: Iterable[dict[str, Any]]
@@ -31,6 +39,20 @@ class RealWorldPayloadContract(Protocol):
     def _visual_evidence_for_handle(self, handle: str) -> dict[str, Any]: ...
     def internal_fixture_id_for_public_reference(self, fixture_id: str) -> str | None: ...
     def _public_navigation_waypoints(self) -> list[dict[str, Any]]: ...
+    def _public_fixture_reference_payload(self, value: Any) -> Any: ...
+    def _agent_visible_detection_payload(self, detection: dict[str, Any]) -> dict[str, Any]: ...
+    def public_tool_names(self) -> list[str]: ...
+    def runtime_metric_map_payload(
+        self,
+        *,
+        metric_map: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
+        cleanup_worklist: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
+    def camera_model_policy_payload(self) -> dict[str, Any]: ...
+    def model_declared_observations_payload(self) -> dict[str, Any]: ...
+    def policy_view_payload(self) -> dict[str, Any]: ...
+    def _camera_offset(self) -> dict[str, float]: ...
 
 
 def runtime_metric_map_payload(
@@ -208,6 +230,311 @@ def runtime_metric_map_payload(
         )
     assert_no_forbidden_agent_view_keys(payload)
     return payload
+
+
+def agent_view_payload(
+    contract: RealWorldPayloadContract,
+    *,
+    realworld_contract: str,
+    visible_object_detections_mode: str,
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None],
+) -> dict[str, Any]:
+    observed_objects = [
+        contract._agent_visible_detection_payload(dict(contract._detections_by_handle[handle]))
+        for handle in sorted(contract._detections_by_handle)
+    ]
+    metric_map = contract.metric_map()
+    static_fixture_projection = contract.static_fixture_projection()
+    cleanup_worklist = contract.cleanup_worklist_payload(
+        static_fixture_projection=static_fixture_projection
+    )
+    model_declared = contract.model_declared_observations_payload()
+    runtime_metric_map = dict(metric_map.get("runtime_metric_map") or {})
+    if not runtime_metric_map:
+        runtime_metric_map = contract.runtime_metric_map_payload(
+            metric_map=metric_map,
+            static_fixture_projection=static_fixture_projection,
+            cleanup_worklist=cleanup_worklist,
+        )
+    payload = {
+        "contract": realworld_contract,
+        "perception_mode": contract.perception_mode,
+        "detection_exposure_policy": contract.visible_detection_exposure_policy,
+        "structured_detections_available": contract.perception_mode
+        == visible_object_detections_mode,
+        "metric_map": metric_map,
+        "runtime_metric_map": runtime_metric_map,
+        "static_fixture_projection": static_fixture_projection,
+        "observed_objects": observed_objects,
+        "raw_fpv_observations": [dict(item) for item in contract._raw_fpv_observations],
+        "camera_model_policy_evidence": contract.camera_model_policy_payload(),
+        "model_declared_observations": model_declared["observations"],
+        "model_declared_observation_evidence": model_declared,
+        "policy_view": contract.policy_view_payload(),
+        "cleanup_worklist": cleanup_worklist,
+        "observed_waypoint_ids": sorted(contract._observed_waypoint_ids),
+        "public_tool_names": contract.public_tool_names(),
+        "forbidden_private_fields_absent": True,
+    }
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def agent_visible_detection_payload(
+    contract: RealWorldPayloadContract,
+    detection: dict[str, Any],
+    *,
+    minimal_map_mode: str,
+    sanitized_visible_object_detections_provenance: str,
+    sanitized_visible_object_detections_policy: str,
+    public_destination_policy_for_category: Callable[[Any], dict[str, Any]],
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None],
+) -> dict[str, Any]:
+    if contract.map_mode != minimal_map_mode:
+        payload = copy.deepcopy(detection)
+        if contract.sanitize_world_labels:
+            payload = sanitized_visible_detection_payload(
+                payload,
+                sanitized_visible_object_detections_provenance=(
+                    sanitized_visible_object_detections_provenance
+                ),
+                sanitized_visible_object_detections_policy=(
+                    sanitized_visible_object_detections_policy
+                ),
+                public_destination_policy_for_category=public_destination_policy_for_category,
+            )
+        assert_no_forbidden_agent_view_keys(payload)
+        return payload
+    payload = contract._public_fixture_reference_payload(copy.deepcopy(detection))
+    support = dict(payload.get("support_estimate") or {})
+    public_fixture_id = str(support.get("fixture_id") or "")
+    if public_fixture_id:
+        support["source_fixture_hidden"] = True
+        support["source"] = "public_semantic_anchor"
+        payload["support_estimate"] = support
+    if contract.sanitize_world_labels:
+        payload = sanitized_visible_detection_payload(
+            payload,
+            sanitized_visible_object_detections_provenance=(
+                sanitized_visible_object_detections_provenance
+            ),
+            sanitized_visible_object_detections_policy=sanitized_visible_object_detections_policy,
+            public_destination_policy_for_category=public_destination_policy_for_category,
+        )
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def sanitized_visible_detection_payload(
+    payload: dict[str, Any],
+    *,
+    sanitized_visible_object_detections_provenance: str,
+    sanitized_visible_object_detections_policy: str,
+    public_destination_policy_for_category: Callable[[Any], dict[str, Any]],
+) -> dict[str, Any]:
+    payload = copy.deepcopy(payload)
+    for key in (
+        "candidate_fixture_id",
+        "candidate_fixture_category",
+        "cleanup_recommended",
+        "recommended_tool",
+    ):
+        payload.pop(key, None)
+    payload["producer_type"] = sanitized_visible_object_detections_provenance
+    payload["producer_id"] = sanitized_visible_object_detections_provenance
+    payload["perception_source"] = sanitized_visible_object_detections_provenance
+    payload["detection_exposure_policy"] = sanitized_visible_object_detections_policy
+    payload["destination_policy_status"] = "policy_required"
+    payload["destination_policy"] = public_destination_policy_for_category(payload.get("category"))
+    support = dict(payload.get("support_estimate") or {})
+    if support:
+        support["source"] = "public_support_evidence"
+        support["perception_source"] = sanitized_visible_object_detections_provenance
+        support["model_provenance"] = sanitized_visible_object_detections_provenance
+        payload["support_estimate"] = support
+    return payload
+
+
+def policy_view_payload(
+    *,
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None],
+) -> dict[str, Any]:
+    payload = {
+        "schema": "realworld_cleanup_policy_view_v1",
+        "allowed_inputs": [
+            "metric_map",
+            "runtime_metric_map",
+            "static_fixture_projection",
+            "observed_objects",
+            "raw_fpv_observations",
+            "camera_model_policy_evidence",
+            "model_declared_observations",
+            "navigation_status",
+        ],
+        "excluded_report_only_views": [
+            "chase_camera",
+            "third_person_simulation_view",
+            "private_evaluation",
+        ],
+        "chase_camera_policy_input": False,
+        "public_contract_note": (
+            "Policy inputs are robot-local or static-map data. Chase and "
+            "third-person simulation views are report-only evidence."
+        ),
+    }
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def camera_model_policy_payload(
+    contract: RealWorldPayloadContract,
+    *,
+    camera_model_policy_schema: str,
+    camera_model_policy_mode: str,
+    simulated_camera_model_provenance: str,
+    sim_visual_grounding_pipeline_id: str,
+    external_visual_grounding_provenance: str,
+    average_duplicate_rate: Callable[[list[dict[str, Any]]], float],
+) -> dict[str, Any]:
+    events = [dict(item) for item in contract._camera_model_policy_events]
+    pipeline_ids = [
+        str((item.get("visual_grounding_pipeline") or {}).get("pipeline_id") or "")
+        for item in events
+    ]
+    pipeline_ids = [item for item in pipeline_ids if item]
+    failure_count = sum(
+        1
+        for item in events
+        if (item.get("visual_grounding_pipeline") or {}).get("status") == "failed"
+    )
+    model_provenance = (
+        simulated_camera_model_provenance
+        if not pipeline_ids or set(pipeline_ids) == {sim_visual_grounding_pipeline_id}
+        else external_visual_grounding_provenance
+    )
+    return {
+        "schema": camera_model_policy_schema,
+        "perception_mode": contract.perception_mode,
+        "enabled": contract.perception_mode == camera_model_policy_mode,
+        "model_provenance": model_provenance
+        if contract.perception_mode == camera_model_policy_mode
+        else "",
+        "visual_grounding_pipeline_id": pipeline_ids[-1]
+        if pipeline_ids
+        else sim_visual_grounding_pipeline_id,
+        "visual_grounding_pipeline_ids": sorted(set(pipeline_ids)),
+        "visual_grounding_failure_count": failure_count,
+        "event_count": len(events),
+        "candidate_count": sum(int(item.get("candidate_count") or 0) for item in events),
+        "unresolved_count": sum(
+            int((item.get("visual_grounding_pipeline") or {}).get("unresolved_count") or 0)
+            for item in events
+        ),
+        "duplicate_rate": average_duplicate_rate(events),
+        "events": events,
+        "private_truth_included": False,
+        "policy_note": (
+            "Camera-model policy candidates must be explicitly labelled and "
+            "must not include private scoring truth."
+        ),
+    }
+
+
+def model_declared_observations_payload(
+    contract: RealWorldPayloadContract,
+    *,
+    model_declared_observations_schema: str,
+) -> dict[str, Any]:
+    observations = [dict(item) for item in contract._model_declared_observations]
+    acted_handles = {
+        handle
+        for handle, lifecycle in contract._object_lifecycle.items()
+        if lifecycle.get("state") in {"navigating_to_object", "held", "placed", "placed_closed"}
+    }
+    for item in observations:
+        item["acted_on"] = str(item.get("object_id") or "") in acted_handles
+    return {
+        "schema": model_declared_observations_schema,
+        "perception_mode": contract.perception_mode,
+        "observation_count": len(observations),
+        "resolved_count": sum(
+            1 for item in observations if item.get("grounding_status") == "resolved"
+        ),
+        "acted_count": sum(1 for item in observations if item.get("acted_on")),
+        "observations": observations,
+        "private_truth_included": False,
+    }
+
+
+def record_raw_fpv_observation(
+    contract: RealWorldPayloadContract,
+    waypoint: dict[str, Any],
+    *,
+    perception_mode: str,
+) -> dict[str, Any]:
+    observation_id = f"raw_fpv_{len(contract._raw_fpv_observations) + 1:03d}"
+    item = {
+        "observation_id": observation_id,
+        "waypoint_id": str(waypoint["waypoint_id"]),
+        "room_id": str(waypoint["room_id"]),
+        "held_object_id": contract._held_handle,
+        "perception_mode": perception_mode,
+        "structured_detections_available": False,
+        "camera_offset": contract._camera_offset(),
+        "image_artifacts": {},
+        "artifact_status": "pending_robot_view_capture",
+        "public_contract_note": (
+            "No structured movable-object detections, categories, support estimates, "
+            "target labels, or private scoring truth are included."
+        ),
+    }
+    contract._raw_fpv_observations.append(item)
+    return dict(item)
+
+
+def record_inspection_observation(
+    contract: RealWorldPayloadContract,
+    response: dict[str, Any],
+    *,
+    detections: list[dict[str, Any]],
+    source_observation_id: str,
+    inspection_observation_schema: str,
+    target_candidate_evidence_lane: Callable[[Any], str],
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None],
+) -> None:
+    state_counts: dict[str, int] = {}
+    actionability_counts: dict[str, int] = {}
+    changed = 0
+    for detection in detections:
+        state = str(detection.get("candidate_state") or "")
+        if state:
+            state_counts[state] = state_counts.get(state, 0) + 1
+        actionability = str(detection.get("actionability_status") or "")
+        if actionability:
+            actionability_counts[actionability] = actionability_counts.get(actionability, 0) + 1
+        if detection.get("candidate_state_changed") is True:
+            changed += 1
+    camera_offset = contract._camera_offset()
+    observation = {
+        "schema": inspection_observation_schema,
+        "observation_id": str(source_observation_id),
+        "waypoint_id": str(response.get("waypoint_id") or contract._current_waypoint_id),
+        "room_id": str(response.get("current_room_id") or ""),
+        "perception_mode": contract.perception_mode,
+        "evidence_lane": target_candidate_evidence_lane(contract),
+        "camera_offset": camera_offset,
+        "camera_adjusted": bool(
+            camera_offset.get("yaw_delta_deg") or camera_offset.get("pitch_delta_deg")
+        ),
+        "structured_detections_available": bool(response.get("structured_detections_available")),
+        "candidate_count": len(detections),
+        "candidate_state_counts": state_counts,
+        "actionability_status_counts": actionability_counts,
+        "changed_candidate_state_count": changed,
+        "private_truth_included": False,
+    }
+    assert_no_forbidden_agent_view_keys(observation)
+    contract._inspection_observations.append(observation)
 
 
 def cleanup_worklist_payload(

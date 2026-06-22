@@ -1,9 +1,10 @@
 # B1 / Map 12 Verified Map-Scene Alignment
 
-Current blocker: verified alignment still needs a rendered B1 Gaussian scene
-top-down plus human/operator-reviewed B1/Map 12 correspondence anchors. The
-pre-anchor review/fitter gates now prove the current state is review-pending,
-not verified.
+Current blocker: final verified alignment still needs reviewed
+`navigation_area_id` / `asset_partition_id` semantics for the manually picked
+B1/Map 12 correspondence anchors. The cropped B1 Gaussian top-down exists, the
+old misleading source-map top-down output was deleted locally, and automatic
+contour alignment was tried but failed the residual gate.
 
 Blocker fingerprint:
 
@@ -16,12 +17,36 @@ Blocker fingerprint:
 
 Last proven evidence:
 
-- `python scripts/maps/render_b1_scene_gaussian_topdown.py --scene-xy-bounds=-22.7833251953125,-13.112351417541504,8.074257850646973,7.298900469562338 --output-dir output/b1-map12/scene-gaussian-topdown --capture`
-  is the required local Isaac render command for correspondence review. It
-  writes `scene_gaussian_topdown.json`, `camera_request.json`, and
-  `views/top2down.png` with `geometry_status=rendered_gaussian_scene_topdown`,
-  explicit camera height/FOV, and ray-plane `scene_xyz` mapping. It does not
-  infer bounds and does not fall back to label inventory.
+- `output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json`
+  is the current cropped B1 Gaussian top-down packet. It records
+  `crop_max_z=1.8`, `geometry_status=rendered_gaussian_scene_topdown`, explicit
+  camera height/FOV, and ray-plane `scene_xyz` mapping. The old
+  `output/b1-map12/runtime-delete-smoke/review_labels_topdown.png` source-map
+  frame image was deleted locally because it was a misleading intermediate, not
+  current alignment evidence.
+- `python scripts/maps/auto_align_b1_map12_scene_topdown.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --manual-draft docs/status/active/b1-map12-scene-correspondences-draft.json --output-dir output/b1-map12/auto-alignment-probe-tracked-draft`
+  writes `auto_alignment_status=candidate_seed_only`. The contour seed fails
+  against the manual draft anchors with mean residual `2.152082 m` and max
+  residual `2.595962 m`. The semantic label/partition center search also fails;
+  its best candidate has mean residual `7.891215 m` and max `11.003484 m`.
+  Neither automatic route can be promoted.
+- `docs/status/active/b1-map12-scene-correspondences-draft.json` snapshots the
+  seven operator-picked manual draft anchors from the ignored `tmp/` export so
+  the local probe is reproducible. The anchors intentionally remain
+  `review_status=proposed`; their room/area ids are not final semantics.
+- `python scripts/maps/promote_b1_map12_manual_draft_for_verification.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --output output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json`
+  explicitly creates a verification-only accepted manifest for the manual
+  fallback. It uses synthetic area/partition ids only to exercise the residual
+  gate; do not commit it as the final accepted asset.
+- `python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --review-manifest assets/maps/b1-map12-alignment-review.json --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json`
+  writes review suggestions for real `navigation_area_id` /
+  `asset_partition_id` values without mutating the accepted manifest. It found
+  only 1 strong candidate out of 7 anchors; the rest are nearest-only hints,
+  so final semantic acceptance still needs human review.
+- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/manual-draft-alignment`
+  writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
+  and residual evidence with mean `0.352908 m`, p90 `0.491765 m`, and max
+  `0.502064 m`.
 - `python scripts/maps/render_b1_map12_label_tool.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/label-tool`
   writes `output/b1-map12/label-tool/label_tool.html` and
   `label_tool_packet.json`. The HTML editor loads raw Map12 navigation layers,
@@ -48,36 +73,47 @@ Last proven evidence:
   writes static B1 preview metadata with only `map` and `topdown` views; no
   `views.fpv`, no `views.chase`, and no corresponding camera preview files are
   published before residual-backed Isaac runtime camera evidence exists.
-- `.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 --alignment-artifact output/b1-map12/alignment-draft/alignment_residuals.json --output output/b1-map12/alignment-draft/readiness_with_alignment.json`
-  passes validation while preserving `map12_overlay_status=candidate` and
-  `map12_to_b1_usd_transform_status=unverified`.
+- `.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 --alignment-artifact output/b1-map12/manual-draft-alignment/alignment_residuals.json --output output/b1-map12/manual-draft-alignment/readiness_with_alignment.json`
+  passes validation with `map12_overlay_status=verified`,
+  `map12_to_b1_usd_transform_status=verified`, and
+  `robot_navigation_supported=false`.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
 
-Next hypothesis: once a human/operator-reviewed
-`assets/maps/b1-map12-scene-correspondences.json` exists with at
-least six accepted anchors, the fitter can either promote global alignment to
-`verified` under the threshold policy or leave global alignment candidate and
-record verified local areas where enough local anchors pass.
+Next hypothesis: once the seven manual anchors receive reviewed real
+`navigation_area_id` and `asset_partition_id` values, they can replace the
+verification-only synthetic ids in `assets/maps/b1-map12-scene-correspondences.json`
+and preserve the same passing residuals without weakening the threshold policy.
 
 Next command/artifact:
 
 ```bash
-python scripts/maps/render_b1_scene_gaussian_topdown.py \
-  --scene-xy-bounds=-22.7833251953125,-13.112351417541504,8.074257850646973,7.298900469562338 \
-  --output-dir output/b1-map12/scene-gaussian-topdown \
-  --capture
+python scripts/maps/auto_align_b1_map12_scene_topdown.py \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json \
+  --manual-draft docs/status/active/b1-map12-scene-correspondences-draft.json \
+  --output-dir output/b1-map12/auto-alignment-probe-tracked-draft
 
 python scripts/maps/render_b1_map12_correspondence_review.py \
   --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json \
+  --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json \
   --output-dir output/b1-map12/correspondence-review
 
+python scripts/maps/promote_b1_map12_manual_draft_for_verification.py \
+  --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
+  --output output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json
+
+python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
+  --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
+  --review-manifest assets/maps/b1-map12-alignment-review.json \
+  --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json \
+  --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json
+
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences assets/maps/b1-map12-scene-correspondences.json \
+  --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/alignment
+  --output-dir output/b1-map12/manual-draft-alignment
 ```
 
 Stop condition: do not mark B1 / Map 12 alignment verified until the committed

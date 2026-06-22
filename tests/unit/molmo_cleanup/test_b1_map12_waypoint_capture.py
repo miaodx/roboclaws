@@ -6,7 +6,25 @@ from pathlib import Path
 from scripts.isaac_lab_cleanup.capture_b1_map12_waypoint_views import (
     DEFAULT_SCENE_XY_BOUNDS,
     build_waypoint_capture_request,
+    parse_args,
 )
+
+
+def test_b1_waypoint_capture_rejects_non_positive_dimensions() -> None:
+    for flag, value in (("--width", "0"), ("--height", "-1")):
+        try:
+            parse_args([flag, value])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_b1_waypoint_capture_accepts_positive_dimensions() -> None:
+    args = parse_args(["--width", "1280", "--height", "720"])
+
+    assert args.width == 1280
+    assert args.height == 720
 
 
 def test_b1_waypoint_capture_request_uses_waypoints_and_extra_points(tmp_path: Path) -> None:
@@ -79,7 +97,5 @@ def test_b1_waypoint_capture_request_uses_waypoints_and_extra_points(tmp_path: P
     assert request["point_capture"]["transform_status"] == "approx_bbox_fit_unverified"
     assert request["views"][0]["view_id"] == "wp_meeting_room_a_center"
     assert request["views"][0]["map_point"]["source"] == "inspection_waypoint"
-    assert any(
-        view["view_id"] == "extra_review_meeting_room_b_center" for view in request["views"]
-    )
+    assert any(view["view_id"] == "extra_review_meeting_room_b_center" for view in request["views"])
     assert any(view["view_id"] == "extra_map_center" for view in request["views"])

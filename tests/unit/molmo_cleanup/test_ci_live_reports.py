@@ -722,8 +722,17 @@ def test_live_codex_turn_idle_timeout_uses_env_default(monkeypatch) -> None:
     monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", "7")
     assert run_codex._codex_turn_idle_timeout_s(None) == 7.0
 
-    monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", "bad")
-    assert run_codex._codex_turn_idle_timeout_s(None) == 300.0
+    monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", "0")
+    assert run_codex._codex_turn_idle_timeout_s(None) == 0.0
+
+    for value in ("bad", "nan", "inf", "-1"):
+        monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", value)
+        try:
+            run_codex._codex_turn_idle_timeout_s(None)
+        except ValueError as exc:
+            assert "ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S must be a non-negative finite" in str(exc)
+        else:
+            raise AssertionError(f"expected invalid idle timeout env to fail: {value}")
 
 
 def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeypatch) -> None:
@@ -996,7 +1005,9 @@ def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
     assert env["ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL"] == "https://provider.example.test/v1"
     assert env["ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS"] == "1"
     assert runner.live_timing["provider_timing_proxy"]["enabled"] is True
-    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "codex-router-responses"
+    assert (
+        runner.live_timing["provider_timing_proxy"]["provider_profile"] == "codex-router-responses"
+    )
     assert runner.live_timing["provider_timing_proxy"]["responses_websockets_disabled"] is True
 
 
@@ -1250,9 +1261,7 @@ def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_thresh
     assert command[command.index("--min-sweep-coverage") + 1] == "1.0"
 
 
-def test_live_codex_map_build_checker_uses_map_task_identity(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_live_codex_map_build_checker_uses_map_task_identity(tmp_path: Path, monkeypatch) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()

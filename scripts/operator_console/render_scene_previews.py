@@ -80,8 +80,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--width", type=int, default=DEFAULT_WIDTH)
-    parser.add_argument("--height", type=int, default=DEFAULT_HEIGHT)
+    parser.add_argument("--width", type=_positive_int_arg, default=DEFAULT_WIDTH)
+    parser.add_argument("--height", type=_positive_int_arg, default=DEFAULT_HEIGHT)
     parser.add_argument(
         "--skip-existing",
         action="store_true",
@@ -114,8 +114,8 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
         if world_id == B1_MAP12_WORLD_ID:
             result = render_b1_map12_preview(
                 output_dir=output_dir,
-                width=max(1, int(args.width)),
-                height=max(1, int(args.height)),
+                width=int(args.width),
+                height=int(args.height),
                 skip_existing=bool(args.skip_existing),
                 camera_artifact=args.b1_camera_artifact,
             )
@@ -125,8 +125,8 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
                 output_dir=output_dir,
                 work_dir=work_dir,
                 seed=int(args.seed),
-                width=max(1, int(args.width)),
-                height=max(1, int(args.height)),
+                width=int(args.width),
+                height=int(args.height),
                 skip_existing=bool(args.skip_existing),
             )
         results.append(result)
@@ -349,52 +349,26 @@ def render_b1_map12_preview(
     chase_path = output_dir / f"{slug}-chase.png"
     topdown_path = output_dir / f"{slug}-topdown.png"
     metadata_path = output_dir / f"{slug}-preview.json"
-    removed_stale: list[str] = []
-    preserved_camera = (
-        _b1_existing_real_camera_preview_metadata(metadata_path, fpv_path, chase_path)
-        if camera_artifact is None
+    removed_stale = _remove_stale_b1_camera_previews(
+        camera_artifact=camera_artifact,
+        fpv_path=fpv_path,
+        chase_path=chase_path,
+    )
+    skip_result = (
+        _b1_preview_skip_result(
+            camera_artifact=camera_artifact,
+            fpv_path=fpv_path,
+            map_path=map_path,
+            chase_path=chase_path,
+            topdown_path=topdown_path,
+            metadata_path=metadata_path,
+            removed_stale=removed_stale,
+        )
+        if skip_existing
         else None
     )
-    if camera_artifact is None and preserved_camera is None:
-        for stale_path in (fpv_path, chase_path):
-            if stale_path.exists():
-                stale_path.unlink()
-                removed_stale.append(str(stale_path))
-    if (
-        skip_existing
-        and map_path.exists()
-        and topdown_path.exists()
-        and metadata_path.exists()
-        and (
-            (
-                camera_artifact is None
-                and (
-                    preserved_camera is not None
-                    or _b1_metadata_has_no_camera_previews(metadata_path)
-                )
-            )
-            or (
-                camera_artifact is not None
-                and fpv_path.exists()
-                and chase_path.exists()
-                and _b1_metadata_has_real_camera_previews(metadata_path)
-            )
-        )
-    ):
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "skipped",
-            **(
-                {"fpv": str(fpv_path), "chase": str(chase_path)}
-                if camera_artifact is not None
-                else {}
-            ),
-            "map": str(map_path),
-            "topdown": str(topdown_path),
-            "metadata": str(metadata_path),
-            "removed_stale": removed_stale,
-        }
+    if skip_result is not None:
+        return skip_result
 
     raw_map_bundle = B1_MAP_BUNDLE_DIR
     if not raw_map_bundle.is_dir():
@@ -487,14 +461,6 @@ def render_b1_map12_preview(
         metadata["views"]["fpv"] = camera_result["views"]["fpv"]
         metadata["views"]["chase"] = camera_result["views"]["chase"]
         metadata["camera_preview_artifact"] = camera_result["artifact"]
-    elif preserved_camera is not None:
-        metadata["renderer"] = (
-            preserved_camera.get("renderer") or "static_b1_map12_with_isaac_runtime_camera_previews"
-        )
-        metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
-        metadata["views"]["chase"] = preserved_camera["views"]["chase"]
-        if preserved_camera.get("artifact"):
-            metadata["camera_preview_artifact"] = preserved_camera["artifact"]
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -520,6 +486,59 @@ def render_b1_map12_preview(
     return result
 
 
+def _remove_stale_b1_camera_previews(
+    *,
+    camera_artifact: Path | None,
+    fpv_path: Path,
+    chase_path: Path,
+) -> list[str]:
+    if camera_artifact is not None:
+        return []
+    removed_stale: list[str] = []
+    for stale_path in (fpv_path, chase_path):
+        if stale_path.exists():
+            stale_path.unlink()
+            removed_stale.append(str(stale_path))
+    return removed_stale
+
+
+def _b1_preview_skip_result(
+    *,
+    camera_artifact: Path | None,
+    fpv_path: Path,
+    map_path: Path,
+    chase_path: Path,
+    topdown_path: Path,
+    metadata_path: Path,
+    removed_stale: list[str],
+) -> dict[str, Any] | None:
+    if not (map_path.exists() and topdown_path.exists() and metadata_path.exists()):
+        return None
+    if camera_artifact is None:
+        can_skip = _b1_metadata_has_no_camera_previews(metadata_path)
+    else:
+        can_skip = (
+            fpv_path.exists()
+            and chase_path.exists()
+            and _b1_metadata_has_real_camera_previews(
+                metadata_path,
+                camera_artifact=camera_artifact,
+            )
+        )
+    if not can_skip:
+        return None
+    return {
+        "world_id": B1_MAP12_WORLD_ID,
+        "scene_source": "b1-gaussian-digital-twin",
+        "status": "skipped",
+        **({"fpv": str(fpv_path), "chase": str(chase_path)} if camera_artifact is not None else {}),
+        "map": str(map_path),
+        "topdown": str(topdown_path),
+        "metadata": str(metadata_path),
+        "removed_stale": removed_stale,
+    }
+
+
 def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -531,12 +550,35 @@ def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
     return "fpv" not in views and "chase" not in views
 
 
-def _b1_metadata_has_real_camera_previews(path: Path) -> bool:
+def _b1_metadata_has_real_camera_previews(
+    path: Path,
+    *,
+    camera_artifact: Path | None = None,
+) -> bool:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
+    if camera_artifact is not None and not _b1_metadata_camera_artifact_matches(
+        payload,
+        camera_artifact=camera_artifact,
+    ):
+        return False
     return _b1_metadata_payload_has_real_camera_previews(payload)
+
+
+def _b1_metadata_camera_artifact_matches(
+    payload: dict[str, Any],
+    *,
+    camera_artifact: Path,
+) -> bool:
+    artifact = payload.get("camera_preview_artifact")
+    if not isinstance(artifact, dict):
+        return False
+    raw_path = str(artifact.get("path") or "").strip()
+    if not raw_path:
+        return False
+    return Path(raw_path).resolve() == camera_artifact.resolve()
 
 
 def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bool:
@@ -550,27 +592,6 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
         chase.get("provenance") or ""
     ).startswith("isaac_runtime_")
-
-
-def _b1_existing_real_camera_preview_metadata(
-    metadata_path: Path,
-    fpv_path: Path,
-    chase_path: Path,
-) -> dict[str, Any] | None:
-    if not fpv_path.is_file() or not chase_path.is_file() or not metadata_path.is_file():
-        return None
-    try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not _b1_metadata_payload_has_real_camera_previews(payload):
-        return None
-    views = payload.get("views") or {}
-    return {
-        "views": {"fpv": dict(views["fpv"]), "chase": dict(views["chase"])},
-        "artifact": dict(payload.get("camera_preview_artifact") or {}),
-        "renderer": str(payload.get("renderer") or ""),
-    }
 
 
 def _promote_b1_camera_previews(
@@ -594,54 +615,13 @@ def _promote_b1_camera_previews(
             "artifact_path": str(camera_artifact),
             "reason": str(exc),
         }
-    candidates = _b1_camera_preview_candidates(payload, artifact_path=camera_artifact)
-    evaluated: list[dict[str, Any]] = []
-    for candidate in candidates:
-        fpv_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("fpv"))
-        chase_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("chase"))
-        candidate_result = {
-            "label": candidate.get("label"),
-            "action": candidate.get("action"),
-            "waypoint_id": candidate.get("waypoint_id"),
-            "source_kind": candidate.get("source_kind"),
-            "fpv_source": str(fpv_source) if fpv_source is not None else "",
-            "chase_source": str(chase_source) if chase_source is not None else "",
-        }
-        provenance_errors = _b1_camera_preview_provenance_errors(payload, candidate)
-        if provenance_errors:
-            candidate_result["status"] = "provenance_rejected"
-            candidate_result["provenance_errors"] = provenance_errors
-            evaluated.append(candidate_result)
-            continue
-        if fpv_source is None or chase_source is None:
-            candidate_result["status"] = "missing_view_path"
-            evaluated.append(candidate_result)
-            continue
-        if not fpv_source.is_file() or not chase_source.is_file():
-            candidate_result["status"] = "missing_view_file"
-            evaluated.append(candidate_result)
-            continue
-        fpv_diagnostics = _image_diagnostics(fpv_source)
-        chase_diagnostics = _image_diagnostics(chase_source)
-        errors = [
-            *(f"fpv: {error}" for error in _b1_camera_preview_quality_errors(fpv_diagnostics)),
-            *(f"chase: {error}" for error in _b1_camera_preview_quality_errors(chase_diagnostics)),
-        ]
-        candidate_result["fpv_diagnostics"] = fpv_diagnostics
-        candidate_result["chase_diagnostics"] = chase_diagnostics
-        candidate_result["quality_errors"] = errors
-        if errors:
-            candidate_result["status"] = "quality_rejected"
-            evaluated.append(candidate_result)
-            continue
-        candidate_result["status"] = "accepted"
-        candidate_result["score"] = _b1_camera_preview_score(fpv_diagnostics) + (
-            _b1_camera_preview_score(chase_diagnostics) * 0.75
-        )
-        candidate_result["camera_control_contract"] = candidate.get("camera_control_contract")
-        evaluated.append(candidate_result)
-
-    accepted = [item for item in evaluated if item.get("status") == "accepted"]
+    candidate_results = _evaluate_b1_camera_preview_candidates(
+        payload=payload,
+        camera_artifact=camera_artifact,
+    )
+    candidates = candidate_results["candidates"]
+    evaluated = candidate_results["evaluated"]
+    accepted = candidate_results["accepted"]
     if not accepted:
         return {
             "status": "no_usable_camera_pair",
@@ -732,6 +712,89 @@ def _promote_b1_camera_previews(
                 "image_diagnostics": _image_diagnostics(chase_path),
             },
         },
+    }
+
+
+def _evaluate_b1_camera_preview_candidates(
+    *,
+    payload: dict[str, Any],
+    camera_artifact: Path,
+) -> dict[str, Any]:
+    candidates = _b1_camera_preview_candidates(payload, artifact_path=camera_artifact)
+    evaluated = [
+        _evaluate_b1_camera_preview_candidate(
+            payload=payload,
+            camera_artifact=camera_artifact,
+            candidate=candidate,
+        )
+        for candidate in candidates
+    ]
+    accepted = [item for item in evaluated if item.get("status") == "accepted"]
+    return {"candidates": candidates, "evaluated": evaluated, "accepted": accepted}
+
+
+def _evaluate_b1_camera_preview_candidate(
+    *,
+    payload: dict[str, Any],
+    camera_artifact: Path,
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    fpv_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("fpv"))
+    chase_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("chase"))
+    candidate_result = {
+        "label": candidate.get("label"),
+        "action": candidate.get("action"),
+        "waypoint_id": candidate.get("waypoint_id"),
+        "source_kind": candidate.get("source_kind"),
+        "fpv_source": str(fpv_source) if fpv_source is not None else "",
+        "chase_source": str(chase_source) if chase_source is not None else "",
+    }
+    provenance_errors = _b1_camera_preview_provenance_errors(payload, candidate)
+    if provenance_errors:
+        return {
+            **candidate_result,
+            "status": "provenance_rejected",
+            "provenance_errors": provenance_errors,
+        }
+    if fpv_source is None or chase_source is None:
+        return {**candidate_result, "status": "missing_view_path"}
+    if not fpv_source.is_file() or not chase_source.is_file():
+        return {**candidate_result, "status": "missing_view_file"}
+    return _evaluate_b1_camera_preview_quality(
+        candidate=candidate,
+        candidate_result=candidate_result,
+        fpv_source=fpv_source,
+        chase_source=chase_source,
+    )
+
+
+def _evaluate_b1_camera_preview_quality(
+    *,
+    candidate: dict[str, Any],
+    candidate_result: dict[str, Any],
+    fpv_source: Path,
+    chase_source: Path,
+) -> dict[str, Any]:
+    fpv_diagnostics = _image_diagnostics(fpv_source)
+    chase_diagnostics = _image_diagnostics(chase_source)
+    errors = [
+        *(f"fpv: {error}" for error in _b1_camera_preview_quality_errors(fpv_diagnostics)),
+        *(f"chase: {error}" for error in _b1_camera_preview_quality_errors(chase_diagnostics)),
+    ]
+    result = {
+        **candidate_result,
+        "fpv_diagnostics": fpv_diagnostics,
+        "chase_diagnostics": chase_diagnostics,
+        "quality_errors": errors,
+    }
+    if errors:
+        return {**result, "status": "quality_rejected"}
+    return {
+        **result,
+        "status": "accepted",
+        "score": _b1_camera_preview_score(fpv_diagnostics)
+        + (_b1_camera_preview_score(chase_diagnostics) * 0.75),
+        "camera_control_contract": candidate.get("camera_control_contract"),
     }
 
 
@@ -1308,6 +1371,16 @@ def _image_diagnostics(path: Path) -> dict[str, Any]:
 
 def _utc_timestamp() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

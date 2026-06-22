@@ -609,12 +609,6 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
         "grounding": (
             "visual_grounding/overlays/**/*.jpg",
             "visual_grounding/overlays/**/*.png",
-            "*grounding*.png",
-            "*grounding*.jpg",
-            "*bbox*.png",
-            "*bbox*.jpg",
-            "*detection*.png",
-            "*detection*.jpg",
         ),
     }
     preferred_dirs = {
