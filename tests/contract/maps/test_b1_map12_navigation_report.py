@@ -7,6 +7,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     READINESS_SCHEMA,
     SEMANTIC_SOURCE,
     SEMANTIC_USD_BLOCKED,
+    WAYPOINT_POSE_REQUESTS_SCHEMA,
     readiness_artifact_with_navigation,
 )
 from scripts.isaac_lab_cleanup.render_b1_map12_navigation_report import main as render_main
@@ -70,12 +71,70 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
         "transform_source": "reviewed_correspondence_fit",
     }
     readiness["validation"] = {"status": "passed", "errors": []}
+    pose_requests = {
+        "schema": WAYPOINT_POSE_REQUESTS_SCHEMA,
+        "status": "blocked",
+        "semantic_source": SEMANTIC_SOURCE,
+        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+        "alignment_transform_source": "reviewed_correspondence_fit",
+        "selected_transform_type": "mixed",
+        "source_map_frame": "robot_map_12_map",
+        "target_scene_frame": "b1_rebuilt_scene_usd_world",
+        "waypoint_count": 1,
+        "waypoints": [
+            {
+                "waypoint_id": "manual_point_a",
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "selected_transform_type": "rigid_2d",
+                "coverage_decision": {
+                    "status": "verified_global",
+                    "fit_scope": "global_transform",
+                },
+                "map12_nav_goal": {"x": -8.0, "y": 0.0, "yaw_deg": 90.0},
+                "b1_pose": {
+                    "frame": "b1_rebuilt_scene_usd_world",
+                    "x": -6.6,
+                    "y": -8.0,
+                    "z": 0.0,
+                    "yaw_deg": 90.0,
+                },
+                "planner_backed": False,
+                "physical_robot": False,
+            }
+        ],
+        "blocked_request_count": 1,
+        "blocked_requests": [
+            {
+                "waypoint_id": "unknown_area",
+                "request_status": "blocked",
+                "reason": "navigation_area_id 'not_verified_area' is not verified",
+                "coverage_decision": {
+                    "status": "blocked",
+                    "fit_scope": "local_area_transform",
+                    "navigation_area_id": "not_verified_area",
+                },
+                "map12_nav_goal": {"x": 0.5, "y": 0.5},
+                "planner_backed": False,
+                "physical_robot": False,
+            }
+        ],
+        "artifact_errors": [],
+        "planner_backed": False,
+        "physical_robot": False,
+        "robot_navigation_supported": False,
+        "validation": {"status": "passed", "errors": []},
+    }
     (run_dir / "navigation_smoke.json").write_text(
         json.dumps(navigation, indent=2),
         encoding="utf-8",
     )
     (run_dir / "readiness_with_navigation.json").write_text(
         json.dumps(readiness, indent=2),
+        encoding="utf-8",
+    )
+    (run_dir / "waypoint_pose_requests.json").write_text(
+        json.dumps(pose_requests, indent=2),
         encoding="utf-8",
     )
 
@@ -90,9 +149,15 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
     assert "manipulation: unsupported" in report
     assert "global_verified" in report
     assert "available, anchors=6, mean=0.23 m, max=0.71 m" in report
+    assert "Waypoint Pose Requests" in report
+    assert "manual_point_a" in report
+    assert "verified_global / global_transform" in report
+    assert "unknown_area" in report
+    assert "navigation_area_id &#x27;not_verified_area&#x27; is not verified" in report
     assert "known-poor search seed" in report
     assert "planner-backed" not in report
     assert "first.fpv.png" in report
     assert "wp_1.chase.png" in report
     assert "navigation_smoke.json" in report
     assert "readiness_with_navigation.json" in report
+    assert "waypoint_pose_requests.json" in report

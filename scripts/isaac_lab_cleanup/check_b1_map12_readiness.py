@@ -21,6 +21,7 @@ from roboclaws.maps.rasterize import load_pgm
 READINESS_SCHEMA = "b1_map12_digital_twin_readiness_v1"
 NAVIGATION_SMOKE_SCHEMA = "b1_map12_navigation_smoke_v1"
 ALIGNMENT_RESIDUALS_SCHEMA = "b1_map12_scene_alignment_residuals_v1"
+WAYPOINT_POSE_REQUESTS_SCHEMA = "b1_map12_waypoint_pose_requests_v1"
 SEMANTIC_SOURCE = "robot_map_12_navigation_memory_overlay"
 SEMANTIC_USD_BLOCKED = "blocked_until_segmentation_or_manifest"
 NAVIGATION_PROVENANCE = "isaac_b1_map12_navigation_smoke"
@@ -906,6 +907,113 @@ def validate_navigation_smoke_artifact(
     return errors
 
 
+def validate_waypoint_pose_requests_artifact(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(
+        payload.get("schema") == WAYPOINT_POSE_REQUESTS_SCHEMA,
+        "unexpected waypoint pose request schema",
+        errors,
+    )
+    _require(
+        payload.get("status") in {"ready", "blocked"},
+        "waypoint pose request status must be ready or blocked",
+        errors,
+    )
+    _require(
+        payload.get("semantic_source") == SEMANTIC_SOURCE,
+        "waypoint pose request semantic source must remain Map 12 overlay",
+        errors,
+    )
+    _require(
+        payload.get("alignment_transform_source") in {"reviewed_correspondence_fit", ""},
+        "waypoint pose requests require reviewed correspondence transform",
+        errors,
+    )
+    _require(
+        payload.get("planner_backed") is False,
+        "waypoint pose requests must not claim planner-backed navigation",
+        errors,
+    )
+    _require(
+        payload.get("physical_robot") is False,
+        "waypoint pose requests must not claim physical robot navigation",
+        errors,
+    )
+    _require(
+        payload.get("robot_navigation_supported") is False,
+        "waypoint pose requests are pose conversion artifacts, not navigation proof",
+        errors,
+    )
+    waypoints = [item for item in payload.get("waypoints") or [] if isinstance(item, dict)]
+    blocked = [item for item in payload.get("blocked_requests") or [] if isinstance(item, dict)]
+    _require(
+        int(payload.get("waypoint_count") or 0) == len(waypoints),
+        "waypoint_count must match ready waypoint rows",
+        errors,
+    )
+    _require(
+        int(payload.get("blocked_request_count") or 0) == len(blocked),
+        "blocked_request_count must match blocked request rows",
+        errors,
+    )
+    if payload.get("status") == "ready":
+        _require(
+            bool(payload.get("alignment_artifact")),
+            "ready requests need alignment artifact",
+            errors,
+        )
+        _require(len(waypoints) >= 1, "ready requests need at least one waypoint", errors)
+        _require(not blocked, "ready requests must not contain blocked rows", errors)
+    else:
+        _require(
+            bool(blocked) or bool(payload.get("artifact_errors")),
+            "blocked requests need blocked rows or artifact errors",
+            errors,
+        )
+    for index, item in enumerate(waypoints, start=1):
+        coverage = _dict(item.get("coverage_decision"))
+        _require(bool(item.get("waypoint_id")), f"waypoint {index} missing waypoint_id", errors)
+        _require(
+            str(item.get("alignment_transform_source") or "") == "reviewed_correspondence_fit",
+            f"waypoint {index} requires reviewed correspondence transform source",
+            errors,
+        )
+        _require(
+            bool(item.get("alignment_artifact")),
+            f"waypoint {index} missing alignment artifact",
+            errors,
+        )
+        _require(
+            isinstance(item.get("map12_nav_goal"), dict)
+            and _has_xy(_dict(item.get("map12_nav_goal"))),
+            f"waypoint {index} missing Map12 x/y nav goal",
+            errors,
+        )
+        _require(
+            isinstance(item.get("b1_pose"), dict),
+            f"waypoint {index} missing B1 scene pose",
+            errors,
+        )
+        _require(
+            coverage.get("status") in {"verified_global", "verified_local_area"},
+            f"waypoint {index} missing verified coverage decision",
+            errors,
+        )
+        _require(
+            item.get("planner_backed") is False and item.get("physical_robot") is False,
+            f"waypoint {index} must not claim planner-backed or physical navigation",
+            errors,
+        )
+    for index, item in enumerate(blocked, start=1):
+        _require(bool(item.get("reason")), f"blocked request {index} missing reason", errors)
+        _require(
+            item.get("request_status") == "blocked",
+            f"blocked request {index} must have request_status=blocked",
+            errors,
+        )
+    return errors
+
+
 def reviewable_image_errors(path: Path) -> list[str]:
     try:
         with Image.open(path) as image:
@@ -973,8 +1081,11 @@ def residual_backed_candidate_waypoints(
     ]
     waypoints = []
     for anchor in anchors[: min(4, len(anchors))]:
-        waypoint = _residual_backed_waypoint_from_anchor(
-            anchor,
+        waypoint = residual_backed_waypoint_from_nav_goal(
+            nav_goal=_dict(anchor.get("nav_goal")),
+            waypoint_id=f"b1_aligned_{anchor['id']}",
+            label=str(anchor.get("label") or anchor["id"]),
+            source_anchor_id=str(anchor["id"]),
             transform=selected_transform,
             alignment_artifact_path=alignment_artifact_path,
         )
@@ -983,15 +1094,20 @@ def residual_backed_candidate_waypoints(
     return waypoints
 
 
-def _residual_backed_waypoint_from_anchor(
-    anchor: dict[str, Any],
+def residual_backed_waypoint_from_nav_goal(
+    nav_goal: dict[str, Any],
     *,
+    waypoint_id: str,
+    label: str = "",
+    source_anchor_id: str = "",
     transform: dict[str, Any],
     alignment_artifact_path: Path | None,
+    coverage_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    nav_goal = _dict(anchor.get("nav_goal"))
     if not _has_xy(nav_goal):
         return {}
+    if str(transform.get("source") or "") != "reviewed_correspondence_fit":
+        raise ValueError("Map12 waypoint conversion requires reviewed_correspondence_fit")
     yaw = _optional_float(nav_goal.get("yaw"))
     yaw_deg = (
         math.degrees(yaw) if yaw is not None else _optional_float(nav_goal.get("yaw_deg")) or 0.0
@@ -1000,13 +1116,20 @@ def _residual_backed_waypoint_from_anchor(
         [float(nav_goal["x"]), float(nav_goal["y"])], transform
     )
     return {
-        "waypoint_id": f"b1_aligned_{anchor['id']}",
-        "source_anchor_id": anchor["id"],
-        "label": anchor.get("label") or anchor["id"],
+        "waypoint_id": waypoint_id,
+        "source_anchor_id": source_anchor_id,
+        "label": label or waypoint_id,
         "semantic_source": SEMANTIC_SOURCE,
         "alignment_artifact": str(alignment_artifact_path) if alignment_artifact_path else "",
         "alignment_transform_source": "reviewed_correspondence_fit",
         "selected_transform_type": str(transform.get("type") or ""),
+        "coverage_decision": dict(
+            coverage_decision
+            or {
+                "status": "verified_global",
+                "fit_scope": "global_transform",
+            }
+        ),
         "map12_nav_goal": nav_goal,
         "b1_pose": {
             "frame": str(transform.get("target_frame") or "b1_rebuilt_scene_usd_world"),
@@ -1016,6 +1139,9 @@ def _residual_backed_waypoint_from_anchor(
             "yaw_deg": round(float(yaw_deg) + float(transform.get("yaw_deg") or 0.0), 6),
             "pose_source": "reviewed_correspondence_fit",
         },
+        "request_status": "pose_request_only",
+        "planner_backed": False,
+        "physical_robot": False,
     }
 
 

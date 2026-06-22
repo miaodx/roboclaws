@@ -134,6 +134,53 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
     assert any(item["label"] == "Console Launch Log" for item in state["artifact_paths"])
 
 
+def test_state_exposes_wrapper_level_runtime_prior_artifacts(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "b1-wrapper-run"
+    attempt_dir = run_dir / "0618_1015" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "b1-wrapper-run",
+                "route": get_selection(B1_CODEX_OPEN_TASK).to_payload(),
+                "phase": "starting",
+                "backend_lock": "b1_isaaclab",
+                "started_at_epoch": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "runtime_map_prior_snapshot.json").write_text(
+        '{"schema":"runtime_map_prior_snapshot_v1"}\n',
+        encoding="utf-8",
+    )
+    (run_dir / "runtime_map_prior_targets.json").write_text(
+        '{"schema":"runtime_map_prior_materialized_targets_v1"}\n',
+        encoding="utf-8",
+    )
+    (run_dir / "b1_robot_consumption_manifest.json").write_text(
+        '{"schema":"b1_map12_robot_consumption_manifest_v1"}\n',
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(B1_CODEX_OPEN_TASK))
+
+    labels = {item["label"] for item in state["artifact_paths"]}
+    assert "B1 Robot Consumption" in labels
+    assert "Runtime Map Prior" in labels
+    assert "Runtime Map Prior Targets" in labels
+    assert next(
+        item for item in state["artifact_paths"] if item["label"] == "B1 Robot Consumption"
+    )["path"] == str((run_dir / "b1_robot_consumption_manifest.json").resolve())
+    assert next(item for item in state["artifact_paths"] if item["label"] == "Runtime Map Prior")[
+        "path"
+    ] == str((run_dir / "runtime_map_prior_snapshot.json").resolve())
+
+
 def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatch) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0617_1606" / "seed-7"

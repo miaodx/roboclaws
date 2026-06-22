@@ -86,8 +86,48 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
     assert b1.implementation_backend == "isaaclab_subprocess"
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1.overrides
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1.overrides
+    assert not any(item.startswith("b1_alignment_artifact=") for item in b1.overrides)
+    assert not any(item.startswith("b1_navigation_artifact=") for item in b1.overrides)
+    assert not any(item.startswith("b1_semantic_projection_artifact=") for item in b1.overrides)
     assert "world=b1-map12" in b1.argv
     assert "backend=isaaclab_subprocess" in b1.argv
+
+
+def test_b1_launch_accepts_explicit_robot_consumption_proof_artifacts() -> None:
+    b1 = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=b1-map12",
+            "backend=isaaclab",
+            "agent_engine=codex-cli",
+            "prompt=inspect the digital twin",
+            "evidence_lane=world-public-labels",
+            "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
+            "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json",
+            "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
+        ]
+    )
+
+    assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
+        b1.overrides
+    )
+    assert (
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
+        in b1.overrides
+    )
+    assert (
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json"
+        in b1.overrides
+    )
+    assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in b1.argv
+    assert (
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
+        in b1.argv
+    )
+    assert (
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json"
+        in b1.argv
+    )
 
 
 def test_molmospaces_world_rejects_public_isaac_backend() -> None:

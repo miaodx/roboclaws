@@ -22,8 +22,10 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     READINESS_SCHEMA,
     SEMANTIC_SOURCE,
     SEMANTIC_USD_BLOCKED,
+    WAYPOINT_POSE_REQUESTS_SCHEMA,
     build_readiness_artifact,
     validate_navigation_smoke_artifact,
+    validate_waypoint_pose_requests_artifact,
 )
 from scripts.isaac_lab_cleanup.isaac_worker_cli import _positive_int_arg
 
@@ -40,6 +42,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--b1-root", type=Path)
     parser.add_argument("--map12-root", type=Path)
     parser.add_argument("--readiness-artifact", type=Path)
+    parser.add_argument(
+        "--waypoint-pose-requests",
+        type=Path,
+        help=(
+            "Optional b1_map12_waypoint_pose_requests_v1 artifact. When provided, "
+            "navigation smoke captures those residual-backed on-demand poses instead of "
+            "the first readiness candidate waypoints."
+        ),
+    )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--render-width", type=_positive_int_arg, default=540)
@@ -64,15 +75,24 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     artifact_path = output_dir / "navigation_smoke.json"
     readiness = load_or_build_readiness(args)
-    waypoints = [
-        item
-        for item in readiness.get("map12_overlay", {}).get("candidate_waypoints") or []
-        if isinstance(item, dict)
-    ][:2]
+    waypoints, request_blocker = navigation_smoke_waypoints(
+        readiness=readiness,
+        waypoint_pose_requests=args.waypoint_pose_requests,
+    )
+    if request_blocker:
+        artifact = blocked_artifact(
+            readiness=readiness,
+            reason=request_blocker,
+        )
+        write_artifact(artifact_path, artifact)
+        return 2
     if len(waypoints) < 2:
         artifact = blocked_artifact(
             readiness=readiness,
-            reason="B1 / Map 12 overlay did not produce at least two candidate waypoints.",
+            reason=(
+                "B1 / Map 12 navigation smoke requires at least two residual-backed "
+                "waypoint poses before it can claim navigation support."
+            ),
         )
         write_artifact(artifact_path, artifact)
         return 2
@@ -160,7 +180,9 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         result = json.loads(result_path.read_text(encoding="utf-8"))
         waypoint_evidence.append(result)
 
-    provisional_passed = len(waypoint_evidence) >= 2 and not child_failures
+    provisional_passed = (
+        navigation_smoke_has_distinct_pose_evidence(waypoint_evidence) and not child_failures
+    )
     artifact = {
         "schema": NAVIGATION_SMOKE_SCHEMA,
         "status": "passed" if provisional_passed else "blocked",
@@ -280,6 +302,66 @@ def load_or_build_readiness(args: argparse.Namespace) -> dict[str, Any]:
     if args.b1_root is None or args.map12_root is None:
         raise ValueError("either --readiness-artifact or both --b1-root/--map12-root are required")
     return build_readiness_artifact(Path(args.b1_root), Path(args.map12_root))
+
+
+def navigation_smoke_waypoints(
+    *,
+    readiness: dict[str, Any],
+    waypoint_pose_requests: Path | None,
+) -> tuple[list[dict[str, Any]], str]:
+    if waypoint_pose_requests is not None:
+        payload = json.loads(Path(waypoint_pose_requests).read_text(encoding="utf-8"))
+        if payload.get("schema") != WAYPOINT_POSE_REQUESTS_SCHEMA:
+            return [], f"unexpected waypoint pose request schema: {payload.get('schema')!r}"
+        validation_errors = validate_waypoint_pose_requests_artifact(payload)
+        if validation_errors:
+            return [], "invalid waypoint pose request artifact: " + "; ".join(validation_errors)
+        if payload.get("status") != "ready":
+            blocked_reasons = [
+                str(item.get("reason") or "")
+                for item in payload.get("blocked_requests") or []
+                if isinstance(item, dict) and item.get("reason")
+            ]
+            reason = "; ".join(blocked_reasons) or "waypoint pose request artifact is blocked"
+            return [], reason
+        if str(payload.get("alignment_transform_source") or "") != "reviewed_correspondence_fit":
+            return [], "waypoint pose requests require reviewed correspondence transform"
+        return [
+            item
+            for item in payload.get("waypoints") or []
+            if isinstance(item, dict) and isinstance(item.get("b1_pose"), dict)
+        ], ""
+    readiness_waypoints = [
+        item
+        for item in readiness.get("map12_overlay", {}).get("candidate_waypoints") or []
+        if isinstance(item, dict)
+        and isinstance(item.get("b1_pose"), dict)
+        and str(item.get("alignment_transform_source") or "") == "reviewed_correspondence_fit"
+        and bool(item.get("alignment_artifact"))
+    ][:2]
+    if len(readiness_waypoints) < 2:
+        return [], (
+            "navigation smoke requires at least two residual-backed waypoint poses; "
+            "provide a ready b1_map12_waypoint_pose_requests_v1 artifact or a readiness "
+            "artifact with reviewed-correspondence candidate waypoints"
+        )
+    return readiness_waypoints, ""
+
+
+def navigation_smoke_has_distinct_pose_evidence(waypoint_evidence: list[dict[str, Any]]) -> bool:
+    if len(waypoint_evidence) < 2:
+        return False
+    pose_keys = {
+        (
+            round(float(dict(item.get("robot_pose") or {}).get("x") or 0.0), 3),
+            round(float(dict(item.get("robot_pose") or {}).get("y") or 0.0), 3),
+        )
+        for item in waypoint_evidence
+        if isinstance(item, dict)
+        and item.get("robot_pose_applied") is True
+        and isinstance(item.get("robot_pose"), dict)
+    }
+    return len(pose_keys) >= 2
 
 
 def blocked_artifact(

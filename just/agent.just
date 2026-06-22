@@ -151,7 +151,7 @@ run dispatch_target agent_engine mode="" *overrides:
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|max_wall_seconds|min_generated_mess_count|\
-        b1_alignment_review|map_bundle|mode|output_dir|policy|port|prompt|provider|\
+        b1_alignment_artifact|b1_alignment_review|b1_navigation_artifact|b1_semantic_projection_artifact|map_bundle|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
@@ -361,6 +361,9 @@ run dispatch_target agent_engine mode="" *overrides:
         port="$(get port 18788)"
         map_bundle="$(get map_bundle auto)"
         b1_alignment_review="$(get b1_alignment_review "")"
+        b1_alignment_artifact="$(get b1_alignment_artifact "")"
+        b1_navigation_artifact="$(get b1_navigation_artifact "")"
+        b1_semantic_projection_artifact="$(get b1_semantic_projection_artifact "")"
         cleanup_routine="$(get cleanup_routine skill)"
         case "$cleanup_routine" in
           auto|skill)
@@ -756,6 +759,7 @@ run dispatch_target agent_engine mode="" *overrides:
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path"
           "$min_generated_mess_count" "$generated_mess_object_ids" "$dispatch_surface"
           "$resolved_task_intent" "$operator_messages_path" "$b1_alignment_review"
+          "$b1_alignment_artifact" "$b1_navigation_artifact" "$b1_semantic_projection_artifact"
         )
         run_dir_override="$(get run_dir "")"
         if [[ -n "$run_dir_override" ]]; then

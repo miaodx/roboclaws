@@ -61,6 +61,11 @@ const els = {
   claudeProviderInput: document.getElementById("claude-provider-input"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
+  b1AlignmentArtifactInput: document.getElementById("b1-alignment-artifact-input"),
+  b1NavigationArtifactInput: document.getElementById("b1-navigation-artifact-input"),
+  b1SemanticProjectionArtifactInput: document.getElementById(
+    "b1-semantic-projection-artifact-input"
+  ),
   localizationGate: document.getElementById("localization-gate"),
   enablementGate: document.getElementById("enablement-gate"),
   estopGate: document.getElementById("estop-gate"),
@@ -170,6 +175,10 @@ function bindEvents() {
   });
   [
     els.contextInput,
+    els.isaacSceneInput,
+    els.b1AlignmentArtifactInput,
+    els.b1NavigationArtifactInput,
+    els.b1SemanticProjectionArtifactInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
@@ -618,6 +627,9 @@ function routeStatusDisplay(route, readiness) {
   }
   if (kind === "needs_agibot_context") {
     return { label: "NEEDS CONTEXT", className: "needs_action" };
+  }
+  if (kind === "needs_route_parameter") {
+    return { label: "NEEDS INPUT", className: "needs_action" };
   }
   return { label: "NEEDS ACTION", className: "needs_action" };
 }
@@ -1143,6 +1155,18 @@ async function refreshSelectedRouteReadiness() {
   if (els.contextInput.value) {
     params.set("context_json", els.contextInput.value);
   }
+  if (els.isaacSceneInput.value) {
+    params.set("isaac_scene_usd_path", els.isaacSceneInput.value);
+  }
+  if (els.b1AlignmentArtifactInput.value) {
+    params.set("b1_alignment_artifact", els.b1AlignmentArtifactInput.value);
+  }
+  if (els.b1NavigationArtifactInput.value) {
+    params.set("b1_navigation_artifact", els.b1NavigationArtifactInput.value);
+  }
+  if (els.b1SemanticProjectionArtifactInput.value) {
+    params.set("b1_semantic_projection_artifact", els.b1SemanticProjectionArtifactInput.value);
+  }
   if (isAgibotRoute(route)) {
     params.set("real_movement_enabled", els.realMovementGate.checked ? "true" : "false");
     params.set("localization_ready", els.localizationGate.checked ? "true" : "false");
@@ -1408,6 +1432,15 @@ function launchOverrides(route = state.selectedRoute) {
   }
   if (els.isaacSceneInput.value) {
     overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
+  }
+  if (els.b1AlignmentArtifactInput.value) {
+    overrides.b1_alignment_artifact = els.b1AlignmentArtifactInput.value;
+  }
+  if (els.b1NavigationArtifactInput.value) {
+    overrides.b1_navigation_artifact = els.b1NavigationArtifactInput.value;
+  }
+  if (els.b1SemanticProjectionArtifactInput.value) {
+    overrides.b1_semantic_projection_artifact = els.b1SemanticProjectionArtifactInput.value;
   }
   return overrides;
 }

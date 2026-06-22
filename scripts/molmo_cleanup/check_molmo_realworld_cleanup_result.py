@@ -213,6 +213,7 @@ def _add_planner_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     parser.add_argument("--require-waypoint-honesty", action="store_true")
     parser.add_argument("--require-real-robot-alignment", action="store_true")
+    parser.add_argument("--require-b1-robot-consumption-proof", action="store_true")
 
 
 def _add_isaac_checker_args(parser: argparse.ArgumentParser) -> None:
@@ -339,6 +340,7 @@ def main() -> None:
             require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
             require_waypoint_honesty=args.require_waypoint_honesty,
             require_real_robot_alignment=args.require_real_robot_alignment,
+            require_b1_robot_consumption_proof=args.require_b1_robot_consumption_proof,
             require_isaac_runtime=args.require_isaac_runtime,
             require_isaac_real_runtime=args.require_isaac_real_runtime,
             require_isaac_scene_loaded=args.require_isaac_scene_loaded,
@@ -730,6 +732,8 @@ def _assert_optional_backend_gates(
 ) -> None:
     if opts["require_real_robot_alignment"]:
         _assert_real_robot_alignment(data, base, report_text)
+    if opts["require_b1_robot_consumption_proof"]:
+        _assert_b1_robot_consumption_proof(data, base)
     if _needs_isaac_runtime(opts):
         _assert_isaac_runtime(
             data,
@@ -1791,6 +1795,71 @@ def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: 
     assert "Nav2 Map Bundle" in report_text, report_text[:500]
     assert "map_bundle/map.yaml" in report_text, report_text[:500]
     assert "report_only_simulation_view" in report_text, report_text[:500]
+
+
+def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None:
+    nav2_bundle = data.get("nav2_map_bundle") or {}
+    assert nav2_bundle.get("schema") == "nav2_map_bundle_snapshot_v1", nav2_bundle
+    assert nav2_bundle.get("snapshot_complete") is True, nav2_bundle
+    artifact_paths = nav2_bundle.get("artifact_paths") or {}
+    artifact_hashes = nav2_bundle.get("artifact_hashes") or {}
+    semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
+    assert semantics_path.is_file(), nav2_bundle
+    assert len(str(artifact_hashes.get("semantics_json") or "")) == 64, artifact_hashes
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    assert semantics.get("schema") == "nav2_cleanup_semantics_v1", semantics
+    assert semantics.get("environment_id") == "agibot-robot-map-12", semantics
+    assert (semantics.get("spatial_contract") or {}).get("alignment_status") == "verified", (
+        semantics.get("spatial_contract") or {}
+    )
+    proof = (
+        (semantics.get("digital_twin_capabilities") or {}).get("robot_consumption_proof")
+    ) or {}
+    assert proof.get("schema") == "b1_map12_robot_consumption_proof_v1", proof
+    assert proof.get("status") == "robot_navigation_verified", proof
+    assert proof.get("alignment_status") == "verified", proof
+    assert proof.get("navigation_status") == "verified", proof
+    assert proof.get("robot_navigation_supported") is True, proof
+    assert proof.get("robot_navigation_provenance") == "isaac_b1_map12_navigation_smoke", proof
+    assert int(proof.get("navigation_waypoint_count") or 0) >= 1, proof
+    assert proof.get("alignment_artifact"), proof
+    assert proof.get("navigation_artifact"), proof
+    assert proof.get("physical_robot") is False, proof
+    assert proof.get("manipulation_supported") is False, proof
+    _assert_b1_robot_consumption_manifest(base, proof)
+
+
+def _assert_b1_robot_consumption_manifest(base: Path, proof: dict[str, Any]) -> None:
+    manifest_path = base / "b1_robot_consumption_manifest.json"
+    assert manifest_path.is_file(), manifest_path
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest.get("schema") == "b1_map12_robot_consumption_manifest_v1", manifest
+    assert manifest.get("status") == "robot_navigation_ready", manifest
+    navigation = manifest.get("navigation") if isinstance(manifest.get("navigation"), dict) else {}
+    assert navigation.get("ready") is True, navigation
+    assert navigation.get("status") == proof.get("status"), navigation
+    assert navigation.get("alignment_status") == proof.get("alignment_status"), navigation
+    assert navigation.get("navigation_status") == proof.get("navigation_status"), navigation
+    assert navigation.get("alignment_artifact") == proof.get("alignment_artifact"), navigation
+    assert navigation.get("navigation_artifact") == proof.get("navigation_artifact"), navigation
+    assert navigation.get("robot_navigation_provenance") == proof.get(
+        "robot_navigation_provenance"
+    ), navigation
+    assert int(navigation.get("navigation_waypoint_count") or 0) == int(
+        proof.get("navigation_waypoint_count") or 0
+    ), navigation
+    capabilities = (
+        manifest.get("capabilities") if isinstance(manifest.get("capabilities"), dict) else {}
+    )
+    assert capabilities.get("robot_navigation") is True, capabilities
+    assert capabilities.get("manipulation") is False, capabilities
+    semantics = manifest.get("semantics") if isinstance(manifest.get("semantics"), dict) else {}
+    assert semantics.get("object_projection_status") == "blocked_until_object_semantic_anchors", (
+        semantics
+    )
+    policy = manifest.get("policy") if isinstance(manifest.get("policy"), dict) else {}
+    assert policy.get("no_output_directory_autodiscovery") is True, policy
+    assert policy.get("object_labels_are_not_inferred_from_room_anchors") is True, policy
 
 
 def _has_planner_proof_requests(data: dict[str, Any]) -> bool:

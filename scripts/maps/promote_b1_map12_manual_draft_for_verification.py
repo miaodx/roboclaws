@@ -60,15 +60,12 @@ def build_verification_manifest(
     for index, anchor in enumerate(anchors, start=1):
         item = dict(anchor)
         item["review_status"] = "accepted"
+        item["anchor_role"] = "alignment"
         item["confidence"] = item.get("confidence") or 0.8
-        item["navigation_area_id"] = item.get("navigation_area_id") or f"manual_draft_area_{index}"
-        item["asset_partition_id"] = (
-            item.get("asset_partition_id") or f"manual_draft_region_{index}"
-        )
         evidence = dict(item.get("evidence") or {})
         evidence["verification_note"] = (
             "Verification-only promotion from proposed manual draft anchors. "
-            "Synthetic area/partition ids are not final room semantics."
+            "These anchors verify map-scene geometry only, not room semantics."
         )
         item["evidence"] = evidence
         promoted.append(item)
@@ -83,7 +80,7 @@ def build_verification_manifest(
         "notes": [
             "Generated for local residual verification after automatic alignment failed.",
             "Do not commit this as assets/maps/b1-map12-scene-correspondences.json.",
-            "Do not use synthetic area/partition ids as room semantic evidence.",
+            "Do not use alignment anchors as room semantic evidence.",
         ],
         "anchors": promoted,
     }

@@ -1454,6 +1454,99 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "world=b1-map12" in target_trace
     assert "backend=isaaclab_subprocess" in target_trace
     assert "generated_mess_count=0" in target_trace
+    assert "b1_alignment_artifact=" not in target_trace
+    assert "b1_navigation_artifact=" not in target_trace
+    assert "b1_semantic_projection_artifact=" not in target_trace
+
+
+def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() -> None:
+    route, plan_trace = trace_surface_run_with_plan(
+        "surface=household-world",
+        "world=b1-map12",
+        "backend=isaaclab",
+        "agent_engine=codex-cli",
+        "prompt=inspect the digital twin",
+        "evidence_lane=world-public-labels",
+        "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json",
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
+    )
+
+    assert route[28] == "output/b1-map12/alignment/alignment_residuals.json"
+    assert route[29] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
+    assert route[30] == "output/b1-map12/semantic-projection/semantic_projection.json"
+    target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
+    assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
+        target_trace
+    )
+    assert (
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
+        in target_trace
+    )
+    assert (
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json"
+        in target_trace
+    )
+
+
+def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    b1_branch = molmo_text.split('if [[ "$backend" == "isaaclab_subprocess"', 1)[1].split(
+        "    fi\n    map_bundle_args=()",
+        1,
+    )[0]
+
+    assert "compile_b1_map12_runtime_bundle.py" in b1_branch
+    assert "convert_nav2_cleanup_bundle.py" in b1_branch
+    assert "b1_robot_consumption_manifest.json" in b1_branch
+    assert '--output "${output_dir}/runtime_map_prior_snapshot.json"' in b1_branch
+    assert '--summary-json "${output_dir}/runtime_map_prior_targets.json"' in b1_branch
+    assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch
+
+
+def test_b1_isaac_route_uses_b1_robot_consumption_checker_gate() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    isaac_branch = molmo_text.split(
+        'if [[ "$profile" == "world-public-labels" && "$backend" == "isaaclab_subprocess" ]]',
+        1,
+    )[1].split('    fi\n    if [[ "$cleanup_routine"', 1)[0]
+
+    assert "--require-b1-robot-consumption-proof" in isaac_branch
+    assert "--require-real-robot-alignment" not in isaac_branch
+    assert "requires explicit b1_alignment_artifact and b1_navigation_artifact" in isaac_branch
+
+
+def test_b1_isaac_route_requires_explicit_robot_consumption_artifacts() -> None:
+    binary = just_bin()
+    env = os.environ.copy()
+    env.pop("ROBOCLAWS_JUST_TRACE", None)
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+
+    result = subprocess.run(
+        [
+            binary,
+            "agent::run",
+            "household-world.open-ended",
+            "codex-cli",
+            "world-public-labels",
+            "world=b1-map12",
+            "backend=isaaclab_subprocess",
+            "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
+            "b1_alignment_review=assets/maps/b1-map12-alignment-review.json",
+            "task_intent=open-ended",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert (
+        "requires explicit b1_alignment_artifact and b1_navigation_artifact" in result.stderr
+        or "requires explicit b1_alignment_artifact and b1_navigation_artifact" in result.stdout
+    )
 
 
 def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None:

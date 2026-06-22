@@ -371,6 +371,10 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     "real_movement_enabled",
                     "scenario_setup",
                     "provider_profile",
+                    "isaac_scene_usd_path",
+                    "b1_alignment_artifact",
+                    "b1_navigation_artifact",
+                    "b1_semantic_projection_artifact",
                 ),
             )
             _, port = requested_mcp_endpoint(override_map)

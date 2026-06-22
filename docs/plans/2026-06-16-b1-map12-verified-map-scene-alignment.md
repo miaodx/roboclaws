@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-verified-map-scene-alignment
-status: In progress
+status: Completed prerequisite evidence contract; active unfinished work moved to 2026-06-17 plan
 created: 2026-06-16
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -27,10 +27,33 @@ related_context:
 
 ## Status
 
+Completed prerequisite evidence contract. This document now records the accepted
+geometry-alignment lifecycle, residual thresholds, and evidence that downstream
+B1 runtime work may consume. It is not the active implementation plan for the
+remaining robot-consumption work. Active unfinished work lives in
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+
+Completed scope:
+
+- Seven human-accepted `anchor_role=alignment` geometry anchors are committed in
+  `assets/maps/b1-map12-scene-correspondences.json`.
+- The official residual artifact at
+  `output/b1-map12/alignment/alignment_residuals.json` is globally verified.
+- Geometry alignment is sufficient for residual-backed Map12-to-B1 pose
+  application.
+- Room/object semantics are explicitly not completed by this contract.
+
+Remaining scope owned elsewhere:
+
+- Agent-visible MCP/runtime-prior capability exposure.
+- Human-accepted `anchor_role=semantic` room-interior anchors.
+- Strict room semantic projection and later object semantic projection.
+- Any future product runtime proof that consumes those semantics.
+
 Reviewed with grill-batch on 2026-06-16. The correspondence schema direction,
 verification thresholds, and first annotation workflow are accepted. The
-implementation slice now has fitter/readiness/probe evidence, but final
-room/area semantic acceptance is still pending.
+implementation slice now has fitter/readiness/probe evidence, while final
+room/area semantic acceptance remains pending in the active 2026-06-17 plan.
 
 2026-06-17 update: there is not yet an operator-authored room semantic
 manifest. Treat `assets/maps/b1-map12-alignment-review.json` as a seed/review
@@ -47,17 +70,99 @@ mean `2.152082 m` and max `2.595962 m`. The same probe now also tries semantic
 label/partition center matching; that candidate is worse, with best mean
 residual `7.891215 m` and max `11.003484 m`. A tracked manual draft snapshot
 now lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`.
-The explicit verification-only manual fallback passes global rigid alignment
-with mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
-area/partition ids and must not be committed as the final accepted
-correspondence asset.
+The seven manual picks are explicit `anchor_role=alignment` geometry anchors;
+they should not be re-clicked or forced to carry room semantics. The explicit
+verification-only manual fallback passes global rigid alignment with mean
+residual `0.352908 m` and max `0.502064 m`, but it is geometry-only evidence
+and must not be treated as final room/area semantics.
+
+2026-06-18 follow-up: user confirmed using the seven manual points as
+`anchor_role=alignment` accepted geometry anchors. The committed manifest
+`assets/maps/b1-map12-scene-correspondences.json` now points to
+`docs/status/active/b1-map12-alignment-accepted-review-packet.json` and contains
+seven accepted geometry anchors with blank semantic ids. The official fitter
+run at `output/b1-map12/alignment/alignment_residuals.json` is
+`global_verified` with `selected_transform_type=rigid_2d`, mean residual
+`0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
 
 Semantic suggestion pass:
 `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` compares the manual
 anchors against the current Map12 review polygons and B1 scene partition bounds.
 It found only 1 strong candidate out of 7 anchors, so the current evidence is
 not strong enough to auto-fill final `navigation_area_id` /
-`asset_partition_id` values.
+`asset_partition_id` values. The command now also writes
+`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, a
+non-mutating human-review packet that combines each manual pick with semantic
+candidates while keeping all anchors proposed and accepted anchor count at zero.
+`scripts/maps/promote_b1_map12_semantic_review_packet.py` now provides the
+strict promotion path from a human-edited packet into the committed
+correspondence manifest. Accepted anchors must declare `anchor_role`. Accepted
+`alignment` anchors require explicit picks and no bbox seed, but may leave
+`navigation_area_id` / `asset_partition_id` blank. Accepted `semantic` anchors
+additionally require real room/partition ids and reject synthetic
+`manual_draft_*` values. The promoter still rejects proposed-only packets, fewer
+than six human-accepted anchors, bbox/seed coordinate sources, and auto-accepted
+suggestions before validating the final manifest. Use `--check` first to
+validate a human-edited packet without writing the committed asset. Promotion
+strips review-only suggestion metadata such as `semantic_review` before writing
+the production correspondence manifest.
+The suggestion command also writes
+`output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
+HTML table for operator review of the proposed anchors and candidate semantic
+ids.
+`scripts/maps/check_b1_map12_semantic_review_packet_fit.py` validates the same
+human-edited packet and runs the residual fitter on a preview manifest under
+`output/` without writing the committed correspondence asset.
+`scripts/maps/build_b1_map12_semantic_projection.py` is now the strict
+room-label projection gate. With the current committed alignment-only manifest,
+it exits non-zero with `accepted semantic anchors are required before projecting
+room labels`; this is expected until human-accepted `anchor_role=semantic`
+room-interior anchors are promoted. The projection artifact keeps object
+projection blocked and does not infer object labels from room anchors.
+`scripts/maps/compile_b1_map12_runtime_bundle.py` can consume explicit verified
+alignment and navigation artifacts and write a
+`digital_twin_capabilities.robot_consumption_proof` summary into the generated
+`semantics.json`. The default route does not auto-discover generated `output/`
+artifacts; callers must pass `b1_alignment_artifact=...` and
+`b1_navigation_artifact=...` explicitly when they want product/open-task runs to
+consume the verified robot-navigation proof.
+The compiled bundle also writes `b1_robot_consumption_manifest.json`, a stable
+downstream-consumer summary of robot navigation readiness, room/object semantic
+readiness, blocked capabilities, required bundle files, and the no-autodiscovery
+policy.
+The operator console now exposes the same requirement in route metadata and
+readiness: B1 / Map 12 console launches stay blocked until both explicit proof
+artifact paths are supplied.
+It can also consume a verified semantic projection artifact explicitly via
+`b1_semantic_projection_artifact=...` / `--semantic-projection-artifact` and
+write `digital_twin_capabilities.room_semantic_projection_proof`. This remains
+blocked until accepted semantic anchors are promoted and the strict projection
+script produces a verified artifact; proposed packets and alignment-only
+manifests are not accepted as room semantics.
+Compiled B1/Nav2 cleanup bundles can now be exported to the canonical
+`runtime_map_prior_snapshot_v1` contract with
+`scripts/maps/convert_nav2_cleanup_bundle.py`, so downstream robot consumers can
+load B1 digital-twin map context through the same prior shape as simulator
+map-build output.
+
+2026-06-18 planning-loop clarification: this plan remains the prerequisite
+alignment evidence contract. It owns reviewed correspondences, real
+`navigation_area_id` / `asset_partition_id` semantics, residual thresholds, and
+readiness status. `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
+consumes a passing residual artifact for on-demand Map12 waypoint or `map_xy/yaw`
+requests, B1 scene pose application, and same-pose Isaac preview proof.
+
+2026-06-18 pause handoff: implementation was paused before changing the
+MCP/runtime consumer path. The alignment contract is in the following state:
+seven accepted `anchor_role=alignment` geometry anchors are committed and the
+official residual artifact is globally verified; room/object semantic anchors
+are still not accepted; the semantic projection script is expected to fail with
+`accepted semantic anchors are required before projecting room labels`.
+Compiled B1 runtime bundles now produce explicit robot-consumption and runtime
+prior artifacts, but the next context should still expose the B1 capability
+status from an explicitly supplied `runtime_map_prior` into the agent-visible
+MCP/runtime map context. That consumer-chain work must not change anchor
+acceptance, infer room labels, or add fallback discovery.
 
 ## Goal
 
@@ -143,6 +248,11 @@ This plan must not change:
 - `correspondence_anchor`: a named map-scene match such as a door center, wall
   corner, corridor turn, room entrance, fixed column, or room-area centroid that
   exists in both Map 12 and the B1 scene.
+- `anchor_role=alignment`: a geometry-only map-scene anchor used for global
+  residual fitting. It does not need room ids and does not prove room labels.
+- `anchor_role=semantic`: a room/area semantic anchor, preferably an
+  interior/centroid point, used for local area transforms and label projection.
+  It must carry reviewed `navigation_area_id` and `asset_partition_id` values.
 - `global_transform`: one map-to-scene transform applied to all verified
   anchors.
 - `area_transform`: a transform scoped to a named room or navigation area when
@@ -174,6 +284,7 @@ Add a first-class map-scene correspondence manifest, for example:
     {
       "anchor_id": "meeting_room_a_door_center",
       "anchor_type": "door_center",
+      "anchor_role": "semantic",
       "navigation_area_id": "west_corridor",
       "asset_partition_id": "meeting_room_a",
       "map_xy": [-5.5, 2.4],
@@ -203,6 +314,18 @@ at `assets/maps/b1-map12-scene-correspondences.json`.
 Only human/operator-reviewed picks may use `review_status=accepted`.
 Model-generated or script-generated anchor candidates must remain
 `review_status=proposed` until reviewed.
+
+Strict promotion from the review packet to the committed manifest is allowed
+only after a human/operator changes selected anchors to `review_status=accepted`
+and each accepted anchor explicitly declares `anchor_role`. At least six
+accepted `alignment` anchors are enough for global residual fitting. Accepted
+`semantic` anchors are a separate room-label evidence group and must supply real
+`navigation_area_id` and `asset_partition_id` values. The promotion path must
+reject proposed-only packets, partial accepted packets, missing roles, missing
+semantic ids on `anchor_role=semantic`, synthetic `manual_draft_*` semantic ids,
+bbox/seed coordinate sources, and any attempt to auto-accept suggestions. It
+must validate the final manifest before writing
+`assets/maps/b1-map12-scene-correspondences.json`.
 
 The checked-in correspondence manifest may remain empty as a fail-loud
 placeholder. Empty anchors mean no transform is verified and the fitter/review
@@ -302,14 +425,16 @@ Initial thresholds are plan defaults and should be confirmed during review:
 
 - Minimum global anchors: 6 accepted anchors.
 - Minimum non-collinear anchors: 4.
-- Required spatial coverage: anchors must cover at least three navigation areas
-  or scene partitions.
+- Global fit no longer requires room/partition coverage, because corner/edge
+  alignment anchors are often not reliable room-label evidence. Spatial quality
+  is enforced by count, non-collinearity, and residual thresholds.
 - Global verified target: mean residual <= 0.75 m and max residual <= 1.5 m.
 - Area verified target: mean residual <= 0.5 m and max residual <= 1.0 m within
   the area.
-- Minimum area anchors: 3 accepted, non-collinear anchors for an independently
-  fitted area transform. If an area has fewer anchors, it may inherit a passing
-  global transform but must not claim an independent local transform.
+- Minimum area anchors: 3 accepted, non-collinear `anchor_role=semantic` anchors
+  for an independently fitted area transform. If an area has fewer anchors, it
+  may inherit a passing global transform but must not claim an independent local
+  transform.
 - Outliers: allowed only when explicitly excluded with a recorded reason.
 
 If the first annotation run shows these thresholds are unrealistic, update this
@@ -366,7 +491,9 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/maps/auto_align_b1_map12_scene_topdown.py`
+- `scripts/maps/check_b1_map12_semantic_review_packet_fit.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `tests/contract/maps/test_b1_map12_verified_alignment.py`
 - `tests/contract/maps/test_b1_map12_digital_twin_readiness.py`
@@ -375,16 +502,31 @@ them before claiming `verified` requires an explicit plan update.
 ## Suggested Proof
 
 ```bash
-python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
+# after a human/operator edits the review packet and accepts geometry anchors:
+python scripts/maps/promote_b1_map12_semantic_review_packet.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --output assets/maps/b1-map12-scene-correspondences.json \
+  --check
+
+python scripts/maps/check_b1_map12_semantic_review_packet_fit.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/manual-draft-alignment
+  --output-dir output/b1-map12/review-packet-fit-check
+
+python scripts/maps/promote_b1_map12_semantic_review_packet.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --output assets/maps/b1-map12-scene-correspondences.json
+
+python scripts/maps/fit_b1_map12_scene_alignment.py \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --output-dir output/b1-map12/alignment
 
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
   --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 \
-  --alignment-artifact output/b1-map12/manual-draft-alignment/alignment_residuals.json \
-  --output output/b1-map12/manual-draft-alignment/readiness_with_alignment.json
+  --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+  --output output/b1-map12/alignment/readiness_with_alignment.json
 
 ./scripts/dev/run_pytest_standalone.sh \
   tests/contract/maps/test_b1_map12_verified_alignment.py \
@@ -393,16 +535,23 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   -q
 ```
 
-The manual draft proof above is verification-only. The final production proof
-must use `assets/maps/b1-map12-scene-correspondences.json` after the same
-anchors receive reviewed real `navigation_area_id` and `asset_partition_id`
-values.
+The old manual draft proof remains verification-only. The final production
+geometry proof must use `assets/maps/b1-map12-scene-correspondences.json` with
+accepted `anchor_role=alignment` anchors. Room/area label projection remains a
+second proof that needs separate accepted `anchor_role=semantic` anchors with
+real `navigation_area_id` and `asset_partition_id` values. The strict semantic
+projection script must fail on proposed-only packets and the current
+alignment-only manifest.
 
 ## Definition Of Done
 
 Success only if:
 
 - a reviewable correspondence manifest exists with at least 6 accepted anchors;
+- accepted geometry anchors declare `anchor_role=alignment`; accepted
+  room/label anchors declare `anchor_role=semantic` and have human-reviewed real
+  `navigation_area_id` and `asset_partition_id` values, not synthetic
+  verification-only ids or model-generated proposed suggestions;
 - bbox seed output is explicitly labeled `known_poor_seed_only`;
 - the transform fitter writes residual metrics and overlay previews;
 - readiness artifacts cannot claim verified alignment without residual evidence;
@@ -412,9 +561,11 @@ Success only if:
   artifact clearly says global alignment remains candidate;
 - per-area verified alignment is supported when global alignment is poor;
 - independently fitted per-area alignment requires at least 3 accepted,
-  non-collinear anchors for that area;
+  non-collinear `anchor_role=semantic` anchors for that area;
 - room/area semantic correspondence can become verified only with residual
   evidence;
+- room-label projection cannot be emitted until accepted `anchor_role=semantic`
+  anchors exist in the promoted correspondence manifest;
 - object/receptacle USD binding, manipulation, and planner-backed navigation
   remain blocked or out of scope;
 - reports show residuals and outliers clearly enough for a human to audit the
@@ -422,8 +573,12 @@ Success only if:
 
 ## Blockers And Decisions
 
-- Need first accepted anchor set. Without human/operator-reviewed anchor
-  correspondences, verified alignment remains blocked.
+- Need first accepted alignment anchor set. Without human/operator-reviewed
+  geometry correspondences, verified global alignment remains blocked. Without
+  separate accepted semantic anchors, room/area label projection remains blocked.
+- The current first accepted alignment anchor set exists and verifies global
+  geometry, but the semantic projection gate correctly remains blocked until
+  room-interior semantic anchors are reviewed and promoted.
 - If residuals are high, prefer area-level verified claims over weakening
   global thresholds.
 - Accepted annotation lifecycle: draft under `output/`; committed map-bundle
@@ -435,96 +590,69 @@ Success only if:
 
 ## Recommended Next Step
 
-Run preflight on this plan. The execution contract should start with the
-correspondence manifest schema, report/script anchor review workflow, and
-residual fitter before touching static map-bundle semantics.
+No further implementation should start from this file unless the anchor schema,
+residual thresholds, or readiness semantics need to change. Continue active work
+from `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
-## Preflight Contract
+## Prerequisite Contract For 2026-06-17 Execution
 
-Preflight status: DRAFT
+Status: accepted prerequisite contract; consumed by
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
-Task source: mixed user prompt + plan review
+Planning-loop decision on 2026-06-18: keep this document focused on alignment
+evidence. The 2026-06-17 plan consumed this residual artifact for on-demand
+Map12 waypoint or `map_xy/yaw` requests, B1 scene pose application, and
+same-pose Isaac preview proof; it remains the active source for remaining
+robot-facing consumer and semantic-projection work.
 
-Canonical source: `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`
-
-Route: durable `$intuitive-flow`
-
-Goal: Implement the B1 / Map 12 map-scene alignment evidence slice so verified
-claims require reviewed correspondences and residuals, while poor bbox overlay
+Goal: Provide the only valid residual-backed alignment evidence that downstream
+runtime pose application may consume. Verified geometry claims require
+human/operator accepted `anchor_role=alignment` correspondences and residual
+artifacts. Verified room/area semantic claims additionally require accepted
+`anchor_role=semantic` correspondences with real semantic ids. Poor bbox overlay
 remains only a known-poor visual-search seed.
 
-Scope:
+This contract owns:
 
-- Add the B1 / Map 12 correspondence manifest schema and reviewed-asset
-  lifecycle.
-- Add a report/script anchor review workflow with separate map and scene picks.
-- Add a deterministic transform fitter and residual report.
-- Integrate residual evidence into B1 readiness artifacts without promoting
-  static semantics prematurely.
-- Add report/test coverage for bbox-seed rejection, verified/global vs
-  area-verified claims, and blocked object/manipulation claims.
-
-Non-goals:
-
-- No pick/place, support-surface, object segmentation, receptacle binding, or
-  manipulation support.
-- No planner-backed navigation or physical robot parity claim.
-- No new public product surface or command grammar.
-- No annotation UI unless the report/script workflow is proven insufficient and
-  re-approved.
-- No `semantics.json` promotion until the separate alignment manifest and
-  residual artifact are reviewed.
-
-Entity budget:
-
-- reuse: B1 readiness script, B1 navigation report, static map bundle,
-  `scene_map_correspondence_v1`, cross-environment map parity tests, and
-  `scene-gaussian-map-alignment` evidence vocabulary.
-- remove/merge: none.
-- new: correspondence manifest schema,
-  `assets/maps/b1-map12-scene-correspondences.json` after review, transform
-  fitter script, residual artifact, focused contract test;
-  these are necessary because bbox fit has poor observed quality and cannot be
-  reused as a verified baseline.
-- expansion triggers: custom annotation UI, object-level USD binding,
-  planner-backed navigation, physical robot proof, altered residual thresholds,
-  or public surface changes require re-approval.
-
-Context:
-
-- must-read: this plan, `docs/human/domain.md`,
-  `docs/plans/refactor-reduce-entropy-b1-map12-digital-twin.md`,
-  `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`,
-  `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`,
-  `skills/scene-gaussian-map-alignment/SKILL.md`,
-  `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`,
-  `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`,
-  `assets/maps/agibot-robot-map-12/semantics.json`,
-  `assets/maps/b1-map12-alignment-review.json`,
+- B1 / Map 12 correspondence manifest schema and reviewed-asset lifecycle.
+- Separate map-coordinate and scene-coordinate picks for accepted anchors.
+- Strict promotion from a human-edited review packet to
   `assets/maps/b1-map12-scene-correspondences.json`.
-- useful: existing operator-console B1 preview artifacts and any current
-  `output/b1-map12/**` readiness/navigation reports.
-- avoid-unless-needed: historical MolmoSpaces Isaac parity plans, raw provider
-  logs, old Genesis renderer work, and broad `output/` scans.
+- Deterministic transform fitting, residual reports, global and per-area
+  threshold policy, and readiness status.
+- Bbox-seed rejection, proposed-only review rejection, role-specific semantic-id
+  rejection, and blocked object/manipulation/planner claims.
 
-Acceptance:
+This contract does not own:
 
-- SUCCESS: reviewed correspondences exist; bbox seed is rejected as verification
-  evidence; fitter emits residuals and visual overlays; readiness can claim
-  global `verified` only when thresholds pass or else records
-  `area_verified_only`; object/receptacle/manipulation/planner claims remain
-  blocked; reports make residuals and outliers auditable.
-- BLOCKED_NEEDS_DECISION: thresholds need relaxation, custom annotation UI is
-  required, accepted anchors cannot be chosen from available evidence, or scope
-  expands into object/manipulation/planner/public-surface work.
-- BLOCKED_NEEDS_LOCAL_VALIDATION: required Isaac scene rendering, local B1
-  assets, or human/operator anchor review are unavailable when claiming
-  reviewed visual evidence or verified alignment.
-- INTERMEDIATE_ONLY: schema, fitter, and tests exist but no reviewed anchor set
-  or local/manual evidence is available; this cannot claim verified alignment.
-- No regressions: existing B1 navigation readiness, cross-environment map
-  parity, Map 12 bundle conversion, and public household-world routes continue
-  to pass.
+- On-demand runtime point conversion into B1 scene robot pose rows.
+- Isaac robot pose application, FPV/Chase/topdown capture, or operator-console
+  preview promotion.
+- Public product-surface grammar, MCP tools, planner-backed navigation,
+  physical robot parity, or manipulation readiness.
+
+Acceptance for downstream consumption:
+
+- At least six anchors have `review_status=accepted`.
+- Accepted geometry anchors declare `anchor_role=alignment`. Accepted semantic
+  anchors declare `anchor_role=semantic` and have real human-reviewed
+  `navigation_area_id` / `asset_partition_id` values, not synthetic
+  `manual_draft_*` ids or model-generated suggestions.
+- Bbox/seed coordinates do not populate accepted evidence and cannot count
+  toward residual verification.
+- The fitter emits residuals and visual overlays.
+- Readiness can claim global `verified` only when thresholds pass, or records
+  `area_verified_only` for explicit passing local areas.
+- Reports make residuals and outliers auditable.
+- Object/receptacle/manipulation/planner claims remain blocked or out of scope.
+
+Blocked states:
+
+- No human/operator reviewed anchors: downstream pose requests must block.
+- Residuals fail thresholds: downstream pose requests must block unless a
+  specific local area transform independently passes and is explicitly selected.
+- Threshold relaxation, custom annotation UI, object/manipulation/planner
+  expansion, or public surface changes require a plan update before use.
 
 Verification:
 
@@ -546,6 +674,20 @@ Verification:
     --correspondences assets/maps/b1-map12-scene-correspondences.json \
     --map-bundle assets/maps/agibot-robot-map-12 \
     --output-dir output/b1-map12/alignment
+
+  # Expected to fail until accepted semantic anchors are promoted.
+  python scripts/maps/build_b1_map12_semantic_projection.py \
+    --correspondences assets/maps/b1-map12-scene-correspondences.json \
+    --review-manifest assets/maps/b1-map12-alignment-review.json \
+    --output output/b1-map12/semantic-projection/semantic_projection.json
+
+  python scripts/maps/compile_b1_map12_runtime_bundle.py \
+    --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+    --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
+    --review-manifest assets/maps/b1-map12-alignment-review.json \
+    --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+    --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json \
+    --output-dir output/b1-map12/digital-twin-runtime-proof-check
 
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
     --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
@@ -570,16 +712,14 @@ Verification:
 - optional: render or update the B1 navigation/alignment HTML report for easier
   review after deterministic gates pass.
 
-Execution:
+Execution ownership:
 
-- main: root session supervises scope, protects bbox/semantic boundaries, and
-  makes final complete/blocked judgment.
-- worker: none by default.
-- worker-goal: none.
-
-To execute: `/goal execute docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md with intuitive-flow`
-
-Optional tracking: none
-
-Approval: `LGTM`, `approve`, or `go ahead` approves this preflight; edits
-request revision.
+- Main execution continues from
+  `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+- This document remains the prerequisite alignment contract and should be
+  updated only when anchor lifecycle, residual thresholds, or readiness semantics
+  change.
+- Fresh-context resume should treat this document as evidence only. The next
+  implementation slice belongs in the 2026-06-17 plan unless it changes the
+  correspondence schema, residual thresholds, or semantic-anchor acceptance
+  contract.

@@ -234,8 +234,14 @@ def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blockin
 ) -> None:
     route = get_selection(B1_CODEX_OPEN_TASK)
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
-    assert readiness["can_start"] is True
-    assert {gate["id"] for gate in readiness["gates"]} == {"provider_key", "mcp_port_free"}
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "needs_route_parameter"
+    assert {gate["id"] for gate in readiness["gates"]} == {
+        "provider_key",
+        "mcp_port_free",
+        "b1_alignment_artifact",
+        "b1_navigation_artifact",
+    }
 
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id="active", pid=os.getpid())

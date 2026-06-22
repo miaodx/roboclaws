@@ -16,8 +16,10 @@ if __package__ in {None, ""}:
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     NAVIGATION_SMOKE_SCHEMA,
     READINESS_SCHEMA,
+    WAYPOINT_POSE_REQUESTS_SCHEMA,
     validate_navigation_smoke_artifact,
     validate_readiness_artifact,
+    validate_waypoint_pose_requests_artifact,
 )
 
 
@@ -28,6 +30,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--navigation-artifact", type=Path)
     parser.add_argument("--readiness-artifact", type=Path)
+    parser.add_argument("--waypoint-pose-requests", type=Path)
     parser.add_argument("--output", type=Path)
     return parser.parse_args(argv)
 
@@ -37,16 +40,22 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = Path(args.run_dir)
     navigation_path = Path(args.navigation_artifact or run_dir / "navigation_smoke.json")
     readiness_path = Path(args.readiness_artifact or run_dir / "readiness_with_navigation.json")
+    pose_requests_path = Path(
+        args.waypoint_pose_requests or run_dir / "waypoint_pose_requests.json"
+    )
     output_path = Path(args.output or run_dir / "report.html")
 
     navigation = _read_json(navigation_path)
     readiness = _read_json(readiness_path) if readiness_path.is_file() else {}
+    pose_requests = _read_json(pose_requests_path) if pose_requests_path.is_file() else {}
     html = render_report(
         run_dir=run_dir,
         navigation=navigation,
         readiness=readiness,
+        pose_requests=pose_requests,
         navigation_path=navigation_path,
         readiness_path=readiness_path if readiness else None,
+        pose_requests_path=pose_requests_path if pose_requests else None,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
@@ -68,13 +77,19 @@ def render_report(
     run_dir: Path,
     navigation: dict[str, Any],
     readiness: dict[str, Any],
+    pose_requests: dict[str, Any],
     navigation_path: Path,
     readiness_path: Path | None,
+    pose_requests_path: Path | None,
 ) -> str:
     if navigation.get("schema") != NAVIGATION_SMOKE_SCHEMA:
         raise ValueError(f"unexpected navigation schema: {navigation.get('schema')!r}")
     if readiness and readiness.get("schema") != READINESS_SCHEMA:
         raise ValueError(f"unexpected readiness schema: {readiness.get('schema')!r}")
+    if pose_requests and pose_requests.get("schema") != WAYPOINT_POSE_REQUESTS_SCHEMA:
+        raise ValueError(
+            f"unexpected waypoint pose request schema: {pose_requests.get('schema')!r}"
+        )
     navigation_errors = validate_navigation_smoke_artifact(navigation, require_files=False)
     readiness_errors = (
         validate_readiness_artifact(
@@ -84,9 +99,13 @@ def render_report(
         if readiness
         else []
     )
+    pose_request_errors = (
+        validate_waypoint_pose_requests_artifact(pose_requests) if pose_requests else []
+    )
     rows = [
         ("Navigation smoke", str(navigation.get("status") or "")),
         ("Readiness", str(readiness.get("readiness_status") or "not provided")),
+        ("Waypoint pose requests", str(pose_requests.get("status") or "not provided")),
         ("Robot navigation", _yes_no(navigation.get("robot_navigation_supported"))),
         ("Navigation provenance", str(navigation.get("navigation_provenance") or "")),
         ("Robot provenance", str(navigation.get("robot_navigation_provenance") or "")),
@@ -98,6 +117,8 @@ def render_report(
         ("USD receptacle index", _yes_no(navigation.get("usd_receptacle_index_ready"))),
         ("Manipulation", _yes_no(navigation.get("manipulation_supported"))),
         ("Waypoint evidence", str(navigation.get("navigation_waypoint_count") or 0)),
+        ("Ready pose requests", str(pose_requests.get("waypoint_count") or 0)),
+        ("Blocked pose requests", str(pose_requests.get("blocked_request_count") or 0)),
         ("Robot views", str(navigation.get("robot_view_evidence_status") or "")),
         ("Map-scene alignment", str(readiness.get("readiness_alignment_status") or "")),
         ("Map-scene transform", str(readiness.get("map12_to_b1_usd_transform_status") or "")),
@@ -106,9 +127,12 @@ def render_report(
     validation_rows = [
         ("navigation contract", navigation_errors),
         ("readiness contract", readiness_errors),
+        ("waypoint pose request contract", pose_request_errors),
         ("navigation artifact validation", _validation_errors(navigation)),
         ("readiness artifact validation", _validation_errors(readiness)),
+        ("waypoint pose request validation", _validation_errors(pose_requests)),
     ]
+    request_cards = _pose_request_section(pose_requests)
     waypoint_cards = [
         _waypoint_card(run_dir, waypoint, index)
         for index, waypoint in enumerate(_waypoints(navigation), start=1)
@@ -119,6 +143,10 @@ def render_report(
     if readiness_path is not None:
         artifact_links.append(
             ("readiness_with_navigation.json", _relative_href(run_dir, readiness_path))
+        )
+    if pose_requests_path is not None:
+        artifact_links.append(
+            ("waypoint_pose_requests.json", _relative_href(run_dir, pose_requests_path))
         )
     manipulation_badge = _badge(
         "manipulation",
@@ -226,6 +254,27 @@ def render_report(
       margin: 16px 0;
       overflow: hidden;
     }}
+    .request-table {{
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }}
+    .request-table th, .request-table td {{
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 13px;
+    }}
+    .request-table th {{
+      color: var(--muted);
+      background: var(--panel);
+      font-size: 12px;
+    }}
     .waypoint-head {{
       display: grid;
       grid-template-columns: minmax(0, 1fr) repeat(4, auto);
@@ -312,6 +361,8 @@ def render_report(
   </div>
   <h2>Waypoint Evidence</h2>
   {"".join(waypoint_cards) if waypoint_cards else "<p>No waypoint evidence was recorded.</p>"}
+  <h2>Waypoint Pose Requests</h2>
+  {request_cards}
   <h2>Contract Checks</h2>
   <section class="checks">
     {_validation_rows(validation_rows)}
@@ -332,6 +383,64 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _waypoints(navigation: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in navigation.get("waypoint_evidence") or [] if isinstance(item, dict)]
+
+
+def _pose_request_section(pose_requests: dict[str, Any]) -> str:
+    if not pose_requests:
+        return "<p>No waypoint pose request artifact was provided.</p>"
+    ready_rows = [
+        _pose_request_row(item, "ready") for item in _pose_request_waypoints(pose_requests)
+    ]
+    blocked_rows = [
+        _pose_request_row(item, "blocked") for item in _pose_request_blocked(pose_requests)
+    ]
+    rows = "".join([*ready_rows, *blocked_rows])
+    if not rows:
+        rows = (
+            '<tr><td colspan="6">No ready or blocked waypoint pose request rows were recorded.'
+            "</td></tr>"
+        )
+    return f"""
+  <table class="request-table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Waypoint</th>
+        <th>Coverage</th>
+        <th>Map12</th>
+        <th>B1 pose</th>
+        <th>Reason</th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+"""
+
+
+def _pose_request_waypoints(pose_requests: dict[str, Any]) -> list[dict[str, Any]]:
+    return [item for item in pose_requests.get("waypoints") or [] if isinstance(item, dict)]
+
+
+def _pose_request_blocked(pose_requests: dict[str, Any]) -> list[dict[str, Any]]:
+    return [item for item in pose_requests.get("blocked_requests") or [] if isinstance(item, dict)]
+
+
+def _pose_request_row(item: dict[str, Any], status: str) -> str:
+    coverage = (
+        item.get("coverage_decision") if isinstance(item.get("coverage_decision"), dict) else {}
+    )
+    nav_goal = item.get("map12_nav_goal") if isinstance(item.get("map12_nav_goal"), dict) else {}
+    pose = item.get("b1_pose") if isinstance(item.get("b1_pose"), dict) else {}
+    return (
+        "<tr>"
+        f"<td>{escape(status)}</td>"
+        f"<td>{escape(str(item.get('waypoint_id') or ''))}</td>"
+        f"<td>{escape(_coverage_label(coverage))}</td>"
+        f"<td>{_goal_label(nav_goal)}</td>"
+        f"<td>{_pose_label(pose) if pose else ''}</td>"
+        f"<td>{escape(str(item.get('reason') or ''))}</td>"
+        "</tr>"
+    )
 
 
 def _waypoint_card(run_dir: Path, waypoint: dict[str, Any], index: int) -> str:
@@ -441,6 +550,17 @@ def _goal_label(goal: dict[str, Any]) -> str:
             yaw=float(goal.get("yaw") or 0.0),
         )
     )
+
+
+def _coverage_label(coverage: dict[str, Any]) -> str:
+    if not coverage:
+        return ""
+    parts = [
+        str(coverage.get("status") or ""),
+        str(coverage.get("fit_scope") or ""),
+        str(coverage.get("navigation_area_id") or ""),
+    ]
+    return " / ".join(part for part in parts if part)
 
 
 def _shape_label(waypoint: dict[str, Any], view_name: str) -> str:

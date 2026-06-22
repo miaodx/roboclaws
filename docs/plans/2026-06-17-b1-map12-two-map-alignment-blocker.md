@@ -1,8 +1,8 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: Partially implemented
+status: Active unfinished plan; geometry/navigation proof completed, robot-facing consumer exposure and semantics remain
 created: 2026-06-17
-last_reviewed: 2026-06-17
+last_reviewed: 2026-06-18
 implementation_allowed: true
 source:
   - user request to make two-map alignment the blocking issue for usable digital twin
@@ -23,21 +23,91 @@ related_context:
 
 ## Problem
 
-The B1 digital twin is not usable until the Gaussian/scene asset frame can be
-aligned to the Map12 navigation frame. Map12 already has two mutually consistent
-baseline inputs:
+The B1 digital twin is only partially usable as a robot-consumable asset. The
+Gaussian/scene asset frame is now aligned to the Map12 navigation frame, and
+preview-grade residual-backed robot pose application has passed. The remaining
+problem is making that verified B1 map context reach robot-facing consumers in
+the same strict shape as simulator Runtime Map Prior input, while keeping
+unreviewed room/object semantics blocked.
+
+Map12 already has two mutually consistent baseline inputs:
 
 ```text
 vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot
 vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json
 ```
 
-The missing piece is the reviewed transform between the Map12 navigation frame
-and the B1 scene/Gaussian frame. The first runtime direction is Map12 -> B1
-scene, because digital-twin waypoint previews must start from Map12 waypoints
-and place the robot in Isaac at the corresponding B1 scene pose. The inverse
-direction is still needed before scene labels or object labels can become Map12
-navigation labels or object locations.
+Completed execution status: the reviewed global transform exists and the first
+Map12 -> B1 robot-consumption proof passes. The residual artifact at
+`output/b1-map12/alignment/alignment_residuals.json` is `global_verified`.
+`output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`
+applies two residual-backed Map12 navigation-memory points as B1 scene robot
+poses and captures same-pose Isaac FPV/Chase evidence. Operator preview
+promotion from that artifact succeeds under
+`output/b1-map12/operator-preview-residual-overlay/`.
+
+Remaining execution status: compiled B1 bundles expose
+`digital_twin_capabilities` in `semantics.json`,
+`runtime_map_prior_snapshot.json`, `runtime_map_prior_targets.json`, and
+`b1_robot_consumption_manifest.json`, but the agent-visible MCP/runtime map
+consumer path still needs a focused proof that the robot/agent sees
+`robot_navigation_supported=true` plus blocked room/object/manipulation status
+from the explicitly supplied prior. Room/object projection still needs separate
+semantic anchors and is not part of the completed geometry/navigation proof.
+`scripts/maps/build_b1_map12_semantic_projection.py` is the strict room-label
+projection gate: with the current alignment-only manifest it must fail with
+`accepted semantic anchors are required before projecting room labels`, and it
+keeps object projection blocked instead of inferring object labels from room
+anchors.
+
+## Confirmed Target
+
+The target is not just static alignment. The B1 / Map12 digital twin should
+behave like a simulator scene from the robot/agent point of view:
+
+- **Navigation layer**: a robot can use Map12 map context, choose a public
+  Map12 waypoint or explicit `map_xy/yaw`, convert it through the verified
+  alignment, and move/apply the corresponding B1 scene pose on demand.
+- **Render/observation layer**: after applying that pose, the runtime can render
+  Gaussian/digital-twin views such as FPV, Chase, topdown, and any future
+  task-required camera view so open-ended tasks can inspect the asset from the
+  robot's current pose.
+- **Agent consumption layer**: the map, navigation capability, render
+  capability, and blocked semantic/manipulation status are exposed through the
+  same explicit runtime-prior / MCP / agent-visible context style as simulator
+  assets, not through hidden scripts, stale generated outputs, or silent
+  fallback.
+
+Room/object semantic alignment improves open-ended task quality, but it is not
+a hard prerequisite for Map12-driven navigation plus Gaussian rendering.
+Semantic projection remains blocked until accepted semantic anchors exist.
+
+## Completed Work Split
+
+Completed prerequisite evidence now lives in
+`docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`. Treat that
+file as evidence-only unless anchor lifecycle, residual thresholds, or readiness
+semantics change.
+
+Completed in this active plan:
+
+- B1 topdown/review/fitter path for `2rd_floor_seperated`.
+- Seven accepted `anchor_role=alignment` geometry anchors.
+- Residual-backed Map12 waypoint or `map_xy/yaw` to B1 scene pose request path.
+- Isaac same-pose FPV/Chase navigation smoke for two Map12 points.
+- Operator preview promotion from accepted runtime camera evidence.
+- Explicit B1 product/operator-console proof artifact requirements.
+- B1 robot-consumption manifest and canonical runtime-prior wrapper exports.
+
+Still active here:
+
+- Preserve and expose B1 capability status through the robot-facing MCP/runtime
+  map consumer path.
+- Keep room/object semantics blocked until accepted `anchor_role=semantic`
+  anchors exist.
+- Promote strict room semantic projection only from a verified projection
+  artifact.
+- Add object semantic anchors/projection later as a separate proof.
 
 ## Decision
 
@@ -92,6 +162,48 @@ Preview parity contract:
 - Static B1 preview generation must continue to publish only `map` and `topdown`
   until such a runtime camera artifact exists.
 
+On-demand Map12 navigation point contract:
+
+- Accepted input is either an existing public Map12 inspection waypoint id or an
+  explicit `map_xy` plus optional yaw in the Map12/source-map frame.
+- The request first runs a residual-backed coverage check. Coverage may be a
+  verified global transform or an explicitly verified local area transform.
+- A supported request emits a B1 scene robot pose packet with frame id, `x/y/z`,
+  yaw, transform source, alignment artifact, input id or point, and coverage
+  decision.
+- An unsupported, uncovered, malformed, or unverified request emits a blocked
+  artifact with the reason. It must not substitute another point, use the bbox
+  seed, or publish fake camera proof.
+- This contract is an internal runtime/artifact path for digital-twin preview.
+  It does not imply planner-backed navigation, collision-free path planning,
+  physical robot navigation, a new MCP tool, or a public `household-world`
+  surface change.
+
+Planning-loop scope clarification:
+
+- This document is the current execution source for the remaining work needed
+  to make B1 / Map 12 consumable like a simulator scene: expose verified B1
+  capability status through the robot-facing runtime-prior/MCP consumer path,
+  then add reviewed room/object semantic projection when human-accepted
+  semantic anchors exist.
+- The preview-grade robot pose application path has already passed:
+  `Map12 waypoint id or map_xy/yaw -> residual-backed coverage check -> B1 scene
+  robot pose -> Isaac pose application -> same-pose FPV, Chase, and topdown
+  evidence`.
+- `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` remains the
+  prerequisite evidence contract. It owns reviewed correspondences, real
+  `navigation_area_id` / `asset_partition_id` semantics, residual thresholds,
+  and readiness status. This plan consumes only a passing residual artifact from
+  that contract.
+- "Arbitrary Map12 point" means an operator-supplied waypoint id or `map_xy/yaw`
+  inside verified global coverage or an explicitly verified local area. It does
+  not mean every coordinate in the map, a planner-backed path, obstacle
+  avoidance, manipulation readiness, physical robot support, or a public MCP
+  navigation tool.
+- Unsupported or unverified points must emit blocked artifacts with explicit
+  reasons. They must not fall back to bbox seeds, nearest known points, synthetic
+  manual-draft ids, scene-probe cameras, or stale cached previews.
+
 ## Minimal Path
 
 1. Render a `2rd_floor_seperated` topdown diagnostic.
@@ -128,11 +240,16 @@ Each accepted anchor needs explicit:
 ```text
 map_xy
 scene_xyz
-asset_partition_id
-navigation_area_id
+anchor_role=alignment|semantic
 evidence note
 review_status=accepted
 ```
+
+For the current seven corner/edge picks, use `anchor_role=alignment`. They are
+geometry anchors only and do not need `asset_partition_id` /
+`navigation_area_id`. Add separate `anchor_role=semantic` room-interior points
+before projecting room names or object labels into Map12; those semantic points
+must carry real `asset_partition_id` and `navigation_area_id` values.
 
 5. Reuse the existing fitter:
 
@@ -149,16 +266,26 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
    - Fail: keep all scene labels as evidence only.
 
 7. Generate B1 waypoint robot-view evidence only after residuals pass.
-   - Select at least one Map12 public inspection waypoint in a verified global
-     area or an explicitly verified local area.
-   - Convert the waypoint into a B1 scene robot pose using the residual-backed
-     transform, never the bbox seed.
-   - Apply that robot pose in Isaac and capture FPV, Chase, map, and verify
-     images from the same pose.
-   - Record the alignment artifact, selected transform type, waypoint id,
-     map-frame pose, B1 scene pose, and `robot_pose_applied` status.
-   - If the first capture path cannot apply the pose in Isaac, stop with a
-     blocked artifact instead of publishing FPV/Chase previews.
+   - Build a transform-aware B1 waypoint/pose request path that accepts either
+     an existing Map12 public inspection waypoint or an on-demand Map12
+     `map_xy/yaw` point.
+   - Convert the request into a B1 scene robot pose only when it is inside
+     verified global coverage or an explicitly verified local area.
+   - Apply that robot pose in Isaac and capture same-pose FPV, Chase, topdown,
+     map, and report/verify evidence.
+   - Record the alignment artifact, selected transform type, input waypoint id
+     or point, map-frame pose, B1 scene pose, coverage decision, and
+     `robot_pose_applied` status.
+   - Stop with a blocked artifact on unsupported point, failed pose
+     application, missing camera evidence, or any attempt to use bbox/seed
+     transforms.
+
+   Current evidence: this step passes for the navigation-memory points
+   `plastic_bottle_table_1` and `long_table` under
+   `output/b1-map12/navigation-smoke/residual-overlay/`. A separate attempt
+   using two accepted alignment-corner anchors generated valid B1 pose requests
+   but remained blocked because both FPV captures had too little visual detail;
+   those anchors are geometry evidence, not good smoke viewpoints.
 
 8. Promote the runtime camera artifact into operator-console preview assets.
    - Reuse `scripts/operator_console/render_scene_previews.py
@@ -168,35 +295,49 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
    - Preserve the current no-camera static preview behavior when no accepted
      runtime camera artifact exists.
 
+   Current evidence: promotion succeeds from
+   `output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`.
+   The generated preview metadata uses `waypoint_id=b1_aligned_long_table` for
+   both FPV and Chase, references
+   `output/b1-map12/alignment/alignment_residuals.json`, records
+   `alignment_transform_source=reviewed_correspondence_fit`, and keeps
+   `isaac_runtime_*` provenance.
+
 ## Acceptance Criteria
 
-- A topdown diagnostic exists for `2rd_floor_seperated`.
-- The diagnostic lists all scene partitions and high-signal object labels.
-- The diagnostic records `up_axis=z`, `horizontal_axes=[x,y]`, and
-  `geometry_status`.
-- At least six accepted anchors exist across at least three scene partitions or
-  navigation areas.
-- Accepted anchors use `scene_xyz`; UI-only 2D picks are normalized to
-  `scene_xyz=[x,y,0]`.
+Completed prerequisite criteria:
+
+- The B1 topdown diagnostic and two-map review path exist for
+  `2rd_floor_seperated`.
+- Seven accepted `anchor_role=alignment` anchors are committed and use
+  `scene_xyz`.
 - The residual artifact reports rigid/similarity candidates, residual metrics,
-  and pass/fail status.
-- No code path treats empty or seed-derived correspondences as verified.
-- The label tool or alignment tool never projects Gaussian/scene objects into
-  Map12 without a residual-backed transform.
-- Before a residual-backed robot-view artifact exists, `b1-map12-preview.json`
-  contains no `views.fpv` or `views.chase`, and the corresponding static preview
-  files are absent.
-- After residual-backed waypoint capture, B1 FPV and Chase preview metadata share
-  the same `waypoint_id`, reference the same alignment artifact or transform
-  source, and use `isaac_runtime_*` provenance.
-- B1 FPV is a robot-mounted/head-camera-equivalent Isaac runtime view, not a
-  scene-probe camera. Chase is report evidence from the same applied robot pose,
-  not agent-facing policy input.
-- Preview promotion rejects bbox-fit, scene-probe, missing-pose, mixed-waypoint,
-  blank, or low-detail camera artifacts.
-- Preview promotion requires residual-backed alignment provenance in the camera
-  artifact before stamping `isaac_runtime_*` metadata. Image quality alone is
-  not enough.
+  and `global_verified` status.
+- Empty, seed-derived, bbox-fit, and proposed-only correspondences do not verify
+  alignment.
+- Residual-backed pose requests record input waypoint id or `map_xy/yaw`,
+  coverage decision, transform source/artifact, and output B1 scene pose.
+- Unsupported or unverified points block loudly with artifacts instead of
+  falling back to another transform, point, or camera source.
+- B1 FPV/Chase preview promotion requires same-waypoint, residual-backed,
+  `isaac_runtime_*` evidence.
+
+Remaining criteria:
+
+- Agent-visible MCP/runtime map context exposes the B1 capability status from an
+  explicitly supplied `runtime_map_prior`.
+- The exposed capability context proves `robot_navigation_supported=true` for
+  the verified B1 bundle while room semantics, object semantics, manipulation,
+  planner-backed navigation, and physical-robot support remain blocked or out
+  of scope.
+- No runtime consumer path auto-discovers generated `output/**` artifacts or
+  silently substitutes missing/malformed B1 proof inputs.
+- The current seven alignment anchors never become room/object semantics.
+- Strict room semantic projection stays blocked until accepted
+  `anchor_role=semantic` room-interior anchors with real
+  `navigation_area_id` / `asset_partition_id` values are promoted.
+- Object semantic projection remains blocked until separate object-level
+  semantic anchors/proof exist.
 
 ## Non-Goals
 
@@ -208,43 +349,38 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
 
 ## Implementation Slice
 
-P0:
+Completed slices:
 
-- Add a small topdown diagnostic generator for `2rd_floor_seperated`.
-- Use a separate minimal alignment tool for two-map anchor picking. Do not hide
-  alignment inside the Map12 room-label editor.
-- Export accepted anchors to the existing correspondence schema.
-- Make the correspondence schema/fitter/tests agree on Z-up, `x,y` topdown, and
-  `scene_xyz` anchor storage.
-- Make all fitter/report branches consume the manifest projection policy,
-  including independent area transforms, inherited area residuals, alignment
-  previews, and leave-one-out diagnostics.
-- Make the review UI load vendor Map12 from `nav2.yaml` / `occupancy.pgm`
-  directly.
+- Topdown diagnostic, two-map review/export, Z-up `x,y` correspondence policy,
+  fitter residuals, readiness/report wiring, pose request artifacts, B1
+  navigation smoke, operator-preview camera promotion, explicit proof artifact
+  requirements, robot-consumption manifest, and canonical runtime-prior wrapper
+  exports.
 
-P1:
+Active P0:
 
-- Run the fitter and wire its residual output into readiness/report previews.
-- Project accepted room/object labels as candidate Map12 semantics only after
-  residuals pass.
-- Add or update a transform-aware B1 waypoint robot-view capture path:
-  `Map12 waypoint -> residual-backed B1 pose -> Isaac robot views`.
-- Make `run_b1_map12_navigation_smoke.py` or a narrow sibling script consume the
-  reviewed alignment artifact instead of the known-poor bbox candidate when
-  producing preview-grade waypoint evidence.
-- Promote the accepted runtime camera artifact into operator-console static
-  previews with `--b1-camera-artifact`, preserving no-camera static previews as
-  the default before runtime evidence exists.
-- Add tests that reject B1 FPV/Chase preview metadata unless both views are
-  same-waypoint, same-pose, residual-backed `isaac_runtime_*` artifacts.
-- Add tests that reject camera artifacts without an alignment artifact or
-  transform source, without applied B1 scene robot pose metadata, or derived
-  from bbox-fit / scene-probe sources.
+- Preserve B1 digital-twin capability status from an explicitly supplied
+  `runtime_map_prior` when `RealWorldCleanupContract` initializes runtime prior
+  state.
+- Expose that status through the agent-visible `runtime_metric_map` or adjacent
+  map-context payload used by MCP/server artifacts.
+- Add focused tests proving the agent can see verified B1 navigation capability
+  and blocked room/object/manipulation status without accepting semantics.
 
-P2:
+Active P1:
 
-- Register `B1_floor2_slow` to the same frame for photorealistic visual/open
-  tasks.
+- Human-review `docs/status/active/b1-map12-semantic-anchor-review-packet.json`.
+- Promote only accepted `anchor_role=semantic` room-interior anchors through
+  `scripts/maps/promote_b1_map12_semantic_review_packet.py`.
+- Run `scripts/maps/build_b1_map12_semantic_projection.py` only after accepted
+  semantic anchors exist, then pass the resulting verified artifact explicitly
+  as `b1_semantic_projection_artifact=...` / `--semantic-projection-artifact`.
+
+Active P2:
+
+- Add separate object-level semantic anchors and projection proof.
+- Register `B1_floor2_slow` to the same frame for later photorealistic
+  visual/open-task work.
 
 ## Verification
 
@@ -293,8 +429,14 @@ python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
   --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
   --output output/b1-map12/readiness/readiness.aligned.json
 
+python scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py \
+  --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+  --points output/b1-map12/navigation-smoke/map12_points.json \
+  --output output/b1-map12/navigation-smoke/waypoint_pose_requests.json
+
 python scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py \
   --readiness-artifact output/b1-map12/readiness/readiness.aligned.json \
+  --waypoint-pose-requests output/b1-map12/navigation-smoke/waypoint_pose_requests.json \
   --output-dir output/b1-map12/navigation-smoke \
   --accept-nvidia-eula
 
@@ -315,117 +457,182 @@ python scripts/operator_console/render_scene_previews.py \
 
 Preflight status: DRAFT
 
-Task source: user prompt plus this active plan and the 2026-06-17 reduce-entropy
-packet.
+Task source: user request to merge/split completed B1 plans and preflight the
+unfinished work; active plan path; completed prerequisite evidence contract.
 
 Canonical source: `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 
-Route: durable `$intuitive-flow`
+Route: durable `$intuitive-flow` after approval. Main session can implement the
+first P0 slice directly if the diff stays narrow; use a delegated worker only
+for isolated read-only review or long local proof.
 
-Goal: Make B1 / Map 12 usable enough for digital-twin preview by producing an
-honest two-map alignment diagnostic/review path, fitting residual-backed
-Map12-to-B1 transforms, and promoting B1 robot-view previews only from
-residual-backed Isaac runtime pose evidence.
+Goal: Make the verified B1 / Map12 Gaussian asset behave like a simulator scene
+for robot-facing consumers: Map12-driven on-demand navigation/pose application,
+Gaussian multi-view rendering from the applied pose, and explicit
+agent-visible runtime map capability status, while keeping unaccepted
+room/object semantics blocked.
 
 Scope:
 
-- P0: topdown diagnostic for `2rd_floor_seperated`; two-map anchor review/export;
-  Z-up `x,y` correspondence/fitter/test contract; vendor Map12 loading.
-- P1: residual integration into readiness/report paths; transform-aware B1
-  waypoint robot-view capture; operator-console camera preview promotion with
-  residual-backed provenance checks.
-- P2 only after P0/P1 pass: `B1_floor2_slow` visual registration for later
-  photorealistic/open-task work.
+- P0: expose existing B1 `digital_twin_capabilities` / `capability_summary`
+  from an explicitly supplied `runtime_map_prior` into agent-visible
+  MCP/runtime map context.
+- P0: add focused tests proving the agent-visible context reports verified B1
+  robot navigation and blocked room/object/manipulation status.
+- P0: ensure the agent-visible contract names the currently proven render
+  surface: residual-backed B1 pose application can produce same-pose
+  Gaussian/digital-twin FPV, Chase, and topdown evidence without implying
+  planner-backed or physical robot navigation.
+- P1: promote room semantics only from human-accepted `anchor_role=semantic`
+  room-interior anchors, then run strict semantic projection and consume the
+  verified projection artifact explicitly.
+- P2: add separate object-level semantic anchors/projection proof later.
 
-Non-goals: fused Gaussian semantic map, `B1_floor2_slow` first-pass
-registration, affine production truth, object/receptacle USD binding,
-manipulation readiness, public `household-world` command or MCP changes.
+Non-goals: redo geometry alignment, rerun topdown/anchor review unless evidence
+is stale, auto-align maps, auto-accept semantic anchors, infer room/object labels
+from geometry anchors, commit generated `output/**`, add fallback/autodiscovery,
+change public command grammar, add a public MCP navigation tool, claim planner
+backing, claim physical robot support, or implement manipulation/object USD
+binding.
 
-Entity budget:
+Entity budget: reuse=`runtime_map_prior_snapshot_v1`,
+`runtime_map_prior_targets.json`, `b1_robot_consumption_manifest.json`,
+`RealWorldCleanupContract.agent_view_payload()`, existing MCP live artifact
+writers, existing semantic review/projection scripts; remove/merge=do not keep
+`2026-06-16` as a second active implementation plan; new=at most a small helper
+for extracting/summarizing prior capabilities if needed to avoid duplicated
+payload logic; expansion triggers=new artifact schema, public tool/command,
+compatibility shim, semantic auto-promotion, manipulation/planner support.
 
-- Reuse: `assets/maps/b1-map12-scene-correspondences.json`,
-  `scripts/maps/fit_b1_map12_scene_alignment.py`,
-  `scripts/maps/render_b1_map12_correspondence_review.py`,
-  `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`,
-  `scripts/operator_console/render_scene_previews.py`.
-- Remove/merge: old `x,z` / Y-up assumptions from current B1 / Map 12
-  correspondence fixtures and fitter branches for `2rd_floor_seperated`.
-- New: a small scene topdown diagnostic artifact and the minimal anchor-picking
-  surface/export path, because existing tools only render manifest status or
-  edit Map12 label geometry.
-- Expansion triggers: adding a new public command grammar, new MCP tool,
-  fused semantic map artifact, manipulation support, or treating
-  `B1_floor2_slow` as first-pass registration requires re-approval.
-
-Context:
-
-- Must-read: this plan, `STATUS.md`, `ARCHITECTURE.md`,
-  `docs/human/domain.md`, `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`,
-  `assets/maps/b1-map12-scene-correspondences.json`,
-  `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
-  `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
-  `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/`.
-- Useful: `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`
-  for historical context only; it contains older `x,z` / Y-up examples that
-  must not override this plan.
-- Avoid unless needed: broad `output/**`, historical retrospectives, and old
-  B1 merged-bundle artifacts.
+Context: must-read=`README.md`, `ARCHITECTURE.md`, `STATUS.md`, `AGENTS.md`,
+`CLAUDE.md`, this plan,
+`docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`,
+`docs/status/active/b1-map12-verified-map-scene-alignment.md`,
+`roboclaws/household/realworld_contract_init.py`,
+`roboclaws/household/realworld_contract_payloads.py`,
+`roboclaws/household/realworld_runtime_map_contract.py`,
+`roboclaws/household/realworld_mcp_server.py`,
+`roboclaws/maps/runtime_prior_snapshot.py`; useful=focused tests under
+`tests/contract/molmo_cleanup/` and `tests/contract/maps/`;
+avoid-unless-needed=large `output/**`, historical retrospectives, old merged B1
+bundle artifacts, broad UI rewrites.
 
 Acceptance:
 
-- SUCCESS: residual-backed global or local B1 / Map 12 alignment exists, or the
-  scene diagnostic honestly blocks alignment; if alignment passes, at least one
-  same-waypoint FPV/Chase preview pair is promoted from residual-backed Isaac
-  runtime robot pose evidence.
-- BLOCKED_NEEDS_DECISION: none expected; implementation may try different
-  diagnostic and review-tool approaches as long as the invariants above hold.
-- BLOCKED_NEEDS_LOCAL_VALIDATION: Isaac runtime waypoint capture and camera
-  proof require local Isaac/GPU/EULA availability.
-- INTERMEDIATE_ONLY: acceptable only if P0 diagnostic/review/fitter gates pass
-  but Isaac camera capture remains unavailable; mark B1 preview camera proof as
-  blocked, not complete.
-- No regressions: empty/seed correspondences stay blocked, bbox seed never
-  verifies alignment, static B1 preview omits FPV/Chase before accepted runtime
-  camera evidence, and existing Map12 consistency gates still pass.
+- SUCCESS: an agent-visible MCP/runtime map payload built from an explicit B1
+  runtime prior contains B1 capability status showing
+  `robot_navigation_supported=true`, a render/observation capability statement
+  for same-pose Gaussian/digital-twin FPV/Chase/topdown evidence, and blocked
+  room/object/manipulation status; tests prove this without accepting semantic
+  anchors or reading generated fallback paths.
+- SUCCESS for P1: after human-accepted semantic anchors exist, strict semantic
+  projection produces a verified artifact, product/open-task routes consume it
+  only through an explicit `b1_semantic_projection_artifact=...` path, and
+  proposed-only/alignment-only inputs remain rejected.
+- BLOCKED_NEEDS_DECISION: human must choose/accept semantic anchors before room
+  projection can become complete.
+- BLOCKED_NEEDS_LOCAL_VALIDATION: full product proof that depends on local Isaac
+  or operator-console browser review remains local/manual if changed behavior
+  reaches those surfaces.
+- INTERMEDIATE_ONLY: P0 capability exposure may land without P1/P2 semantics if
+  tests prove navigation-ready plus semantics-blocked status honestly.
+- No regressions: no silent fallback, no backwards compatibility shim for old
+  artifact names or call shapes, no `output/**` autodiscovery, geometry anchors
+  remain geometry-only, semantic projection fails loudly until accepted semantic
+  anchors exist.
 
-Verification:
+Verification: deterministic=`ruff check` and `ruff format --check` on touched
+files plus focused pytest for runtime prior snapshot, B1 bundle,
+realworld contract/MCP server, and checker/console paths touched by the change;
+integration=compile/convert B1 bundle with explicit alignment/navigation proof
+artifacts when P0 changes prior consumption; product-run=B1 product/open-task or
+operator-console route with explicit `b1_alignment_artifact` and
+`b1_navigation_artifact` when route behavior changes; local-live-manual=Isaac
+navigation smoke and browser/operator-console review only if execution changes
+pose/camera/console behavior; optional=semantic review packet dry-run before P1.
 
-- Deterministic: run the focused pytest command in this plan plus any new
-  tests for Z-up projection, review/export, residual gating, and preview
-  provenance rejection.
-- Integration: run the Map12 consistency, correspondence review, fitter, and
-  readiness commands listed above.
-- Product-run: run `scripts/operator_console/render_scene_previews.py --world
-  b1-map12` before camera evidence and again with `--b1-camera-artifact` after
-  accepted runtime evidence.
-- Local-live-manual: run the Isaac waypoint capture/navigation smoke on a host
-  with the required Isaac runtime and review the generated topdown/camera
-  artifacts for nonblank, same-pose evidence.
-- Optional: compare alternate diagnostic backends when geometry extraction is
-  poor; keep the simplest one that produces honest review evidence.
-
-Execution: main session supervises the plan, owns final complete/blocked
-judgment, and updates this plan if implementation evidence changes details.
-Worker: optional, only for isolated read-only scouting of scene diagnostic
-backend choices or local artifact inspection.
+Execution: main=own scope, code changes, focused verification, commit, and final
+complete/blocked judgment; worker=none by default; worker-goal=none.
 
 To execute: `/goal execute docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md with intuitive-flow`
 
-Approval: `LGTM`, `approve`, or `go ahead` approves this preflight; requested
-edits revise this section before execution.
+Optional tracking: none
+
+Approval: `LGTM`, `approve`, or `go ahead` approves this preflight; edits
+request revision.
 
 ## Stop Condition
 
-Stop after either:
+For the approved P0 slice, stop after the agent-visible MCP/runtime map context
+exposes B1 capability status from an explicitly supplied runtime prior and
+focused tests prove navigation-ready plus room/object/manipulation-blocked
+status without fallback or semantic promotion.
 
-- the first residual-backed transform is available and at least one
-  same-waypoint B1 FPV/Chase preview pair has been generated and promoted into
-  the operator-console preview metadata; or
-- the diagnostic proves the scene labels are not self-consistent enough to align.
+For P1, stop if human-accepted semantic anchors are missing. Do not proceed to
+room semantic projection from proposed-only packets, alignment-only manifests,
+or generated suggestions.
 
-Do not broaden into semantic-map authoring until this blocker is closed.
+For P2, stop before object projection until a separate object-anchor acceptance
+contract exists.
+
+Do not broaden into public MCP tools, planner-backed navigation, physical robot
+support, manipulation, or fused semantic-map authoring without a new plan update.
 
 ## Implementation Status
+
+2026-06-18 planning-loop update:
+
+- The agent planning loop concluded this 2026-06-17 plan owns the runtime
+  application contract: residual-backed Map12 waypoint ids or on-demand
+  `map_xy/yaw` points become B1 scene robot poses, Isaac pose applications, and
+  same-pose visual evidence only inside verified coverage.
+- `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` remains the
+  prerequisite alignment/residual evidence source; this plan owns the newer
+  Z-up `x,y` policy and runtime proof contract.
+- The accepted geometry anchors, residuals, and local Isaac pose/camera proof
+  now exist. The active implementation blocker is narrower: B1 capability status
+  from the explicit runtime prior must still be exposed to the robot-facing
+  MCP/runtime map consumer, and room/object semantics remain blocked until
+  separate semantic anchors are accepted.
+- P1 internal pose request contract is implemented:
+  `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py` writes
+  `b1_map12_waypoint_pose_requests_v1` artifacts from on-demand Map12
+  waypoint ids or `map_xy/yaw` points. Globally verified residual-backed
+  alignment produces B1 pose rows with coverage decisions; unverified
+  alignment, malformed points, or missing coverage produce blocked rows.
+- Explicit local-area coverage is supported only when the point names a
+  `navigation_area_id` that has a verified independent area transform in the
+  residual artifact. Missing or unknown local area ids block loudly; no global
+  fallback is inferred for area-only alignment.
+- `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` can consume the
+  pose request artifact through `--waypoint-pose-requests`. A blocked request
+  artifact blocks smoke capture, and missing/seed-derived readiness waypoints
+  no longer act as a silent fallback.
+- Navigation smoke now requires at least two distinct applied B1 scene poses
+  before it can set `robot_navigation_supported=true`; duplicate-pose camera
+  rows remain blocked even if two images exist.
+- `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
+  `waypoint_pose_requests.json`, showing ready and blocked conversion rows so
+  coverage decisions are auditable even before Isaac robot-view capture passes.
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py` implements the
+  strict reviewed-anchor promotion gate owned by the 2026-06-16 alignment plan.
+  It writes the committed correspondence manifest only from human-accepted
+  anchors with explicit `anchor_role`, rejects proposed-only rows, fewer than
+  six accepted anchors, bbox/seed coordinate sources, and auto-accepted
+  suggestions, and requires real ids only for accepted `anchor_role=semantic`
+  anchors. Its `--check` mode validates the same gate without writing the
+  committed asset, and write mode strips review-only suggestion metadata from
+  promoted anchors.
+- The same promotion gate now also rejects self-inconsistent review-packet
+  metadata: top-level accepted/proposed counts must match actual anchor
+  statuses, `accepted_manifest_mutated` must be false, and policy must keep
+  `auto_accept=false` plus `review_required=true`.
+- The semantic suggestion command now also emits
+  `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
+  for the human/operator to review candidate ids before editing the JSON packet.
+- `scripts/maps/check_b1_map12_semantic_review_packet_fit.py` can validate a
+  human-edited packet and run the residual fitter against a promoted preview
+  manifest under `output/` without writing the committed correspondence asset.
 
 2026-06-17 update:
 
@@ -456,15 +663,105 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - B1 static preview generation still publishes only `map` and `topdown` before
   residual-backed Isaac runtime camera evidence; FPV/Chase promotion remains
   guarded by same-waypoint, residual-backed, `robot_pose_applied` provenance.
+- Operator-console B1 camera preview promotion now rejects generic
+  `robot_view_steps` unless they include an explicit camera-control contract
+  proving the FPV source is robot-mounted or a head-camera equivalent and not a
+  scene-probe or bbox source. Dedicated B1 navigation-smoke waypoint evidence
+  remains accepted because the smoke artifact already represents pose-driven
+  runtime waypoint capture.
+- The same preview promotion gate also rejects camera artifacts that omit the
+  waypoint id or mix FPV/Chase files from different view labels, so promoted
+  FPV and Chase metadata always describe one same-waypoint evidence row.
+- `--skip-existing` for B1 previews now reuses camera preview metadata only
+  when it still carries the matching camera artifact path, same waypoint id,
+  residual alignment artifact, and `reviewed_correspondence_fit` transform
+  source. Incomplete stale camera metadata is rewritten to static map/topdown
+  preview and stale FPV/Chase files are removed.
 
 Current gate:
 
-- `assets/maps/b1-map12-scene-correspondences.json` still has zero accepted
-  anchors. This is the correct blocked state until a human/operator reviews at
-  least six anchors across at least three areas/partitions.
-- The residual-backed transform, Isaac waypoint camera proof, and FPV/Chase
-  preview promotion remain unimplemented/unverified until reviewed anchors and
-  local Isaac runtime evidence exist.
+- `assets/maps/b1-map12-scene-correspondences.json` now contains seven accepted
+  `anchor_role=alignment` geometry anchors from
+  `docs/status/active/b1-map12-alignment-accepted-review-packet.json`.
+- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment`
+  writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
+  mean residual `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+- The internal pose-request artifact and report-audit path consume that
+  residual artifact. The default navigation-smoke harness now passes with two
+  residual-backed Map12 navigation-memory points and same-pose Isaac FPV/Chase
+  evidence.
+- `scripts/maps/compile_b1_map12_runtime_bundle.py` can now consume explicit
+  verified alignment and navigation artifacts and write
+  `digital_twin_capabilities.robot_consumption_proof` into `semantics.json`.
+  With the accepted residual/navigation smoke artifacts, the compiled runtime
+  bundle validates and reports `robot_navigation_supported=true`. The compiler
+  does not auto-discover `output/` artifacts; callers must pass explicit paths,
+  and missing, invalid, or mismatched artifacts fail loudly.
+- The compiled bundle writes `b1_robot_consumption_manifest.json` as the thin
+  robot-consumer status packet. It summarizes navigation readiness, room/object
+  semantic readiness, blocked capabilities, required bundle files, and the
+  no-autodiscovery policy without adding another fallback path.
+- The same compiler can now consume an explicit verified semantic projection
+  artifact and write
+  `digital_twin_capabilities.room_semantic_projection_proof` into
+  `semantics.json`. This only promotes room semantics when the projection
+  artifact itself was produced from accepted semantic anchors. The default route
+  does not auto-discover semantic projection output, and object projection stays
+  `blocked_until_object_semantic_anchors`.
+- A compiled B1/Nav2 cleanup bundle can now be converted into the same
+  `runtime_map_prior_snapshot_v1` contract used by sim map-build output via
+  `runtime_prior_snapshot_from_nav2_cleanup_bundle(...)` or
+  `scripts/maps/convert_nav2_cleanup_bundle.py`. This gives downstream robot
+  consumers one canonical prior shape for online sim maps, Agibot
+  `navigation_memory.json`, and compiled B1 digital-twin bundles.
+- The B1 product/open-task route now exports the compiled bundle into
+  `runtime_map_prior_snapshot.json` and
+  `runtime_map_prior_targets.json` beside the run output, and copies
+  `b1_robot_consumption_manifest.json` to the run root. The export is an
+  explicit visible artifact from the freshly compiled bundle; it does not
+  auto-discover older generated `output/` files or silently change the default
+  `runtime_map_prior` input.
+- Operator-console state also lists those wrapper-level artifacts, so B1 runs
+  launched from the console can expose the canonical prior and robot-consumer
+  manifest even when the active live-attempt evidence is nested under a
+  timestamp/seed directory.
+- The B1 / Isaac checker path now uses
+  `--require-b1-robot-consumption-proof`, which validates the run-local copied
+  `map_bundle/semantics.json` for a verified
+  `digital_twin_capabilities.robot_consumption_proof` and requires the run-root
+  `b1_robot_consumption_manifest.json` to match the verified navigation proof.
+  It intentionally does
+  not reuse the older RBY1M `--require-real-robot-alignment` gate.
+- When that gate is active, B1 product/open-task routes fail before launch
+  unless both `b1_alignment_artifact` and `b1_navigation_artifact` are passed
+  explicitly. Missing proof input is a blocker, not permission to auto-discover
+  generated `output/` files.
+- Operator-console B1 / Map 12 launch readiness follows the same rule and
+  requires explicit readable JSON paths for both proof artifacts before Start
+  Agent Run can become ready.
+- `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
+  currently exits non-zero with `accepted semantic anchors are required before
+  projecting room labels`. This is expected until human-accepted
+  `anchor_role=semantic` room-interior anchors are promoted.
+
+Next implementation slice:
+
+- Human-review `docs/status/active/b1-map12-semantic-anchor-review-packet.json`.
+  If selected room-interior points are valid, promote them through
+  `scripts/maps/promote_b1_map12_semantic_review_packet.py`, then run the
+  strict semantic projection script. Do not use the verification-only manifest,
+  bbox seed, proposed-only packet, or current alignment-only manifest as room
+  semantics.
+- For product/open-task runs that need the robot-consumption proof inside the
+  map bundle, pass explicit `b1_alignment_artifact=...` and
+  `b1_navigation_artifact=...` overrides rather than relying on generated
+  `output/` discovery.
+- After the strict semantic projection artifact exists, product/open-task runs
+  may also pass explicit `b1_semantic_projection_artifact=...` to carry verified
+  room semantics in the runtime bundle. Do not pass proposed-only packets or
+  current alignment-only manifests as room semantics.
+- Add separate object-level semantic anchors later before projecting object
+  labels.
 
 Latest deterministic evidence:
 
@@ -475,8 +772,80 @@ ruff format --check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/map
 ruff check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
 ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
 ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_topdown_diagnostic.py -q
+ruff check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+ruff format --check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q
+ruff check scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+ruff format --check scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py -q
+ruff check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
+ruff format --check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_navigation_report.py -q
+ruff check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py
+ruff format --check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_render_scene_previews.py -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q
 .venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --output-dir output/b1-map12/scene-topdown-label-overlay
 python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
 python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof
 ```
+
+## Fresh Context Handoff
+
+Paused on 2026-06-18 at the user's request so the remaining work can resume in
+a fresh context.
+
+Current proven state:
+
+- Geometry alignment is accepted through seven committed
+  `anchor_role=alignment` anchors in
+  `assets/maps/b1-map12-scene-correspondences.json`.
+- The official residual artifact is
+  `output/b1-map12/alignment/alignment_residuals.json`; it is
+  `global_verified` with `selected_transform_type=rigid_2d`, mean residual
+  `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+- The first preview-grade robot-consumption proof passes through
+  `output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`.
+  It applies two residual-backed Map12 navigation-memory points as B1 scene
+  robot poses and records same-pose Isaac FPV/Chase evidence.
+- Product and operator-console routes require explicit
+  `b1_alignment_artifact=...` and `b1_navigation_artifact=...` paths before
+  B1 proof consumption. They must not auto-discover generated `output/`
+  artifacts.
+- Compiled B1 runtime bundles write `b1_robot_consumption_manifest.json`,
+  `runtime_map_prior_snapshot.json`, and `runtime_map_prior_targets.json`.
+  `runtime_map_prior_targets.json` includes `digital_twin_capabilities` and
+  `capability_summary`.
+
+Known incomplete state:
+
+- Room semantic projection is still blocked. The current committed
+  correspondence manifest contains geometry anchors only.
+- `docs/status/active/b1-map12-semantic-anchor-review-packet.json` is review
+  input only. It is not accepted semantic truth.
+- Object semantic projection and object/receptacle binding remain blocked.
+- Manipulation, planner-backed navigation, physical robot navigation, and new
+  public MCP navigation tools remain out of scope for this plan.
+- A narrow consumer-chain gap was found just before pausing: the compiled B1
+  prior carries `digital_twin_capabilities`, but
+  `RealWorldCleanupContract` currently extracts prior observed objects,
+  anchors, and rooms without preserving that capability status in the
+  agent-visible MCP/runtime map payload. The next context should verify and fix
+  that strict consumer path without promoting unreviewed semantics.
+
+Recommended first slice for the new context:
+
+1. Inspect `roboclaws/household/realworld_contract_init.py`,
+   `roboclaws/household/realworld_contract_payloads.py`,
+   `roboclaws/household/realworld_runtime_map_contract.py`, and
+   `roboclaws/household/realworld_mcp_server.py`.
+2. Expose existing B1 `digital_twin_capabilities` / `capability_summary` from
+   an explicitly supplied `runtime_map_prior` into the agent-visible
+   `runtime_metric_map` or adjacent map-context payload.
+3. Add focused contract/MCP tests proving the agent can see
+   `robot_navigation_supported=true` while room/object/manipulation capability
+   status remains blocked.
+4. Do not touch generated `output/**`, do not add fallback/autodiscovery, and do
+   not infer room or object labels from the seven alignment anchors.

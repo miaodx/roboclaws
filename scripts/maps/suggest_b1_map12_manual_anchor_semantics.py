@@ -4,16 +4,22 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from html import escape
 from pathlib import Path
 from typing import Any
 
 SUGGESTION_SCHEMA = "b1_map12_manual_anchor_semantic_suggestions_v1"
+REVIEW_PACKET_SCHEMA = "b1_map12_manual_anchor_semantic_review_packet_v1"
 DEFAULT_DRAFT = Path("docs/status/active/b1-map12-scene-correspondences-draft.json")
 DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_SCENE_DIAGNOSTIC = Path(
     "output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json"
 )
 DEFAULT_OUTPUT = Path("output/b1-map12/manual-draft-anchor-semantic-suggestions.json")
+DEFAULT_REVIEW_PACKET_OUTPUT = Path(
+    "output/b1-map12/manual-draft-anchor-semantic-review-packet.json"
+)
+DEFAULT_REVIEW_REPORT_OUTPUT = Path("output/b1-map12/manual-draft-anchor-semantic-review.html")
 STRONG_DISTANCE_M = 0.5
 
 
@@ -28,6 +34,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
     parser.add_argument("--scene-diagnostic", type=Path, default=DEFAULT_SCENE_DIAGNOSTIC)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--review-packet-output",
+        type=Path,
+        default=DEFAULT_REVIEW_PACKET_OUTPUT,
+        help=(
+            "Optional review aid that combines manual picks with semantic suggestions. "
+            "Anchors remain proposed and require human acceptance."
+        ),
+    )
+    parser.add_argument(
+        "--review-report-output",
+        type=Path,
+        default=DEFAULT_REVIEW_REPORT_OUTPUT,
+        help="Static HTML table for human review of the semantic review packet.",
+    )
     return parser.parse_args(argv)
 
 
@@ -43,6 +64,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    review_packet_output = args.review_packet_output
+    review_report_output = args.review_report_output
+    if review_packet_output is not None:
+        review_packet = build_semantic_review_packet(
+            draft=json.loads(args.draft.read_text(encoding="utf-8")),
+            suggestions=payload,
+            draft_path=args.draft,
+            suggestions_path=args.output,
+        )
+        review_packet_output.parent.mkdir(parents=True, exist_ok=True)
+        review_packet_output.write_text(
+            json.dumps(review_packet, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        if review_report_output is not None:
+            review_report_output.parent.mkdir(parents=True, exist_ok=True)
+            review_report_output.write_text(
+                render_semantic_review_report(review_packet, packet_path=review_packet_output),
+                encoding="utf-8",
+            )
     print(
         json.dumps(
             {
@@ -50,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
                 "anchor_count": payload["anchor_count"],
                 "strong_candidate_count": payload["strong_candidate_count"],
                 "output": str(args.output),
+                "review_packet_output": str(review_packet_output or ""),
+                "review_report_output": str(review_report_output or ""),
             },
             sort_keys=True,
         )
@@ -123,6 +166,151 @@ def build_semantic_suggestions(
         ),
         "suggestions": suggestions,
     }
+
+
+def build_semantic_review_packet(
+    *,
+    draft: dict[str, Any],
+    suggestions: dict[str, Any],
+    draft_path: Path | None = None,
+    suggestions_path: Path | None = None,
+) -> dict[str, Any]:
+    suggestion_by_anchor = {
+        str(item.get("anchor_id") or ""): item
+        for item in suggestions.get("suggestions") or []
+        if isinstance(item, dict)
+    }
+    anchors = []
+    for anchor in explicit_anchor_picks(draft):
+        anchor_id = str(anchor.get("anchor_id") or "")
+        suggestion = suggestion_by_anchor.get(anchor_id, {})
+        map_candidates = [
+            item for item in suggestion.get("map_candidates") or [] if isinstance(item, dict)
+        ]
+        scene_candidates = [
+            item for item in suggestion.get("scene_candidates") or [] if isinstance(item, dict)
+        ]
+        recommended_area = str(suggestion.get("recommended_navigation_area_id") or "")
+        recommended_partition = str(suggestion.get("recommended_asset_partition_id") or "")
+        candidate = dict(anchor)
+        candidate["anchor_role"] = str(anchor.get("anchor_role") or "alignment")
+        candidate["review_status"] = "proposed"
+        candidate["navigation_area_id"] = recommended_area
+        candidate["asset_partition_id"] = recommended_partition
+        candidate["semantic_review"] = {
+            "status": "needs_human_review",
+            "suggestion_status": str(suggestion.get("suggestion_status") or "missing_suggestion"),
+            "recommended_navigation_area_id": recommended_area,
+            "recommended_asset_partition_id": recommended_partition,
+            "map_candidates": map_candidates,
+            "scene_candidates": scene_candidates,
+            "acceptance_instructions": (
+                "Use anchor_role=alignment for geometry-only picks. Use anchor_role=semantic "
+                "only for room-interior label points with final navigation_area_id and "
+                "asset_partition_id, then change review_status to accepted."
+            ),
+        }
+        anchors.append(candidate)
+    return {
+        "schema": REVIEW_PACKET_SCHEMA,
+        "source_map_frame": draft.get("source_map_frame"),
+        "target_scene_frame": draft.get("target_scene_frame"),
+        "bbox_seed_policy": draft.get("bbox_seed_policy"),
+        "scene_projection_policy": draft.get("scene_projection_policy"),
+        "source_draft": str(draft_path or suggestions.get("draft") or ""),
+        "source_suggestions": str(suggestions_path or ""),
+        "status": "needs_human_review",
+        "accepted_manifest_mutated": False,
+        "accepted_anchor_count": 0,
+        "proposed_anchor_count": len(anchors),
+        "strong_candidate_count": int(suggestions.get("strong_candidate_count") or 0),
+        "policy": {
+            "auto_accept": False,
+            "review_required": True,
+            "note": (
+                "This packet is a review aid only. It must not be used as a verified "
+                "correspondence manifest until anchors are explicitly accepted."
+            ),
+        },
+        "anchors": anchors,
+    }
+
+
+def render_semantic_review_report(
+    packet: dict[str, Any], *, packet_path: Path | None = None
+) -> str:
+    rows = "\n".join(render_anchor_row(anchor) for anchor in packet.get("anchors") or [])
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>B1 Map12 Manual Anchor Semantic Review</title>
+  <style>
+    body {{ font-family: sans-serif; margin: 24px; color: #17202a; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #d7dde5; padding: 6px; vertical-align: top; }}
+    th {{ background: #eef2f6; text-align: left; }}
+    code {{ background: #f6f8fa; padding: 1px 3px; }}
+    .notice {{ border-left: 4px solid #b36b00; background: #fff8e8; padding: 10px; }}
+  </style>
+</head>
+<body>
+  <h1>B1 Map12 Manual Anchor Semantic Review</h1>
+  <p class="notice">Review aid only. It does not accept anchors or mutate the committed manifest.
+  Final ids must be human reviewed before running the strict promoter.</p>
+  <p>Packet: <code>{escape(str(packet_path or ""))}</code></p>
+  <p>Status: <strong>{escape(str(packet.get("status") or ""))}</strong>.
+  Proposed: <strong>{escape(str(packet.get("proposed_anchor_count") or 0))}</strong>.
+  Accepted: <strong>{escape(str(packet.get("accepted_anchor_count") or 0))}</strong>.
+  Strong candidates: <strong>{escape(str(packet.get("strong_candidate_count") or 0))}</strong>.</p>
+  <table id="semantic-review-report">
+    <thead>
+      <tr>
+        <th>Anchor</th>
+        <th>Status</th>
+        <th>Map XY</th>
+        <th>Scene XYZ</th>
+        <th>Recommended IDs</th>
+        <th>Map Candidates</th>
+        <th>Scene Candidates</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows}
+    </tbody>
+  </table>
+</body>
+</html>
+"""
+
+
+def render_anchor_row(anchor: dict[str, Any]) -> str:
+    review = (
+        anchor.get("semantic_review") if isinstance(anchor.get("semantic_review"), dict) else {}
+    )
+    review_status = escape(str(anchor.get("review_status") or ""))
+    suggestion_status = escape(str(review.get("suggestion_status") or ""))
+    return f"""<tr>
+  <td><code>{escape(str(anchor.get("anchor_id") or ""))}</code></td>
+  <td>{review_status}<br />{suggestion_status}</td>
+  <td><code>{escape(json.dumps(anchor.get("map_xy") or []))}</code></td>
+  <td><code>{escape(json.dumps(anchor.get("scene_xyz") or []))}</code></td>
+  <td>navigation: <code>{escape(str(anchor.get("navigation_area_id") or ""))}</code><br />
+      asset: <code>{escape(str(anchor.get("asset_partition_id") or ""))}</code></td>
+  <td>{render_candidate_list(review.get("map_candidates") or [], "map_area_id")}</td>
+  <td>{render_candidate_list(review.get("scene_candidates") or [], "partition_id")}</td>
+</tr>"""
+
+
+def render_candidate_list(candidates: list[Any], id_field: str) -> str:
+    items = []
+    for candidate in candidates[:3]:
+        if not isinstance(candidate, dict):
+            continue
+        label = str(candidate.get(id_field) or candidate.get("label_id") or "")
+        distance = candidate.get("distance_m")
+        items.append(f"<li><code>{escape(label)}</code> {escape(str(distance))} m</li>")
+    return "<ul>" + "".join(items) + "</ul>" if items else ""
 
 
 def explicit_anchor_picks(draft: dict[str, Any]) -> list[dict[str, Any]]:

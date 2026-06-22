@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,10 @@ from roboclaws.household.manipulation_provenance import (
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
+from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, MINIMAL_MAP_MODE
+from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
+from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -22,6 +26,13 @@ AGIBOT_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.
 AGIBOT_SDK_RUNNER_PATH = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 )
+B1_MAP12_BUNDLE = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
+)
+B1_SCENE_ROOT = (
+    REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / "2rd_floor_seperated"
+)
+B1_REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -1841,6 +1852,52 @@ def test_checker_rejects_real_robot_alignment_when_chase_is_policy_input(
             min_generated_mess_count=5,
             require_real_robot_alignment=True,
         )
+
+
+def test_checker_accepts_b1_robot_consumption_proof_without_rby1m_readiness(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
+
+    checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
+    with pytest.raises(AssertionError):
+        checker._assert_real_robot_alignment(run_result, tmp_path, "Nav2 Map Bundle")
+
+
+def test_checker_rejects_b1_robot_consumption_without_verified_navigation(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=False)
+
+    with pytest.raises(AssertionError):
+        checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
+
+
+def test_checker_rejects_b1_robot_consumption_without_manifest(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
+    (tmp_path / "b1_robot_consumption_manifest.json").unlink()
+
+    with pytest.raises(AssertionError):
+        checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
+
+
+def test_checker_rejects_b1_robot_consumption_manifest_drift(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
+    manifest_path = tmp_path / "b1_robot_consumption_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["navigation"]["navigation_artifact"] = "wrong.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(AssertionError):
+        checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
 
 
 def test_checker_rejects_too_small_generated_mess_set(tmp_path: Path) -> None:
@@ -4777,6 +4834,155 @@ def _insert_robot_timeline_before_score(report: Path) -> None:
     else:
         report_text += robot_timeline
     report.write_text(report_text, encoding="utf-8")
+
+
+def _b1_robot_consumption_run_result(tmp_path: Path, *, verified: bool) -> dict[str, object]:
+    source_bundle = _compile_b1_runtime_bundle_for_checker(tmp_path, verified=verified)
+    run_result: dict[str, object] = {
+        "contract": "realworld_cleanup_contract_v1",
+        "artifacts": {},
+    }
+    attach_nav2_map_bundle_snapshot(
+        run_result=run_result,
+        run_dir=tmp_path,
+        source_bundle_dir=source_bundle,
+    )
+    manifest_path = source_bundle / "b1_robot_consumption_manifest.json"
+    if manifest_path.is_file():
+        shutil.copy2(manifest_path, tmp_path / "b1_robot_consumption_manifest.json")
+    return run_result
+
+
+def _compile_b1_runtime_bundle_for_checker(tmp_path: Path, *, verified: bool) -> Path:
+    kwargs: dict[str, Path] = {}
+    if verified:
+        alignment_path = tmp_path / "b1_alignment_residuals.json"
+        navigation_path = tmp_path / "b1_navigation_smoke.json"
+        alignment_path.write_text(
+            json.dumps(_b1_verified_alignment_artifact()),
+            encoding="utf-8",
+        )
+        navigation_path.write_text(
+            json.dumps(_b1_navigation_artifact(tmp_path, alignment_path=alignment_path)),
+            encoding="utf-8",
+        )
+        kwargs = {
+            "alignment_artifact_path": alignment_path,
+            "navigation_artifact_path": navigation_path,
+        }
+    result = compile_runtime_bundle(
+        map_bundle=B1_MAP12_BUNDLE,
+        scene_root=B1_SCENE_ROOT,
+        review_manifest_path=B1_REVIEW_MANIFEST,
+        output_dir=tmp_path / ("b1-runtime-verified" if verified else "b1-runtime-blocked"),
+        **kwargs,
+    )
+    return Path(result["output_dir"])
+
+
+def _b1_verified_alignment_artifact() -> dict[str, object]:
+    return {
+        "schema": "b1_map12_scene_alignment_residuals_v1",
+        "bbox_seed_policy": "known_poor_seed_only",
+        "manipulation_supported": False,
+        "object_receptacle_usd_binding_status": "blocked_out_of_scope",
+        "global_alignment_status": "verified",
+        "selected_transform_type": "rigid_2d",
+        "selected_transform": {
+            "source": "reviewed_correspondence_fit",
+            "type": "rigid_2d",
+        },
+        "residual_evidence": {
+            "status": "available",
+            "matched_anchor_count": 6,
+            "transform_source": "reviewed_correspondence_fit",
+            "mean_residual_m": 0.1,
+            "median_residual_m": 0.1,
+            "p90_residual_m": 0.2,
+            "max_residual_m": 0.3,
+        },
+        "area_alignment": [],
+    }
+
+
+def _b1_navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict[str, object]:
+    first = tmp_path / "b1-waypoint-1.fpv.png"
+    second = tmp_path / "b1-waypoint-2.fpv.png"
+    _write_checker_reviewable_png(first, color=(32, 64, 96))
+    _write_checker_reviewable_png(second, color=(96, 64, 32))
+    return {
+        "schema": "b1_map12_navigation_smoke_v1",
+        "status": "passed",
+        "robot_navigation_supported": True,
+        "robot_navigation_provenance": NAVIGATION_PROVENANCE,
+        "navigation_provenance": "kinematic_pose_driven",
+        "alignment_artifact": str(alignment_path),
+        "alignment_transform_source": "reviewed_correspondence_fit",
+        "planner_backed": False,
+        "physical_robot": False,
+        "semantic_source": "robot_map_12_navigation_memory_overlay",
+        "semantic_usd_binding_status": "blocked_until_segmentation_or_manifest",
+        "semantic_anchors_are_usd_truth": False,
+        "usd_object_index_ready": False,
+        "usd_receptacle_index_ready": False,
+        "manipulation_supported": False,
+        "navigation_waypoint_count": 2,
+        "robot_view_evidence_status": "available",
+        "waypoint_evidence": [
+            _b1_waypoint_evidence(
+                "wp_1",
+                x=-4.0,
+                y=-8.0,
+                alignment_path=alignment_path,
+                fpv=first,
+            ),
+            _b1_waypoint_evidence(
+                "wp_2",
+                x=-2.0,
+                y=-7.0,
+                alignment_path=alignment_path,
+                fpv=second,
+            ),
+        ],
+    }
+
+
+def _b1_waypoint_evidence(
+    waypoint_id: str,
+    *,
+    x: float,
+    y: float,
+    alignment_path: Path,
+    fpv: Path,
+) -> dict[str, object]:
+    return {
+        "waypoint_id": waypoint_id,
+        "robot_pose": {
+            "frame": "b1_rebuilt_scene_usd_world_candidate",
+            "x": x,
+            "y": y,
+            "z": 0.0,
+            "yaw_deg": 0.0,
+        },
+        "robot_pose_applied": True,
+        "alignment_artifact": str(alignment_path),
+        "alignment_transform_source": "reviewed_correspondence_fit",
+        "views": {"fpv": str(fpv)},
+    }
+
+
+def _write_checker_reviewable_png(path: Path, *, color: tuple[int, int, int]) -> None:
+    image = Image.new("RGB", (32, 24))
+    pixels = image.load()
+    red, green, blue = color
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels[x, y] = (
+                (red + x * 7) % 256,
+                (green + y * 11) % 256,
+                (blue + (x + y) * 5) % 256,
+            )
+    image.save(path)
 
 
 def _write_strict_planner_proof(

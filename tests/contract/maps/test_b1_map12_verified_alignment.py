@@ -7,21 +7,39 @@ from pathlib import Path
 
 import pytest
 
+from scripts.isaac_lab_cleanup.build_b1_map12_waypoint_pose_requests import (
+    build_pose_request_artifact,
+)
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     KNOWN_POOR_BBOX_SEED_SOURCE,
     readiness_artifact_with_alignment,
     validate_readiness_artifact,
+    validate_waypoint_pose_requests_artifact,
+)
+from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
+    navigation_smoke_has_distinct_pose_evidence,
+    navigation_smoke_waypoints,
 )
 from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
+from scripts.maps.build_b1_map12_semantic_anchor_review_packet import (
+    build_semantic_anchor_review_packet,
+)
+from scripts.maps.build_b1_map12_semantic_projection import build_semantic_projection
 from scripts.maps.fit_b1_map12_scene_alignment import (
+    ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_ALIGNMENT_RESIDUALS_SCHEMA,
     B1_MAP12_CORRESPONDENCES_SCHEMA,
+    SEMANTIC_ANCHOR_ROLE,
     build_alignment_residuals,
     validate_alignment_residual_artifact,
     validate_correspondence_manifest,
 )
 from scripts.maps.promote_b1_map12_manual_draft_for_verification import (
     build_verification_manifest,
+)
+from scripts.maps.promote_b1_map12_semantic_review_packet import (
+    PromotionError,
+    build_reviewed_correspondence_manifest,
 )
 from scripts.maps.render_b1_map12_correspondence_review import (
     build_review_packet,
@@ -32,13 +50,24 @@ from scripts.maps.render_b1_scene_gaussian_topdown import (
     build_topdown_camera_request,
 )
 from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (
+    build_semantic_review_packet,
     build_semantic_suggestions,
+    render_semantic_review_report,
 )
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "fit_b1_map12_scene_alignment.py"
 REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence_review.py"
+PROMOTE_REVIEW_PACKET_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_semantic_review_packet.py"
+)
+CHECK_REVIEW_PACKET_FIT_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
+)
+SEMANTIC_PROJECTION_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_projection.py"
+)
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 VENDOR_MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
@@ -71,6 +100,7 @@ def accepted_anchor(
     return {
         "anchor_id": anchor_id,
         "anchor_type": "door_center",
+        "anchor_role": SEMANTIC_ANCHOR_ROLE,
         "navigation_area_id": navigation_area_id,
         "asset_partition_id": asset_partition_id,
         "map_xy": [map_xy[0], map_xy[1]],
@@ -85,6 +115,22 @@ def accepted_anchor(
         "map_coordinate_source": "operator_map_pick",
         "scene_coordinate_source": "operator_scene_pick",
     }
+
+
+def alignment_anchor(
+    anchor_id: str,
+    map_xy: tuple[float, float],
+    scene_xy: tuple[float, float],
+) -> dict[str, object]:
+    anchor = accepted_anchor(
+        anchor_id,
+        map_xy,
+        scene_xy,
+        navigation_area_id="",
+        asset_partition_id="",
+    )
+    anchor["anchor_role"] = ALIGNMENT_ANCHOR_ROLE
+    return anchor
 
 
 def scene_topdown_render_packet(tmp_path: Path) -> Path:
@@ -154,6 +200,61 @@ def passing_anchors() -> list[dict[str, object]]:
     return anchors
 
 
+def semantic_review_packet(*, anchors: list[dict[str, object]]) -> dict[str, object]:
+    packet = correspondence_manifest(anchors=anchors)
+    accepted_count = sum(anchor.get("review_status") == "accepted" for anchor in anchors)
+    proposed_count = sum(anchor.get("review_status") == "proposed" for anchor in anchors)
+    packet.update(
+        {
+            "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+            "status": "human_reviewed" if accepted_count else "needs_human_review",
+            "accepted_manifest_mutated": False,
+            "accepted_anchor_count": accepted_count,
+            "proposed_anchor_count": proposed_count,
+            "policy": {
+                "auto_accept": False,
+                "review_required": True,
+            },
+        }
+    )
+    return packet
+
+
+def accepted_room_review_manifest(*, labels: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "schema": "b1_map12_alignment_review_v1",
+        "labels": labels,
+    }
+
+
+def accepted_room_label(
+    *,
+    label_id: str,
+    map_area_id: str,
+    scene_partition_id: str,
+    room_label: str,
+    category: str = "room",
+) -> dict[str, object]:
+    return {
+        "label_id": label_id,
+        "map_area_id": map_area_id,
+        "scene_partition_id": scene_partition_id,
+        "review_status": "accepted",
+        "room_label": room_label,
+        "category": category,
+        "geometry": {
+            "type": "map_polygon",
+            "frame_id": "map",
+            "points": [
+                {"x": 0.0, "y": 0.0},
+                {"x": 2.0, "y": 0.0},
+                {"x": 2.0, "y": 2.0},
+                {"x": 0.0, "y": 2.0},
+            ],
+        },
+    }
+
+
 def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
     anchor = accepted_anchor(
         "bbox_seed_prefill",
@@ -219,6 +320,38 @@ def test_fitter_selects_simple_verified_similarity_transform(tmp_path: Path) -> 
     assert payload["diagnostic_affine_transform"]["diagnostic_only"] is True
 
 
+def test_fitter_verifies_geometry_alignment_anchors_without_semantic_ids(
+    tmp_path: Path,
+) -> None:
+    anchors = []
+    for anchor in passing_anchors():
+        map_xy = anchor["map_xy"]
+        scene_xyz = anchor["scene_xyz"]
+        assert isinstance(map_xy, list)
+        assert isinstance(scene_xyz, list)
+        anchors.append(
+            alignment_anchor(
+                str(anchor["anchor_id"]),
+                (float(map_xy[0]), float(map_xy[1])),
+                (float(scene_xyz[0]), float(scene_xyz[1])),
+            )
+        )
+    manifest = correspondence_manifest(anchors=anchors)
+
+    payload = build_alignment_residuals(
+        manifest,
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+
+    assert validate_alignment_residual_artifact(payload) == []
+    assert payload["global_alignment_status"] == "verified"
+    assert payload["accepted_navigation_area_count"] == 0
+    assert payload["accepted_asset_partition_count"] == 0
+    assert payload["area_alignment"] == []
+    assert {row["anchor_role"] for row in payload["residuals"]} == {ALIGNMENT_ANCHOR_ROLE}
+
+
 def test_readiness_promotes_verified_only_from_residual_artifact(tmp_path: Path) -> None:
     readiness = static_readiness_payload()
     readiness["map12_overlay"] = {
@@ -241,6 +374,288 @@ def test_readiness_promotes_verified_only_from_residual_artifact(tmp_path: Path)
     assert merged["map12_to_b1_usd_transform_status"] == "verified"
     assert merged["residual_evidence"]["matched_anchor_count"] == 6
     assert validate_readiness_artifact(merged) == []
+
+
+def test_waypoint_pose_requests_convert_verified_global_map12_points(tmp_path: Path) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "manual_point_a", "x": -8.0, "y": 0.0, "yaw_deg": 90.0},
+            {"waypoint_id": "manual_point_b", "x": 1.0, "y": 4.0, "yaw": 0.25},
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "ready"
+    assert payload["waypoint_count"] == 2
+    assert payload["blocked_request_count"] == 0
+    assert payload["robot_navigation_supported"] is False
+    assert payload["planner_backed"] is False
+    assert payload["physical_robot"] is False
+    first = payload["waypoints"][0]
+    assert first["coverage_decision"]["status"] == "verified_global"
+    assert first["alignment_transform_source"] == "reviewed_correspondence_fit"
+    assert first["b1_pose"]["frame"] == "b1_rebuilt_scene_usd_world"
+    assert first["b1_pose"]["x"] == pytest.approx(-6.6)
+    assert first["b1_pose"]["y"] == pytest.approx(-8.0)
+    assert first["b1_pose"]["yaw_deg"] == pytest.approx(90.0)
+
+
+def test_waypoint_pose_requests_block_unverified_alignment_and_bad_point(
+    tmp_path: Path,
+) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()[:3]),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "not_covered", "x": -8.0, "y": 0.0},
+            {"waypoint_id": "bad_point", "x": "not-a-number", "y": 1.0},
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "blocked"
+    assert payload["waypoint_count"] == 0
+    assert payload["blocked_request_count"] == 2
+    assert payload["blocked_requests"][0]["request_status"] == "blocked"
+    assert (
+        "alignment artifact must be globally verified" in payload["blocked_requests"][0]["reason"]
+    )
+    assert payload["blocked_requests"][1]["request_status"] == "blocked"
+
+
+def test_waypoint_pose_requests_convert_verified_local_area_points(tmp_path: Path) -> None:
+    anchors = [
+        accepted_anchor(
+            "central_a",
+            (0.0, 0.0),
+            (10.0, -4.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "central_b",
+            (1.0, 0.0),
+            (11.0, -4.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "central_c",
+            (0.0, 1.0),
+            (10.0, -3.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "west_a",
+            (10.0, 0.0),
+            (-20.0, 30.0),
+            navigation_area_id="west_corridor",
+            asset_partition_id="meeting_room_a",
+        ),
+        accepted_anchor(
+            "north_a",
+            (0.0, 10.0),
+            (35.0, 22.0),
+            navigation_area_id="north_fixture_area",
+            asset_partition_id="meeting_room_c",
+        ),
+        accepted_anchor(
+            "south_a",
+            (-10.0, -7.0),
+            (-32.0, -24.0),
+            navigation_area_id="south_fixture_area",
+            asset_partition_id="reception_area_a",
+        ),
+    ]
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=anchors),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {
+                "waypoint_id": "central_local_point",
+                "navigation_area_id": "central_floor",
+                "x": 0.5,
+                "y": 0.5,
+            }
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "ready"
+    point = payload["waypoints"][0]
+    assert point["coverage_decision"]["status"] == "verified_local_area"
+    assert point["coverage_decision"]["navigation_area_id"] == "central_floor"
+    assert point["b1_pose"]["x"] == pytest.approx(10.5)
+    assert point["b1_pose"]["y"] == pytest.approx(-3.5)
+
+
+def test_waypoint_pose_requests_block_missing_or_unknown_local_area(tmp_path: Path) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(
+            anchors=[
+                accepted_anchor(
+                    "central_a",
+                    (0.0, 0.0),
+                    (10.0, -4.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+                accepted_anchor(
+                    "central_b",
+                    (1.0, 0.0),
+                    (11.0, -4.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+                accepted_anchor(
+                    "central_c",
+                    (0.0, 1.0),
+                    (10.0, -3.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+            ]
+        ),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "missing_area", "x": 0.5, "y": 0.5},
+            {
+                "waypoint_id": "unknown_area",
+                "navigation_area_id": "not_verified_area",
+                "x": 0.5,
+                "y": 0.5,
+            },
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "blocked"
+    assert payload["waypoint_count"] == 0
+    assert payload["blocked_request_count"] == 2
+    assert "point.navigation_area_id" in payload["blocked_requests"][0]["reason"]
+    assert "not verified" in payload["blocked_requests"][1]["reason"]
+
+
+def test_navigation_smoke_consumes_ready_pose_requests_and_blocks_bad_request_artifact(
+    tmp_path: Path,
+) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+    ready = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "manual_point_a", "x": -8.0, "y": 0.0},
+            {"waypoint_id": "manual_point_b", "x": 1.0, "y": 4.0},
+        ],
+    )
+    ready_path = tmp_path / "ready_pose_requests.json"
+    ready_path.write_text(json.dumps(ready), encoding="utf-8")
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={},
+        waypoint_pose_requests=ready_path,
+    )
+
+    assert blocker == ""
+    assert [item["waypoint_id"] for item in waypoints] == ["manual_point_a", "manual_point_b"]
+
+    blocked = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[{"waypoint_id": "bad_point", "x": "not-a-number", "y": 1.0}],
+    )
+    blocked_path = tmp_path / "blocked_pose_requests.json"
+    blocked_path.write_text(json.dumps(blocked), encoding="utf-8")
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={"map12_overlay": {"candidate_waypoints": ready["waypoints"]}},
+        waypoint_pose_requests=blocked_path,
+    )
+
+    assert waypoints == []
+    assert "point must contain finite x/y" in blocker
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={
+            "map12_overlay": {
+                "candidate_waypoints": [
+                    {
+                        "waypoint_id": "bbox_seed_waypoint",
+                        "alignment_transform_source": KNOWN_POOR_BBOX_SEED_SOURCE,
+                        "alignment_artifact": "",
+                        "b1_pose": {"x": 0.0, "y": 0.0},
+                    }
+                ]
+            }
+        },
+        waypoint_pose_requests=None,
+    )
+
+    assert waypoints == []
+    assert "requires at least two residual-backed waypoint poses" in blocker
+
+
+def test_navigation_smoke_pass_gate_requires_two_distinct_applied_poses() -> None:
+    first = {
+        "waypoint_id": "manual_point_a",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -4.0, "y": -8.0, "z": 0.0, "yaw_deg": 0.0},
+    }
+    duplicate = {
+        "waypoint_id": "manual_point_b",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -4.0, "y": -8.0, "z": 0.0, "yaw_deg": 90.0},
+    }
+    second = {
+        "waypoint_id": "manual_point_c",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -2.5, "y": -7.0, "z": 0.0, "yaw_deg": 90.0},
+    }
+
+    assert navigation_smoke_has_distinct_pose_evidence([first]) is False
+    assert navigation_smoke_has_distinct_pose_evidence([first, duplicate]) is False
+    assert navigation_smoke_has_distinct_pose_evidence([first, second]) is True
+    assert (
+        navigation_smoke_has_distinct_pose_evidence(
+            [first, {**second, "robot_pose_applied": False}]
+        )
+        is False
+    )
 
 
 def test_readiness_records_area_verified_only_when_global_fit_fails(tmp_path: Path) -> None:
@@ -444,6 +859,7 @@ def test_review_packet_keeps_proposed_anchor_pending(tmp_path: Path) -> None:
     assert packet["review_status"] == "review_pending"
     assert packet["accepted_anchor_count"] == 0
     assert packet["fit_ready_anchor_count"] == 0
+    assert packet["anchors"][0]["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
     assert packet["anchors"][0]["review_action"] == (
         "pick explicit map_xy and scene_xyz, then mark accepted after operator review"
     )
@@ -469,9 +885,10 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
 
     assert payload["verification_only"] is True
     assert payload["anchors"][0]["review_status"] == "accepted"
-    assert payload["anchors"][0]["navigation_area_id"] == "manual_draft_area_1"
-    assert payload["anchors"][0]["asset_partition_id"] == "manual_draft_region_1"
-    assert "not final room semantics" in payload["anchors"][0]["evidence"]["verification_note"]
+    assert payload["anchors"][0]["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
+    assert payload["anchors"][0]["navigation_area_id"] == ""
+    assert payload["anchors"][0]["asset_partition_id"] == ""
+    assert "geometry only" in payload["anchors"][0]["evidence"]["verification_note"]
 
 
 def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
@@ -534,6 +951,591 @@ def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
     assert suggestion["suggestion_status"] == "strong_candidate_needs_review"
     assert suggestion["recommended_navigation_area_id"] == "area_a"
     assert suggestion["recommended_asset_partition_id"] == "partition_a"
+
+
+def test_manual_anchor_semantic_review_packet_keeps_anchors_proposed() -> None:
+    draft = correspondence_manifest(
+        anchors=[
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "",
+                "asset_partition_id": "",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "review_status": "proposed",
+            }
+        ]
+    )
+    suggestions = {
+        "schema": "b1_map12_manual_anchor_semantic_suggestions_v1",
+        "strong_candidate_count": 1,
+        "suggestions": [
+            {
+                "anchor_id": "manual_draft_anchor",
+                "suggestion_status": "strong_candidate_needs_review",
+                "recommended_navigation_area_id": "area_a",
+                "recommended_asset_partition_id": "partition_a",
+                "map_candidates": [{"map_area_id": "area_a", "distance_m": 0.0}],
+                "scene_candidates": [{"partition_id": "partition_a", "distance_m": 0.0}],
+            }
+        ],
+    }
+
+    packet = build_semantic_review_packet(draft=draft, suggestions=suggestions)
+
+    assert packet["schema"] == "b1_map12_manual_anchor_semantic_review_packet_v1"
+    assert packet["status"] == "needs_human_review"
+    assert packet["accepted_manifest_mutated"] is False
+    assert packet["accepted_anchor_count"] == 0
+    assert packet["proposed_anchor_count"] == 1
+    anchor = packet["anchors"][0]
+    assert anchor["review_status"] == "proposed"
+    assert anchor["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
+    assert anchor["navigation_area_id"] == "area_a"
+    assert anchor["asset_partition_id"] == "partition_a"
+    assert anchor["semantic_review"]["status"] == "needs_human_review"
+    assert anchor["semantic_review"]["acceptance_instructions"].startswith("Use anchor_role")
+
+
+def test_manual_anchor_semantic_review_report_is_read_only() -> None:
+    packet = {
+        "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+        "status": "needs_human_review",
+        "accepted_manifest_mutated": False,
+        "accepted_anchor_count": 0,
+        "proposed_anchor_count": 1,
+        "strong_candidate_count": 1,
+        "anchors": [
+            {
+                "anchor_id": "manual_draft_anchor",
+                "review_status": "proposed",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "semantic_review": {
+                    "suggestion_status": "strong_candidate_needs_review",
+                    "map_candidates": [{"map_area_id": "area_a", "distance_m": 0.0}],
+                    "scene_candidates": [{"partition_id": "partition_a", "distance_m": 0.0}],
+                },
+            }
+        ],
+    }
+
+    html = render_semantic_review_report(packet)
+
+    assert 'id="semantic-review-report"' in html
+    assert "Review aid only" in html
+    assert "manual_draft_anchor" in html
+    assert "area_a" in html
+    assert "partition_a" in html
+    assert "Accepted: <strong>0</strong>" in html
+    assert "mark accepted" not in html
+
+
+def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:
+    packet = semantic_review_packet(
+        anchors=[
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "review_status": "proposed",
+            }
+        ]
+    )
+
+    with pytest.raises(PromotionError, match="no human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_rejects_partial_accepted_packet() -> None:
+    packet = semantic_review_packet(anchors=passing_anchors()[:5])
+
+    with pytest.raises(PromotionError, match="at least 6 human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> None:
+    packet = semantic_review_packet(anchors=passing_anchors())
+    for anchor in packet["anchors"]:
+        anchor["semantic_review"] = {
+            "status": "needs_human_review",
+            "map_candidates": [{"map_area_id": "candidate_only"}],
+        }
+
+    payload = build_reviewed_correspondence_manifest(packet)
+
+    assert payload["schema"] == "b1_map12_scene_correspondences_v1"
+    assert payload["promotion_policy"]["auto_accept"] is False
+    assert len(payload["anchors"]) == 6
+    assert "semantic_review" not in payload["anchors"][0]
+    assert payload["anchors"][0]["navigation_area_id"]
+    assert payload["anchors"][0]["asset_partition_id"]
+    assert validate_correspondence_manifest(payload) == []
+
+
+def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors() -> None:
+    review_manifest = {
+        "schema": "b1_map12_alignment_review_v1",
+        "labels": [
+            {
+                "label_id": "meeting_room_b",
+                "map_area_id": "central_floor",
+                "scene_partition_id": "meeting_room_b",
+                "review_status": "accepted",
+                "room_label": "Open kitchen",
+                "category": "kitchen",
+                "geometry": {
+                    "type": "map_polygon",
+                    "frame_id": "map",
+                    "points": [
+                        {"x": -4.0, "y": -1.0},
+                        {"x": 2.0, "y": -1.0},
+                        {"x": 2.0, "y": 5.0},
+                        {"x": -4.0, "y": 5.0},
+                    ],
+                },
+            },
+            {
+                "label_id": "draft_label",
+                "map_area_id": "draft_area",
+                "scene_partition_id": "draft_partition",
+                "review_status": "draft",
+                "geometry": {
+                    "type": "map_polygon",
+                    "points": [
+                        {"x": 0.0, "y": 0.0},
+                        {"x": 1.0, "y": 0.0},
+                        {"x": 1.0, "y": 1.0},
+                    ],
+                },
+            },
+        ],
+    }
+    alignment = build_alignment_residuals(
+        correspondence_manifest(
+            anchors=[
+                alignment_anchor("a1", (0.0, 0.0), (1.0, 2.0)),
+                alignment_anchor("a2", (2.0, 0.0), (3.0, 2.0)),
+                alignment_anchor("a3", (0.0, 2.0), (1.0, 4.0)),
+                alignment_anchor("a4", (2.0, 2.0), (3.0, 4.0)),
+                alignment_anchor("a5", (1.0, 3.0), (2.0, 5.0)),
+                alignment_anchor("a6", (3.0, 1.0), (4.0, 3.0)),
+            ]
+        ),
+        map_bundle=Path("map12"),
+        output_dir=Path("output/test-b1-map12-semantic-anchor-review-packet"),
+    )
+
+    packet = build_semantic_anchor_review_packet(
+        review_manifest=review_manifest,
+        alignment=alignment,
+        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+        alignment_artifact_path=Path("output/b1-map12/alignment/alignment_residuals.json"),
+    )
+
+    assert packet["schema"] == "b1_map12_manual_anchor_semantic_review_packet_v1"
+    assert packet["status"] == "needs_human_review"
+    assert packet["accepted_anchor_count"] == 0
+    assert packet["proposed_anchor_count"] == 1
+    anchor = packet["anchors"][0]
+    assert anchor["anchor_role"] == SEMANTIC_ANCHOR_ROLE
+    assert anchor["review_status"] == "proposed"
+    assert anchor["navigation_area_id"] == "central_floor"
+    assert anchor["asset_partition_id"] == "meeting_room_b"
+    assert anchor["map_xy"] == pytest.approx([-1.0, 2.0])
+    assert anchor["scene_xyz"] == pytest.approx([0.0, 4.0, 0.0])
+    assert anchor["map_coordinate_source"] == "accepted_review_label_polygon_center"
+    assert anchor["scene_coordinate_source"] == "reviewed_correspondence_fit_projection"
+
+    with pytest.raises(PromotionError, match="no human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_semantic_projection_rejects_current_alignment_only_manifest() -> None:
+    correspondences = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    review_manifest = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    with pytest.raises(ValueError, match="accepted semantic anchors are required"):
+        build_semantic_projection(
+            correspondences=correspondences,
+            review_manifest=review_manifest,
+        )
+
+
+def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "semantic_projection.json"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SEMANTIC_PROJECTION_SCRIPT),
+            "--correspondences",
+            str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
+            "--review-manifest",
+            str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "accepted semantic anchors are required" in completed.stderr
+    assert not output_path.exists()
+
+
+def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
+    proposed_packet = semantic_review_packet(
+        anchors=[{**passing_anchors()[0], "review_status": "proposed"}]
+    )
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="unexpected correspondence schema"):
+        build_semantic_projection(
+            correspondences=proposed_packet,
+            review_manifest=review_manifest,
+        )
+
+
+def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+                category="meeting_room",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_b",
+                map_area_id="central_floor",
+                scene_partition_id="meeting_room_b",
+                room_label="Open kitchen",
+                category="kitchen",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_c",
+                map_area_id="north_fixture_area",
+                scene_partition_id="meeting_room_c",
+                room_label="Meeting room B",
+                category="meeting_room",
+            ),
+            accepted_room_label(
+                label_id="reception_area_a",
+                map_area_id="south_fixture_area",
+                scene_partition_id="reception_area_a",
+                room_label="Main hall",
+                category="living_room",
+            ),
+            accepted_room_label(
+                label_id="storage_room_a",
+                map_area_id="storage_room_a",
+                scene_partition_id="storage_room_a",
+                room_label="Storage room",
+                category="storage_room",
+            ),
+        ]
+    )
+
+    payload = build_semantic_projection(
+        correspondences=promoted,
+        review_manifest=review_manifest,
+        correspondences_path=Path("assets/maps/b1-map12-scene-correspondences.json"),
+        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+    )
+
+    assert payload["schema"] == "b1_map12_semantic_projection_v1"
+    assert payload["status"] == "verified_room_semantics"
+    assert payload["semantic_anchor_count"] == 6
+    assert payload["room_projection_count"] == 5
+    assert payload["object_projection_status"] == "blocked_until_object_semantic_anchors"
+    assert payload["objects"] == []
+    rooms = {room["room_id"]: room for room in payload["rooms"]}
+    assert rooms["meeting_room_a"]["semantic_anchor_count"] == 2
+    assert rooms["meeting_room_a"]["navigation_area_id"] == "west_corridor"
+    assert rooms["meeting_room_a"]["source_anchor_ids"] == ["anchor_1", "anchor_2"]
+    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["meeting_room_b"]["category"] == "kitchen"
+    assert rooms["meeting_room_b"]["map_polygon"] == [
+        {"x": 0.0, "y": 0.0},
+        {"x": 2.0, "y": 0.0},
+        {"x": 2.0, "y": 2.0},
+        {"x": 0.0, "y": 2.0},
+    ]
+
+
+def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    promoted["anchors"][1]["navigation_area_id"] = "wrong_area"
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_b",
+                map_area_id="central_floor",
+                scene_partition_id="meeting_room_b",
+                room_label="Open kitchen",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_c",
+                map_area_id="north_fixture_area",
+                scene_partition_id="meeting_room_c",
+                room_label="Meeting room B",
+            ),
+            accepted_room_label(
+                label_id="reception_area_a",
+                map_area_id="south_fixture_area",
+                scene_partition_id="reception_area_a",
+                room_label="Main hall",
+            ),
+            accepted_room_label(
+                label_id="storage_room_a",
+                map_area_id="storage_room_a",
+                scene_partition_id="storage_room_a",
+                room_label="Storage room",
+            ),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="must share one navigation_area_id"):
+        build_semantic_projection(
+            correspondences=promoted,
+            review_manifest=review_manifest,
+        )
+
+
+def test_strict_review_promotion_promotes_alignment_anchors_without_semantic_ids() -> None:
+    anchors = []
+    for anchor in passing_anchors():
+        map_xy = anchor["map_xy"]
+        scene_xyz = anchor["scene_xyz"]
+        assert isinstance(map_xy, list)
+        assert isinstance(scene_xyz, list)
+        anchors.append(
+            alignment_anchor(
+                str(anchor["anchor_id"]),
+                (float(map_xy[0]), float(map_xy[1])),
+                (float(scene_xyz[0]), float(scene_xyz[1])),
+            )
+        )
+    packet = semantic_review_packet(anchors=anchors)
+
+    payload = build_reviewed_correspondence_manifest(packet)
+
+    assert len(payload["anchors"]) == 6
+    assert {anchor["anchor_role"] for anchor in payload["anchors"]} == {ALIGNMENT_ANCHOR_ROLE}
+    assert {anchor["navigation_area_id"] for anchor in payload["anchors"]} == {""}
+    assert {anchor["asset_partition_id"] for anchor in payload["anchors"]} == {""}
+    assert validate_correspondence_manifest(payload) == []
+
+
+def test_strict_review_promotion_rejects_accepted_anchor_without_role() -> None:
+    anchors = passing_anchors()
+    anchors[0].pop("anchor_role")
+    packet = semantic_review_packet(anchors=anchors)
+
+    with pytest.raises(PromotionError, match="needs anchor_role"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("navigation_area_id", "", "needs navigation_area_id"),
+        ("asset_partition_id", "", "needs asset_partition_id"),
+        ("navigation_area_id", "manual_draft_area_1", "uses synthetic navigation_area_id"),
+        ("asset_partition_id", "manual_draft_region_1", "uses synthetic asset_partition_id"),
+    ],
+)
+def test_strict_semantic_review_promotion_rejects_missing_or_synthetic_ids(
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    anchors = passing_anchors()
+    anchors[0][field] = value
+    packet = semantic_review_packet(anchors=anchors)
+
+    with pytest.raises(PromotionError, match=message):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_rejects_bbox_seed_coordinates() -> None:
+    anchors = passing_anchors()
+    anchors[0]["scene_coordinate_source"] = "known_poor_bbox_seed"
+    packet = semantic_review_packet(anchors=anchors)
+
+    with pytest.raises(PromotionError, match="must not use bbox seed coordinates"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+@pytest.mark.parametrize(
+    ("packet_update", "message"),
+    [
+        ({"accepted_anchor_count": 0}, "accepted_anchor_count does not match accepted anchors"),
+        ({"proposed_anchor_count": 9}, "proposed_anchor_count does not match proposed anchors"),
+        ({"accepted_manifest_mutated": True}, "accepted_manifest_mutated=false"),
+        ({"policy": {"auto_accept": True, "review_required": True}}, "auto_accept=false"),
+        ({"policy": {"auto_accept": False, "review_required": False}}, "review_required=true"),
+    ],
+)
+def test_strict_semantic_review_promotion_rejects_inconsistent_packet_metadata(
+    packet_update: dict[str, object],
+    message: str,
+) -> None:
+    packet = semantic_review_packet(anchors=passing_anchors())
+    packet.update(packet_update)
+
+    with pytest.raises(PromotionError, match=message):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_check_mode_does_not_write(tmp_path: Path) -> None:
+    packet = semantic_review_packet(anchors=passing_anchors())
+    packet_path = tmp_path / "review_packet.json"
+    output_path = tmp_path / "b1-map12-scene-correspondences.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(output_path),
+            "--check",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(completed.stdout)
+    assert summary["accepted_anchor_count"] == 6
+    assert summary["output_written"] is False
+    assert summary["output"] == ""
+    assert not output_path.exists()
+
+
+def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
+    tmp_path: Path,
+) -> None:
+    packet = semantic_review_packet(anchors=[{**passing_anchors()[0], "review_status": "proposed"}])
+    packet_path = tmp_path / "review_packet.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(tmp_path / "out.json"),
+            "--check",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "no human-accepted anchors" in completed.stderr
+
+
+def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
+    tmp_path: Path,
+) -> None:
+    packet = semantic_review_packet(anchors=passing_anchors())
+    packet_path = tmp_path / "review_packet.json"
+    output_dir = tmp_path / "fit-check"
+    committed_path = tmp_path / "b1-map12-scene-correspondences.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(completed.stdout)
+    assert summary["committed_manifest_written"] is False
+    assert summary["accepted_anchor_count"] == 6
+    assert summary["global_alignment_status"] == "verified"
+    assert (output_dir / "promoted_correspondences.preview.json").is_file()
+    assert (output_dir / "alignment_residuals.json").is_file()
+    assert not committed_path.exists()
+
+
+def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path) -> None:
+    packet = semantic_review_packet(anchors=[{**passing_anchors()[0], "review_status": "proposed"}])
+    packet_path = tmp_path / "review_packet.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(tmp_path / "fit-check"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "no human-accepted anchors" in completed.stderr
 
 
 def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:
@@ -686,6 +1688,7 @@ def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Pat
     assert "b1-map12-scene-correspondences.draft.json" in html
     assert "map_xy" in html
     assert "scene_xyz" in html
+    assert "anchor_role" in html
     assert "scene_pick_policy" in html
     assert "rendered_gaussian_scene_topdown_ray_plane_pick" in html
 
