@@ -46,6 +46,12 @@ eval-to-evolution, is the immediate follow-up after this plan creates a stable
 `agent_view_module` evolution target. Candidate 3, capability-slice eval
 groups, stays parked as later eval-harness metadata.
 
+Scope decision: Agent View is the shared household-world contract across
+current and planned household backends, including MolmoSpaces/MuJoCo and
+Agibot/GDK. Backend-local payload construction may remain local only when it is
+behind the shared Agent View schema, guard, provenance, and blocked-capability
+vocabulary.
+
 ## Why Now
 
 The repo has intentionally broadened its surface:
@@ -110,9 +116,9 @@ Observed risk:
   interface that names all inputs, provenance, blocked capabilities, and
   private exclusions.
 - `static_fixture_projection` still appears in current payload paths. This plan
-  should not promote it as a new long-term Agent View concept. It may remain as
-  a compatibility/report/map input where current behavior still needs it, but
-  the explicit contract should center Base Navigation Map, Runtime Metric Map,
+  should not preserve it as an Agent View compatibility surface. Known
+  consumers should migrate to the new Agent View contract shape, and the
+  explicit contract should center Base Navigation Map, Runtime Metric Map,
   public runtime evidence, active perception evidence, public MCP capabilities,
   and blocked/provenance-limited states.
 
@@ -189,6 +195,8 @@ disappear.
 - Record the intended owner for each field in the plan or ADR appendix.
 - Include both MolmoSpaces/realworld and Agibot cleanup Agent View producers in
   the inventory. Do not let the new module become Molmo-only by accident.
+- Do not move builders, rename code modules, or migrate artifact consumers in
+  this slice. Slice 1 is ADR plus interface inventory only.
 
 Acceptance:
 
@@ -201,6 +209,9 @@ Acceptance:
 - The inventory has a row for `agibot_cleanup_contract.agent_view_payload` and
   states whether it migrates in this plan or remains a backend-local adapter
   behind shared Agent View guards.
+- The inventory states that Agent View covers all household-world backends,
+  including Agibot, while full builder migration is deferred until a later
+  slice.
 
 ### Slice 2: Canonical Agent View Builder
 
@@ -209,21 +220,23 @@ Acceptance:
 - Add explicit real-robot-obtainability/provenance labels to top-level Agent
   View sections.
 - Keep existing product launch commands and output artifact names stable.
-- Preserve current `agent_view.json` top-level compatibility for this refactor
-  unless the ADR explicitly approves a schema-version change. New structured
-  sections may be additive first; migration/deletion of old top-level keys
-  should be a later artifact-schema cleanup.
+- Treat this as a forward architecture upgrade, not a backward-compatibility
+  patch. Migrate known in-repo consumers to the new `agent_view.json` contract
+  shape in the same scoped work instead of keeping old top-level keys only for
+  compatibility.
 - Ensure MolmoSpaces and Agibot Agent View payloads use the same forbidden-key
   guard and section labeling vocabulary, even if their backend-specific map or
   movement evidence stays in separate adapters.
 
 Acceptance:
 
-- Existing `agent_view.json` output remains available.
+- `agent_view.json` remains the artifact name, but its schema may move forward
+  when the ADR names the new contract and known consumers are migrated.
 - Callers use the canonical Agent View module rather than assembling payloads
   directly across unrelated helper modules.
 - Forbidden private fields still fail loudly.
 - No compatibility shim is added for obsolete public command names.
+- No compatibility shim is added for the old Agent View field layout.
 - The Agibot payload path is either migrated to the shared builder or explicitly
   wrapped by shared Agent View validation; leaving it as an unvalidated duplicate
   is not accepted.
@@ -267,6 +280,9 @@ Acceptance:
   path-based rules do not already cover them.
 - Add an Agent View focused deterministic gate if the existing focused tests are
   too scattered to catch private leakage/provenance drift.
+- Keep this hook narrow: path signals and a focused deterministic Agent View
+  gate only. Do not add `evolution_target`, capability-slice grouping, or a row
+  taxonomy redesign in this plan.
 - Do not reorganize the whole row taxonomy in this plan.
 
 Acceptance:
@@ -279,6 +295,8 @@ Acceptance:
 - `execute budget=focused` either runs focused deterministic gates or records
   explicit blocked evidence for environment/provider-only rows.
 - No new provider matrix is introduced by this refactor.
+- No `evolution_target` or capability-slice eval grouping field is introduced
+  by this refactor.
 
 ## Non-Goals
 
@@ -390,20 +408,33 @@ blocked, or skipped by budget; do not claim live proof from deterministic tests.
    module and move existing helper behavior there, leaving no new parallel
    concept.
 2. Which current `agent_view_payload` fields are contractual versus historical
-   report compatibility? Proposed default: decide in Slice 1 inventory before
-   code movement.
+   report compatibility? Decision: no backward-compatibility burden for
+   historical Agent View fields during a forward architecture upgrade. Slice 1
+   should classify them so known consumers can migrate or delete their old
+   assumptions.
 3. Should the new top-level Agent View sections be additive in
    `agent_view.json`, or should existing top-level keys be migrated into
-   sections in one breaking artifact-schema change? Proposed default: additive
-   first, no artifact-breaking key deletion in this plan.
+   sections in one breaking artifact-schema change? Decision: migrate known
+   consumers to the new schema instead of preserving old keys for compatibility.
+   Keep the artifact name stable, but do not keep old field layout solely for
+   backward compatibility.
 4. What is the minimum focused test set that proves Agent View without running
    the whole household suite? Proposed default: add one focused Agent View
    contract test module and keep the existing MCP/profile/perception focused
    tests as support.
 5. Should Agibot use the same builder immediately or only the same validation
-   and labels? Proposed default: share guard/schema helpers immediately; migrate
-   full builder only if it does not pull Agibot-specific backend logic into the
-   household realworld path.
+   and labels? Decision: Agent View covers Agibot as part of the
+   household-world contract. Share guard/schema/provenance/blocked-capability
+   vocabulary immediately; migrate the full builder only in a later slice if it
+   does not pull Agibot-specific backend logic into the household realworld
+   path.
+6. Should Slice 1 start code movement? Decision: no. Slice 1 is ADR plus
+   interface inventory only; builder migration, artifact-consumer migration,
+   and module renames start in later slices.
+7. Does the eval-harness selector hook belong in this plan? Decision: yes, but
+   narrowly. It may add Agent View path signals and a focused deterministic
+   gate; it must not add `evolution_target`, capability-slice grouping, or a
+   provider-matrix redesign.
 
 ## Reduce-Entropy Loop Notes
 
@@ -434,12 +465,12 @@ Round 1 findings resolved in this plan:
 
 Round 2 findings resolved in this plan:
 
-- New structured Agent View sections should be additive first. Deleting existing
-  `agent_view.json` top-level keys would be an artifact-schema change and is
-  out of scope unless the ADR explicitly approves it.
-- `static_fixture_projection` may remain as compatibility/report/map input
-  where current code still needs it, but it must not become the new public
-  Agent View center.
+- New structured Agent View sections are a forward architecture upgrade. Known
+  in-repo consumers should migrate to the new schema; old top-level keys should
+  not be retained solely for compatibility.
+- `static_fixture_projection` should not remain as an Agent View compatibility
+  surface. If a report or map path still needs it, that use should be explicit
+  outside the agent-facing contract.
 
 Round 3 findings resolved in this plan:
 
@@ -447,6 +478,17 @@ Round 3 findings resolved in this plan:
   the whole plan. This is useful discovery evidence but too broad for a first
   implementation slice. The verification plan now requires slice-level
   narrowing before `execute`.
+
+Round 4 findings resolved in this plan:
+
+- Agent View is a shared household-world contract, including the Agibot path.
+  Backend-local payload construction may remain only behind shared schema,
+  guard, provenance, and blocked-capability vocabulary.
+- Slice 1 is intentionally ADR plus interface inventory. It should not perform
+  builder migration, artifact-consumer migration, or module renames.
+- The eval-harness work in this plan is narrowly limited to Agent View path
+  selection and focused deterministic gate coverage. `evolution_target` and
+  capability-slice grouping remain follow-ups.
 
 Parked observations:
 

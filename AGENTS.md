@@ -265,6 +265,12 @@ ruff format --check .
    a required dependency, config, runtime, or artifact is missing or malformed,
    fail loudly with an actionable error instead of substituting another source
    or silently degrading behavior.
+9. **Forward architecture upgrades do not require backward compatibility**:
+   when an architecture redesign is a positive upgrade to the current contract,
+   migrate known in-repo callers, docs, tests, and artifacts to the new shape
+   instead of preserving old field layouts, wrappers, aliases, command forms, or
+   artifact schemas for compatibility. Add a temporary compatibility bridge
+   only when the human explicitly requests one, and record its removal trigger.
 
 ---
 
