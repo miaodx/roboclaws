@@ -51,11 +51,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--generated-mess-count",
         type=int,
         default=None,
-        help=(
-            "Generated mess count override. Defaults to 5 for world-public-labels entries "
-            "and 10 for camera-raw-fpv entries so the RAW_FPV success gate can require "
-            "7 accepted placements."
-        ),
+        help="Generated mess count override. Defaults to 5 for world-public-labels entries.",
     )
     parser.add_argument(
         "--profile",
@@ -108,7 +104,7 @@ def _run_preflight_or_statuses(
         return None
     try:
         if not args.skip_version_check:
-            _version_checks(args)
+            _version_checks(args, entries)
         if not args.skip_uv_sync:
             _run_checked([args.uv_bin, "sync", "--extra", "dev", "--extra", "molmospaces"])
         if not args.skip_prewarm:
@@ -181,7 +177,7 @@ def _run_entry(
             "rerun_command": rerun_command,
             "env": {
                 "ROBOCLAWS_PROVIDER_PROFILE": entry.provider_profile,
-                "ROBOCLAWS_CLAUDE_MODEL": entry.model,
+                _model_env_key(entry): entry.model,
                 PROVIDER_TIMING_PROXY_ENV: _default_provider_timing_proxy_value(),
             },
             "cache_roots": [
@@ -205,7 +201,7 @@ def _run_entry(
 
     env = os.environ.copy()
     env["ROBOCLAWS_PROVIDER_PROFILE"] = entry.provider_profile
-    env["ROBOCLAWS_CLAUDE_MODEL"] = entry.model
+    env[_model_env_key(entry)] = entry.model
     env.setdefault(PROVIDER_TIMING_PROXY_ENV, "1")
     env["ROBOCLAWS_REPORT_RERUN_COMMAND"] = rerun_command
     try:
@@ -258,8 +254,6 @@ def _entry_profile(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> str:
 def _entry_generated_mess_count(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> int:
     if args.generated_mess_count is not None:
         return int(args.generated_mess_count)
-    if _entry_profile(entry, args) == "camera-raw-fpv":
-        return 10
     return 5
 
 
@@ -284,7 +278,7 @@ def _live_command(
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=cleanup",
-        "agent_engine=claude-code",
+        f"agent_engine={entry.agent_engine}",
         f"provider_profile={entry.provider_profile}",
         f"evidence_lane={profile}",
         f"seed={args.seed}",
@@ -307,7 +301,7 @@ def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namesp
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=cleanup",
-        "agent_engine=claude-code",
+        f"agent_engine={entry.agent_engine}",
         f"provider_profile={entry.provider_profile}",
         f"evidence_lane={profile}",
         f"seed={args.seed}",
@@ -317,10 +311,18 @@ def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namesp
     ]
     return (
         f"ROBOCLAWS_PROVIDER_PROFILE={entry.provider_profile} "
-        f"ROBOCLAWS_CLAUDE_MODEL={entry.model} "
+        f"{_model_env_key(entry)}={entry.model} "
         f"{PROVIDER_TIMING_PROXY_ENV}={_default_provider_timing_proxy_value()} "
         f"{shell_join(command)}"
     )
+
+
+def _model_env_key(entry: MolmoLiveModelEntry) -> str:
+    if entry.agent_engine == "claude-code":
+        return "ROBOCLAWS_CLAUDE_MODEL"
+    if entry.agent_engine == "openai-agents-sdk":
+        return "ROBOCLAWS_OPENAI_AGENTS_MODEL"
+    raise ValueError(f"unsupported Molmo live agent engine: {entry.agent_engine}")
 
 
 def _default_provider_timing_proxy_value() -> str:
@@ -344,8 +346,14 @@ def _prewarm(args: argparse.Namespace, *, generated_mess_count: int) -> None:
     )
 
 
-def _version_checks(args: argparse.Namespace) -> None:
-    for binary in ("codex", "claude"):
+def _version_checks(
+    args: argparse.Namespace,
+    entries: tuple[MolmoLiveModelEntry, ...],
+) -> None:
+    required_binaries = (
+        {"claude"} if any(entry.agent_engine == "claude-code" for entry in entries) else set()
+    )
+    for binary in sorted(required_binaries):
         resolved = shutil.which(binary)
         if not resolved:
             raise RuntimeError(f"{binary} command not found")

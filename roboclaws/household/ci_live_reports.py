@@ -18,6 +18,12 @@ COMMON_DIAGNOSTIC_FILES = (
     "claude-version.txt",
     "claude-events.jsonl",
     "claude.stderr.log",
+    "driver.log",
+    "openai-agents-events.jsonl",
+    "openai-agents-trace.json",
+    "openai-agents-spans.jsonl",
+    "openai-agents-server.log",
+    "openai-agents-skill-context.json",
     "checker.log",
     "server.pid",
     "trace.jsonl",
@@ -34,6 +40,7 @@ COMMON_DIAGNOSTIC_FILES = (
 class MolmoLiveModelEntry:
     name: str
     label: str
+    agent_engine: str
     provider_profile: str
     model: str
     secret_env: str
@@ -42,36 +49,40 @@ class MolmoLiveModelEntry:
 
 MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
     MolmoLiveModelEntry(
-        name="kimi-k2.6",
-        label="Kimi K2.6",
-        provider_profile="kimi-anthropic",
-        model="kimi-k2.6",
-        secret_env="KIMI_API_KEY",
-        profile="world-public-labels",
-    ),
-    MolmoLiveModelEntry(
-        name="mimo-v2.5",
-        label="MiMo v2.5",
+        name="claude-code-mimo-v2.5",
+        label="Claude Code + MiMo v2.5",
+        agent_engine="claude-code",
         provider_profile="mimo-tp-anthropic",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
         profile="world-public-labels",
     ),
     MolmoLiveModelEntry(
-        name="kimi-k2.6-camera-raw-fpv",
-        label="Kimi K2.6 RAW_FPV",
+        name="claude-code-kimi-k2.6",
+        label="Claude Code + Kimi K2.6",
+        agent_engine="claude-code",
         provider_profile="kimi-anthropic",
         model="kimi-k2.6",
         secret_env="KIMI_API_KEY",
-        profile="camera-raw-fpv",
+        profile="world-public-labels",
     ),
     MolmoLiveModelEntry(
-        name="mimo-v2.5-camera-raw-fpv",
-        label="MiMo v2.5 RAW_FPV",
-        provider_profile="mimo-tp-anthropic",
+        name="agents-sdk-mimo-v2.5",
+        label="OpenAI Agents SDK + MiMo v2.5",
+        agent_engine="openai-agents-sdk",
+        provider_profile="mimo-tp-openai-chat",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
-        profile="camera-raw-fpv",
+        profile="world-public-labels",
+    ),
+    MolmoLiveModelEntry(
+        name="agents-sdk-kimi-k2.7-code",
+        label="OpenAI Agents SDK + Kimi K2.7 Code",
+        agent_engine="openai-agents-sdk",
+        provider_profile="kimi-openai-chat",
+        model="kimi-k2.7-code",
+        secret_env="KIMI_API_KEY",
+        profile="world-public-labels",
     ),
 )
 
@@ -104,10 +115,11 @@ def base_status(
         "schema": STATUS_SCHEMA,
         "entry": entry.name,
         "label": entry.label,
+        "agent_engine": entry.agent_engine,
         "provider_profile": entry.provider_profile,
         "model": entry.model,
         "secret_env": entry.secret_env,
-        "driver": "claude",
+        "driver": entry.agent_engine,
         "profile": profile,
         "seed": seed,
         "generated_mess_count": generated_mess_count,
@@ -294,7 +306,7 @@ def write_live_index(root: Path, statuses: list[dict[str, Any]] | None = None) -
                 "<h1>MolmoSpaces Live Cleanup Reports</h1>",
                 '<p class="sub">Published by GitHub Actions for main-only / opt-in '
                 "MolmoSpaces cleanup runs. Each row links to the report or diagnostics "
-                "for one provider-backed Claude Code run.</p>",
+                "for one provider-backed live-agent run.</p>",
                 "<table>",
                 "<thead><tr><th>Model</th><th>Status</th><th>Profile</th><th>Report</th>"
                 "<th>Provider</th><th>Rerun locally</th><th>Reason</th></tr></thead>",
@@ -313,6 +325,7 @@ def _live_index_row(status: dict[str, Any]) -> str:
     label = html.escape(str(status.get("label") or status.get("entry") or "Molmo live run"))
     state = html.escape(str(status.get("status") or "unknown"))
     provider = html.escape(str(status.get("provider_profile") or "unknown provider"))
+    agent_engine = html.escape(str(status.get("agent_engine") or status.get("driver") or "unknown"))
     model = html.escape(str(status.get("model") or "unknown model"))
     profile = html.escape(str(status.get("profile") or "unknown profile"))
     reason = html.escape(str(status.get("reason") or ""))
@@ -335,7 +348,7 @@ def _live_index_row(status: dict[str, Any]) -> str:
         f"<td><code>{state}</code></td>"
         f"<td><code>{profile}</code></td>"
         f"<td>{report}</td>"
-        f"<td><code>{provider}</code></td>"
+        f"<td><code>{agent_engine}</code><br><code>{provider}</code></td>"
         f"<td><code>{rerun_command}</code></td>"
         f"<td>{reason}</td>"
         "</tr>"

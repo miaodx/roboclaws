@@ -100,6 +100,9 @@ def _molmo_live_section(site_dir: Path) -> str:
     items = []
     for entry in entries:
         label = html.escape(str(entry.get("label") or entry.get("entry") or "Molmo live run"))
+        agent_engine = html.escape(
+            str(entry.get("agent_engine") or entry.get("driver") or "unknown")
+        )
         model = html.escape(str(entry.get("model") or "unknown model"))
         provider = html.escape(str(entry.get("provider_profile") or "unknown provider"))
         status = html.escape(str(entry.get("status") or "unknown"))
@@ -116,7 +119,7 @@ def _molmo_live_section(site_dir: Path) -> str:
         else:
             title = f"<span>{label}</span>"
         desc = (
-            f'      <div class="desc">Claude Code live cleanup via '
+            f'      <div class="desc">Live cleanup via <code>{agent_engine}</code> and '
             f"<code>{provider}</code> / <code>{model}</code> using "
             f"<code>{profile}</code>. Status: "
             f"<code>{status}</code>"
