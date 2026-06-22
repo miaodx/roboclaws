@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.rasterize import load_pgm
 from roboclaws.maps.route import validate_metric_map_route
 from roboclaws.maps.spatial_contract import (
@@ -28,6 +28,8 @@ def validate_nav2_map_bundle_payload(
 
     map_yaml = _load_bundle_map_yaml(bundle_dir, paths, errors)
     semantics = _load_bundle_semantics(bundle_dir, paths, errors)
+    if semantics is None:
+        return tuple(errors), tuple(warnings), {}
     _validate_semantics_private_truth(semantics, private_map_keys, errors)
     resolution, origin = _validate_map_yaml_contract(map_yaml, errors)
     grid = _load_bundle_occupancy_grid(
@@ -100,16 +102,12 @@ def _load_bundle_semantics(
     bundle_dir: Path,
     paths: dict[str, Path],
     errors: list[str],
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     try:
-        payload = json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        errors.append(f"invalid semantics.json: {exc}")
-        return {}
-    if not isinstance(payload, dict):
-        errors.append("semantics.json must contain a JSON object")
-        return {}
-    return payload
+        return read_json_object(bundle_dir / paths["semantics_json"], label="Nav2 semantics")
+    except (FileNotFoundError, ValueError) as exc:
+        errors.append(str(exc))
+        return None
 
 
 def _validate_semantics_private_truth(

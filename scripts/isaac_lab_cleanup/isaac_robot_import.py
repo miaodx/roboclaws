@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Any, Callable
+
+from roboclaws.core.json_sources import read_json_object
 
 ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
 ISAAC_RBY1M_ROBOT_USD_IMPORT_SCHEMA = "isaac_rby1m_robot_usd_import_v1"
@@ -100,10 +101,9 @@ def load_json_if_file(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return read_json_object(path, label="Isaac robot import summary")
+    except (OSError, ValueError):
         return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def find_rby1m_isaac_urdf() -> Path | None:

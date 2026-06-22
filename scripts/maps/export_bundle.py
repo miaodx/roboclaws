@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noqa: E402
 from roboclaws.maps.bundle import (  # noqa: E402
     static_landmarks_from_fixture_projection,
@@ -104,30 +104,21 @@ def _output_dir(args: argparse.Namespace) -> Path:
 
 def _load_agent_view(*, run_result: Path | None, agent_view: Path | None) -> dict[str, Any]:
     if run_result is not None:
-        data = _load_json_source(run_result, label="run result")
-        if not isinstance(data, dict):
-            raise SystemExit(
-                f"run result payload must be a JSON object: {run_result} "
-                f"(got {type(data).__name__})"
-            )
+        data = _read_json_source(run_result, label="run result")
         loaded = data.get("agent_view")
     else:
         assert agent_view is not None
-        loaded = _load_json_source(agent_view, label="agent view")
+        loaded = _read_json_source(agent_view, label="agent view")
     if not isinstance(loaded, dict):
         raise SystemExit("agent view payload must be a JSON object")
     return loaded
 
 
-def _load_json_source(path: Path, *, label: str) -> Any:
-    if not path.is_file():
-        raise SystemExit(f"{label} source is missing: {path}")
+def _read_json_source(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(
-            f"{label} source is unreadable: {path}: {type(exc).__name__}: {exc}"
-        ) from exc
+        return read_json_object(path, label=label)
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 if __name__ == "__main__":

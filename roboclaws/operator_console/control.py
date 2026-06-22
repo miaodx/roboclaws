@@ -11,6 +11,7 @@ from typing import Any
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import derive_operator_state
@@ -263,15 +264,21 @@ def _read_control_rows(run_dir: Path) -> list[dict[str, Any]]:
 
 def read_operator_state_for_control(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        return read_json_object(path, label="operator state")
     except FileNotFoundError as exc:
         raise OperatorControlError("unknown run", status=404) from exc
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            raise OperatorControlError(
+                (
+                    f"operator state source contains invalid JSON at {path}: "
+                    f"line {cause.lineno} column {cause.colno}: {cause.msg}"
+                ),
+                status=409,
+            ) from exc
         raise OperatorControlError(
-            (
-                f"operator state source contains invalid JSON at {path}: "
-                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
-            ),
+            f"operator state source must be a JSON object at {path}",
             status=409,
         ) from exc
     except OSError as exc:
@@ -279,12 +286,6 @@ def read_operator_state_for_control(path: Path) -> dict[str, Any]:
             f"operator state source cannot be read at {path}: {exc}",
             status=409,
         ) from exc
-    if not isinstance(payload, dict):
-        raise OperatorControlError(
-            f"operator state source must be a JSON object at {path}",
-            status=409,
-        )
-    return payload
 
 
 def _float(value: object) -> float:

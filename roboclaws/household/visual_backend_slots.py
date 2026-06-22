@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 MOLMO_MAX_VISUAL_BACKENDS_ENV = "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS"
 DEFAULT_MOLMO_MAX_VISUAL_BACKENDS = 1
 DEFAULT_SLOT_ROOT = Path("output/molmo/visual-backend-slots")
@@ -183,8 +185,8 @@ def _read_slot(path: Path, *, slot_id: int) -> VisualBackendSlotState:
     if not path.exists():
         return VisualBackendSlotState(slot_id=slot_id, path=path, held=False)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        payload = read_json_object(path, label="visual backend slot")
+    except (OSError, ValueError):
         return VisualBackendSlotState(slot_id=slot_id, path=path, held=True, stale=False)
     pid = payload.get("pid")
     pid_value = pid if isinstance(pid, int) else None

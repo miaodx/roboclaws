@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.scene_camera_render_diagnostics import float_list
 
 USD_PHYSICS_PRIM_TYPE_NAMES = (
@@ -89,10 +89,9 @@ def prepared_scene_summary(path: Path) -> dict[str, Any]:
     if not summary_path.is_file():
         return {}
     try:
-        payload = json.loads(summary_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return read_json_object(summary_path, label="prepared scene summary")
+    except (OSError, ValueError):
         return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def usda_visual_physics_contract(prim_blocks: dict[str, str]) -> dict[str, Any]:

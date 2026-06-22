@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     metric_map_bundle_metadata,
@@ -28,7 +28,7 @@ def metric_map_from_bundle(
     contract: str = REALWORLD_CONTRACT,
 ) -> dict[str, Any]:
     _validate_projection_source_bundle(bundle_dir)
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = _read_bundle_semantics(bundle_dir)
     map_yaml = parse_map_yaml((bundle_dir / "map.yaml").read_text(encoding="utf-8"))
     resolution = float(map_yaml.get("resolution") or DEFAULT_COSTMAP_PARAMETERS["resolution_m"])
     origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else [0.0, 0.0, 0.0]
@@ -103,7 +103,7 @@ def metric_map_from_bundle(
 
 def static_landmarks_from_bundle(bundle_dir: Path) -> list[dict[str, Any]]:
     _validate_projection_source_bundle(bundle_dir)
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = _read_bundle_semantics(bundle_dir)
     return [
         dict(item) for item in semantics.get("static_landmarks") or [] if isinstance(item, dict)
     ]
@@ -119,3 +119,7 @@ def _waypoint_pose(waypoint: dict[str, Any]) -> dict[str, float]:
 
 def _validate_projection_source_bundle(bundle_dir: Path) -> None:
     validate_nav2_map_bundle(bundle_dir).raise_for_errors()
+
+
+def _read_bundle_semantics(bundle_dir: Path) -> dict[str, Any]:
+    return read_json_object(bundle_dir / "semantics.json", label="Nav2 semantics")

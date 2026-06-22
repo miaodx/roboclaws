@@ -12,7 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import read_json_object, read_json_value
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     ALIGNMENT_RESIDUALS_SCHEMA,
     SEMANTIC_SOURCE,
@@ -213,12 +213,12 @@ def load_points(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def _read_json_array(path: Path, *, label: str) -> list[Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON array: {path}: {exc.msg}") from exc
+        payload = read_json_value(path, label=label)
+    except FileNotFoundError as exc:
+        raise ValueError(f"{label} missing: {path}") from exc
+    except ValueError as exc:
+        raise ValueError(f"{label} must contain valid JSON array: {path}") from exc
     if not isinstance(payload, list):
         raise ValueError(f"{label} must contain a JSON array: {path}")
     return payload

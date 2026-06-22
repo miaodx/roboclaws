@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.artifact_paths import output_relpath
 
 
@@ -396,8 +396,8 @@ def _load_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
     if not path.is_file():
         return {"status": "missing_manifest", "path": output_relpath(path, output_dir)}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = read_json_object(path, label="robot camera prior probe manifest")
+    except (OSError, ValueError) as exc:
         return {
             "status": "read_failed",
             "path": output_relpath(path, output_dir),

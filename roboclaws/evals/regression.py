@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.evals.models import (
     MISSING_UNAVAILABLE,
     EvalResult,
@@ -49,7 +50,7 @@ def promote_regression_sample_from_eval_result(
         raise ValueError("review_label eval-regression:do-not-promote cannot write a sample")
 
     eval_results_path = Path(eval_results_path)
-    bundle = _load_json(eval_results_path)
+    bundle = _load_json(eval_results_path, label="eval regression promotion")
     result = _select_result(
         bundle,
         source_sample_id=source_sample_id,
@@ -313,7 +314,7 @@ def _source_sample(suite: dict[str, Any], identity: dict[str, Any]) -> EvalSampl
 
 def _suite_payload(bundle: dict[str, Any], *, suite_path: Path | None) -> dict[str, Any]:
     if suite_path is not None:
-        return _load_json(Path(suite_path))
+        return _load_json(Path(suite_path), label="eval regression suite")
     return dict(_mapping(bundle.get("suite")))
 
 
@@ -363,16 +364,11 @@ def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        return read_json_object(Path(path), label=label)
     except FileNotFoundError as exc:
-        raise ValueError(f"missing JSON file: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid JSON file {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"JSON file must contain an object: {path}")
-    return payload
+        raise ValueError(str(exc)) from exc
 
 
 def _optional_path(value: str | None) -> Path | None:

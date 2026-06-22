@@ -392,6 +392,15 @@ def runtime_metric_map_from_prior_artifact(payload: dict[str, Any] | None) -> di
     return copy.deepcopy(payload)
 
 
+def read_runtime_map_prior_artifact(path: str | Path | None) -> dict[str, Any] | None:
+    """Read a runtime-map-prior artifact from an explicit source path."""
+
+    if path is None or str(path) == "":
+        return None
+    payload = read_json_object(Path(path), label="runtime map prior")
+    return runtime_metric_map_from_prior_artifact(payload)
+
+
 def materialize_runtime_prior_targets(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Return consumer-facing waypoint and fixture targets from either producer path."""
 

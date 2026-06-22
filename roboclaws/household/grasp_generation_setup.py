@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.planner_task_feasibility import grasp_cache_generation_preflight
 
 GRASP_GENERATION_SETUP_SCHEMA = "molmospaces_grasp_generation_setup_v1"
@@ -156,7 +156,7 @@ def run_grasp_generation_setup(
 
 
 def load_availability_preflight_from_manifest(path: Path) -> dict[str, Any]:
-    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest = read_json_object(path, label="grasp generation proof bundle manifest")
     preflight = manifest.get("grasp_cache_availability_preflight")
     if not isinstance(preflight, dict):
         raise ValueError(f"No grasp_cache_availability_preflight found in {path}")

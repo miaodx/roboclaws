@@ -33,6 +33,7 @@ from roboclaws.agents.provider_timing_proxy import (
     start_provider_timing_proxy,
     stop_provider_timing_proxy,
 )
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import household_intent_from_args as _household_intent
 from roboclaws.household.task_intent import household_task_name_from_args as _household_run_id
@@ -632,10 +633,7 @@ def _runner_timing_breakdown(timing: dict[str, object], finished_at: float) -> d
 def _mcp_trace_timing(run_dir: Path) -> dict[str, object]:
     run_result_path = run_dir / "run_result.json"
     if run_result_path.is_file():
-        try:
-            run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            run_result = {}
+        run_result = read_json_object(run_result_path, label="Claude live run_result")
         timing = run_result.get("runtime_timing")
         if isinstance(timing, dict):
             return timing

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from roboclaws.household import grasp_initial_contact_diagnostics as diagnostics
 from roboclaws.household.grasp_initial_contact_diagnostics import (
+    run_grasp_initial_contact_diagnostics,
     summarize_initial_contact_variants,
 )
 from roboclaws.household.report import render_grasp_initial_contact_diagnostics_report
@@ -121,3 +123,84 @@ def test_render_grasp_initial_contact_diagnostics_report(tmp_path: Path) -> None
     assert "sign_1_dist_0.8_settle_50" in report_text
     assert "Best Variant Samples" in report_text
     assert "nonzero_success" in report_text
+
+
+def test_initial_contact_diagnostics_rejects_malformed_probe_result(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate = tmp_path / "Bread_1_grasps.json"
+    candidate.write_text('{"transforms": []}\n', encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        output = Path(command[command.index("--output") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("{not-json}\n", encoding="utf-8")
+        return {"status": "ready", "returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(diagnostics, "run_molmospaces_probe_command", fake_run)
+
+    try:
+        run_grasp_initial_contact_diagnostics(
+            generation_preflight=_generation_preflight(tmp_path),
+            output_dir=tmp_path / "out",
+            candidate_grasps_path=candidate,
+            molmospaces_python=Path("/tmp/molmo/.venv/bin/python"),
+        )
+    except ValueError as exc:
+        assert "grasp initial-contact probe result source must contain valid JSON object" in str(
+            exc
+        )
+        assert "initial_contact_probe_result.json" in str(exc)
+    else:  # pragma: no cover - malformed child probe result should fail aloud
+        raise AssertionError("expected malformed initial-contact probe result to fail aloud")
+
+
+def test_initial_contact_diagnostics_rejects_non_object_probe_result(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate = tmp_path / "Bread_1_grasps.json"
+    candidate.write_text('{"transforms": []}\n', encoding="utf-8")
+
+    def fake_run(command, **_kwargs):
+        output = Path(command[command.index("--output") + 1])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("[]\n", encoding="utf-8")
+        return {"status": "ready", "returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(diagnostics, "run_molmospaces_probe_command", fake_run)
+
+    try:
+        run_grasp_initial_contact_diagnostics(
+            generation_preflight=_generation_preflight(tmp_path),
+            output_dir=tmp_path / "out",
+            candidate_grasps_path=candidate,
+            molmospaces_python=Path("/tmp/molmo/.venv/bin/python"),
+        )
+    except ValueError as exc:
+        assert "grasp initial-contact probe result source must contain a JSON object" in str(exc)
+        assert "initial_contact_probe_result.json" in str(exc)
+    else:  # pragma: no cover - wrong-shaped child probe result should fail aloud
+        raise AssertionError("expected non-object initial-contact probe result to fail aloud")
+
+
+def _generation_preflight(tmp_path: Path) -> dict:
+    working_dir = tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation"
+    working_dir.mkdir(parents=True, exist_ok=True)
+    xml = tmp_path / "Bread_1.xml"
+    xml.write_text("<mujoco />", encoding="utf-8")
+    assets_dir = tmp_path / "assets"
+    assets_dir.mkdir()
+    return {
+        "status": "ready",
+        "molmospaces_python": "/tmp/molmo/.venv/bin/python",
+        "working_dir": str(working_dir),
+        "assets_dir": str(assets_dir),
+        "assets": [
+            {
+                "asset_uid": "Bread_1",
+                "objects_list_entry": {"name": "Bread_1", "xml": str(xml)},
+            }
+        ],
+    }

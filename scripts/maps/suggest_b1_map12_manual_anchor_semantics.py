@@ -19,7 +19,6 @@ from roboclaws.core.json_sources import read_json_object
 SUGGESTION_SCHEMA = "b1_map12_manual_anchor_semantic_suggestions_v1"
 REVIEW_PACKET_SCHEMA = "b1_map12_manual_anchor_semantic_review_packet_v1"
 DEFAULT_DRAFT = Path("docs/status/active/b1-map12-scene-correspondences-draft.json")
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_SCENE_DIAGNOSTIC = Path(
     "output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json"
 )
@@ -29,6 +28,7 @@ DEFAULT_REVIEW_PACKET_OUTPUT = Path(
 )
 DEFAULT_REVIEW_REPORT_OUTPUT = Path("output/b1-map12/manual-draft-anchor-semantic-review.html")
 STRONG_DISTANCE_M = 0.5
+SEMANTIC_PROJECTION_SCHEMA = "b1_map12_semantic_projection_v1"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -39,7 +39,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     )
     parser.add_argument("--draft", type=Path, default=DEFAULT_DRAFT)
-    parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--room-projection", type=Path, required=True)
     parser.add_argument("--scene-diagnostic", type=Path, default=DEFAULT_SCENE_DIAGNOSTIC)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
@@ -66,10 +66,10 @@ def main(argv: list[str] | None = None) -> int:
         draft = read_json_object(args.draft, label="manual draft")
         payload = build_semantic_suggestions(
             draft=draft,
-            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
+            room_projection=read_json_object(args.room_projection, label="room projection"),
             scene_diagnostic=read_json_object(args.scene_diagnostic, label="scene diagnostic"),
             draft_path=args.draft,
-            review_manifest_path=args.review_manifest,
+            room_projection_path=args.room_projection,
             scene_diagnostic_path=args.scene_diagnostic,
         )
     except (FileNotFoundError, ValueError) as exc:
@@ -116,13 +116,13 @@ def main(argv: list[str] | None = None) -> int:
 def build_semantic_suggestions(
     *,
     draft: dict[str, Any],
-    review_manifest: dict[str, Any],
+    room_projection: dict[str, Any],
     scene_diagnostic: dict[str, Any],
     draft_path: Path | None = None,
-    review_manifest_path: Path | None = None,
+    room_projection_path: Path | None = None,
     scene_diagnostic_path: Path | None = None,
 ) -> dict[str, Any]:
-    labels = map_labels(review_manifest)
+    labels = map_labels(room_projection)
     partitions = scene_partitions(scene_diagnostic)
     suggestions = []
     for anchor in explicit_anchor_picks(draft):
@@ -162,7 +162,7 @@ def build_semantic_suggestions(
     return {
         "schema": SUGGESTION_SCHEMA,
         "draft": str(draft_path or ""),
-        "review_manifest": str(review_manifest_path or ""),
+        "room_projection": str(room_projection_path or ""),
         "scene_diagnostic": str(scene_diagnostic_path or ""),
         "policy": {
             "status": "review_suggestions_only",
@@ -341,20 +341,28 @@ def explicit_anchor_picks(draft: dict[str, Any]) -> list[dict[str, Any]]:
     return anchors
 
 
-def map_labels(review_manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def map_labels(room_projection: dict[str, Any]) -> list[dict[str, Any]]:
+    if room_projection.get("schema") != SEMANTIC_PROJECTION_SCHEMA:
+        raise ValueError(f"unexpected room projection schema: {room_projection.get('schema')!r}")
     labels = []
-    for label in review_manifest.get("labels") or []:
-        if not isinstance(label, dict):
+    for room in room_projection.get("rooms") or []:
+        if not isinstance(room, dict):
             continue
-        geometry = label.get("geometry")
-        if not isinstance(geometry, dict) or geometry.get("type") != "map_polygon":
-            continue
-        points = geometry.get("points")
+        points = room.get("map_polygon")
         if not isinstance(points, list) or len(points) < 3:
             continue
-        labels.append(label)
+        labels.append(
+            {
+                "label_id": str(room.get("room_id") or ""),
+                "map_area_id": str(room.get("navigation_area_id") or ""),
+                "scene_partition_id": str(room.get("asset_partition_id") or ""),
+                "room_label": str(room.get("room_label") or room.get("room_id") or ""),
+                "review_status": str(room.get("review_status") or ""),
+                "geometry": {"points": points},
+            }
+        )
     if not labels:
-        raise ValueError("review manifest has no map_polygon labels")
+        raise ValueError("room projection has no map_polygon labels")
     return labels
 
 

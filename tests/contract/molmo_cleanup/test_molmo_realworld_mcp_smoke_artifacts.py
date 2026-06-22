@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.realworld_mcp_server import MCP_SERVER_NAME
@@ -24,6 +27,40 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
 
     _assert_smoke_run_result(run_result)
     _assert_smoke_report_and_artifacts(tmp_path, trace_text=trace_text, report_text=report_text)
+
+
+def test_smoke_run_result_reader_accepts_json_object(tmp_path: Path) -> None:
+    smoke = _load_smoke_module()
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text(json.dumps({"ok": True}) + "\n", encoding="utf-8")
+
+    assert smoke._read_smoke_run_result(run_result_path) == {"ok": True}
+
+
+def test_smoke_run_result_reader_rejects_missing_source(tmp_path: Path) -> None:
+    smoke = _load_smoke_module()
+    run_result_path = tmp_path / "run_result.json"
+
+    with pytest.raises(FileNotFoundError, match="smoke run_result source is missing"):
+        smoke._read_smoke_run_result(run_result_path)
+
+
+def test_smoke_run_result_reader_rejects_malformed_json(tmp_path: Path) -> None:
+    smoke = _load_smoke_module()
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="smoke run_result source must contain valid JSON object"):
+        smoke._read_smoke_run_result(run_result_path)
+
+
+def test_smoke_run_result_reader_rejects_non_object_json(tmp_path: Path) -> None:
+    smoke = _load_smoke_module()
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text("[1, 2, 3]\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="smoke run_result source must contain a JSON object"):
+        smoke._read_smoke_run_result(run_result_path)
 
 
 def _load_smoke_module() -> Any:

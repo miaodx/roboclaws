@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.grasp_cache_generation import (
     ensure_molmospaces_assets_symlink,
     generation_xml_path,
@@ -590,7 +590,4 @@ def run_molmospaces_probe_command(
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"expected JSON object in {path}")
-    return data
+    return read_json_object(path, label="grasp initial-contact probe result")

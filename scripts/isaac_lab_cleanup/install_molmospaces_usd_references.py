@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 SCHEMA = "roboclaws_molmospaces_usd_reference_install_v1"
 DEFAULT_INSTALL_DIR = Path("output/isaaclab/molmospaces-usd")
 DEFAULT_CACHE_DIR = Path.home() / ".molmospaces"
@@ -225,8 +227,8 @@ def _missing_referenced_assets(paths: list[Path]) -> list[str]:
     assets: list[str] = []
     for path in paths:
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            payload = read_json_object(path, label="USD reference state artifact")
+        except (OSError, ValueError) as exc:
             raise SystemExit(f"Could not read JSON artifact {path}: {exc}") from exc
         _collect_missing_referenced_assets(payload, assets)
     return _dedupe(assets)

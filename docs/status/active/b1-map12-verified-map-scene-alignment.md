@@ -49,17 +49,11 @@ Last proven evidence:
   explicitly creates a verification-only accepted manifest for the manual
   fallback. It uses `anchor_role=alignment` geometry anchors only; do not commit
   it as the final accepted asset.
-- `python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --review-manifest assets/maps/b1-map12-alignment-review.json --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json`
-  writes review suggestions for real `navigation_area_id` /
-  `asset_partition_id` values without mutating the accepted manifest. It found
-  only 1 strong candidate out of 7 anchors; the rest are nearest-only hints,
-  so final semantic acceptance still needs human review.
-- The same suggestion command also writes
-  `output/b1-map12/manual-draft-anchor-semantic-review-packet.json` by default.
-  The packet combines each manual pick with candidate semantic ids for review,
-  keeps every anchor `review_status=proposed`, records
-  `accepted_manifest_mutated=false`, and reports `accepted_anchor_count=0`,
-  `proposed_anchor_count=7`, `strong_candidate_count=1`.
+- `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` now consumes an
+  explicit `--room-projection` artifact, not the retired Map12 candidate label
+  boxes. With the current committed geometry-only correspondence manifest,
+  semantic projection is still blocked, so this suggestion path is a follow-up
+  after accepted semantic anchors exist.
 - `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/manual-draft-alignment`
   writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
   and residual evidence with mean `0.352908 m`, p90 `0.491765 m`, and max
@@ -79,13 +73,11 @@ Last proven evidence:
   matched anchors, mean residual `0.352908 m`, p90 `0.491765 m`, and max
   residual `0.502064 m`. Preview overlays are under
   `output/b1-map12/alignment/previews/`.
-- `python scripts/maps/render_b1_map12_label_tool.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/label-tool`
+- `python scripts/maps/render_b1_map12_label_tool.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/label-tool`
   writes `output/b1-map12/label-tool/label_tool.html` and
-  `label_tool_packet.json`. The HTML editor loads raw Map12 navigation layers,
-  scene partition evidence, and the review manifest as separate layers; it
-  supports polygon/circle/point draft labels, movable labels, global display
-  tilt, and exports `b1_map12_alignment_review_v1` without mutating either raw
-  source.
+  `label_tool_packet.json`. The HTML editor starts from the current
+  `semantics.json` if present, or an empty vendor-map packet otherwise. It no
+  longer seeds the retired Map12 candidate room boxes.
 - `python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review`
   writes `output/b1-map12/correspondence-review/correspondence_review.html`
   and `correspondence_review_packet.json` with
@@ -164,15 +156,7 @@ Last proven evidence:
   The earlier interrupted
   `output/b1-map12/navigation-smoke-harness/residual-overlay-harness/` directory
   is a partial run with zero-byte JSON files and is not evidence.
-- `python scripts/maps/build_b1_map12_semantic_anchor_review_packet.py --review-manifest assets/maps/b1-map12-alignment-review.json --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --output docs/status/active/b1-map12-semantic-anchor-review-packet.json`
-  writes three proposed `anchor_role=semantic` room-interior center anchors for
-  the currently accepted room labels. They use real `navigation_area_id` /
-  `asset_partition_id` values and scene points from the verified
-  `reviewed_correspondence_fit`, but remain `review_status=proposed` with
-  `accepted_anchor_count=0`. The strict promoter rejects the packet with
-  `review packet has no human-accepted anchors`, so it is a review input, not
-  accepted room/object semantics.
-- `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
+- `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --room-semantics assets/maps/b1-map12-room-semantics.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is the correct gate for the current committed
   manifest: seven accepted `anchor_role=alignment` anchors prove geometry, but
@@ -184,7 +168,7 @@ Last proven evidence:
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report. The current accepted navigation-smoke proof includes
   local Isaac same-pose camera evidence.
-- `python scripts/maps/compile_b1_map12_runtime_bundle.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --review-manifest assets/maps/b1-map12-alignment-review.json --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --output-dir output/b1-map12/digital-twin-runtime-proof-check`
+- `python scripts/maps/compile_b1_map12_runtime_bundle.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --room-semantics assets/maps/b1-map12-room-semantics.json --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --output-dir output/b1-map12/digital-twin-runtime-proof-check`
   compiles a valid runtime Nav2 bundle with
   `digital_twin_capabilities.robot_consumption_proof.status=robot_navigation_verified`,
   `robot_navigation_supported=true`, and source-frame

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.generated_mess import (
     GENERATED_MESS_MANIFEST_SCHEMA,
     generated_mess_success_threshold,
@@ -118,9 +118,7 @@ def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
 def load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
+    manifest = read_json_object(path, label="generated mess manifest")
     if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
         raise ValueError(
             "generated mess manifest schema mismatch: "
@@ -524,7 +522,7 @@ def scenario_from_map_bundle(
     seed: int,
     generated_mess_count: int,
 ) -> CleanupScenario:
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    semantics = read_json_object(bundle_dir / "semantics.json", label="Isaac map bundle semantics")
     raw_fixtures = [dict(item) for item in semantics.get("static_landmarks") or []]
     if not raw_fixtures:
         return build_cleanup_scenario(seed=seed)

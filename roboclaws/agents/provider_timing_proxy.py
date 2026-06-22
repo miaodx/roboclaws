@@ -24,6 +24,7 @@ from roboclaws.agents.provider_timing_contract import (
     PROVIDER_REQUEST_METRIC_SCHEMA,
     PROVIDER_REQUEST_METRICS_FILENAME,
 )
+from roboclaws.core.json_sources import read_json_object
 
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
 PROVIDER_TIMING_PROXY_UPSTREAM_ENV = "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL"
@@ -156,7 +157,11 @@ async def start_provider_timing_proxy(
     last_error = ""
     while time.monotonic() < deadline:
         if ready_path.is_file():
-            payload = _read_ready_payload(ready_path)
+            try:
+                payload = _read_ready_payload(ready_path)
+            except (OSError, ValueError) as exc:
+                await stop_provider_timing_proxy(proc)
+                raise RuntimeError(f"provider timing proxy ready source is invalid: {exc}") from exc
             return ProviderTimingProxyHandle(
                 process=proc,
                 bind_url=str(payload.get("bind_url") or f"http://{bind_host}:{bind_port}"),
@@ -213,19 +218,14 @@ async def serve_provider_timing_proxy(
     bind_port = _site_port(site)
     bind_url = f"http://{config.bind_host}:{bind_port}"
     if ready_path is not None:
-        ready_path.parent.mkdir(parents=True, exist_ok=True)
-        ready_path.write_text(
-            json.dumps(
-                {
-                    "schema": "roboclaws_provider_timing_proxy_ready_v1",
-                    "bind_url": bind_url,
-                    "upstream_base_url": config.upstream_base_url,
-                    "metrics_path": str(config.metrics_path),
-                },
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
+        _write_ready_payload(
+            ready_path,
+            {
+                "schema": "roboclaws_provider_timing_proxy_ready_v1",
+                "bind_url": bind_url,
+                "upstream_base_url": config.upstream_base_url,
+                "metrics_path": str(config.metrics_path),
+            },
         )
 
     stop_event = stop_event or asyncio.Event()
@@ -432,11 +432,19 @@ def _validated_bind_port(value: int, setting_name: str) -> int:
 
 
 def _read_ready_payload(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    if not path.is_file():
         return {}
-    return payload if isinstance(payload, dict) else {}
+    try:
+        return read_json_object(path, label="provider timing proxy ready")
+    except FileNotFoundError:
+        return {}
+
+
+def _write_ready_payload(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path.replace(path)
 
 
 def _read_stderr_tail(proc: subprocess.Popen[bytes]) -> str:

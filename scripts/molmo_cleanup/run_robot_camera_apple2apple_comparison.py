@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.artifact_paths import output_relpath
 from roboclaws.household.generated_mess import (
     build_generated_mess_manifest,
@@ -865,13 +866,13 @@ def _state_location_map(state: dict[str, Any]) -> dict[str, str]:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="robot camera apple2apple JSON artifact")
 
 
 def _load_optional_json(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="robot camera apple2apple optional JSON artifact")
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -1663,8 +1664,8 @@ def _load_light_shadow_probe_manifest(path: Path, *, output_dir: Path) -> dict[s
             "path": output_relpath(path, output_dir),
         }
     try:
-        payload = _read_json(path)
-    except (OSError, json.JSONDecodeError) as exc:
+        payload = read_json_object(path, label="robot camera prior probe manifest")
+    except (OSError, ValueError) as exc:
         return {
             "status": "read_failed",
             "path": output_relpath(path, output_dir),

@@ -16,8 +16,11 @@ image_url="${ROBOCLAWS_CLOUDML_IMAGE_URL:-${registry_repo}:roboclaws-eval-env-$(
 juicefs_url="${ROBOCLAWS_JUICEFS_URL:-https://cloud.mioffice.cn/juicefs/vol-detail?cluster=wlcb-cloudml&name=robot-intelligent-planning-data&path=/dongxu/gpu_perf/gpu_perf/${input_rel}}"
 asset_mode="${ROBOCLAWS_STAGE_ASSET_MODE:-archive}"
 archive_name="${ROBOCLAWS_STAGE_ARCHIVE_NAME:-cleanup-focused-molmospaces-val0.tar.gz}"
+code_archive_name="${ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME:-roboclaws-code-${code_short}.tar.gz}"
+map_bundle="${ROBOCLAWS_STAGE_MAP_BUNDLE:-assets/maps/molmospaces/procthor-10k-val/0}"
 include_grasps="${ROBOCLAWS_STAGE_INCLUDE_GRASPS:-false}"
 run_upload_dry_run="${ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN:-true}"
+run_upload="${ROBOCLAWS_STAGE_RUN_UPLOAD:-false}"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'USAGE'
@@ -36,14 +39,17 @@ Environment overrides:
   ROBOCLAWS_JUICEFS_URL               Full cloud.mioffice.cn JuiceFS vol-detail URL.
   ROBOCLAWS_STAGE_ASSET_MODE          archive|manifest-only. Default: archive.
   ROBOCLAWS_STAGE_ARCHIVE_NAME        Default: cleanup-focused-molmospaces-val0.tar.gz
+  ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME   Default: roboclaws-code-<code>.tar.gz
+  ROBOCLAWS_STAGE_MAP_BUNDLE          Default: assets/maps/molmospaces/procthor-10k-val/0
   ROBOCLAWS_STAGE_INCLUDE_GRASPS      Set true to include grasps/droid when materializing.
   ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN  Set false to skip executor upload dry-run.
+  ROBOCLAWS_STAGE_RUN_UPLOAD          Set true to upload staged files to JuiceFS.
   ROBOCLAWS_EXECUTOR_ROOT             Default: /home/mi/executor
   ROBOCLAWS_EXECUTOR_CONFIG_ROOT      Default: $ROBOCLAWS_EXECUTOR_ROOT/conf
   ROBOCLAWS_EXECUTOR_CONFIG_PATH      Default: profiles/nvs/miaodongxu.yaml
 
-Real JuiceFS upload is intentionally not performed by this script. After review,
-run the printed executor command without --dry_run if the target path is accepted.
+Real JuiceFS upload runs only when ROBOCLAWS_STAGE_RUN_UPLOAD=true. Otherwise the
+script prints the upload command and, by default, performs an upload dry-run.
 USAGE
   exit 0
 fi
@@ -93,24 +99,65 @@ require_path "$assets_source/scenes/procthor-10k-val/val_0.xml" \
   "MolmoSpaces val_0 scene XML"
 require_path "$assets_source/scenes/procthor-10k-val/val_0.json" \
   "MolmoSpaces val_0 scene metadata"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_metadata.json" \
+  "MolmoSpaces val_0 scene runtime metadata"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_ceiling.xml" \
+  "MolmoSpaces val_0 ceiling scene XML"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_assets" \
+  "MolmoSpaces val_0 local mesh assets"
+require_path "$assets_source/scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz" \
+  "MolmoSpaces procthor val combined trie metadata"
+require_path "$assets_source/scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json" \
+  "MolmoSpaces procthor val remote manifest"
+require_path "$assets_source/scenes/procthor-10k-val/.procthor-10k-val_val_0.tar.zst_complete_links" \
+  "MolmoSpaces val_0 link completion flag"
 require_path "$assets_source/objects/thor" \
   "MolmoSpaces THOR object assets"
 require_path "$assets_source/robots/rby1m" \
   "MolmoSpaces RBY1M robot assets"
+require_path "$assets_source/mjthor_data_type_to_source_to_versions.json" \
+  "MolmoSpaces installed-source manifest"
+require_path "$cache_source/mjthor_data_type_to_source_to_versions.json" \
+  "MolmoSpaces cache manifest"
+case "$map_bundle" in
+  /*|../*|*/../*)
+    echo "error: ROBOCLAWS_STAGE_MAP_BUNDLE must be a repo-relative path: $map_bundle" >&2
+    exit 1
+    ;;
+esac
+require_path "$repo_root/$map_bundle/map.yaml" \
+  "Roboclaws Nav2 map bundle map.yaml"
+require_path "$repo_root/$map_bundle/semantics.json" \
+  "Roboclaws Nav2 map bundle semantics.json"
 
 clean_stage_dir "$stage_dir"
 
 archive_path=""
 archive_sha256=""
 archive_bytes=""
+code_archive_path="$stage_dir/archives/$code_archive_name"
+code_archive_sha256=""
+code_archive_bytes=""
 staged_paths=()
 case "$asset_mode" in
   archive)
     archive_path="$stage_dir/archives/$archive_name"
     archive_tmp="${archive_path}.tmp"
+    archive_manifest_dir="$stage_dir/.archive-manifest"
+    mkdir -p "$archive_manifest_dir/molmospaces/assets" "$archive_manifest_dir/molmospaces/cache"
+    cp "$assets_source/mjthor_data_type_to_source_to_versions.json" \
+      "$archive_manifest_dir/molmospaces/assets/"
+    cp "$cache_source/mjthor_data_type_to_source_to_versions.json" \
+      "$archive_manifest_dir/molmospaces/cache/"
     tar_paths=(
       "scenes/procthor-10k-val/val_0.xml"
       "scenes/procthor-10k-val/val_0.json"
+      "scenes/procthor-10k-val/val_0_metadata.json"
+      "scenes/procthor-10k-val/val_0_ceiling.xml"
+      "scenes/procthor-10k-val/val_0_assets"
+      "scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz"
+      "scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json"
+      "scenes/procthor-10k-val/.procthor-10k-val_val_0.tar.zst_complete_links"
       "objects/thor"
       "robots/rby1m"
     )
@@ -120,9 +167,15 @@ case "$asset_mode" in
     fi
     tar -czf "$archive_tmp" \
       --dereference \
-      --transform 's#^#molmospaces/assets/#' \
+      --transform 's#^\(scenes\|objects\|robots\|grasps\)/#molmospaces/assets/\1/#' \
+      --transform 's#^assets/maps/#roboclaws/assets/maps/#' \
       -C "$assets_source" \
-      "${tar_paths[@]}"
+      "${tar_paths[@]}" \
+      -C "$archive_manifest_dir" \
+      "molmospaces" \
+      -C "$repo_root" \
+      "$map_bundle"
+    rm -rf "$archive_manifest_dir"
     mv "$archive_tmp" "$archive_path"
     archive_sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
     archive_bytes="$(stat -c '%s' "$archive_path")"
@@ -138,8 +191,22 @@ case "$asset_mode" in
     ;;
 esac
 
+code_tmp="$stage_dir/.code-archive-tmp"
+rm -rf "$code_tmp"
+mkdir -p "$code_tmp/roboclaws.git"
+git -C "$repo_root" archive --format=tar "$code_commit" | tar -xf - -C "$code_tmp/roboclaws.git"
+printf '%s\n' "$code_commit" > "$code_tmp/roboclaws.git/.roboclaws_code_commit"
+tar -czf "${code_archive_path}.tmp" -C "$code_tmp" roboclaws.git
+mv "${code_archive_path}.tmp" "$code_archive_path"
+rm -rf "$code_tmp"
+code_archive_sha256="$(sha256sum "$code_archive_path" | awk '{print $1}')"
+code_archive_bytes="$(stat -c '%s' "$code_archive_path")"
+printf '%s  %s\n' "$code_archive_sha256" "$code_archive_name" > "${code_archive_path}.sha256"
+staged_paths+=("archives/$code_archive_name" "archives/${code_archive_name}.sha256")
+
 manifest_path="$stage_dir/roboclaws_cloudml_cleanup_assets.json"
 export ROBOCLAWS_STAGE_MANIFEST_PATH="$manifest_path"
+export ROBOCLAWS_STAGE_REPO_ROOT="$repo_root"
 export ROBOCLAWS_STAGE_DIR_RESOLVED="$stage_dir"
 export ROBOCLAWS_STAGE_INPUT_REL="$input_rel"
 export ROBOCLAWS_STAGE_JUICEFS_URL="$juicefs_url"
@@ -152,6 +219,11 @@ export ROBOCLAWS_STAGE_ARCHIVE_NAME="$archive_name"
 export ROBOCLAWS_STAGE_ARCHIVE_PATH="$archive_path"
 export ROBOCLAWS_STAGE_ARCHIVE_SHA256="$archive_sha256"
 export ROBOCLAWS_STAGE_ARCHIVE_BYTES="$archive_bytes"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME="$code_archive_name"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_PATH="$code_archive_path"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_SHA256="$code_archive_sha256"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_BYTES="$code_archive_bytes"
+export ROBOCLAWS_STAGE_MAP_BUNDLE="$map_bundle"
 export ROBOCLAWS_STAGE_INCLUDE_GRASPS="$include_grasps"
 export ROBOCLAWS_STAGE_STAGED_PATHS="$(IFS=:; echo "${staged_paths[*]}")"
 
@@ -162,10 +234,11 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-repo_root = Path(os.environ.get("PWD", ".")).resolve()
+repo_root = Path(os.environ["ROBOCLAWS_STAGE_REPO_ROOT"]).resolve()
 stage_dir = Path(os.environ["ROBOCLAWS_STAGE_DIR_RESOLVED"]).resolve()
 staged_paths = [item for item in os.environ["ROBOCLAWS_STAGE_STAGED_PATHS"].split(":") if item]
 archive_path = os.environ["ROBOCLAWS_STAGE_ARCHIVE_PATH"]
+code_archive_path = os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_PATH"]
 
 def du(path: str) -> str:
     candidate = Path(path).expanduser()
@@ -188,12 +261,22 @@ payload = {
             f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
             f"/archives/{os.environ['ROBOCLAWS_STAGE_ARCHIVE_NAME']}"
         )
-        if os.environ["ROBOCLAWS_STAGE_ASSET_MODE"] == "archive"
+        if os.environ["ROBOCLAWS_STAGE_ARCHIVE_NAME"]
         else "",
+        "code_archive_path": (
+            f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
+            f"/archives/{os.environ['ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME']}"
+        ),
     },
     "git": {
         "code_commit": os.environ["ROBOCLAWS_STAGE_CODE_COMMIT"],
-        "source_path": "cloudml.codeConfig",
+        "source_path": "juicefs.code_archive",
+        "code_archive": {
+            "local_path": code_archive_path,
+            "name": os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME"],
+            "sha256": os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_SHA256"],
+            "bytes": int(os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_BYTES"] or "0"),
+        },
     },
     "image": {
         "url": os.environ["ROBOCLAWS_STAGE_IMAGE_URL"],
@@ -203,6 +286,8 @@ payload = {
         "molmospaces_assets_size": du(os.environ["ROBOCLAWS_STAGE_ASSETS_SOURCE"]),
         "molmospaces_cache_dir": os.environ["ROBOCLAWS_STAGE_CACHE_SOURCE"],
         "molmospaces_cache_size": du(os.environ["ROBOCLAWS_STAGE_CACHE_SOURCE"]),
+        "map_bundle": os.environ["ROBOCLAWS_STAGE_MAP_BUNDLE"],
+        "map_bundle_size": du(str(repo_root / os.environ["ROBOCLAWS_STAGE_MAP_BUNDLE"])),
     },
     "staged_assets": {
         "mode": os.environ["ROBOCLAWS_STAGE_ASSET_MODE"],
@@ -217,12 +302,17 @@ payload = {
         },
     },
     "required_cloudml_checks": [
+        "asset-cache/molmospaces/assets/mjthor_data_type_to_source_to_versions.json",
+        "asset-cache/molmospaces/cache/mjthor_data_type_to_source_to_versions.json",
         "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.xml",
         "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.json",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0_metadata.json",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json",
         "asset-cache/molmospaces/assets/objects/thor",
         "asset-cache/molmospaces/assets/robots/rby1m",
-        "repo:assets/maps/molmospaces/procthor-10k-val/0/map.yaml",
-        "repo:assets/maps/molmospaces/procthor-10k-val/0/semantics.json",
+        "asset-cache/roboclaws/assets/maps/molmospaces/procthor-10k-val/0/map.yaml",
+        "asset-cache/roboclaws/assets/maps/molmospaces/procthor-10k-val/0/semantics.json",
     ],
     "eval": {
         "minimal_real_cleanup_product": (
@@ -259,7 +349,11 @@ if [[ -n "$archive_path" ]]; then
   echo "archive_sha256=$archive_sha256"
   echo "archive_bytes=$archive_bytes"
 fi
+echo "code_archive=$code_archive_path"
+echo "code_archive_sha256=$code_archive_sha256"
+echo "code_archive_bytes=$code_archive_bytes"
 echo "upload_dry_run_command=EXECUTOR_CONFIG_ROOT=$executor_config_root EXECUTOR_CONFIG_PATH=$executor_config_path $executor_root/execute.py storage juicefs upload --local_dir '$stage_dir' --url '$juicefs_url' --dry_run --json"
+echo "upload_command=EXECUTOR_CONFIG_ROOT=$executor_config_root EXECUTOR_CONFIG_PATH=$executor_config_path $executor_root/execute.py storage juicefs upload --local_dir '$stage_dir' --url '$juicefs_url' --json"
 
 if [[ "$run_upload_dry_run" == "true" ]]; then
   EXECUTOR_CONFIG_ROOT="$executor_config_root" \
@@ -268,5 +362,14 @@ if [[ "$run_upload_dry_run" == "true" ]]; then
       --local_dir "$stage_dir" \
       --url "$juicefs_url" \
       --dry_run \
+      --json
+fi
+
+if [[ "$run_upload" == "true" ]]; then
+  EXECUTOR_CONFIG_ROOT="$executor_config_root" \
+    EXECUTOR_CONFIG_PATH="$executor_config_path" \
+    "$executor_root/execute.py" storage juicefs upload \
+      --local_dir "$stage_dir" \
+      --url "$juicefs_url" \
       --json
 fi

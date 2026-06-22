@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_value
 from roboclaws.household.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CANONICAL_CAMERA_MODEL,
@@ -14,7 +14,7 @@ from roboclaws.household.camera_control import (
 
 
 def load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_value(path, label="camera view spec")
     raw_views = payload.get("views") if isinstance(payload, dict) else payload
     if not isinstance(raw_views, list):
         raise ValueError("camera view spec must be a list or an object with a views list")

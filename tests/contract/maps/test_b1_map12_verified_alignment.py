@@ -105,7 +105,7 @@ def accepted_anchor(
     navigation_area_id: str,
     asset_partition_id: str,
 ) -> dict[str, object]:
-    return {
+    anchor: dict[str, object] = {
         "anchor_id": anchor_id,
         "anchor_type": "door_center",
         "anchor_role": SEMANTIC_ANCHOR_ROLE,
@@ -123,6 +123,9 @@ def accepted_anchor(
         "map_coordinate_source": "operator_map_pick",
         "scene_coordinate_source": "operator_scene_pick",
     }
+    if asset_partition_id:
+        anchor["map_polygon"] = _test_map_polygon()
+    return anchor
 
 
 def alignment_anchor(
@@ -138,6 +141,7 @@ def alignment_anchor(
         asset_partition_id="",
     )
     anchor["anchor_role"] = ALIGNMENT_ANCHOR_ROLE
+    anchor.pop("map_polygon", None)
     return anchor
 
 
@@ -228,39 +232,48 @@ def semantic_review_packet(*, anchors: list[dict[str, object]]) -> dict[str, obj
     return packet
 
 
-def accepted_room_review_manifest(*, labels: list[dict[str, object]]) -> dict[str, object]:
+def room_semantics_reference(*, rooms: list[dict[str, object]]) -> dict[str, object]:
     return {
-        "schema": "b1_map12_alignment_review_v1",
-        "labels": labels,
+        "schema": "scene_room_semantic_overlay_overrides_v1",
+        "rooms": rooms,
     }
 
 
-def accepted_room_label(
+def accepted_room_reference(
     *,
-    label_id: str,
-    map_area_id: str,
-    scene_partition_id: str,
+    asset_partition_id: str,
     room_label: str,
     category: str = "room",
 ) -> dict[str, object]:
     return {
-        "label_id": label_id,
-        "map_area_id": map_area_id,
-        "scene_partition_id": scene_partition_id,
+        "asset_partition_id": asset_partition_id,
         "review_status": "accepted",
         "room_label": room_label,
         "category": category,
-        "geometry": {
-            "type": "map_polygon",
-            "frame_id": "map",
-            "points": [
-                {"x": 0.0, "y": 0.0},
-                {"x": 2.0, "y": 0.0},
-                {"x": 2.0, "y": 2.0},
-                {"x": 0.0, "y": 2.0},
-            ],
-        },
     }
+
+
+def pending_room_reference(
+    *,
+    asset_partition_id: str,
+    room_label: str,
+    category: str = "room",
+) -> dict[str, object]:
+    return {
+        "asset_partition_id": asset_partition_id,
+        "review_status": "needs_review",
+        "room_label": room_label,
+        "category": category,
+    }
+
+
+def _test_map_polygon() -> list[dict[str, float]]:
+    return [
+        {"x": 0.0, "y": 0.0},
+        {"x": 2.0, "y": 0.0},
+        {"x": 2.0, "y": 2.0},
+        {"x": 0.0, "y": 2.0},
+    ]
 
 
 def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
@@ -902,9 +915,9 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "manual draft missing"),
-        ("{not-json\n", "manual draft must contain valid JSON object"),
-        ("[]\n", "manual draft must contain a JSON object"),
+        (None, "manual draft source is missing"),
+        ("{not-json\n", "manual draft source must contain valid JSON object"),
+        ("[]\n", "manual draft source must contain a JSON object"),
     ],
 )
 def test_manual_draft_promotion_cli_rejects_bad_source_json(
@@ -948,25 +961,18 @@ def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
             }
         ]
     )
-    review_manifest = {
-        "labels": [
+    room_projection = {
+        "schema": "b1_map12_semantic_projection_v1",
+        "rooms": [
             {
-                "label_id": "room_a",
-                "map_area_id": "area_a",
-                "scene_partition_id": "partition_a",
+                "room_id": "room_a",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
                 "room_label": "Room A",
                 "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 0.0, "y": 0.0},
-                        {"x": 2.0, "y": 0.0},
-                        {"x": 2.0, "y": 2.0},
-                        {"x": 0.0, "y": 2.0},
-                    ],
-                },
+                "map_polygon": _test_map_polygon(),
             }
-        ]
+        ],
     }
     scene_diagnostic = {
         "partitions": [
@@ -984,7 +990,7 @@ def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
 
     payload = build_semantic_suggestions(
         draft=draft,
-        review_manifest=review_manifest,
+        room_projection=room_projection,
         scene_diagnostic=scene_diagnostic,
     )
 
@@ -1123,40 +1129,33 @@ def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> 
 
 
 def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors() -> None:
-    review_manifest = {
-        "schema": "b1_map12_alignment_review_v1",
-        "labels": [
+    room_projection = {
+        "schema": "b1_map12_semantic_projection_v1",
+        "rooms": [
             {
-                "label_id": "meeting_room_b",
-                "map_area_id": "central_floor",
-                "scene_partition_id": "meeting_room_b",
+                "room_id": "meeting_room_b",
+                "navigation_area_id": "central_floor",
+                "asset_partition_id": "meeting_room_b",
                 "review_status": "accepted",
                 "room_label": "Open kitchen",
                 "category": "kitchen",
-                "geometry": {
-                    "type": "map_polygon",
-                    "frame_id": "map",
-                    "points": [
-                        {"x": -4.0, "y": -1.0},
-                        {"x": 2.0, "y": -1.0},
-                        {"x": 2.0, "y": 5.0},
-                        {"x": -4.0, "y": 5.0},
-                    ],
-                },
+                "map_polygon": [
+                    {"x": -4.0, "y": -1.0},
+                    {"x": 2.0, "y": -1.0},
+                    {"x": 2.0, "y": 5.0},
+                    {"x": -4.0, "y": 5.0},
+                ],
             },
             {
-                "label_id": "draft_label",
-                "map_area_id": "draft_area",
-                "scene_partition_id": "draft_partition",
+                "room_id": "draft_label",
+                "navigation_area_id": "draft_area",
+                "asset_partition_id": "draft_partition",
                 "review_status": "draft",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 0.0, "y": 0.0},
-                        {"x": 1.0, "y": 0.0},
-                        {"x": 1.0, "y": 1.0},
-                    ],
-                },
+                "map_polygon": [
+                    {"x": 0.0, "y": 0.0},
+                    {"x": 1.0, "y": 0.0},
+                    {"x": 1.0, "y": 1.0},
+                ],
             },
         ],
     }
@@ -1176,9 +1175,9 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
     )
 
     packet = build_semantic_anchor_review_packet(
-        review_manifest=review_manifest,
+        room_projection=room_projection,
         alignment=alignment,
-        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+        room_projection_path=Path("output/b1-map12/semantic-projection/semantic_projection.json"),
         alignment_artifact_path=Path("output/b1-map12/alignment/alignment_residuals.json"),
     )
 
@@ -1193,7 +1192,7 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
     assert anchor["asset_partition_id"] == "meeting_room_b"
     assert anchor["map_xy"] == pytest.approx([-1.0, 2.0])
     assert anchor["scene_xyz"] == pytest.approx([0.0, 4.0, 0.0])
-    assert anchor["map_coordinate_source"] == "accepted_review_label_polygon_center"
+    assert anchor["map_coordinate_source"] == "accepted_room_projection_polygon_center"
     assert anchor["scene_coordinate_source"] == "reviewed_correspondence_fit_projection"
 
     with pytest.raises(PromotionError, match="no human-accepted anchors"):
@@ -1204,14 +1203,14 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
     ("source_arg", "source_text", "expected_error"),
     [
         (
-            "--review-manifest",
+            "--room-projection",
             "{not-json\n",
-            "review manifest source must contain valid JSON object",
+            "room projection source must contain valid JSON object",
         ),
         (
-            "--review-manifest",
+            "--room-projection",
             "[]\n",
-            "review manifest source must contain a JSON object",
+            "room projection source must contain a JSON object",
         ),
         (
             "--alignment-artifact",
@@ -1237,10 +1236,10 @@ def test_semantic_anchor_review_packet_cli_rejects_bad_source_json(
     args = [
         sys.executable,
         str(SEMANTIC_ANCHOR_REVIEW_PACKET_SCRIPT),
-        "--review-manifest",
-        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--room-projection",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"),
         "--alignment-artifact",
-        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"),
         "--output",
         str(output_path),
     ]
@@ -1261,16 +1260,14 @@ def test_semantic_projection_rejects_current_alignment_only_manifest() -> None:
             encoding="utf-8"
         )
     )
-    review_manifest = json.loads(
-        (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
-            encoding="utf-8"
-        )
+    room_semantics = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json").read_text(encoding="utf-8")
     )
 
     with pytest.raises(ValueError, match="accepted semantic anchors are required"):
         build_semantic_projection(
             correspondences=correspondences,
-            review_manifest=review_manifest,
+            room_semantics=room_semantics,
         )
 
 
@@ -1285,8 +1282,8 @@ def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
             str(SEMANTIC_PROJECTION_SCRIPT),
             "--correspondences",
             str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
-            "--review-manifest",
-            str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+            "--room-semantics",
+            str(REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"),
             "--output",
             str(output_path),
         ],
@@ -1313,14 +1310,14 @@ def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
             "correspondence manifest source must contain a JSON object",
         ),
         (
-            "--review-manifest",
+            "--room-semantics",
             "{not-json\n",
-            "review manifest source must contain valid JSON object",
+            "room semantics source must contain valid JSON object",
         ),
         (
-            "--review-manifest",
+            "--room-semantics",
             "[]\n",
-            "review manifest source must contain a JSON object",
+            "room semantics source must contain a JSON object",
         ),
     ],
 )
@@ -1338,8 +1335,8 @@ def test_semantic_projection_cli_rejects_bad_source_json(
         str(SEMANTIC_PROJECTION_SCRIPT),
         "--correspondences",
         str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
-        "--review-manifest",
-        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--room-semantics",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"),
         "--output",
         str(output_path),
     ]
@@ -1358,21 +1355,35 @@ def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
     proposed_packet = semantic_review_packet(
         anchors=[{**passing_anchors()[0], "review_status": "proposed"}]
     )
-    review_manifest = accepted_room_review_manifest(
-        labels=[
-            accepted_room_label(
-                label_id="meeting_room_a",
-                map_area_id="west_corridor",
-                scene_partition_id="meeting_room_a",
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
                 room_label="Meeting room A",
-            )
+            ),
+            accepted_room_reference(
+                asset_partition_id="meeting_room_b",
+                room_label="Meeting room B",
+            ),
+            accepted_room_reference(
+                asset_partition_id="meeting_room_c",
+                room_label="Meeting room C",
+            ),
+            accepted_room_reference(
+                asset_partition_id="reception_area_a",
+                room_label="Main hall",
+            ),
+            accepted_room_reference(
+                asset_partition_id="storage_room_a",
+                room_label="Storage room",
+            ),
         ]
     )
 
     with pytest.raises(ValueError, match="unexpected correspondence schema"):
         build_semantic_projection(
             correspondences=proposed_packet,
-            review_manifest=review_manifest,
+            room_semantics=room_semantics,
         )
 
 
@@ -1380,40 +1391,30 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
     promoted = build_reviewed_correspondence_manifest(
         semantic_review_packet(anchors=passing_anchors())
     )
-    review_manifest = accepted_room_review_manifest(
-        labels=[
-            accepted_room_label(
-                label_id="meeting_room_a",
-                map_area_id="west_corridor",
-                scene_partition_id="meeting_room_a",
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
                 room_label="Meeting room A",
                 category="meeting_room",
             ),
-            accepted_room_label(
-                label_id="meeting_room_b",
-                map_area_id="central_floor",
-                scene_partition_id="meeting_room_b",
-                room_label="Open kitchen",
-                category="kitchen",
-            ),
-            accepted_room_label(
-                label_id="meeting_room_c",
-                map_area_id="north_fixture_area",
-                scene_partition_id="meeting_room_c",
+            accepted_room_reference(
+                asset_partition_id="meeting_room_b",
                 room_label="Meeting room B",
                 category="meeting_room",
             ),
-            accepted_room_label(
-                label_id="reception_area_a",
-                map_area_id="south_fixture_area",
-                scene_partition_id="reception_area_a",
+            accepted_room_reference(
+                asset_partition_id="meeting_room_c",
+                room_label="Meeting room C",
+                category="meeting_room",
+            ),
+            accepted_room_reference(
+                asset_partition_id="reception_area_a",
                 room_label="Main hall",
                 category="living_room",
             ),
-            accepted_room_label(
-                label_id="storage_room_a",
-                map_area_id="storage_room_a",
-                scene_partition_id="storage_room_a",
+            accepted_room_reference(
+                asset_partition_id="storage_room_a",
                 room_label="Storage room",
                 category="storage_room",
             ),
@@ -1422,9 +1423,9 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
 
     payload = build_semantic_projection(
         correspondences=promoted,
-        review_manifest=review_manifest,
+        room_semantics=room_semantics,
         correspondences_path=Path("assets/maps/b1-map12-scene-correspondences.json"),
-        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+        room_semantics_path=Path("assets/maps/b1-map12-room-semantics.json"),
     )
 
     assert payload["schema"] == "b1_map12_semantic_projection_v1"
@@ -1437,8 +1438,8 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
     assert rooms["meeting_room_a"]["semantic_anchor_count"] == 2
     assert rooms["meeting_room_a"]["navigation_area_id"] == "west_corridor"
     assert rooms["meeting_room_a"]["source_anchor_ids"] == ["anchor_1", "anchor_2"]
-    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
-    assert rooms["meeting_room_b"]["category"] == "kitchen"
+    assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert rooms["meeting_room_b"]["category"] == "meeting_room"
     assert rooms["meeting_room_b"]["map_polygon"] == [
         {"x": 0.0, "y": 0.0},
         {"x": 2.0, "y": 0.0},
@@ -1447,41 +1448,62 @@ def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
     ]
 
 
+def test_semantic_projection_rejects_pending_room_semantics() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            ),
+            pending_room_reference(
+                asset_partition_id="meeting_room_b",
+                room_label="Meeting room B",
+                category="meeting_room",
+            ),
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "accepted semantic anchors reference missing accepted DT room semantics: "
+            ".*meeting_room_b"
+        ),
+    ):
+        build_semantic_projection(
+            correspondences=promoted,
+            room_semantics=room_semantics,
+        )
+
+
 def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
     promoted = build_reviewed_correspondence_manifest(
         semantic_review_packet(anchors=passing_anchors())
     )
     promoted["anchors"][1]["navigation_area_id"] = "wrong_area"
-    review_manifest = accepted_room_review_manifest(
-        labels=[
-            accepted_room_label(
-                label_id="meeting_room_a",
-                map_area_id="west_corridor",
-                scene_partition_id="meeting_room_a",
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
                 room_label="Meeting room A",
             ),
-            accepted_room_label(
-                label_id="meeting_room_b",
-                map_area_id="central_floor",
-                scene_partition_id="meeting_room_b",
-                room_label="Open kitchen",
-            ),
-            accepted_room_label(
-                label_id="meeting_room_c",
-                map_area_id="north_fixture_area",
-                scene_partition_id="meeting_room_c",
+            accepted_room_reference(
+                asset_partition_id="meeting_room_b",
                 room_label="Meeting room B",
             ),
-            accepted_room_label(
-                label_id="reception_area_a",
-                map_area_id="south_fixture_area",
-                scene_partition_id="reception_area_a",
+            accepted_room_reference(
+                asset_partition_id="meeting_room_c",
+                room_label="Meeting room C",
+            ),
+            accepted_room_reference(
+                asset_partition_id="reception_area_a",
                 room_label="Main hall",
             ),
-            accepted_room_label(
-                label_id="storage_room_a",
-                map_area_id="storage_room_a",
-                scene_partition_id="storage_room_a",
+            accepted_room_reference(
+                asset_partition_id="storage_room_a",
                 room_label="Storage room",
             ),
         ]
@@ -1490,27 +1512,44 @@ def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
     with pytest.raises(ValueError, match="must share one navigation_area_id"):
         build_semantic_projection(
             correspondences=promoted,
-            review_manifest=review_manifest,
+            room_semantics=room_semantics,
         )
 
 
-def test_semantic_projection_rejects_malformed_accepted_review_label_polygon() -> None:
+def test_semantic_projection_rejects_malformed_anchor_map_polygon() -> None:
     promoted = build_reviewed_correspondence_manifest(
         semantic_review_packet(anchors=passing_anchors())
     )
-    label = accepted_room_label(
-        label_id="meeting_room_a",
-        map_area_id="west_corridor",
-        scene_partition_id="meeting_room_a",
-        room_label="Meeting room A",
+    promoted["anchors"][0]["map_polygon"][0].pop("y")
+    room_semantics = room_semantics_reference(
+        rooms=[
+            accepted_room_reference(
+                asset_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            ),
+            accepted_room_reference(
+                asset_partition_id="meeting_room_b",
+                room_label="Meeting room B",
+            ),
+            accepted_room_reference(
+                asset_partition_id="meeting_room_c",
+                room_label="Meeting room C",
+            ),
+            accepted_room_reference(
+                asset_partition_id="reception_area_a",
+                room_label="Main hall",
+            ),
+            accepted_room_reference(
+                asset_partition_id="storage_room_a",
+                room_label="Storage room",
+            ),
+        ]
     )
-    label["geometry"]["points"][0].pop("y")
-    review_manifest = accepted_room_review_manifest(labels=[label])
 
-    with pytest.raises(ValueError, match="has malformed polygon point"):
+    with pytest.raises(ValueError, match="map_polygon points must contain x/y"):
         build_semantic_projection(
             correspondences=promoted,
-            review_manifest=review_manifest,
+            room_semantics=room_semantics,
         )
 
 
@@ -1656,9 +1695,9 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "review packet missing"),
-        ("{not-json\n", "review packet must contain valid JSON object"),
-        ("[]\n", "review packet must contain a JSON object"),
+        (None, "review packet source is missing"),
+        ("{not-json\n", "review packet source must contain valid JSON object"),
+        ("[]\n", "review packet source must contain a JSON object"),
     ],
 )
 def test_strict_semantic_review_promotion_cli_rejects_bad_packet_source_json(
@@ -1753,9 +1792,9 @@ def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path
 @pytest.mark.parametrize(
     ("source_text", "expected_error"),
     [
-        (None, "review packet missing"),
-        ("{not-json\n", "review packet must contain valid JSON object"),
-        ("[]\n", "review packet must contain a JSON object"),
+        (None, "review packet source is missing"),
+        ("{not-json\n", "review packet source must contain valid JSON object"),
+        ("[]\n", "review packet source must contain a JSON object"),
     ],
 )
 def test_semantic_review_packet_fit_check_rejects_bad_packet_source_json(
@@ -1908,7 +1947,7 @@ def test_review_packet_rejects_label_inventory_scene_context(tmp_path: Path) -> 
 
 
 def test_review_packet_requires_scene_topdown_render_file(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match="required scene top-down render missing"):
+    with pytest.raises(FileNotFoundError, match="scene top-down render source is missing"):
         build_review_packet(
             correspondence_manifest(anchors=[]),
             map_bundle=VENDOR_MAP12_BUNDLE,

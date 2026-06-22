@@ -4,10 +4,12 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from roboclaws.household import grasp_pose_policy_cache as pose_cache
 from roboclaws.household.grasp_pose_policy_cache import (
     GRASP_POSE_POLICY_CACHE_SCHEMA,
+    load_initial_contact_result,
     resolve_pose_policy,
     run_grasp_pose_policy_cache_generation,
 )
@@ -37,6 +39,34 @@ def test_resolve_pose_policy_uses_initial_contact_best_variant(tmp_path: Path) -
     assert policy["source"] == str(result_path)
     assert policy["name"] == "sign_1_dist_0.8_settle_1"
     assert policy["source_success_count"] == 9
+
+
+def test_load_initial_contact_result_rejects_malformed_source(tmp_path: Path) -> None:
+    result_path = tmp_path / "initial_contact_result.json"
+    result_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp initial-contact result source must contain valid JSON object: "
+            r".*initial_contact_result\.json"
+        ),
+    ):
+        load_initial_contact_result(result_path)
+
+
+def test_load_initial_contact_result_rejects_non_object_source(tmp_path: Path) -> None:
+    result_path = tmp_path / "initial_contact_result.json"
+    result_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp initial-contact result source must contain a JSON object: "
+            r".*initial_contact_result\.json"
+        ),
+    ):
+        load_initial_contact_result(result_path)
 
 
 def test_pose_policy_cache_generation_installs_valid_generated_npz(

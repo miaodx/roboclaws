@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.planner_task_feasibility import (
     grasp_cache_availability_preflight,
     validate_grasp_cache_file,
@@ -16,7 +17,7 @@ GRASP_CACHE_GENERATION_SCHEMA = "molmospaces_grasp_cache_generation_v1"
 
 
 def load_generation_preflight_from_manifest(path: Path) -> dict[str, Any]:
-    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest = read_json_object(path, label="grasp cache generation proof bundle manifest")
     preflight = manifest.get("grasp_cache_generation_preflight")
     if not isinstance(preflight, dict):
         raise ValueError(f"No grasp_cache_generation_preflight found in {path}")

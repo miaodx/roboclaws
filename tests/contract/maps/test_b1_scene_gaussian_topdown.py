@@ -10,6 +10,7 @@ from PIL import Image
 
 from scripts.maps.render_b1_scene_gaussian_topdown import (
     TOPDOWN_RENDER_SCHEMA,
+    _capture_scene,
     build_topdown_camera_request,
     prepare_nurec_crop_max_z_scene_usd,
     topdown_render_packet,
@@ -368,3 +369,36 @@ def test_capture_one_scene_rejects_malformed_camera_request_source(
     assert completed.returncode != 0
     assert message in completed.stderr
     assert not result_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "gaussian topdown capture result source must contain valid JSON object"),
+        ("[]\n", "gaussian topdown capture result source must contain a JSON object"),
+    ),
+)
+def test_capture_scene_rejects_malformed_child_result_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    message: str,
+) -> None:
+    result_path = tmp_path / "capture_result.json"
+
+    def fake_run(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        result_path.write_text(source, encoding="utf-8")
+        return subprocess.CompletedProcess([], 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(ValueError, match=message):
+        _capture_scene(
+            scene_usd=tmp_path / "scene_gs.usda",
+            camera_request=tmp_path / "camera_request.json",
+            output_dir=tmp_path / "views",
+            result_path=result_path,
+            width=960,
+            height=640,
+        )

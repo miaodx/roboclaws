@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
@@ -167,6 +169,55 @@ def test_scanner_runner_skips_blocked_candidates_without_running_commands(tmp_pa
     assert json.loads(output_path.read_text(encoding="utf-8")) == result
 
 
+def test_scanner_runner_rejects_missing_plan_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"scene sampler scanner execution plan source is missing: .*plan\.json",
+    ):
+        runner.run_scanner_plan(
+            plan_path=tmp_path / "plan.json",
+            output_path=tmp_path / "scanner_run.json",
+        )
+
+
+def test_scanner_runner_rejects_malformed_plan_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler scanner execution plan source must contain valid JSON object: "
+            r".*plan\.json"
+        ),
+    ):
+        runner.run_scanner_plan(
+            plan_path=plan_path,
+            output_path=tmp_path / "scanner_run.json",
+        )
+
+
+def test_scanner_runner_rejects_non_object_plan_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler scanner execution plan source must contain a JSON object: "
+            r".*plan\.json"
+        ),
+    ):
+        runner.run_scanner_plan(
+            plan_path=plan_path,
+            output_path=tmp_path / "scanner_run.json",
+        )
+
+
 def test_scanner_runner_dry_run_records_ready_commands_without_execution(tmp_path: Path) -> None:
     runner = _load_runner()
     plan_path = tmp_path / "plan.json"
@@ -236,6 +287,50 @@ def test_scanner_runner_marks_run_before_worklist_action(tmp_path: Path) -> None
     assert alignment["status"] == "ran_before_worklist_action"
     assert alignment["sources"]["ithor"]["status"] == "ran_before_worklist_action"
     assert alignment["sources"]["ithor"]["worklist_next_action"] == "run_manual_source_prep"
+
+
+def test_scanner_runner_rejects_malformed_worklist_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+    worklist_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler next-flow worklist source must contain valid JSON object: "
+            r".*next_flow_worklist\.json"
+        ),
+    ):
+        runner.run_scanner_plan(
+            plan_path=plan_path,
+            worklist_path=worklist_path,
+            output_path=tmp_path / "scanner_run.json",
+            dry_run=True,
+        )
+
+
+def test_scanner_runner_rejects_non_object_worklist_source(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+    worklist_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scene sampler next-flow worklist source must contain a JSON object: "
+            r".*next_flow_worklist\.json"
+        ),
+    ):
+        runner.run_scanner_plan(
+            plan_path=plan_path,
+            worklist_path=worklist_path,
+            output_path=tmp_path / "scanner_run.json",
+            dry_run=True,
+        )
 
 
 def test_scanner_runner_executes_ready_preview_then_map_build(tmp_path: Path) -> None:

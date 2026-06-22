@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects  # noqa: E402
+
 RESULT_SCHEMA = "visual_grounding_benchmark_result_v1"
 PREDICTION_SCHEMA = "visual_grounding_prediction_v1"
 PIPELINE_SCHEMA = "visual_grounding_pipeline_v1"
@@ -358,31 +365,18 @@ def _assert_no_secret_text(text: str, label: str) -> None:
 def _load_json(path: Path) -> dict[str, Any]:
     _assert(path.is_file(), f"missing JSON file: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise AssertionError(
-            f"JSON file must contain valid JSON object: {path}: {exc.msg}"
-        ) from exc
-    _assert(isinstance(payload, dict), f"JSON file must contain a JSON object: {path}")
-    return payload
+        return read_json_object(path, label="JSON file")
+    except ValueError as exc:
+        message = str(exc).replace("JSON file source", "JSON file", 1)
+        raise AssertionError(message) from exc
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        if line.strip():
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise AssertionError(
-                    f"JSONL row must contain valid JSON object: {path}:{line_number}: {exc.msg}"
-                ) from exc
-            _assert(
-                isinstance(payload, dict),
-                f"JSONL row must contain a JSON object: {path}:{line_number}",
-            )
-            rows.append(payload)
-    return rows
+    try:
+        return read_jsonl_objects(path, label="JSONL")
+    except (FileNotFoundError, ValueError) as exc:
+        message = str(exc).replace("JSONL source row", "JSONL row", 1)
+        raise AssertionError(message) from exc
 
 
 def _assert(condition: Any, message: str) -> None:

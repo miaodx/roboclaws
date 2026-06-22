@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from roboclaws.household.planner_task_feasibility import (
@@ -270,6 +271,70 @@ def test_grasp_cache_preflight_rejects_empty_loader_file(tmp_path: Path) -> None
     assert probe["valid"] is False
     assert probe["validation_status"] == "empty"
     assert probe["transform_count"] == 0
+
+
+def test_grasp_cache_preflight_reads_json_loader_file(tmp_path: Path) -> None:
+    grasp_dir = tmp_path / "grasps" / "rum" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    (grasp_dir / "Bread_1_grasps_filtered.json").write_text(
+        json.dumps({"transforms": [[[1.0]]]}),
+        encoding="utf-8",
+    )
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    probe = _grasp_cache_probe(preflight, "grasps/rum/Bread_1/Bread_1_grasps_filtered.json")
+    assert probe["valid"] is True
+    assert probe["validation_status"] == "valid"
+    assert probe["transform_count"] == 1
+
+
+def test_grasp_cache_preflight_treats_non_object_json_loader_file_as_empty(
+    tmp_path: Path,
+) -> None:
+    grasp_dir = tmp_path / "grasps" / "rum" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    (grasp_dir / "Bread_1_grasps_filtered.json").write_text("[]", encoding="utf-8")
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    probe = _grasp_cache_probe(preflight, "grasps/rum/Bread_1/Bread_1_grasps_filtered.json")
+    assert probe["valid"] is False
+    assert probe["validation_status"] == "empty"
+    assert probe["transform_count"] == 0
+
+
+def test_grasp_cache_preflight_reports_malformed_json_loader_file(
+    tmp_path: Path,
+) -> None:
+    grasp_dir = tmp_path / "grasps" / "rum" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    (grasp_dir / "Bread_1_grasps_filtered.json").write_text("{bad json\n", encoding="utf-8")
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    probe = _grasp_cache_probe(preflight, "grasps/rum/Bread_1/Bread_1_grasps_filtered.json")
+    assert probe["valid"] is False
+    assert probe["validation_status"] == "error"
+    assert probe["transform_count"] == 0
+    assert probe["validation_error_type"] == "ValueError"
+    assert "planner grasp cache source must contain valid JSON" in probe["validation_error"]
+
+
+def _grasp_cache_probe(preflight: dict, relative_path: str) -> dict:
+    for probe in preflight["assets"][0]["candidate_grasp_files"]:
+        if probe["relative_path"] == relative_path:
+            return probe
+    raise AssertionError(f"missing grasp cache probe: {relative_path}")
 
 
 def test_grasp_cache_generation_preflight_reports_missing_prerequisites(

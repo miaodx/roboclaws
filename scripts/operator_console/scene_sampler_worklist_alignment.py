@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 WORKLIST_SCHEMA = "molmospaces_scene_sampler_next_flow_worklist_v1"
 
@@ -10,7 +11,7 @@ WORKLIST_SCHEMA = "molmospaces_scene_sampler_next_flow_worklist_v1"
 def load_next_flow_worklist(path: Path | None) -> dict[str, Any] | None:
     if path is None:
         return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_object(path, label="scene sampler next-flow worklist")
     if payload.get("schema") != WORKLIST_SCHEMA:
         raise ValueError(f"next-flow worklist schema mismatch: {payload.get('schema')!r}")
     return payload

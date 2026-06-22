@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household.grasp_generation_setup import (
     DEFAULT_GRASP_GENERATION_PYTHON_PACKAGES,
     DEFAULT_MANIFOLD_SUBMODULE_URL,
@@ -81,3 +83,42 @@ def test_load_availability_preflight_from_manifest(tmp_path: Path) -> None:
     )
 
     assert load_availability_preflight_from_manifest(manifest) == {"schema": "example"}
+
+
+def test_load_availability_preflight_rejects_missing_manifest_source(tmp_path: Path) -> None:
+    with pytest.raises(
+        FileNotFoundError,
+        match=(
+            r"grasp generation proof bundle manifest source is missing: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_availability_preflight_from_manifest(tmp_path / "proof_bundle_run_manifest.json")
+
+
+def test_load_availability_preflight_rejects_malformed_manifest_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "proof_bundle_run_manifest.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp generation proof bundle manifest source must contain valid JSON object: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_availability_preflight_from_manifest(manifest)
+
+
+def test_load_availability_preflight_rejects_non_object_manifest_source(tmp_path: Path) -> None:
+    manifest = tmp_path / "proof_bundle_run_manifest.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"grasp generation proof bundle manifest source must contain a JSON object: "
+            r".*proof_bundle_run_manifest\.json"
+        ),
+    ):
+        load_availability_preflight_from_manifest(manifest)

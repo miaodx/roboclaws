@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 
 def load_scene_metadata(scene_usd_path: Path) -> dict[str, dict[str, Any]]:
@@ -10,11 +11,16 @@ def load_scene_metadata(scene_usd_path: Path) -> dict[str, dict[str, Any]]:
     if not metadata_path.is_file():
         return {}
     try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"malformed scene metadata JSON: {metadata_path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"scene metadata JSON must be a JSON object: {metadata_path}")
+        payload = read_json_object(metadata_path, label="scene metadata JSON")
+    except ValueError as exc:
+        message = str(exc)
+        if "source must contain valid JSON object" in message:
+            raise RuntimeError(f"malformed scene metadata JSON: {metadata_path}") from exc
+        if "source must contain a JSON object" in message:
+            raise RuntimeError(
+                f"scene metadata JSON must be a JSON object: {metadata_path}"
+            ) from exc
+        raise
     objects = payload.get("objects")
     if not isinstance(objects, dict):
         raise RuntimeError(f"scene metadata JSON objects must be a JSON object: {metadata_path}")
@@ -44,16 +50,20 @@ def load_local_isaac_scene_index(scene_usd_path: Path) -> dict[str, Any]:
         reverse=True,
     )
     for candidate in candidates:
-        try:
-            payload = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
+        payload = _read_optional_scene_index(candidate)
+        if not payload:
             continue
         if str(payload.get("scene_usd") or "") != str(scene_usd_path):
             continue
         return payload
     return {}
+
+
+def _read_optional_scene_index(path: Path) -> dict[str, Any]:
+    try:
+        return read_json_object(path, label="local Isaac scene index")
+    except (OSError, ValueError):
+        return {}
 
 
 def isaac_scene_index_entry(anchor_id: str, scene_index: dict[str, Any]) -> dict[str, Any]:

@@ -8,6 +8,8 @@ from typing import Any
 
 from PIL import Image
 
+from roboclaws.core.json_sources import read_json_object
+
 SCHEMA = "roboclaws_robot_camera_rgb_gain_profile_v1"
 DEFAULT_BACKEND = "isaaclab_subprocess"
 
@@ -165,9 +167,7 @@ def _fit_rgb_gain(
     view: str,
     target_ids: set[str],
 ) -> dict[str, Any]:
-    if not manifest_path.is_file():
-        raise FileNotFoundError(manifest_path)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = read_json_object(manifest_path, label="robot-camera RGB gain comparison manifest")
     numerator = [0.0, 0.0, 0.0]
     denominator = [0.0, 0.0, 0.0]
     used_pairs: list[dict[str, Any]] = []

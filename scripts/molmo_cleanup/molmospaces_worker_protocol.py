@@ -8,6 +8,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 type WorkerCommandHandler = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
 
 
@@ -183,7 +185,7 @@ def json_object_from_text(text: str) -> dict[str, Any]:
 
 
 def read_state(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="MolmoSpaces worker state")
 
 
 def write_state(

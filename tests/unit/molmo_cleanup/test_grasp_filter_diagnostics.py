@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from roboclaws.household import grasp_filter_diagnostics as diagnostics
 from roboclaws.household.grasp_filter_diagnostics import (
@@ -100,6 +101,30 @@ def test_filter_diagnostics_ready_when_variant_generates_transform(
     assert result["status"] == "ready"
     assert result["successful_variant_count"] == 1
     assert result["variants"][0]["classification"] == "success"
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("{not-json\n", "candidate grasp JSON source must contain valid JSON object"),
+        ("[]\n", "candidate grasp JSON source must contain a JSON object"),
+    ],
+)
+def test_filter_diagnostics_rejects_malformed_candidate_grasp_source(
+    tmp_path: Path, content: str, message: str
+) -> None:
+    candidate = tmp_path / "Bread_1_grasps.json"
+    candidate.write_text(content, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        run_grasp_filter_diagnostics(
+            generation_preflight=_generation_preflight(tmp_path),
+            output_dir=tmp_path / "out",
+            molmospaces_python=Path("/tmp/molmo/.venv/bin/python"),
+            candidate_grasps_path=candidate,
+            sample_size=2,
+            dry_run=False,
+        )
 
 
 def _candidate_payload() -> dict:

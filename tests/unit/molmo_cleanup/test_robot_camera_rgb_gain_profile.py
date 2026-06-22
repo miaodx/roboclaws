@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -183,3 +184,55 @@ def test_rgb_gain_profile_no_pairs_does_not_write_profile(tmp_path: Path) -> Non
     assert summary["status"] == "no_pairs"
     assert summary["used_pair_count"] == 0
     assert not output.exists()
+
+
+def test_rgb_gain_profile_rejects_missing_manifest_source(tmp_path: Path) -> None:
+    profile = _load_module(SCRIPT_PATH, "make_robot_camera_rgb_gain_profile_missing")
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=(
+            r"robot-camera RGB gain comparison manifest source is missing: "
+            r".*comparison_manifest\.json"
+        ),
+    ):
+        profile.make_rgb_gain_profile(
+            manifest_path=tmp_path / "comparison_manifest.json",
+            output_profile_path=tmp_path / "profile.json",
+        )
+
+
+def test_rgb_gain_profile_rejects_malformed_manifest_source(tmp_path: Path) -> None:
+    profile = _load_module(SCRIPT_PATH, "make_robot_camera_rgb_gain_profile_malformed")
+    manifest = tmp_path / "comparison_manifest.json"
+    manifest.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"robot-camera RGB gain comparison manifest source must contain valid JSON object: "
+            r".*comparison_manifest\.json"
+        ),
+    ):
+        profile.make_rgb_gain_profile(
+            manifest_path=manifest,
+            output_profile_path=tmp_path / "profile.json",
+        )
+
+
+def test_rgb_gain_profile_rejects_non_object_manifest_source(tmp_path: Path) -> None:
+    profile = _load_module(SCRIPT_PATH, "make_robot_camera_rgb_gain_profile_non_object")
+    manifest = tmp_path / "comparison_manifest.json"
+    manifest.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"robot-camera RGB gain comparison manifest source must contain a JSON object: "
+            r".*comparison_manifest\.json"
+        ),
+    ):
+        profile.make_rgb_gain_profile(
+            manifest_path=manifest,
+            output_profile_path=tmp_path / "profile.json",
+        )

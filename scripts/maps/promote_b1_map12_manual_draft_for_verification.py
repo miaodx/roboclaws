@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.core.json_sources import read_json_object
+
 DEFAULT_DRAFT = Path("docs/status/active/b1-map12-scene-correspondences-draft.json")
 DEFAULT_OUTPUT = Path(
     "output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json"
@@ -103,15 +110,10 @@ def has_explicit_picks(anchor: dict[str, Any]) -> bool:
 
 
 def read_draft_packet(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"manual draft missing: {path}")
     try:
-        draft = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"manual draft must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(draft, dict):
-        raise ValueError(f"manual draft must contain a JSON object: {path}")
-    return draft
+        return read_json_object(path, label="manual draft")
+    except FileNotFoundError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.evals.agent_identity import (
     agent_engine_spec,
     blocked_result_from_live_agent_request,
@@ -1329,19 +1330,7 @@ def _read_trace_events_with_errors(path: Path) -> tuple[list[dict[str, Any]], li
 
 
 def _load_optional_json_mapping(path: Path) -> tuple[dict[str, Any], str]:
-    if not path.exists():
-        return {}, ""
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}, ""
-    except json.JSONDecodeError as exc:
-        return {}, f"invalid_json:{exc.msg}"
-    except OSError as exc:
-        return {}, f"read_error:{exc.strerror or exc}"
-    if not isinstance(payload, dict):
-        return {}, "invalid_json_object"
-    return payload, ""
+    return _load_json_mapping(path, missing_reason="")
 
 
 def _json_source_error(path: Path, reason: str) -> dict[str, str]:
@@ -1366,15 +1355,27 @@ def _required_json_artifact_source_errors(paths: dict[str, Path]) -> list[dict[s
 
 
 def _load_required_json_mapping(path: Path) -> tuple[dict[str, Any], str]:
-    if not path.exists():
-        return {}, "missing"
+    return _load_json_mapping(path, missing_reason="missing")
+
+
+def _load_json_mapping(path: Path, *, missing_reason: str) -> tuple[dict[str, Any], str]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return {}, f"invalid_json:{exc.msg}"
-    if not isinstance(payload, dict):
-        return {}, "invalid_json_object"
-    return payload, ""
+        return read_json_object(path, label="eval runner JSON artifact"), ""
+    except FileNotFoundError:
+        return {}, missing_reason
+    except ValueError as exc:
+        return {}, _json_artifact_error_reason(exc)
+    except OSError as exc:
+        return {}, f"read_error:{exc.strerror or exc}"
+
+
+def _json_artifact_error_reason(exc: ValueError) -> str:
+    cause = exc.__cause__
+    if isinstance(cause, json.JSONDecodeError):
+        return f"invalid_json:{cause.msg}"
+    if "must contain a JSON object" in str(exc):
+        return "invalid_json_object"
+    return str(exc)
 
 
 def _skill_name(sample: EvalSample) -> str:

@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 import mujoco
 from PIL import Image
 
+from roboclaws.core.json_sources import read_json_value
 from roboclaws.household.camera_control import (
     load_camera_control_request,
     normalize_camera_control_request,
@@ -1416,7 +1417,7 @@ def _image_to_array(path: Path) -> Any:
 
 
 def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_value(path, label="camera view spec")
     raw_views = payload.get("views") if isinstance(payload, dict) else payload
     if not isinstance(raw_views, list):
         raise ValueError("camera view spec must be a list or an object with a views list")

@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.grasp_cache_generation import (
     ensure_molmospaces_assets_symlink,
     generation_xml_path,
@@ -324,7 +325,7 @@ def _make_candidate_subset(
                 }
             ],
         }
-    data = json.loads(source_path.read_text(encoding="utf-8"))
+    data = read_json_object(source_path, label="candidate grasp JSON")
     transforms = data.get("transforms") or []
     candidate_count = len(transforms)
     indices = _candidate_subset_indices(data, sample_size=sample_size)
@@ -463,7 +464,7 @@ def _variant_blockers(variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _candidate_count(path: Path, *, dry_run: bool) -> int:
     if dry_run or not path.is_file():
         return 0
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = read_json_object(path, label="candidate grasp JSON")
     return len(data.get("transforms") or [])
 
 

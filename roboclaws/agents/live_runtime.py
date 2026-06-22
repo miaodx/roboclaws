@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.core.json_sources import read_json_object
 
 
 @dataclass(frozen=True)
@@ -237,19 +238,27 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+        return read_json_object(path, label="live-agent artifact")
+    except ValueError as exc:
+        cause = exc.__cause__
+        if not isinstance(cause, json.JSONDecodeError):
+            raise ValueError(
+                f"live-agent artifact source {path}: non-object JSON: {_json_type_name(path)}"
+            ) from exc
         raise ValueError(
-            f"live-agent artifact source {path}: invalid JSON at line {exc.lineno} "
-            f"column {exc.colno}: {exc.msg}"
+            f"live-agent artifact source {path}: invalid JSON at line {cause.lineno} "
+            f"column {cause.colno}: {cause.msg}"
         ) from exc
     except OSError as exc:
         raise ValueError(f"live-agent artifact source {path}: cannot be read: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(
-            f"live-agent artifact source {path}: non-object JSON: {type(payload).__name__}"
-        )
-    return payload
+
+
+def _json_type_name(path: Path) -> str:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "unknown"
+    return type(payload).__name__
 
 
 def _bool_or_none(value: Any) -> bool | None:

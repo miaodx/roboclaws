@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 import pytest
 
-from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
+from roboclaws.core.json_sources import (
+    read_gzip_json_object,
+    read_json_object,
+    read_json_value,
+    read_jsonl_objects,
+)
 
 
 @pytest.mark.parametrize(
@@ -29,6 +35,26 @@ def test_read_json_object_rejects_malformed_sources(
 def test_read_json_object_rejects_missing_source(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"sample source is missing: .*missing\.json"):
         read_json_object(tmp_path / "missing.json", label="sample")
+
+
+def test_read_json_value_returns_non_object_payload(tmp_path: Path) -> None:
+    path = tmp_path / "source.json"
+    path.write_text('[{"ok": true}]', encoding="utf-8")
+
+    assert read_json_value(path, label="sample") == [{"ok": True}]
+
+
+def test_read_json_value_rejects_malformed_source(tmp_path: Path) -> None:
+    path = tmp_path / "source.json"
+    path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"sample source must contain valid JSON: .*source\.json"):
+        read_json_value(path, label="sample")
+
+
+def test_read_json_value_rejects_missing_source(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match=r"sample source is missing: .*missing\.json"):
+        read_json_value(tmp_path / "missing.json", label="sample")
 
 
 @pytest.mark.parametrize(
@@ -71,3 +97,49 @@ def test_read_jsonl_objects_returns_object_rows_and_skips_blank_lines(tmp_path: 
         {"event": "start"},
         {"event": "done"},
     ]
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("{not-json\n", r"sample gzip source must contain valid JSON object: .*source\.json\.gz"),
+        ("[]\n", r"sample gzip source must contain a JSON object: .*source\.json\.gz"),
+    ],
+)
+def test_read_gzip_json_object_rejects_malformed_sources(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    path = tmp_path / "source.json.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write(source)
+
+    with pytest.raises(ValueError, match=message):
+        read_gzip_json_object(path, label="sample gzip")
+
+
+def test_read_gzip_json_object_rejects_missing_source(tmp_path: Path) -> None:
+    with pytest.raises(
+        FileNotFoundError, match=r"sample gzip source is missing: .*missing\.json\.gz"
+    ):
+        read_gzip_json_object(tmp_path / "missing.json.gz", label="sample gzip")
+
+
+def test_read_gzip_json_object_rejects_plain_json_source(tmp_path: Path) -> None:
+    path = tmp_path / "source.json.gz"
+    path.write_text('{"ok": true}', encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"sample gzip source cannot be read as gzip JSON: .*source\.json\.gz",
+    ):
+        read_gzip_json_object(path, label="sample gzip")
+
+
+def test_read_gzip_json_object_returns_object_payload(tmp_path: Path) -> None:
+    path = tmp_path / "source.json.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write('{"ok": true}\n')
+
+    assert read_gzip_json_object(path, label="sample gzip") == {"ok": True}

@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
+
 MANIFEST_SCHEMA = "molmo_live_ci_report_manifest_v1"
 STATUS_SCHEMA = "molmo_live_ci_entry_status_v1"
 COMMON_DIAGNOSTIC_FILES = (
@@ -127,7 +129,7 @@ def write_status(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def read_status(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_object(path, label="Molmo live CI status")
     if payload.get("schema") != STATUS_SCHEMA:
         raise ValueError(f"{path} is not a {STATUS_SCHEMA} document")
     return payload

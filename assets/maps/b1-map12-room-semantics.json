@@ -1,0 +1,116 @@
+{
+  "schema": "scene_room_semantic_overlay_overrides_v1",
+  "source": "b1_map12_digital_twin_room_semantics",
+  "policy": {
+    "source_of_truth": "digital_twin_scene_partitions",
+    "contains_map12_candidate_polygons": false,
+    "contains_navigation_area_bindings": false,
+    "allows_pending_review_labels": true,
+    "notes": [
+      "This file is the reviewed room-label reference for B1 / Map 12.",
+      "Map12 navigation geometry must come from a validated Base Navigation Map or an explicit semantic projection artifact, not from this room-label reference.",
+      "Rows with review_status=needs_review are display-label candidates only and must not be promoted into verified room semantics."
+    ]
+  },
+  "rooms": [
+    {
+      "asset_partition_id": "meeting_room_a",
+      "room_label": "Meeting room A",
+      "category": "meeting_room",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.88,
+      "review_status": "accepted",
+      "aliases": [
+        "meeting_room_a",
+        "Meeting room A",
+        "meeting room"
+      ],
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "meeting_room_b",
+      "room_label": "Meeting room B",
+      "category": "meeting_room",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.88,
+      "review_status": "accepted",
+      "operator_note": "Corrected on 2026-06-20 from the earlier Open kitchen override after Map12 draft review against the Gaussian asset topdown.",
+      "aliases": [
+        "meeting_room_b",
+        "Meeting room B",
+        "meeting room"
+      ],
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0003_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "meeting_room_c",
+      "room_label": "Meeting room C",
+      "category": "meeting_room",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.88,
+      "review_status": "accepted",
+      "aliases": [
+        "meeting_room_c",
+        "Meeting room C",
+        "meeting room"
+      ],
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "reception_area_a",
+      "room_label": "Main hall / living area",
+      "category": "living_room",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.9,
+      "review_status": "accepted",
+      "aliases": [
+        "reception_area_a",
+        "Main hall / living area",
+        "living room",
+        "reception area",
+        "大厅",
+        "客厅"
+      ],
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0001_observe.fpv.png",
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0004_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "short_corridor_a",
+      "room_label": "Short corridor",
+      "category": "corridor",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.82,
+      "review_status": "accepted",
+      "aliases": [
+        "short_corridor_a",
+        "Short corridor",
+        "corridor",
+        "走廊"
+      ],
+      "evidence_artifacts": []
+    },
+    {
+      "asset_partition_id": "storage_room_a",
+      "room_label": "Storage room",
+      "category": "storage",
+      "semantic_source": "digital_twin_room_semantic_reference",
+      "confidence": 0.82,
+      "review_status": "accepted",
+      "aliases": [
+        "storage_room_a",
+        "Storage room",
+        "storage",
+        "储藏室"
+      ],
+      "evidence_artifacts": []
+    }
+  ]
+}

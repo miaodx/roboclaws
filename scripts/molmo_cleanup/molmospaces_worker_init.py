@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any, Callable
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.generated_mess import GENERATED_MESS_MANIFEST_SCHEMA
 from roboclaws.launch.scene_sampler import _molmospaces_get_scenes_args
 
@@ -12,9 +12,7 @@ from roboclaws.launch.scene_sampler import _molmospaces_get_scenes_args
 def load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
+    manifest = read_json_object(path, label="generated mess manifest")
     if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
         raise ValueError(
             "generated mess manifest schema mismatch: "
@@ -126,11 +124,14 @@ def _source_scene_json_path(scene_xml: Path) -> Path | None:
 
 def _source_scene_json_rooms(scene_json: Path) -> list[dict[str, Any]]:
     try:
-        payload = json.loads(scene_json.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"malformed source scene JSON: {scene_json}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"source scene JSON must be a JSON object: {scene_json}")
+        payload = read_json_object(scene_json, label="source scene JSON")
+    except ValueError as exc:
+        message = str(exc)
+        if "must contain valid JSON object" in message:
+            raise RuntimeError(f"malformed source scene JSON: {scene_json}") from exc
+        if "must contain a JSON object" in message:
+            raise RuntimeError(f"source scene JSON must be a JSON object: {scene_json}") from exc
+        raise RuntimeError(message.replace("source scene JSON source", "source scene JSON", 1))
     rooms = payload.get("rooms")
     if not isinstance(rooms, list):
         raise RuntimeError(f"source scene JSON rooms must be a JSON array: {scene_json}")

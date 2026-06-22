@@ -21,16 +21,8 @@ SCRIPT = REPO_ROOT / "scripts" / "maps" / "suggest_b1_map12_manual_anchor_semant
             "manual draft source must contain valid JSON object",
         ),
         ("draft.json", "[]\n", "manual draft source must contain a JSON object"),
-        (
-            "review.json",
-            "{not-json\n",
-            "review manifest source must contain valid JSON object",
-        ),
-        (
-            "review.json",
-            "[]\n",
-            "review manifest source must contain a JSON object",
-        ),
+        ("projection.json", "{not-json\n", "room projection source must contain valid JSON object"),
+        ("projection.json", "[]\n", "room projection source must contain a JSON object"),
         (
             "scene.json",
             "{not-json\n",
@@ -50,13 +42,13 @@ def test_manual_anchor_semantics_cli_rejects_bad_source_json(
     message: str,
 ) -> None:
     draft = tmp_path / "draft.json"
-    review = tmp_path / "review.json"
+    projection = tmp_path / "projection.json"
     scene = tmp_path / "scene.json"
     output = tmp_path / "suggestions.json"
     review_packet = tmp_path / "review_packet.json"
     review_report = tmp_path / "review.html"
     draft.write_text(json.dumps(_draft()), encoding="utf-8")
-    review.write_text(json.dumps(_review_manifest()), encoding="utf-8")
+    projection.write_text(json.dumps(_room_projection()), encoding="utf-8")
     scene.write_text(json.dumps(_scene_diagnostic()), encoding="utf-8")
     target = tmp_path / filename
     if source is None:
@@ -66,7 +58,7 @@ def test_manual_anchor_semantics_cli_rejects_bad_source_json(
 
     completed = _run_suggester(
         draft=draft,
-        review=review,
+        projection=projection,
         scene=scene,
         output=output,
         review_packet=review_packet,
@@ -85,18 +77,18 @@ def test_manual_anchor_semantics_cli_writes_review_outputs_from_loaded_sources(
     tmp_path: Path,
 ) -> None:
     draft = tmp_path / "draft.json"
-    review = tmp_path / "review.json"
+    projection = tmp_path / "projection.json"
     scene = tmp_path / "scene.json"
     output = tmp_path / "suggestions.json"
     review_packet = tmp_path / "review_packet.json"
     review_report = tmp_path / "review.html"
     draft.write_text(json.dumps(_draft()), encoding="utf-8")
-    review.write_text(json.dumps(_review_manifest()), encoding="utf-8")
+    projection.write_text(json.dumps(_room_projection()), encoding="utf-8")
     scene.write_text(json.dumps(_scene_diagnostic()), encoding="utf-8")
 
     completed = _run_suggester(
         draft=draft,
-        review=review,
+        projection=projection,
         scene=scene,
         output=output,
         review_packet=review_packet,
@@ -116,7 +108,7 @@ def test_manual_anchor_semantics_cli_writes_review_outputs_from_loaded_sources(
 def _run_suggester(
     *,
     draft: Path,
-    review: Path,
+    projection: Path,
     scene: Path,
     output: Path,
     review_packet: Path,
@@ -128,8 +120,8 @@ def _run_suggester(
             str(SCRIPT),
             "--draft",
             str(draft),
-            "--review-manifest",
-            str(review),
+            "--room-projection",
+            str(projection),
             "--scene-diagnostic",
             str(scene),
             "--output",
@@ -161,25 +153,22 @@ def _draft() -> dict[str, object]:
     }
 
 
-def _review_manifest() -> dict[str, object]:
+def _room_projection() -> dict[str, object]:
     return {
-        "schema": "b1_map12_alignment_review_v1",
-        "labels": [
+        "schema": "b1_map12_semantic_projection_v1",
+        "rooms": [
             {
-                "label_id": "room_a",
-                "map_area_id": "area_a",
-                "scene_partition_id": "partition_a",
+                "room_id": "room_a",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
                 "room_label": "Room A",
                 "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 0.0, "y": 0.0},
-                        {"x": 2.0, "y": 0.0},
-                        {"x": 2.0, "y": 2.0},
-                        {"x": 0.0, "y": 2.0},
-                    ],
-                },
+                "map_polygon": [
+                    {"x": 0.0, "y": 0.0},
+                    {"x": 2.0, "y": 0.0},
+                    {"x": 2.0, "y": 2.0},
+                    {"x": 0.0, "y": 2.0},
+                ],
             }
         ],
     }

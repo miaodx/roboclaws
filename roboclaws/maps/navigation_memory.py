@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 
 def read_navigation_memory(
@@ -15,17 +16,21 @@ def read_navigation_memory(
     json_object_label: str | None = None,
 ) -> dict[str, Any]:
     path = Path(path)
-    if not path.is_file():
-        raise ValueError(f"{source_name} missing: {path}")
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{source_name} must contain valid JSON object: {path}") from exc
-    if not isinstance(payload, dict):
-        if json_object_label:
-            raise ValueError(f"{json_object_label} must contain a JSON object at {path}")
-        raise ValueError(f"{source_name} must contain a JSON object: {path}")
-    return payload
+        return read_json_object(path, label=source_name)
+    except FileNotFoundError as exc:
+        raise ValueError(f"{source_name} missing: {path}") from exc
+    except ValueError as exc:
+        message = str(exc)
+        if "must contain valid JSON object" in message:
+            raise ValueError(f"{source_name} must contain valid JSON object: {path}") from exc
+        if "must contain a JSON object" in message:
+            if json_object_label:
+                raise ValueError(
+                    f"{json_object_label} must contain a JSON object at {path}"
+                ) from exc
+            raise ValueError(f"{source_name} must contain a JSON object: {path}") from exc
+        raise
 
 
 def navigation_memory_items(
