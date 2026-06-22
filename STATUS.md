@@ -50,7 +50,7 @@ direct-producer camera labelers are retired from active code, command examples,
 tests, and benchmark promotion. Validation-required maintainer routes stay
 guarded until their separate off-work-network proof runs.
 
-The first-slice cross-environment semantic map parity contract is implemented.
+The initial cross-environment semantic map parity contract is implemented.
 Real-robot, B1 digital-twin, and simulator static map bundles now declare
 source-frame spatial metadata, explicit `display_frame` absence, polygon role,
 geometry source, and alignment status. B1 scene partition labels bind through
@@ -73,6 +73,17 @@ render/observation readiness, and blocked `B1_floor2_slow` default visual-route
 status through agent-visible MCP/runtime map context. Room/object semantic
 projection and public navigation extensions are follow-ups in
 `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
+The cross-environment map/waypoint source-of-truth flow is implemented.
+Simulator, real robot, and Digital Twin product map paths now share strict Base
+Navigation Map v1 validation and canonical area-based base waypoints.
+MolmoSpaces product bundle generation is split away from Agent View/runtime
+projection, the active sampler bundle set validates as fixture-free Base
+Navigation Map v1, product runtime copies selected source bundles into run
+artifacts instead of authoring snapshots from Agent View, runtime cleanup
+observes objects from generated sim bundles, and legacy rich Agent View bundle
+exports plus no-bundle synthetic map projection paths have been removed. The
+implementation source of truth is
+`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -91,18 +102,15 @@ thin review/runtime contract is
 
 ## Next Action
 
-Start Slice 2 of
-`docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`:
-extract the canonical area-based `BaseWaypointBuilder` so simulator, real
-robot, and Digital Twin bundles normalize base inspection waypoints through
-one builder contract.
+Review the implemented cross-environment map/waypoint source-of-truth cleanup
+and keep any remaining follow-up limited to strict Base Navigation Map bundle
+validation or current runtime-map consumers.
 
 ## Current Blocker
 
-No current human blocker for the approved cross-environment map/waypoint
-source-of-truth plan. Slice 1 strict Base Navigation Map v1 validation is
-implemented; the next implementation pressure is the canonical area-based
-waypoint builder and simulator source-map preparation.
+No current human blocker for the implemented cross-environment map/waypoint
+source-of-truth plan. Product runtime, smoke helpers, and current tests now fail
+loudly without a selected Base Navigation Map bundle as intended.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on

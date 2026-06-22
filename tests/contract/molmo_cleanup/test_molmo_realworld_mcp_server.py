@@ -14,7 +14,6 @@ from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
-    VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
 )
 from roboclaws.household.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
@@ -56,25 +55,11 @@ def _open_ended_goal_contract(prompt: str):
 
 
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
-PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def make_molmo_realworld_cleanup_mcp(*args: Any, **kwargs: Any) -> Any:
-    if kwargs.pop("allow_synthetic_map_projection", False):
-        kwargs.setdefault("map_bundle_dir", None)
-        base_contract = kwargs.get("base_contract")
-        if base_contract is None:
-            base_contract = CleanupBackendSession(
-                kwargs.get("scenario") or build_cleanup_scenario(seed=7)
-            )
-        contract = RealWorldCleanupContract(
-            base_contract,
-            perception_mode=kwargs.get("perception_mode", VISIBLE_OBJECT_DETECTIONS_MODE),
-            allow_synthetic_map_projection=True,
-        )
-        kwargs["contract"] = contract
-    else:
-        kwargs.setdefault("map_bundle_dir", PREBUILT_BUNDLE)
+    kwargs.setdefault("map_bundle_dir", PREBUILT_BUNDLE)
     return _make_molmo_realworld_cleanup_mcp(*args, **kwargs)
 
 
@@ -340,7 +325,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
-    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
+    assert metric_map["map_bundle"]["environment_id"] == "molmospaces-procthor-10k-val-0"
     assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
     assert observation["visible_object_detections"]
@@ -1059,7 +1044,6 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
         port=0,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -1130,13 +1114,12 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
         port=0,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
     )
     try:
         work_waypoint = next(
             item
             for item in server.contract.metric_map()["inspection_waypoints"]
-            if item["waypoint_id"] == "generated_exploration_007"
+            if item["waypoint_id"] == "room_8_inspection"
         )
         server.call_tool("navigate_to_waypoint", waypoint_id=str(work_waypoint["waypoint_id"]))
         observation = server.call_tool("observe")
@@ -1151,7 +1134,15 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
         assert server.call_tool("pick", object_id=candidate["object_id"])["ok"] is True
         fixture_id = candidate["candidate_fixture_id"]
         assert server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)["ok"] is True
-        assert server.call_tool("place_inside", fixture_id=fixture_id)["ok"] is True
+        placed = server.call_tool("place_inside", fixture_id=fixture_id)
+        if (
+            not placed.get("ok")
+            and placed.get("error_reason") == "semantic_order"
+            and placed.get("required_tool") == "open_receptacle"
+        ):
+            assert server.call_tool("open_receptacle", fixture_id=fixture_id)["ok"] is True
+            placed = server.call_tool("place_inside", fixture_id=fixture_id)
+        assert placed["ok"] is True
         observation_blocks = server._mcp_observe_response()
     finally:
         server.close()
@@ -1180,7 +1171,6 @@ def test_realworld_mcp_raw_fpv_trace_records_agent_facing_compact_state(
         port=0,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -1228,13 +1218,12 @@ def test_realworld_mcp_raw_fpv_compact_state_lists_actionable_pending_handles(
         port=0,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
     )
     try:
         server.call_tool("metric_map")
-        server.call_tool("navigate_to_waypoint", waypoint_id="generated_exploration_003")
+        server.call_tool("navigate_to_waypoint", waypoint_id="room_4_inspection")
         server.call_tool("observe")
-        server.call_tool("navigate_to_waypoint", waypoint_id="generated_exploration_007")
+        server.call_tool("navigate_to_waypoint", waypoint_id="room_8_inspection")
         observation = server.call_tool("observe")
         candidate = server.call_tool(
             "navigate_to_visual_candidate",
@@ -1272,7 +1261,7 @@ def test_realworld_mcp_raw_fpv_artifact_filters_private_camera_contract_keys(
     contract = RealWorldCleanupContract(
         CleanupBackendSession(scenario),
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     metric_map = contract.metric_map()
     contract.navigate_to_waypoint(metric_map["inspection_waypoints"][0]["waypoint_id"])

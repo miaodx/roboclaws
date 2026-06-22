@@ -1247,7 +1247,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_household_cleanup_run(
         "codex",
         "world-public-labels",
-        "map_bundle=molmo-cleanup-default-7",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
     )
 
     assert route[:10] == [
@@ -1262,7 +1262,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "127.0.0.1",
         "18788",
     ]
-    assert route[10] == "molmo-cleanup-default-7"
+    assert route[10] == "assets/maps/molmospaces/procthor-10k-val/0"
 
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
@@ -1795,7 +1795,10 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     assert 'map_bundle="auto"' in text
     assert 'python_bin" -m roboclaws.launch.map_bundles' in text
     assert "--map-bundle-dir" in text
-    assert "--require-map-bundle" in text
+    removed_require_flag = "--require-map-" + "bundle"
+    removed_synthetic_flag = "--allow-synthetic-map-" + "projection"
+    assert removed_require_flag not in text
+    assert removed_synthetic_flag not in text
     assert "using backend-derived public metric map" not in text
     assert "map_bundle=${map_bundle_dir} is not allowed" in text
 

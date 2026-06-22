@@ -95,6 +95,10 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
         "consumer_scope": "real_robot_and_digital_twin",
     }
     assert semantics["spatial_contract"]["alignment_status"] == "verified"
+    assert semantics["frame_ids"]["map"] == labels_source_frame(BASE_LABELS)
+    assert semantics["spatial_contract"]["source_map_frame"]["frame_id"] == labels_source_frame(
+        BASE_LABELS
+    )
     assert semantics["provenance"]["raw_map_bundle"] == str(MAP_BUNDLE)
     assert semantics["provenance"]["base_navigation_labels"] == str(BASE_LABELS)
     assert semantics["provenance"]["uses_navigation_memory_as_waypoint_source"] is False
@@ -103,6 +107,9 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
     assert semantics["static_landmarks"] == []
     assert semantics["navigation_memory_anchors"] == []
     assert rooms["meeting_room_b"]["room_label"] == "Meeting room B"
+    assert {room["source_map_frame_id"] for room in semantics["rooms"]} == {
+        labels_source_frame(BASE_LABELS)
+    }
     assert rooms["meeting_room_b"]["label_source"] == "digital_twin_room_semantic_reference"
     assert rooms["open_kitchen_a"]["label_source"] == "operator_reviewed_map12_base_label"
     assert rooms["meeting_room_a"]["polygon_usage"]["navigation"] is False
@@ -117,6 +124,7 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
         waypoint["waypoint_source"] == "generated_exploration_candidate"
         and waypoint["purpose"] == "base_navigation_area_inspection"
         and waypoint["generation_policy"] == WAYPOINT_GENERATION_POLICY
+        and waypoint["frame_id"] == labels_source_frame(BASE_LABELS)
         for waypoint in waypoints.values()
     )
     assert waypoints["open_kitchen_a"]["x"] == pytest.approx(1.15)
@@ -191,6 +199,40 @@ def test_base_navigation_map_rejects_navigation_area_without_safe_waypoint(
         )
 
 
+def test_base_navigation_map_rejects_missing_label_source_frame(tmp_path: Path) -> None:
+    labels_path = _write_modified_labels(tmp_path)
+    labels = _read_json(labels_path)
+    labels.pop("source_map_frame_id")
+    labels_path.write_text(json.dumps(labels), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_map_frame_id must be set"):
+        build_base_navigation_map_bundle(
+            map_bundle=MAP_BUNDLE,
+            labels_path=labels_path,
+            room_semantics_path=ROOM_SEMANTICS,
+            output_dir=tmp_path / "bundle",
+        )
+
+
+def test_base_navigation_map_rejects_label_source_frame_drift(tmp_path: Path) -> None:
+    labels_path = _write_modified_labels(tmp_path)
+    labels = _read_json(labels_path)
+    labels["labels"][0]["source_map_frame_id"] = "operator_map"
+    labels_path.write_text(json.dumps(labels), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="label scene_bbox_seed_meeting_room_a source_map_frame_id must match "
+        "top-level source_map_frame_id",
+    ):
+        build_base_navigation_map_bundle(
+            map_bundle=MAP_BUNDLE,
+            labels_path=labels_path,
+            room_semantics_path=ROOM_SEMANTICS,
+            output_dir=tmp_path / "bundle",
+        )
+
+
 def test_base_navigation_label_validator_reports_all_fail_loud_errors(tmp_path: Path) -> None:
     labels = _read_json(BASE_LABELS)
     room_semantics = _read_json(ROOM_SEMANTICS)
@@ -224,6 +266,10 @@ def _write_modified_labels(tmp_path: Path) -> Path:
     path = tmp_path / "labels.json"
     path.write_text(json.dumps(copy.deepcopy(_read_json(BASE_LABELS))), encoding="utf-8")
     return path
+
+
+def labels_source_frame(path: Path) -> str:
+    return str(_read_json(path)["source_map_frame_id"])
 
 
 def _read_json(path: Path) -> dict:

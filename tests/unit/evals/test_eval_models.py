@@ -369,15 +369,15 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     assert room_sample.grader_config["success_predicate"] == {
         "predicate_id": "waypoint_or_area_visited",
         "authoritative": True,
-        "anchor_id": "anchor_waypoint_generated_exploration_005",
-        "waypoint_id": "generated_exploration_005",
+        "anchor_id": "anchor_waypoint_room_6_inspection",
+        "waypoint_id": "room_6_inspection",
     }
     assert living_sample.grader_config["open_ended_category"] == "positive_observable"
     assert living_sample.grader_config["success_predicate"] == {
         "predicate_id": "waypoint_or_area_visited",
         "authoritative": True,
-        "anchor_id": "anchor_waypoint_generated_exploration_005",
-        "waypoint_id": "generated_exploration_005",
+        "anchor_id": "anchor_waypoint_room_6_inspection",
+        "waypoint_id": "room_6_inspection",
     }
 
     scene_suite = suites[-1]

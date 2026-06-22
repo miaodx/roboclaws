@@ -12,6 +12,7 @@ from roboclaws.household.realworld_mcp_server import MCP_SERVER_NAME
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
@@ -20,7 +21,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     run_result = smoke.run_smoke(
         output_dir=tmp_path,
         seed=7,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     trace_text = (tmp_path / "trace.jsonl").read_text(encoding="utf-8")
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")

@@ -16,15 +16,17 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.household.backend_contract import build_cleanup_backend_session  # noqa: E402
-from roboclaws.household.realworld_contract import RealWorldCleanupContract  # noqa: E402
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND  # noqa: E402
 from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noqa: E402
 from roboclaws.launch.scene_sampler import eval_sampler_rows, ui_sampler_rows  # noqa: E402
 from roboclaws.maps.bundle import (  # noqa: E402
     metric_map_bundle_metadata,
-    static_landmarks_from_fixture_projection,
+    validate_base_navigation_map_v1_bundle,
     validate_nav2_map_bundle,
     write_nav2_map_bundle,
+)
+from roboclaws.maps.molmospaces_preparation import (  # noqa: E402
+    prepare_molmospaces_base_navigation_map,
 )
 
 DEFAULT_SCENES: tuple[tuple[str, int], ...] = (("procthor-10k-val", 0),)
@@ -242,40 +244,38 @@ def _generate_scene_bundle(
         molmospaces_python=molmospaces_python,
     )
     try:
-        contract = RealWorldCleanupContract(
-            session,
-            static_fixture_projection_mode="room_only",
-            map_bundle_dir=None,
-            allow_synthetic_map_projection=True,
-        )
-        agent_view = contract.agent_view_payload()
-        (scene_run_dir / "agent_view.json").write_text(
-            json.dumps(agent_view, indent=2, sort_keys=True) + "\n",
+        backend_state = _backend_state_payload(session)
+        (scene_run_dir / "source_map_preparation_evidence.json").write_text(
+            json.dumps(backend_state, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        metric_map = agent_view.get("metric_map") if isinstance(agent_view, dict) else {}
-        static_fixture_projection = contract.source_map_static_fixture_projection()
-        if not isinstance(metric_map, dict) or not metric_map:
-            raise RuntimeError(f"missing metric_map for {target.token}")
-        if not isinstance(static_fixture_projection, dict) or not static_fixture_projection:
-            raise RuntimeError(f"missing static_fixture_projection for {target.token}")
-        metric_map = canonical_scene_metric_map(
-            metric_map,
+        environment_id = canonical_scene_environment_id(
             scene_source=target.scene_source,
             scene_index=target.scene_index,
+        )
+        metric_map = prepare_molmospaces_base_navigation_map(
+            backend_state=backend_state,
+            scene_source=target.scene_source,
+            scene_index=target.scene_index,
+            environment_id=environment_id,
+            map_id=f"{environment_id}_base_navigation_map",
+            source_path=backend_state.get("scene_xml"),
         )
         staged_snapshot = write_nav2_map_bundle(
             staged_bundle_dir,
             metric_map=metric_map,
-            static_landmarks=static_landmarks_from_fixture_projection(static_fixture_projection),
+            static_landmarks=[],
         )
         validate_nav2_map_bundle(staged_bundle_dir).raise_for_errors()
+        validate_base_navigation_map_v1_bundle(staged_bundle_dir).raise_for_errors()
         output_dir.parent.mkdir(parents=True, exist_ok=True)
         if output_dir.exists():
             shutil.rmtree(output_dir)
         shutil.move(str(staged_bundle_dir), str(output_dir))
         validation = validate_nav2_map_bundle(output_dir)
         validation.raise_for_errors()
+        base_navigation_validation = validate_base_navigation_map_v1_bundle(output_dir)
+        base_navigation_validation.raise_for_errors()
     finally:
         session.close()
 
@@ -288,7 +288,18 @@ def _generate_scene_bundle(
         "environment_id": staged_snapshot.get("environment_id", ""),
         "parameter_hash": staged_snapshot.get("parameter_hash", ""),
         "validation": validation.as_dict(),
+        "base_navigation_validation": base_navigation_validation.as_dict(),
     }
+
+
+def _backend_state_payload(session: Any) -> dict[str, Any]:
+    backend = getattr(session, "backend", None)
+    state_reader = getattr(backend, "_read_state", None)
+    if callable(state_reader):
+        state = state_reader()
+        if isinstance(state, dict):
+            return state
+    raise RuntimeError("MolmoSpaces source-map preparation requires backend state evidence")
 
 
 def _parse_scene_spec(spec: str) -> SceneTarget:

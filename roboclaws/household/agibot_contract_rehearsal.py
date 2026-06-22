@@ -54,6 +54,7 @@ from roboclaws.household.semantic_timeline import (
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 from roboclaws.household.types import CleanupScenario
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path
 
 REHEARSAL_SCHEMA = "molmospaces_agibot_contract_rehearsal_v1"
 CONFIDENCE_LAYER = "MolmoSpaces Agibot Contract Rehearsal"
@@ -133,6 +134,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     visual_grounding: str = "grounding-dino",
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    map_bundle_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Run the Agibot/MolmoSpaces local rehearsal as a robot-like Base Navigation Map flow."""
 
@@ -194,6 +196,8 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         molmospaces_python=molmospaces_python,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
+        map_bundle_dir=map_bundle_dir
+        or molmospaces_nav2_map_bundle_path(scene_source="procthor-10k-val", scene_index=0),
         evidence_lane=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
         map_build=is_map_build,
         visual_grounding=visual_grounding,
@@ -1216,7 +1220,11 @@ def _cleanup_action_target(
     waypoint_id: str,
 ) -> dict[str, Any] | None:
     handle = str(detection.get("object_id") or "")
-    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
+    target_fixture = contract.target_fixture_for_detection(
+        detection,
+        static_fixture_projection,
+        include_runtime_backend_fixtures=True,
+    )
     if target_fixture is None:
         return None
     target_fixture_id = str(target_fixture.get("fixture_id") or "")

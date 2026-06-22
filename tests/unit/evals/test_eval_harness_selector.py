@@ -564,7 +564,7 @@ def test_detached_live_product_row_blocks_on_malformed_live_status_source(
     assert row["status"] == "blocked"
     assert row["outcome"] == "blocked"
     assert row["blocker_category"] == "environment_blocked"
-    assert "live_status JSON parse error" in row["blockers"][0]["detail"]
+    assert "live_status source must contain valid JSON object" in row["blockers"][0]["detail"]
     assert any(path.endswith("live_status.json") for path in row["output_artifacts"])
 
 

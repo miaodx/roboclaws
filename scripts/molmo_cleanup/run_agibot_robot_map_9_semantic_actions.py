@@ -120,7 +120,6 @@ def run_agibot_robot_map_9_semantic_actions(
         seed=seed,
         backend=SYNTHETIC_BACKEND,
         map_bundle_dir=source_bundle_dir,
-        require_map_bundle=True,
         generated_mess_count=generated_mess_count,
     )
     _annotate_confidence_layer(

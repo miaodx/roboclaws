@@ -21,6 +21,7 @@ ROUTINE_PATH = (
     ROOT / "skills" / "molmo-realworld-cleanup" / "scripts" / "trace_preserving_cleanup.py"
 )
 SKILL_PATH = ROOT / "skills" / "molmo-realworld-cleanup" / "SKILL.md"
+PREBUILT_BUNDLE = ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _load_routine_module() -> Any:
@@ -90,7 +91,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     try:
         detection = _first_detection_by_category(server, "food")
@@ -147,7 +148,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_static_fixt
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     try:
         detection = _first_detection_by_category(server, "food")

@@ -66,11 +66,7 @@ def pending_cleanup_candidates(contract: DoneReadinessContract) -> list[dict[str
                 item.get("destination_policy") or {},
             )
             candidate_state = str(item.get("candidate_state") or "")
-            if (
-                state != "held"
-                and not destination_options
-                and candidate_state != "visual_scan_required"
-            ):
+            if state != "held" and not destination_options:
                 continue
             pending.append(
                 {

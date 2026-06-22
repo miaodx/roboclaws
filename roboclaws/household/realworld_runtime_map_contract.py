@@ -250,6 +250,8 @@ def runtime_observed_object_payload(
         cleanup_recommended=bool(worklist_item.get("cleanup_recommended"))
         and not sanitize_world_labels,
     )
+    if producer_type == "external_visual_grounding_service" and actionability == "actionable":
+        actionability = "pending"
     evidence = visual_evidence_for_handle(handle)
     candidate_input = {
         **detection,
