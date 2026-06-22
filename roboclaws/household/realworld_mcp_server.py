@@ -15,7 +15,6 @@ from mcp.server.fastmcp import Image as MCPImage
 
 from roboclaws.core.json_sources import read_jsonl_objects
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.nav2_map_bundle import write_live_nav2_map_bundle_snapshot
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -62,6 +61,7 @@ from roboclaws.launch.goals import (
     goal_contract_from_file,
     goal_contract_from_json,
 )
+from roboclaws.maps.bundle import copy_nav2_map_bundle_snapshot
 from roboclaws.operator_console.interactions import (
     check_operator_messages_for_mcp,
     pending_operator_message_hint,
@@ -259,7 +259,11 @@ class RealWorldMolmoCleanupMCPServer:
             "before.png", title="Before real-world cleanup"
         )
         self._record_robot_view("before", label_suffix="before")
-        self._write_live_map_bundle_snapshot()
+        if self.map_bundle_dir is None:
+            raise ValueError(
+                "map_bundle_dir is required to publish live Base Navigation Map snapshot"
+            )
+        copy_nav2_map_bundle_snapshot(source_bundle_dir=self.map_bundle_dir, run_dir=self.run_dir)
         self._write_live_public_artifacts(trigger="server_initialized")
         self._mcp = FastMCP("roboclaws", host=host, port=self.port)
         register_realworld_mcp_tools(self)
@@ -409,12 +413,6 @@ class RealWorldMolmoCleanupMCPServer:
                 trigger=trigger,
                 error=str(exc),
             )
-
-    def _write_live_map_bundle_snapshot(self) -> None:
-        write_live_nav2_map_bundle_snapshot(
-            run_dir=self.run_dir,
-            source_bundle_dir=self.map_bundle_dir,
-        )
 
     def _augment_response(
         self,

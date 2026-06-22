@@ -83,23 +83,6 @@ def attach_nav2_map_bundle_snapshot(
     return snapshot
 
 
-def write_live_nav2_map_bundle_snapshot(
-    *,
-    run_dir: Path,
-    source_bundle_dir: str | Path | None = None,
-) -> dict[str, Any]:
-    """Write the run-local Base Navigation Map snapshot for live operator surfaces."""
-    if source_bundle_dir is None:
-        raise ValueError(
-            "source_bundle_dir is required to publish a live Base Navigation Map snapshot; "
-            "select or generate a canonical Base Navigation Map bundle before launch"
-        )
-    return copy_nav2_map_bundle_snapshot(
-        source_bundle_dir=Path(source_bundle_dir),
-        run_dir=run_dir,
-    )
-
-
 __all__ = [
     "DEFAULT_COSTMAP_PARAMETERS",
     "DEFAULT_COSTMAP_PROFILE_ID",
@@ -111,5 +94,4 @@ __all__ = [
     "attach_nav2_map_bundle_snapshot",
     "metric_map_bundle_metadata",
     "selected_nav2_map_bundle_dir",
-    "write_live_nav2_map_bundle_snapshot",
 ]
