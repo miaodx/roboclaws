@@ -30,6 +30,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_MATRIX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_ci_live_cleanup_matrix.py"
 RUN_CODEX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 RUN_CLAUDE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
+RUN_OPENAI_AGENTS_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
+)
 ASSEMBLE_LIVE_PAGES_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "assemble_ci_live_pages.py"
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
@@ -39,6 +42,7 @@ def _load_module(path: Path, name: str):
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -1093,6 +1097,97 @@ def test_live_codex_explicit_operator_handoff_pauses_without_killing_server(
     assert payload["reason"] == "operator_handoff_requested"
     assert payload["resume_available"] is True
     assert "MCP server remains alive" in payload["detail"]
+
+
+def test_live_openai_agents_explicit_operator_handoff_pauses_without_continuation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_sdk = _load_module(RUN_OPENAI_AGENTS_PATH, "run_live_openai_agents_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        server_startup_timeout_s=3.0,
+        provider_profile="codex-router-responses",
+        model="gpt-5.5",
+        max_turns=None,
+        incomplete_turn_continuation_attempts=None,
+        cache_tools_list=True,
+        mcp_client_session_timeout_s=None,
+        agent_sdk_perf_profile="",
+        continuation_mode="",
+        model_thinking_mode="default",
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        model_racing=None,
+        model_racing_arm_count=None,
+        raw_fpv_image_memory=None,
+        raw_fpv_image_memory_retain=None,
+        camera_grounded_history_compaction=None,
+        camera_grounded_history_retain=None,
+        raw_fpv_candidate_budget=None,
+        raw_fpv_repeated_failure_limit=None,
+        done_retry_budget=None,
+        max_observe_per_waypoint=None,
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        kickoff_prompt="到达第一个 waypoint 点，等待，不要调用 done，我计划手动调整下位置",
+        backend="molmospaces_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="openai_agents_agent",
+        task="到达第一个 waypoint 点，等待，不要调用 done，我计划手动调整下位置",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+        checker_profile="",
+        server_arg=[],
+        checker_visual_arg=[],
+    )
+    runner = run_sdk.LiveOpenAIAgentsCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls = []
+
+    class FakeRuntime:
+        def run(self, request):
+            calls.append(request.kickoff_prompt)
+            return SimpleNamespace(
+                phase="agent-turn-complete",
+                exit_status=0,
+                reason="",
+                provider_reason="",
+                retryable=False,
+                resume_available=False,
+                usage={},
+                trace_id="trace-1",
+                provider_session_id="session-1",
+                run_result_present=False,
+                started_at_epoch=1.0,
+                finished_at_epoch=2.0,
+            )
+
+    monkeypatch.setattr(run_sdk, "OpenAIAgentsLiveRuntime", FakeRuntime)
+
+    runner._run_sdk_agent()
+
+    assert runner.operator_handoff_active is True
+    assert len(calls) == 1
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "paused"
+    assert payload["reason"] == "operator_handoff_requested"
+    assert payload["resume_available"] is True
+    assert "MCP server remains alive" in payload["detail"]
+    assert runner.live_timing["openai_agents_attempts"][0]["recovery_action"] == (
+        "operator_handoff"
+    )
 
 
 def test_live_codex_no_done_without_operator_handoff_still_fails(
