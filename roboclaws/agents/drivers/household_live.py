@@ -20,8 +20,8 @@ from roboclaws.household.visual_backend_slots import (
 
 HOUSEHOLD_CLEANUP_SERVER_MODULE = "roboclaws.cli.agent_server"
 HOUSEHOLD_CLEANUP_SERVER_TASK = "household-world.cleanup"
-SEMANTIC_MAP_BUILD_SERVER_MODULE = "roboclaws.cli.agent_server"
-SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"
+MAP_BUILD_SERVER_MODULE = "roboclaws.cli.agent_server"
+MAP_BUILD_SERVER_TASK = "household-world.map-build"
 
 
 @dataclass
@@ -136,14 +136,14 @@ def household_cleanup_server_argv(python_bin: str) -> list[str]:
     ]
 
 
-def semantic_map_build_server_argv(python_bin: str) -> list[str]:
-    """Return the package entrypoint for the Agibot semantic-map MCP server."""
+def map_build_server_argv(python_bin: str) -> list[str]:
+    """Return the package entrypoint for the Agibot map-build MCP server."""
 
     return [
         python_bin,
         "-m",
-        SEMANTIC_MAP_BUILD_SERVER_MODULE,
-        SEMANTIC_MAP_BUILD_SERVER_TASK,
+        MAP_BUILD_SERVER_MODULE,
+        MAP_BUILD_SERVER_TASK,
     ]
 
 

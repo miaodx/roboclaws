@@ -11,7 +11,7 @@ Accepted
 Roboclaws should integrate Agibot G2 as a backend for the existing
 `real_robot_cleanup_v1` MCP contract, not as a separate public MCP surface and
 not as a report-only path. The agent-facing tools remain backend-neutral:
-`metric_map`, `fixture_hints`, `observe`, `navigate_to_waypoint`,
+`metric_map`, `static_fixture_projection`, `observe`, `navigate_to_waypoint`,
 `navigate_to_receptacle`, and `done` should mean the same things across sim-only,
 Nav2, Agibot, and future robot backends.
 
@@ -33,7 +33,7 @@ operator must choose whether the MCP session may move the robot.
 
 `observe` in the Agibot backend should actively capture a current robot
 observation, while navigation may also capture arrival observations for
-evidence. `metric_map` and `fixture_hints` should come from the SDK agent-view
+evidence. `metric_map` and `static_fixture_projection` should come from the SDK agent-view
 export; full cleanup semantics are optional for navigation and observation.
 `navigate_to_receptacle` may execute only by resolving a public fixture
 preferred waypoint. Object and visual-candidate navigation remain blocked unless

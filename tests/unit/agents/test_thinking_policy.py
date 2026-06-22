@@ -25,6 +25,16 @@ def test_default_thinking_policy_maps_by_wire_api() -> None:
 
     assert responses["reasoning"] == {"effort": "medium"}
     assert chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
+    assert thinking_request_body_for_wire(
+        provider_profile="mimo-inside-openai-chat",
+        wire_api="chat-completions",
+        mode="default",
+    ) == {"thinking": {"type": "disabled"}}
+    assert thinking_request_body_for_wire(
+        provider_profile="mimo-inside-openai-chat",
+        wire_api="chat-completions",
+        mode="enabled",
+    ) == {"thinking": {"type": "enabled", "keep": "all"}}
 
 
 def test_disabled_thinking_policy_maps_by_wire_api() -> None:

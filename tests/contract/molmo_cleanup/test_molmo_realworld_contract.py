@@ -150,25 +150,25 @@ def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
     contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
 
     assert contract.map_mode == MINIMAL_MAP_MODE
     assert metric_map["mode"] == MINIMAL_MAP_MODE
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
-    assert fixture_hints["rooms"] == []
+    assert static_fixture_projection["rooms"] == []
 
 
 def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
     observation = _first_non_empty_observation(contract)
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
     assert "objects" not in metric_map
-    assert "objects" not in fixture_hints
+    assert "objects" not in static_fixture_projection
     assert observation["private_target_truth_included"] is False
     assert observation["visible_object_detections"]
     for detection in observation["visible_object_detections"]:
@@ -179,7 +179,7 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
         assert "target_receptacle_id" not in detection
         assert "is_misplaced" not in detection
     _assert_no_forbidden_keys(metric_map)
-    _assert_no_forbidden_keys(fixture_hints)
+    _assert_no_forbidden_keys(static_fixture_projection)
     _assert_no_forbidden_keys(observation)
 
 
@@ -343,7 +343,7 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
     waypoint, waypoint_nav, detection = _first_detected_metric_map_waypoint(
         contract,
         metric_map,
@@ -358,7 +358,7 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     agent_view = contract.agent_view_payload()
     live_metric_map = contract.metric_map()
 
-    _assert_nav2_shaped_metric_map(metric_map, fixture_hints, waypoint)
+    _assert_nav2_shaped_metric_map(metric_map, static_fixture_projection, waypoint)
     _assert_nav2_navigation_provenance(
         waypoint_nav,
         blocked_nav,
@@ -411,7 +411,7 @@ def _confirm_pick_and_navigate_to_fixture(
 
 def _assert_nav2_shaped_metric_map(
     metric_map: dict,
-    fixture_hints: dict,
+    static_fixture_projection: dict,
     waypoint: dict,
 ) -> None:
     assert metric_map["schema"] == REAL_ROBOT_MAP_BUNDLE_SCHEMA
@@ -425,10 +425,10 @@ def _assert_nav2_shaped_metric_map(
     assert waypoint["frame_id"] == "map"
     assert waypoint["purpose"] == "minimal_map_exploration"
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
-    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
-    assert fixture_hints["contains_runtime_observations"] is False
-    assert fixture_hints["rooms"] == []
-    assert "observations" not in fixture_hints
+    assert static_fixture_projection["schema"] == "static_fixture_projection_v1"
+    assert static_fixture_projection["contains_runtime_observations"] is False
+    assert static_fixture_projection["rooms"] == []
+    assert "observations" not in static_fixture_projection
 
 
 def _assert_nav2_navigation_provenance(
@@ -449,7 +449,7 @@ def _assert_nav2_navigation_provenance(
     assert object_nav["pose_source"] == "latest_observation"
     assert object_nav["requires_reobserve"] is False
     assert receptacle_nav["navigation_backend"] == "api_semantic"
-    assert receptacle_nav["pose_source"] == "fixture_semantic_map"
+    assert receptacle_nav["pose_source"] == "static_fixture_projection"
 
 
 def _assert_nav2_agent_runtime_map(agent_view: dict, live_metric_map: dict) -> None:
@@ -599,7 +599,7 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
     metric_map = contract.metric_map()
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
-    assert contract.fixture_hints()["rooms"] == []
+    assert contract.static_fixture_projection()["rooms"] == []
     assert metric_map["inspection_waypoints"]
     assert all(
         waypoint["waypoint_source"] == "generated_exploration_candidate"
@@ -726,12 +726,12 @@ def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals
 
     contract = _contract(session)
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
     waypoints = metric_map["inspection_waypoints"]
     routes = [
         validate_metric_map_route(
             metric_map,
-            fixture_hints,
+            static_fixture_projection,
             start_waypoint_id=str(waypoints[0]["waypoint_id"]),
             goal_waypoint_id=str(waypoint["waypoint_id"]),
         )
@@ -1061,12 +1061,12 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     )
 
     metric_map = contract.metric_map()
-    fixture_hints = contract.fixture_hints()
+    static_fixture_projection = contract.static_fixture_projection()
     waypoint, navigation, observation = _first_detection_waypoint(contract, metric_map)
     agent_view = contract.agent_view_payload()
     runtime_map = agent_view["runtime_metric_map"]
 
-    _assert_minimal_static_map_privacy(metric_map, fixture_hints, waypoint)
+    _assert_minimal_static_map_privacy(metric_map, static_fixture_projection, waypoint)
     assert navigation["ok"] is True
     assert observation["visible_object_detections"]
     _assert_minimal_runtime_map_candidates(runtime_map, waypoint)
@@ -1093,7 +1093,7 @@ def _first_detection_waypoint(
 
 def _assert_minimal_static_map_privacy(
     metric_map: dict,
-    fixture_hints: dict,
+    static_fixture_projection: dict,
     waypoint: dict,
 ) -> None:
     assert metric_map["mode"] == MINIMAL_MAP_MODE
@@ -1101,7 +1101,7 @@ def _assert_minimal_static_map_privacy(
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert metric_map["room_category_hints"]
     assert metric_map["driveable_ways"]
-    assert fixture_hints["rooms"] == []
+    assert static_fixture_projection["rooms"] == []
     assert waypoint["waypoint_id"].startswith("generated_")
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert waypoint["candidate_provenance"]["source"] == "public_occupancy_free_space"

@@ -55,22 +55,20 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "href": "/previews/molmospaces-val_5-topdown.png",
         },
     }
-    assert "topdown" not in worlds["agibot-g2/map-12"]["preview_assets"]
-    assert worlds["agibot-g2/map-12"]["preview_assets"]["map"]["href"] == (
-        "/previews/b1-map12-map.png"
-    )
-    assert worlds["b1-map12"]["preview_assets"] == {
-        "fpv": {
-            "path": "/previews/b1-map12-fpv.png",
-            "href": "/previews/b1-map12-fpv.png",
-        },
+    assert worlds["agibot-g2/map-12"]["preview_assets"] == {
         "map": {
             "path": "/previews/b1-map12-map.png",
             "href": "/previews/b1-map12-map.png",
         },
-        "chase": {
-            "path": "/previews/b1-map12-chase.png",
-            "href": "/previews/b1-map12-chase.png",
+        "topdown": {
+            "path": "/previews/b1-map12-topdown.png",
+            "href": "/previews/b1-map12-topdown.png",
+        },
+    }
+    assert worlds["b1-map12"]["preview_assets"] == {
+        "map": {
+            "path": "/previews/b1-map12-map.png",
+            "href": "/previews/b1-map12-map.png",
         },
         "topdown": {
             "path": "/previews/b1-map12-topdown.png",
@@ -137,10 +135,13 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
             "fallback_first_waypoint_low_detail",
         }
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
-        assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
         assert metadata["views"]["topdown"]["provenance"] == (
             "mujoco_camera_control_canonical_eye_target"
         )
+        assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
+        assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
+        assert "semantic_projection" not in metadata["views"]["map"]
+        assert "scene_alignment" not in metadata["views"]["map"]
 
 
 def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
@@ -153,11 +154,9 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
-    assert metadata["views"]["fpv"]["view"] == "raw_fpv"
-    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
-    assert metadata["views"]["chase"]["view"] == "chase_camera"
-    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
     assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
     assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
@@ -435,9 +434,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert b1["default_intent"] == "open-ended"
     assert b1["field_groups"] == ["common", "isaac"]
     assert "grounding" in b1["view_modes"]
-    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1[
-        "argv_preview"
-    ]
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1["argv_preview"]
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
 

@@ -129,7 +129,7 @@ def test_visual_grounding_request_rejects_invalid_base64_as_contract_error() -> 
                 "artifact_status": "recorded",
             },
             category_hints=["dish"],
-            fixture_hints=[],
+            static_fixture_projection=[],
             pipeline_id="grounding-dino",
             image={
                 "mime_type": "image/jpeg",
@@ -150,7 +150,7 @@ def _request() -> dict[str, Any]:
             "artifact_status": "recorded",
         },
         category_hints=["dish"],
-        fixture_hints=[{"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}],
+        static_fixture_projection=[{"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}],
         pipeline_id="grounding-dino",
         image={
             "mime_type": "image/jpeg",

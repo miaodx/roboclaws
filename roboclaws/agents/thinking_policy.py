@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from roboclaws.agents.provider_registry import WIRE_CHAT_COMPLETIONS, WIRE_RESPONSES
+from roboclaws.agents.provider_registry import (
+    PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
+    PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT,
+    WIRE_CHAT_COMPLETIONS,
+    WIRE_RESPONSES,
+)
 
 THINKING_MODE_DEFAULT = "default"
 THINKING_MODE_ENABLED = "enabled"
@@ -36,6 +41,13 @@ def apply_model_thinking_policy(
 
     normalized = normalize_thinking_mode(mode)
     if normalized == THINKING_MODE_DEFAULT:
+        if provider_profile == PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT:
+            return apply_model_thinking_policy(
+                settings,
+                provider_profile=provider_profile,
+                wire_api=wire_api,
+                mode=THINKING_MODE_DISABLED,
+            )
         if wire_api in {WIRE_CHAT_COMPLETIONS, WIRE_RESPONSES}:
             return apply_model_thinking_policy(
                 settings,
@@ -44,7 +56,7 @@ def apply_model_thinking_policy(
                 mode=THINKING_MODE_ENABLED,
             )
         return settings
-    if provider_profile == "kimi-openai-chat":
+    if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
         if wire_api != WIRE_CHAT_COMPLETIONS:
             raise ValueError("Kimi thinking mode is only supported on the OpenAI Chat route")
         extra_body = dict(settings.get("extra_body") or {})
@@ -75,11 +87,13 @@ def thinking_request_body_for_wire(
 
     normalized = normalize_thinking_mode(mode)
     if normalized == THINKING_MODE_DEFAULT:
-        if wire_api in {WIRE_CHAT_COMPLETIONS, WIRE_RESPONSES}:
+        if provider_profile == PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT:
+            normalized = THINKING_MODE_DISABLED
+        elif wire_api in {WIRE_CHAT_COMPLETIONS, WIRE_RESPONSES}:
             normalized = THINKING_MODE_ENABLED
         else:
             return {}
-    if provider_profile == "kimi-openai-chat":
+    if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
         if wire_api != WIRE_CHAT_COMPLETIONS:
             raise ValueError("Kimi thinking mode is only supported on the OpenAI Chat route")
         return {"thinking": _kimi_thinking_payload(normalized)}

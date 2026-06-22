@@ -231,7 +231,7 @@ def _write_run(
         "scenario_id": scenario_id,
         "seed": 6,
         "map_mode": "minimal",
-        "fixture_hint_mode": "room_only",
+        "static_fixture_projection_mode": "room_only",
         "perception_mode": "visible_object_detections",
         "visual_grounding_pipeline_id": "sim",
         "requested_generated_mess_count": 3,

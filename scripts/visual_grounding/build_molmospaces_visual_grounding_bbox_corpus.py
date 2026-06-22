@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         "name": args.name,
         "description": (
             "Fresh MolmoSpaces perception-only visual-grounding corpus. Public "
-            "requests use only image bytes, category hints, fixture hints, and "
+            "requests use only image bytes, category hints, static fixture projection, and "
             "capture context; private bbox labels are MuJoCo segmentation truth "
             "for benchmark scoring only."
         ),
@@ -200,7 +200,7 @@ def generate_scene_observations(
         scenario = backend.scenario
         objects_by_id = {item.object_id: item for item in scenario.objects}
         receptacles_by_id = {item.receptacle_id: item for item in scenario.receptacles}
-        fixture_hints_by_room = public_fixture_hints_by_room(scenario)
+        static_fixture_projection_by_room = public_static_fixture_projection_by_room(scenario)
         observations: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
         targets = list(scenario.private_manifest.targets)[:targets_per_scene]
@@ -244,7 +244,7 @@ def generate_scene_observations(
                     source_receptacle=source_receptacle.to_public_dict()
                     if source_receptacle is not None
                     else {},
-                    fixture_hints_by_room=fixture_hints_by_room,
+                    static_fixture_projection_by_room=static_fixture_projection_by_room,
                     min_visible_pixels=min_visible_pixels,
                     include_invisible=include_invisible,
                 )
@@ -282,7 +282,7 @@ def observation_from_robot_view(
     frame_class: str,
     obj: dict[str, Any],
     source_receptacle: dict[str, Any],
-    fixture_hints_by_room: dict[str, list[dict[str, Any]]],
+    static_fixture_projection_by_room: dict[str, list[dict[str, Any]]],
     min_visible_pixels: int,
     include_invisible: bool,
 ) -> dict[str, Any] | None:
@@ -338,7 +338,7 @@ def observation_from_robot_view(
         "room_id": room_id,
         "capture_context": capture_context,
         "category_hints": list(VISUAL_GROUNDING_CATEGORY_HINTS),
-        "fixture_hints": fixture_hints_by_room.get(room_id, []),
+        "static_fixture_projection": static_fixture_projection_by_room.get(room_id, []),
         "image": {
             "source": "path",
             "path": str(_relative_path(image_path, output_dir)),
@@ -417,7 +417,7 @@ def normalized_xywh_bbox(xyxy: list[int], *, width: int, height: int) -> list[fl
     return [round(x, 6), round(y, 6), round(w, 6), round(h, 6)]
 
 
-def public_fixture_hints_by_room(scenario: Any) -> dict[str, list[dict[str, Any]]]:
+def public_static_fixture_projection_by_room(scenario: Any) -> dict[str, list[dict[str, Any]]]:
     output: dict[str, list[dict[str, Any]]] = {}
     for receptacle in scenario.receptacles:
         public = receptacle.to_public_dict()

@@ -187,6 +187,81 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     assert "household-cleanup direct world-public-labels" not in html
 
 
+def test_cleanup_report_surfaces_failure_reason_on_summary(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    reason = (
+        "Task could not be completed with public robot capabilities; "
+        "generated_exploration_004 was blocked by goal_occupied."
+    )
+    run_result = {
+        "cleanup_status": "failed",
+        "completion_status": "failed",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": {**score.to_dict(), "completion_summary": "less specific summary"},
+        "terminate_reason": reason,
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Failure Reason" in html
+    assert reason in html
+    assert html.index("Failure Reason") < html.index("Run metadata")
+
+
+def test_cleanup_report_hides_failure_reason_on_success(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    final_locations = scenario.object_locations()
+    final_locations.update({"mug_01": "sink_01", "book_01": "bookshelf_01"})
+    score = score_cleanup(final_locations, scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(scenario, final_locations, tmp_path / "after.png", title="After")
+    run_result = {
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "terminate_reason": "successful completion note",
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Failure Reason" not in html
+    assert "successful completion note" not in html
+
+
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     locations = {
@@ -554,8 +629,8 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
         {"tool": "<runtime>", "event": "initialized", "wallclock_elapsed": 0.1},
         {"tool": "metric_map", "event": "request", "wallclock_elapsed": 0.2},
         {"tool": "metric_map", "event": "response", "wallclock_elapsed": 0.5},
-        {"tool": "fixture_hints", "event": "request", "wallclock_elapsed": 1.5},
-        {"tool": "fixture_hints", "event": "response", "wallclock_elapsed": 1.7},
+        {"tool": "static_fixture_projection", "event": "request", "wallclock_elapsed": 1.5},
+        {"tool": "static_fixture_projection", "event": "response", "wallclock_elapsed": 1.7},
         {
             "tool": "<runtime>",
             "event": "robot_view_capture",
@@ -607,7 +682,7 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
     assert "1.9s" in html
     assert "Other MCP overhead" in html
     assert "0.2s" in html
-    assert "fixture_hints" in html
+    assert "static_fixture_projection" in html
 
 
 def test_cleanup_report_renders_per_object_timing_cycles(tmp_path: Path) -> None:
@@ -848,6 +923,9 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
         tmp_path / "after.png",
         title="After",
     )
+    map_bundle = tmp_path / "map_bundle"
+    map_bundle.mkdir()
+    Image.new("RGB", (320, 180), (247, 249, 252)).save(map_bundle / "preview.png")
     run_result = {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
@@ -857,8 +935,8 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_semantic_map",
-            "source_provenance": "molmospaces_public_semantic_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
+            "source_provenance": "molmospaces_base_navigation_map",
             "source_schema": "nav2_cleanup_semantics_v1",
             "source_bundle_root": "assets/maps/molmospaces-procthor-val-0-7",
             "artifact_paths": {
@@ -889,7 +967,7 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
                 "inspection_waypoints": [{"waypoint_id": "room_1_scan_1", "x": 1.0, "y": 1.0}],
                 "robot_pose": {"x": 1.0, "y": 1.0},
             },
-            "fixture_hints": {
+            "static_fixture_projection": {
                 "rooms": [
                     {
                         "room_id": "room_1",
@@ -917,29 +995,30 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Semantic Map <span>Nav2 Map Bundle / Agibot-shaped static map contract</span>" in html
+    assert (
+        "Base Navigation Map Preview "
+        "<span>Nav2 Map Bundle / Agibot-shaped static map contract</span>"
+    ) in html
     assert "What it proves" in html
     assert "What it does not prove" in html
-    assert "Agibot-shaped semantic map view" in html
-    assert "molmospaces_public_semantic_map" in html
+    assert "Agibot-shaped base navigation map preview" in html
+    assert "molmospaces_base_navigation_map" in html
     assert "not a real Agibot GDK map" in html
-    assert 'src="semantic_map.png"' in html
-    assert "report_static_navigation_map.png" in html
+    assert 'src="map_bundle/preview.png"' in html
+    assert "semantic_map.png" not in html
+    assert "map_overlay.json" not in html
+    assert "report_static_navigation_map.png" not in html
     assert "Green dots" in html
     assert "Blue dot" in html
     assert "not a camera image" in html
     assert "Map files, hashes, and known gaps" in html
     assert "tf_timing_not_simulated" in html
-    assert (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
-    assert (tmp_path / "semantic_map.png").exists()
-    assert (tmp_path / "map_overlay.json").exists()
-    overlay = json.loads((tmp_path / "map_overlay.json").read_text(encoding="utf-8"))
-    assert overlay["schema"] == "roboclaws_map_overlay_v1"
-    assert overlay["semantic_map"]["private_truth_included"] is False
-    assert overlay["waypoints"][0]["waypoint_id"] == "room_1_scan_1"
+    assert not (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
+    assert not (tmp_path / "semantic_map.png").exists()
+    assert not (tmp_path / "map_overlay.json").exists()
 
 
-def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerate(
+def test_cleanup_report_does_not_generate_schematic_preview_when_occupancy_frame_is_degenerate(
     tmp_path: Path,
 ) -> None:
     scenario = build_cleanup_scenario(seed=7)
@@ -983,8 +1062,8 @@ def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerat
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_semantic_map",
-            "source_provenance": "molmospaces_public_semantic_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
+            "source_provenance": "molmospaces_base_navigation_map",
             "artifact_paths": {
                 "map_yaml": "map_bundle/map.yaml",
                 "occupancy_image": "map_bundle/map.pgm",
@@ -1010,11 +1089,11 @@ def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerat
                 "inspection_waypoints": [{"waypoint_id": "room_1_scan_1", "x": 1.0, "y": 1.0}],
                 "robot_pose": {"x": 1.0, "y": 1.0},
             },
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
         },
     }
 
-    render_cleanup_report(
+    report_path = render_cleanup_report(
         run_dir=tmp_path,
         scenario=scenario,
         run_result=run_result,
@@ -1023,9 +1102,10 @@ def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerat
         after_snapshot=after,
     )
 
-    preview = Image.open(map_bundle / "report_static_navigation_map.png")
-    assert preview.size == (1100, 360)
-    assert preview.getpixel((20, 20)) != (28, 28, 28)
+    html = report_path.read_text(encoding="utf-8")
+    assert 'src="map_bundle/preview.png"' in html
+    assert "report_static_navigation_map.png" not in html
+    assert not (map_bundle / "report_static_navigation_map.png").exists()
 
 
 def test_cleanup_report_labels_observe_roles_and_zero_pixel_focus(tmp_path: Path) -> None:
@@ -1165,7 +1245,7 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
         "agent_view": {
             "perception_mode": "raw_fpv_only",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [],
             "raw_fpv_observations": [
                 {
@@ -1263,7 +1343,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
         "agent_view": {
             "perception_mode": "raw_fpv_only",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [],
             "raw_fpv_observations": [
                 {
@@ -1463,7 +1543,7 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
         "agent_view": {
             "perception_mode": "camera_model_policy",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "raw_fpv_observations": [
                 {
                     "observation_id": "raw_fpv_001",
@@ -1609,7 +1689,7 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
         "agent_view": {
             "perception_mode": "camera_model_policy",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [
                 {
                     "object_id": "observed_001",
@@ -1805,7 +1885,7 @@ def test_cleanup_report_renders_planner_proof_requests_before_agent_view(
         "agent_view": {
             "contract": "realworld_cleanup_v1",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [{"object_id": "observed_001", "category": "dish"}],
         },
         "private_evaluation": {

@@ -46,10 +46,10 @@ def test_physical_nav2_pilot_attempts_map_waypoints_and_blocks_manipulation(
     )
 
     metric_map = run_result["agent_view"]["metric_map"]
-    fixture_hints = run_result["agent_view"]["fixture_hints"]
+    static_fixture_projection = run_result["agent_view"]["static_fixture_projection"]
     fixtures = [
         fixture
-        for room in fixture_hints["rooms"]
+        for room in static_fixture_projection["rooms"]
         for fixture in room["fixtures"]
         if fixture.get("fixture_id")
     ]

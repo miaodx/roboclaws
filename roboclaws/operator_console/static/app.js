@@ -23,16 +23,6 @@ const state = {
   manualControlPending: false,
 };
 
-const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
-const STATE_RAIL_DEFAULT_WIDTH = 300;
-const STATE_RAIL_MIN_WIDTH = 260;
-const STATE_RAIL_MAX_WIDTH = 760;
-const WORKSPACE_MIN_WIDTH = 420;
-const EVIDENCE_STRIP_HEIGHT_KEY = "roboclaws.operatorConsole.evidenceStripHeight";
-const EVIDENCE_STRIP_DEFAULT_HEIGHT = 280;
-const EVIDENCE_STRIP_MIN_HEIGHT = 160;
-const EVIDENCE_STRIP_MAX_HEIGHT = 620;
-const MAIN_CONTENT_MIN_HEIGHT = 360;
 const MANUAL_CONTROL_STEP_M = 0.25;
 const MANUAL_CONTROL_TURN_DEG = 15;
 const DEFAULT_UI_INTENT = "open-ended";
@@ -105,8 +95,6 @@ const els = {
   eventList: document.getElementById("event-log"),
   rawEvidence: document.getElementById("raw-evidence"),
   toggleRawButton: document.getElementById("toggle-raw-button"),
-  stateRailResizer: document.getElementById("state-rail-resizer"),
-  evidenceStripResizer: document.getElementById("evidence-strip-resizer"),
   confirmDialog: document.getElementById("confirm-dialog"),
   confirmTitle: document.getElementById("confirm-title"),
   confirmAction: document.getElementById("confirm-action"),
@@ -252,8 +240,6 @@ function bindEvents() {
     });
   });
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
-  bindStateRailResize();
-  bindEvidenceStripResize();
   document.querySelectorAll(".view-mode").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
@@ -263,226 +249,6 @@ function bindEvents() {
       }
     });
   });
-}
-
-function bindEvidenceStripResize() {
-  if (!els.appShell || !els.evidenceStripResizer) {
-    return;
-  }
-  const savedHeight = readSavedEvidenceStripHeight();
-  if (savedHeight) {
-    setEvidenceStripHeight(savedHeight, { persist: false });
-  }
-  els.evidenceStripResizer.addEventListener("pointerdown", startEvidenceStripResize);
-  els.evidenceStripResizer.addEventListener("keydown", handleEvidenceStripResizeKey);
-  window.addEventListener("resize", () => {
-    setEvidenceStripHeight(currentEvidenceStripHeight(), { persist: false });
-  });
-}
-
-function startEvidenceStripResize(event) {
-  if (window.matchMedia("(max-width: 1360px)").matches) {
-    return;
-  }
-  event.preventDefault();
-  const startY = event.clientY;
-  const startHeight = currentEvidenceStripHeight();
-  const pointerId = event.pointerId;
-  els.evidenceStripResizer.setPointerCapture(pointerId);
-  document.body.classList.add("resizing-evidence-strip");
-
-  const onPointerMove = (moveEvent) => {
-    setEvidenceStripHeight(startHeight + startY - moveEvent.clientY, { persist: false });
-  };
-  const stopResize = () => {
-    document.body.classList.remove("resizing-evidence-strip");
-    persistEvidenceStripHeight(currentEvidenceStripHeight());
-    els.evidenceStripResizer.removeEventListener("pointermove", onPointerMove);
-    try {
-      els.evidenceStripResizer.releasePointerCapture(pointerId);
-    } catch {
-      // Pointer capture may already be released after a cancelled drag.
-    }
-  };
-
-  els.evidenceStripResizer.addEventListener("pointermove", onPointerMove);
-  els.evidenceStripResizer.addEventListener("pointerup", stopResize, { once: true });
-  els.evidenceStripResizer.addEventListener("pointercancel", stopResize, { once: true });
-}
-
-function handleEvidenceStripResizeKey(event) {
-  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
-    return;
-  }
-  event.preventDefault();
-  const step = event.shiftKey ? 80 : 24;
-  const bounds = evidenceStripHeightBounds();
-  if (event.key === "Home") {
-    setEvidenceStripHeight(bounds.min);
-  } else if (event.key === "End") {
-    setEvidenceStripHeight(bounds.max);
-  } else {
-    const direction = event.key === "ArrowUp" ? 1 : -1;
-    setEvidenceStripHeight(currentEvidenceStripHeight() + direction * step);
-  }
-}
-
-function setEvidenceStripHeight(height, options = {}) {
-  const persist = options.persist !== false;
-  const bounds = evidenceStripHeightBounds();
-  const nextHeight = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(height))));
-  document.documentElement.style.setProperty("--evidence-strip-height", `${nextHeight}px`);
-  els.evidenceStripResizer.setAttribute("aria-valuemin", String(bounds.min));
-  els.evidenceStripResizer.setAttribute("aria-valuemax", String(bounds.max));
-  els.evidenceStripResizer.setAttribute("aria-valuenow", String(nextHeight));
-  if (persist) {
-    persistEvidenceStripHeight(nextHeight);
-  }
-}
-
-function currentEvidenceStripHeight() {
-  const rawValue = getComputedStyle(document.documentElement)
-    .getPropertyValue("--evidence-strip-height")
-    .trim();
-  const parsed = Number.parseFloat(rawValue);
-  return Number.isFinite(parsed) ? parsed : EVIDENCE_STRIP_DEFAULT_HEIGHT;
-}
-
-function evidenceStripHeightBounds() {
-  const shellHeight = els.appShell.getBoundingClientRect().height || window.innerHeight;
-  const availableHeight = shellHeight - 56 - MAIN_CONTENT_MIN_HEIGHT;
-  const max = Math.max(
-    EVIDENCE_STRIP_MIN_HEIGHT,
-    Math.min(EVIDENCE_STRIP_MAX_HEIGHT, Math.floor(availableHeight))
-  );
-  return { min: EVIDENCE_STRIP_MIN_HEIGHT, max };
-}
-
-function readSavedEvidenceStripHeight() {
-  try {
-    const height = Number.parseFloat(localStorage.getItem(EVIDENCE_STRIP_HEIGHT_KEY) || "");
-    return Number.isFinite(height) ? height : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function persistEvidenceStripHeight(height) {
-  try {
-    localStorage.setItem(EVIDENCE_STRIP_HEIGHT_KEY, String(Math.round(height)));
-  } catch {
-    // Local storage can be disabled; resizing should still work for this page load.
-  }
-}
-
-function bindStateRailResize() {
-  if (!els.appShell || !els.stateRailResizer) {
-    return;
-  }
-  const savedWidth = readSavedStateRailWidth();
-  if (savedWidth) {
-    setStateRailWidth(savedWidth, { persist: false });
-  }
-  els.stateRailResizer.addEventListener("pointerdown", startStateRailResize);
-  els.stateRailResizer.addEventListener("keydown", handleStateRailResizeKey);
-  window.addEventListener("resize", () => {
-    setStateRailWidth(currentStateRailWidth(), { persist: false });
-  });
-}
-
-function startStateRailResize(event) {
-  if (window.matchMedia("(max-width: 1360px)").matches) {
-    return;
-  }
-  event.preventDefault();
-  const startX = event.clientX;
-  const startWidth = currentStateRailWidth();
-  const pointerId = event.pointerId;
-  els.stateRailResizer.setPointerCapture(pointerId);
-  document.body.classList.add("resizing-state-rail");
-
-  const onPointerMove = (moveEvent) => {
-    setStateRailWidth(startWidth + startX - moveEvent.clientX, { persist: false });
-  };
-  const stopResize = () => {
-    document.body.classList.remove("resizing-state-rail");
-    persistStateRailWidth(currentStateRailWidth());
-    els.stateRailResizer.removeEventListener("pointermove", onPointerMove);
-    try {
-      els.stateRailResizer.releasePointerCapture(pointerId);
-    } catch {
-      // Pointer capture may already be released after a cancelled drag.
-    }
-  };
-
-  els.stateRailResizer.addEventListener("pointermove", onPointerMove);
-  els.stateRailResizer.addEventListener("pointerup", stopResize, { once: true });
-  els.stateRailResizer.addEventListener("pointercancel", stopResize, { once: true });
-}
-
-function handleStateRailResizeKey(event) {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-    return;
-  }
-  event.preventDefault();
-  const step = event.shiftKey ? 80 : 24;
-  const bounds = stateRailWidthBounds();
-  if (event.key === "Home") {
-    setStateRailWidth(bounds.min);
-  } else if (event.key === "End") {
-    setStateRailWidth(bounds.max);
-  } else {
-    const direction = event.key === "ArrowLeft" ? 1 : -1;
-    setStateRailWidth(currentStateRailWidth() + direction * step);
-  }
-}
-
-function setStateRailWidth(width, options = {}) {
-  const persist = options.persist !== false;
-  const bounds = stateRailWidthBounds();
-  const nextWidth = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width))));
-  document.documentElement.style.setProperty("--state-rail-width", `${nextWidth}px`);
-  els.stateRailResizer.setAttribute("aria-valuemin", String(bounds.min));
-  els.stateRailResizer.setAttribute("aria-valuemax", String(bounds.max));
-  els.stateRailResizer.setAttribute("aria-valuenow", String(nextWidth));
-  if (persist) {
-    persistStateRailWidth(nextWidth);
-  }
-}
-
-function currentStateRailWidth() {
-  const rawValue = getComputedStyle(document.documentElement)
-    .getPropertyValue("--state-rail-width")
-    .trim();
-  const parsed = Number.parseFloat(rawValue);
-  return Number.isFinite(parsed) ? parsed : STATE_RAIL_DEFAULT_WIDTH;
-}
-
-function stateRailWidthBounds() {
-  const shellWidth = els.appShell.getBoundingClientRect().width || window.innerWidth;
-  const availableWidth = shellWidth - 240 - 300 - WORKSPACE_MIN_WIDTH;
-  const max = Math.max(
-    STATE_RAIL_MIN_WIDTH,
-    Math.min(STATE_RAIL_MAX_WIDTH, Math.floor(availableWidth))
-  );
-  return { min: STATE_RAIL_MIN_WIDTH, max };
-}
-
-function readSavedStateRailWidth() {
-  try {
-    const width = Number.parseFloat(localStorage.getItem(STATE_RAIL_WIDTH_KEY) || "");
-    return Number.isFinite(width) ? width : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function persistStateRailWidth(width) {
-  try {
-    localStorage.setItem(STATE_RAIL_WIDTH_KEY, String(Math.round(width)));
-  } catch {
-    // Local storage can be disabled; resizing should still work for this page load.
-  }
 }
 
 function renderRoutes() {
@@ -2157,11 +1923,19 @@ async function copyText(text) {
 }
 
 function renderViews(assets, route = state.selectedRoute) {
-  setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
-  setImageSlot("map", assets.map, "Semantic map artifact has not been written yet.");
-  setImageSlot("topdown", assets.topdown, "Top-down scene view has not been written yet.");
+  setImageSlot("fpv", assets.fpv, "Missing run FPV artifact: expected robot_views/*.fpv.png.");
+  setImageSlot(
+    "map",
+    assets.map,
+    "Missing run map artifact: expected map_bundle/preview.png."
+  );
+  setImageSlot(
+    "topdown",
+    assets.topdown,
+    "Missing run top-down artifact: expected a run-local topdown image."
+  );
   const chaseEmptyText = routeHasOverviewChase(route)
-    ? "No chase frame yet. Waiting for the first observation artifact."
+    ? "Missing run chase artifact: expected robot_views/*.chase.png."
     : "Chase view unavailable for this backend.";
   setImageSlot("chase", assets.chase, chaseEmptyText);
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
@@ -2175,7 +1949,7 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   }
   const previews = route && route.preview_assets ? route.preview_assets : {};
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
-  setImageSlot("map", previews.map, "No semantic map preview is available.");
+  setImageSlot("map", previews.map, "No base navigation map preview is available.");
   setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
   const chaseEmptyText = routeHasOverviewChase(route)
@@ -2206,7 +1980,6 @@ function setImageSlot(name, asset, emptyText) {
       title="Open image preview"
     >
       <img alt="${escapeHtml(label)} artifact" src="${escapeHtml(src)}" />
-      ${robotPoseOverlayMarkup(asset.robot_pose_overlay)}
     </button>
   `;
   const button = slot.querySelector(".image-preview-button");
@@ -2219,32 +1992,10 @@ function setImageSlot(name, asset, emptyText) {
   });
 }
 
-function robotPoseOverlayMarkup(overlay) {
-  if (!overlay || !Number.isFinite(Number(overlay.x_pct)) || !Number.isFinite(Number(overlay.y_pct))) {
-    return "";
-  }
-  const x = clampNumber(Number(overlay.x_pct), 0, 100);
-  const y = clampNumber(Number(overlay.y_pct), 0, 100);
-  const yaw = Number.isFinite(Number(overlay.yaw_deg)) ? Number(overlay.yaw_deg) : 0;
-  const title = `Robot pose x=${overlay.x ?? "?"} y=${overlay.y ?? "?"}`;
-  return `
-    <span
-      class="robot-pose-overlay"
-      style="--robot-x: ${x}%; --robot-y: ${y}%; --robot-yaw: ${yaw}deg;"
-      title="${escapeHtml(title)}"
-      aria-hidden="true"
-    ></span>
-  `;
-}
-
-function clampNumber(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
 function imageLabel(name) {
   const labels = {
     fpv: "FPV",
-    map: "Semantic Map",
+    map: "Base Navigation Map",
     topdown: "Top-down Scene View",
     grounding: "Grounding",
     chase: "Chase",
@@ -2426,7 +2177,6 @@ async function toggleRawEvidence() {
   }
   const hidden = els.rawEvidence.hidden;
   els.rawEvidence.hidden = !hidden;
-  els.evidenceStripResizer.hidden = !hidden;
   els.appShell.classList.toggle("raw-evidence-open", hidden);
   els.toggleRawButton.textContent = hidden ? "Hide Raw Evidence" : "Show Raw Evidence";
   if (hidden) {

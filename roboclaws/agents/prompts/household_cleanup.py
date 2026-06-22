@@ -130,7 +130,7 @@ def _with_task(
     )
 
 
-SEMANTIC_MAP_BUILD_RULES = (
+MAP_BUILD_RULES = (
     "This run is surface=household-world intent=map-build. "
     "This is not a cleanup run. User task: {task}. "
     "Do not pick, place, place_inside, open_receptacle, close_receptacle, or clean any "
@@ -298,10 +298,10 @@ def render_kickoff_prompt(
     )
 
 
-def render_semantic_map_build_prompt(profile: str, task: str) -> str:
+def render_map_build_prompt(profile: str, task: str) -> str:
     """Render the live-agent kickoff prompt for intent=map-build."""
 
-    prompt = CUSTOM_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
+    prompt = CUSTOM_PREFIX + MAP_BUILD_RULES.format(task=task)
     if profile == "camera-raw-fpv":
         return (
             prompt + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
@@ -336,8 +336,8 @@ def main(argv: list[str] | None = None) -> int:
     goal_contract = goal_contract_from_json(args.goal_contract_json)
     intent = normalize_household_intent(str(getattr(goal_contract, "intent", "") or args.intent))
     if intent == HOUSEHOLD_INTENT_MAP_BUILD:
-        task = args.task or "build a semantic map of this room"
-        print(render_semantic_map_build_prompt(args.profile, task))
+        task = args.task or "build a Runtime Metric Map of this room"
+        print(render_map_build_prompt(args.profile, task))
     else:
         print(
             render_kickoff_prompt(

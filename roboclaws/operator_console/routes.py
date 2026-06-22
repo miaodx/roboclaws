@@ -25,7 +25,7 @@ from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS, WORLD_SPECS
 
 DEFAULT_PROMPTS = {
     "cleanup": "帮我收拾这个房间",
-    "map-build": "帮我建立这个房间的语义地图",
+    "map-build": "帮我建立这个房间的 Runtime Metric Map",
     "open-ended": "在这个场景中完成开放性导航任务，并报告你看到的证据。",
 }
 
@@ -363,7 +363,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             ),
             required_overrides=("context_json",),
             default_overrides=(
-                "policy=codex_agibot_semantic_map_build_pilot",
+                "policy=codex_agibot_map_build_pilot",
                 "visual_grounding_timeout_s=20",
             ),
             emergency_stop_required=True,

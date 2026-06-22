@@ -14,7 +14,7 @@ def assert_waypoint_honesty(
     report_text: str,
     *,
     open_ended_intent: bool,
-    semantic_sweep_or_map_build: bool,
+    map_build: bool,
 ) -> None:
     agent_view = data.get("agent_view") or {}
     metric_map = agent_view.get("metric_map") or {}
@@ -27,7 +27,7 @@ def assert_waypoint_honesty(
         worklist,
         trace,
         open_ended_intent=open_ended_intent,
-        semantic_sweep_or_map_build=semantic_sweep_or_map_build,
+        map_build=map_build,
     )
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
 
@@ -36,7 +36,7 @@ def assert_waypoint_honesty(
             trace,
             report_text,
             open_ended_intent=open_ended_intent,
-            semantic_sweep_or_map_build=semantic_sweep_or_map_build,
+            map_build=map_build,
         )
         return
     _assert_static_trace(trace, report_text)
@@ -92,13 +92,13 @@ def _assert_worklist(
     trace: dict[str, Any],
     *,
     open_ended_intent: bool,
-    semantic_sweep_or_map_build: bool,
+    map_build: bool,
 ) -> None:
     assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
     if _is_scan_only_trace(
         trace,
         open_ended_intent=open_ended_intent,
-        semantic_sweep_or_map_build=semantic_sweep_or_map_build,
+        map_build=map_build,
     ):
         assert isinstance(worklist.get("objects") or [], list), worklist
     else:
@@ -110,10 +110,10 @@ def _is_scan_only_trace(
     trace: dict[str, Any],
     *,
     open_ended_intent: bool,
-    semantic_sweep_or_map_build: bool,
+    map_build: bool,
 ) -> bool:
     cleanup_action_count = int(trace.get("cleanup_action_count") or 0)
-    return cleanup_action_count == 0 and (open_ended_intent or semantic_sweep_or_map_build)
+    return cleanup_action_count == 0 and (open_ended_intent or map_build)
 
 
 def _assert_minimal_trace(
@@ -121,11 +121,11 @@ def _assert_minimal_trace(
     report_text: str,
     *,
     open_ended_intent: bool,
-    semantic_sweep_or_map_build: bool,
+    map_build: bool,
 ) -> None:
     assert trace.get("waypoint_source") == "generated_exploration_candidate", trace
-    if semantic_sweep_or_map_build:
-        _assert_semantic_sweep_scan_only_trace(trace)
+    if map_build:
+        _assert_map_build_scan_only_trace(trace)
     elif open_ended_intent and int(trace.get("cleanup_action_count") or 0) == 0:
         assert trace.get("loop_style") == "scan_only", trace
     else:
@@ -134,7 +134,7 @@ def _assert_minimal_trace(
     assert "generated_exploration_candidate" in report_text, report_text[:500]
 
 
-def _assert_semantic_sweep_scan_only_trace(trace: dict[str, Any]) -> None:
+def _assert_map_build_scan_only_trace(trace: dict[str, Any]) -> None:
     assert trace.get("first_cleanup_before_full_survey") is False, trace
     assert trace.get("loop_style") == "scan_only", trace
     assert trace.get("cleanup_action_count") == 0, trace

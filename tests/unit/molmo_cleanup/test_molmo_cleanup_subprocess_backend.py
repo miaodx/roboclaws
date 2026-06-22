@@ -1116,13 +1116,26 @@ def test_worker_room_outlines_use_mesh_world_bounds_not_geom_size() -> None:
     outlines = worker._collect_room_outlines(
         model,
         data,
-        {"receptacles": {}, "objects": {}},
+        {
+            "receptacles": {},
+            "objects": {},
+            "source_room_labels": {
+                "room_1": {
+                    "room_label": "Kitchen",
+                    "room_type": "Kitchen",
+                    "room_label_provenance": "source_scene_json",
+                }
+            },
+        },
     )
 
     assert outlines == [
         {
             "room_id": "room_1",
-            "label": "Room 1",
+            "label": "Kitchen",
+            "room_label": "Kitchen",
+            "room_type": "Kitchen",
+            "room_label_provenance": "source_scene_json",
             "center": pytest.approx([3.0, 3.0]),
             "half_extents": pytest.approx([2.0, 1.0]),
             "provenance": "mujoco_room_mesh_world_bounds",

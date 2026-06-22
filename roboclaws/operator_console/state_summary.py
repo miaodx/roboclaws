@@ -165,7 +165,7 @@ def _open_ended_run_result_success(run_result: dict[str, Any]) -> bool:
 
 
 def _standard_run_result_success(run_result: dict[str, Any]) -> bool:
-    if _any_true_status(run_result, ("ok", "success", "cleanup_success", "semantic_map_success")):
+    if _any_true_status(run_result, ("ok", "success", "cleanup_success", "runtime_map_success")):
         return True
     if _any_success_status(
         run_result,
@@ -183,7 +183,7 @@ def run_result_has_failure(run_result: dict[str, Any]) -> bool:
 
 
 def _open_ended_run_result_failure(run_result: dict[str, Any]) -> bool:
-    return _any_false_status(run_result, ("ok", "success", "semantic_map_success")) or (
+    return _any_false_status(run_result, ("ok", "success", "runtime_map_success")) or (
         _any_failure_status(run_result, ("intent_status", "goal_status", "status"))
     )
 
@@ -191,7 +191,7 @@ def _open_ended_run_result_failure(run_result: dict[str, Any]) -> bool:
 def _standard_run_result_failure(run_result: dict[str, Any]) -> bool:
     return _any_false_status(
         run_result,
-        ("ok", "success", "cleanup_success", "semantic_map_success"),
+        ("ok", "success", "cleanup_success", "runtime_map_success"),
     ) or _any_failure_status(
         run_result,
         ("cleanup_status", "completion_status", "final_status", "status"),

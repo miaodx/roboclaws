@@ -39,6 +39,14 @@ def test_init_state_builds_init_envelope_with_injected_hooks(
     assert result["generated_mess_manifest"] is None
     assert result["scenario"]["scenario_id"] == "molmospaces-unit-1"
     assert written_state["current_receptacle_id"] == "sink_01"
+    assert written_state["source_room_labels"] == {
+        "room_1": {
+            "room_id": "room_1",
+            "room_label": "Kitchen",
+            "room_type": "Kitchen",
+            "room_label_provenance": "source_scene_json",
+        }
+    }
     assert written_state["room_outlines"] == [{"room_id": "room_1"}]
 
 
@@ -81,6 +89,107 @@ def test_init_state_seeds_robot_pose_for_targetless_open_task(
     assert written_state["robot_pose"] == pose
     assert written_state["robot_trajectory"] == [pose]
     assert written_state["qpos"] == [0.1, 0.2, 0.3, 0.4]
+
+
+def test_source_room_labels_reads_adjacent_scene_json(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    scene_xml = tmp_path / "val_5.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    (tmp_path / "val_5.json").write_text(
+        json.dumps(
+            {
+                "rooms": [
+                    {"id": "room|4", "roomType": "Bedroom"},
+                    {"id": "room|7", "roomType": "LivingRoom"},
+                    {"id": "room0", "roomType": "reception lounge"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert source_room_labels(scene_xml) == {
+        "room_4": {
+            "room_id": "room_4",
+            "room_label": "Bedroom",
+            "room_type": "Bedroom",
+            "room_label_provenance": "source_scene_json",
+        },
+        "room_7": {
+            "room_id": "room_7",
+            "room_label": "Living Room",
+            "room_type": "LivingRoom",
+            "room_label_provenance": "source_scene_json",
+        },
+        "room_0": {
+            "room_id": "room_0",
+            "room_label": "reception lounge",
+            "room_type": "reception lounge",
+            "room_label_provenance": "source_scene_json",
+        },
+    }
+
+
+def test_source_room_labels_uses_explicit_ithor_floorplan_provenance(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    scene_xml = tmp_path / "FloorPlan301_physics.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+
+    assert source_room_labels(scene_xml) == {
+        "room_0": {
+            "room_id": "room_0",
+            "room_label": "Bedroom",
+            "room_type": "Bedroom",
+            "room_label_provenance": "ithor_floorplan_id",
+        }
+    }
+
+
+def test_source_room_labels_fails_without_source_label_data(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="missing source room labels"):
+        source_room_labels(scene_xml)
+
+
+def test_all_supported_sim_scene_room_formats_have_source_room_labels(tmp_path: Path) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    # Physical-robot and B1 digital-twin room-label parity is future work, not sim coverage.
+    scenes = {
+        "procthor_scene.xml": [
+            {"id": "room|4", "roomType": "Bedroom"},
+            {"id": "room|7", "roomType": "LivingRoom"},
+        ],
+        "holodeck_scene.xml": [
+            {"id": "room0", "roomType": "open office"},
+            {"id": "room12", "roomType": "Kitchen"},
+        ],
+        "FloorPlan301_physics.xml": None,
+    }
+
+    for xml_name, rooms in scenes.items():
+        scene_xml = tmp_path / xml_name
+        scene_xml.write_text("<mujoco/>", encoding="utf-8")
+        if rooms is not None:
+            scene_xml.with_suffix(".json").write_text(
+                json.dumps({"rooms": rooms}),
+                encoding="utf-8",
+            )
+
+        labels = source_room_labels(scene_xml)
+        assert labels, xml_name
+        for room_id, label in labels.items():
+            assert room_id.startswith("room_"), label
+            assert label.get("room_id") == room_id
+            assert str(label.get("room_label") or "").strip(), label
+            assert str(label.get("room_type") or "").strip(), label
+            assert str(label.get("room_label_provenance") or "").strip(), label
 
 
 def _install_fake_molmospaces_modules(
@@ -151,6 +260,14 @@ def _init_hooks(
         scenario_id=lambda **_kwargs: "molmospaces-unit-1",
         seed_misplaced_objects=lambda *_args: None,
         set_robot_pose=lambda *_args: None,
+        source_room_labels=lambda _scene_xml: {
+            "room_1": {
+                "room_id": "room_1",
+                "room_label": "Kitchen",
+                "room_type": "Kitchen",
+                "room_label_provenance": "source_scene_json",
+            }
+        },
         target_start_receptacle_id=lambda *_args: "sink_01",
         write_state=lambda path, state: path.write_text(
             json.dumps(state, sort_keys=True),

@@ -9,11 +9,11 @@ import time
 from pathlib import Path
 
 from roboclaws.household.agibot_map_build_mcp_server import (
-    AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
+    AGIBOT_MAP_BUILD_POLICY,
     DEFAULT_HOST,
     DEFAULT_PORT,
     MCP_SERVER_NAME,
-    make_agibot_semantic_map_build_mcp,
+    make_agibot_map_build_mcp,
 )
 from roboclaws.household.profiles import (
     CAMERA_GROUNDED_LABELS_LANE,
@@ -30,10 +30,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--context-json", type=Path, required=True)
-    parser.add_argument("--policy", default=AGIBOT_SEMANTIC_MAP_BUILD_POLICY)
+    parser.add_argument("--policy", default=AGIBOT_MAP_BUILD_POLICY)
     parser.add_argument(
         "--task",
-        default="Build a semantic map from Agibot G2 public navigation and camera evidence.",
+        default="Build a Runtime Metric Map from Agibot G2 public navigation and camera evidence.",
     )
     parser.add_argument("--runner-python")
     parser.add_argument("--runner-script", type=Path)
@@ -59,13 +59,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def default_output_dir(policy: str) -> Path:
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y%m%d%H%M%S")
-    return Path("output") / "agibot" / "semantic-map-build-agent" / policy / stamp
+    return Path("output") / "agibot" / "map-build-agent" / policy / stamp
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_dir = args.output_dir or default_output_dir(args.policy)
-    server = make_agibot_semantic_map_build_mcp(
+    server = make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=args.context_json,
         host=args.host,
@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\nAgent task:")
     print("  Call metric_map first and use public map anchors plus observations.")
     print("  Navigate only to public waypoint ids, observe with head_color, then call done.")
-    print("  Do not call fixture_hints, raw Agibot GDK tools, or invent coordinates.\n")
+    print("  Do not call static_fixture_projection, raw Agibot GDK tools, or invent coordinates.\n")
     sys.stdout.flush()
 
     try:

@@ -124,8 +124,8 @@ _first_fixture_for_waypoint = realworld_contract_projection._first_fixture_for_w
 _first_matching_fixture = realworld_contract_projection._first_matching_fixture
 _fixture_affordances = realworld_contract_projection._fixture_affordances
 _fixture_footprint = realworld_contract_projection._fixture_footprint
-_fixture_hints_with_scene_index_overlay = (
-    realworld_contract_projection._fixture_hints_with_scene_index_overlay
+_static_fixture_projection_with_scene_index_overlay = (
+    realworld_contract_projection._static_fixture_projection_with_scene_index_overlay
 )
 _fixture_prefers_inside = realworld_contract_projection._fixture_prefers_inside
 _fixture_requires_open = realworld_contract_projection._fixture_requires_open
@@ -159,7 +159,9 @@ _room_outline_center = realworld_contract_projection._room_outline_center
 _room_outline_metadata = realworld_contract_projection._room_outline_metadata
 _room_polygon_bounds = realworld_contract_projection._room_polygon_bounds
 _rooms_from_fixtures = realworld_contract_projection._rooms_from_fixtures
-_scene_index_fixture_hint_row = realworld_contract_projection._scene_index_fixture_hint_row
+_scene_index_static_fixture_projection_row = (
+    realworld_contract_projection._scene_index_static_fixture_projection_row
+)
 _scene_index_fixture_pose = realworld_contract_projection._scene_index_fixture_pose
 _scene_outline_waypoint_candidates = (
     realworld_contract_projection._scene_outline_waypoint_candidates
@@ -200,7 +202,7 @@ class RealWorldCleanupContract:
 
     The wrapped ``CleanupBackendSession`` still owns state mutation and
     deterministic private scoring. This contract is the public agent boundary:
-    it exposes metric navigation, room-level fixture hints, and robot-local
+    it exposes metric navigation, room-level static fixture projection, and robot-local
     observed object handles instead of a global object-inventory oracle.
     """
 
@@ -209,7 +211,7 @@ class RealWorldCleanupContract:
         contract: CleanupBackendSession,
         *,
         task_prompt: str = DEFAULT_REALWORLD_TASK,
-        fixture_hint_mode: str = "room_only",
+        static_fixture_projection_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         map_bundle_dir: str | Path | None = None,
         visual_grounding_client: VisualGroundingClient | None = None,
@@ -222,7 +224,7 @@ class RealWorldCleanupContract:
         public_acceptance_config: dict[str, Any] | None = None,
     ) -> None:
         realworld_contract_init.validate_contract_options(
-            fixture_hint_mode=fixture_hint_mode,
+            static_fixture_projection_mode=static_fixture_projection_mode,
             perception_mode=perception_mode,
             map_mode=map_mode,
         )
@@ -230,7 +232,7 @@ class RealWorldCleanupContract:
         self.backend = contract.backend
         self.scenario: CleanupScenario = contract.backend.scenario
         self.task_prompt = task_prompt
-        self.fixture_hint_mode = fixture_hint_mode
+        self.static_fixture_projection_mode = static_fixture_projection_mode
         self.perception_mode = perception_mode
         self.map_mode = map_mode
         realworld_contract_init.init_profile_and_acceptance(
@@ -407,7 +409,7 @@ class RealWorldCleanupContract:
         }
         metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
             metric_map=metric_map,
-            fixture_hints=self.fixture_hints(),
+            static_fixture_projection=self.static_fixture_projection(),
         )
         _assert_no_forbidden_agent_view_keys(metric_map)
         return metric_map
@@ -453,14 +455,14 @@ class RealWorldCleanupContract:
             )
             metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
                 metric_map=metric_map,
-                fixture_hints=self.fixture_hints(),
+                static_fixture_projection=self.static_fixture_projection(),
             )
             _assert_no_forbidden_agent_view_keys(metric_map)
             return metric_map
 
         frame_id = "map"
-        map_id = f"{self.scenario.scenario_id}_semantic_map"
-        map_version = "static-fixture-map-v1"
+        map_id = f"{self.scenario.scenario_id}_base_navigation_map"
+        map_version = "base-navigation-map-v1"
         metric_map = self._ok(
             "metric_map",
             contract=REALWORLD_CONTRACT,
@@ -523,23 +525,27 @@ class RealWorldCleanupContract:
         )
         metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
             metric_map=metric_map,
-            fixture_hints=self.fixture_hints(),
+            static_fixture_projection=self.static_fixture_projection(),
         )
         _assert_no_forbidden_agent_view_keys(metric_map)
         return metric_map
 
-    def fixture_hints(self) -> dict[str, Any]:
+    def static_fixture_projection(self) -> dict[str, Any]:
         if self.map_mode == MINIMAL_MAP_MODE:
-            return self._minimal_fixture_hints()
-        if self._bundle_fixture_hints_template is not None:
-            fixture_hints = copy.deepcopy(self._bundle_fixture_hints_template)
+            return self._minimal_static_fixture_projection()
+        if self._bundle_static_fixture_projection_template is not None:
+            static_fixture_projection = copy.deepcopy(
+                self._bundle_static_fixture_projection_template
+            )
             if self._scene_index_fixture_overlay:
-                fixture_hints["rooms"] = _fixture_hints_with_scene_index_overlay(
-                    fixture_hints.get("rooms") or [],
-                    self._scene_index_fixture_overlay,
-                    fixture_hint_mode=self.fixture_hint_mode,
+                static_fixture_projection["rooms"] = (
+                    _static_fixture_projection_with_scene_index_overlay(
+                        static_fixture_projection.get("rooms") or [],
+                        self._scene_index_fixture_overlay,
+                        static_fixture_projection_mode=self.static_fixture_projection_mode,
+                    )
                 )
-                fixture_hints["scene_index_fixture_overlay"] = {
+                static_fixture_projection["scene_index_fixture_overlay"] = {
                     "enabled": True,
                     "source": "isaac_scene_index",
                     "fixture_count": len(self._scene_index_fixture_overlay),
@@ -549,24 +555,26 @@ class RealWorldCleanupContract:
                         "They do not include private acceptable-destination sets."
                     ),
                 }
-            fixture_hints["contract"] = REALWORLD_CONTRACT
-            fixture_hints["tool"] = "fixture_hints"
-            fixture_hints["status"] = "ok"
-            fixture_hints["ok"] = True
-            fixture_hints["fixture_hint_mode"] = self.fixture_hint_mode
+            static_fixture_projection["contract"] = REALWORLD_CONTRACT
+            static_fixture_projection["tool"] = "static_fixture_projection"
+            static_fixture_projection["status"] = "ok"
+            static_fixture_projection["ok"] = True
+            static_fixture_projection["static_fixture_projection_mode"] = (
+                self.static_fixture_projection_mode
+            )
             overlay_note = (
                 " A public Isaac scene-index fixture overlay is preferred for "
                 "backend-generated scene-specific cleanup scenarios."
                 if self._scene_index_fixture_overlay
                 else ""
             )
-            fixture_hints["public_contract_note"] = (
-                "Static fixture hints are projected from the selected prebuilt Nav2 "
+            static_fixture_projection["public_contract_note"] = (
+                "Static fixture projection is derived from the selected prebuilt Nav2 "
                 "map bundle. Runtime movable-object observations remain separate "
                 f"observed_* handles.{overlay_note}"
             )
-            _assert_no_forbidden_agent_view_keys(fixture_hints)
-            return fixture_hints
+            _assert_no_forbidden_agent_view_keys(static_fixture_projection)
+            return static_fixture_projection
 
         rooms = []
         for room in self._rooms:
@@ -588,10 +596,10 @@ class RealWorldCleanupContract:
                     "preferred_manipulation_waypoint_id": self._preferred_waypoint_for_fixture(
                         fixture_id
                     ),
-                    "position_detail": self.fixture_hint_mode,
+                    "position_detail": self.static_fixture_projection_mode,
                 }
-                if self.fixture_hint_mode == "exact_fixtures":
-                    item["room_position"] = "operator_selected_exact_fixture_hint"
+                if self.static_fixture_projection_mode == "exact_fixtures":
+                    item["room_position"] = "operator_selected_exact_fixture"
                 fixtures.append(item)
             rooms.append(
                 {
@@ -602,25 +610,25 @@ class RealWorldCleanupContract:
                 }
             )
         return self._ok(
-            "fixture_hints",
+            "static_fixture_projection",
             contract=REALWORLD_CONTRACT,
-            schema="static_fixture_semantic_map_v1",
-            fixture_hint_mode=self.fixture_hint_mode,
+            schema="static_fixture_projection_v1",
+            static_fixture_projection_mode=self.static_fixture_projection_mode,
             contains_runtime_observations=False,
             public_contract_note=(
-                "Static fixture hints describe rooms, fixed receptacles, and affordances. "
+                "Static fixture projection describes rooms, fixed receptacles, and affordances. "
                 "Runtime movable-object observations remain separate observed_* handles."
             ),
             rooms=rooms,
         )
 
-    def _minimal_fixture_hints(self) -> dict[str, Any]:
+    def _minimal_static_fixture_projection(self) -> dict[str, Any]:
         payload = self._ok(
-            "fixture_hints",
+            "static_fixture_projection",
             contract=REALWORLD_CONTRACT,
-            schema="static_fixture_semantic_map_v1",
+            schema="static_fixture_projection_v1",
             mode=MINIMAL_MAP_MODE,
-            fixture_hint_mode=self.fixture_hint_mode,
+            static_fixture_projection_mode=self.static_fixture_projection_mode,
             contains_runtime_observations=False,
             rooms=[],
             generated_exploration_candidate_count=len(self._public_waypoints),
@@ -648,7 +656,7 @@ class RealWorldCleanupContract:
         start_waypoint_id = self._current_waypoint_id
         route = validate_metric_map_route(
             self.metric_map(),
-            self.fixture_hints(),
+            self.static_fixture_projection(),
             start_waypoint_id=start_waypoint_id,
             goal_waypoint_id=waypoint_id,
         )
@@ -789,7 +797,7 @@ class RealWorldCleanupContract:
     ) -> dict[str, Any]:
         runtime_map = self.runtime_metric_map_payload(
             metric_map=self.metric_map(),
-            fixture_hints=self.fixture_hints(),
+            static_fixture_projection=self.static_fixture_projection(),
         )
         resolution = resolve_target_query(
             runtime_map,
@@ -1315,7 +1323,7 @@ class RealWorldCleanupContract:
                 API_SEMANTIC_PROVENANCE,
             ),
             goal_pose=self._fixture_pose(internal_fixture_id),
-            pose_source="fixture_semantic_map",
+            pose_source="static_fixture_projection",
             staleness_s=0.0,
             pose_confidence=1.0,
             pose_covariance=[0.0, 0.0, 0.0],
@@ -1500,14 +1508,16 @@ class RealWorldCleanupContract:
             for handle in sorted(self._detections_by_handle)
         ]
         metric_map = self.metric_map()
-        fixture_hints = self.fixture_hints()
-        cleanup_worklist = self.cleanup_worklist_payload(fixture_hints=fixture_hints)
+        static_fixture_projection = self.static_fixture_projection()
+        cleanup_worklist = self.cleanup_worklist_payload(
+            static_fixture_projection=static_fixture_projection
+        )
         model_declared = self.model_declared_observations_payload()
         runtime_metric_map = dict(metric_map.get("runtime_metric_map") or {})
         if not runtime_metric_map:
             runtime_metric_map = self.runtime_metric_map_payload(
                 metric_map=metric_map,
-                fixture_hints=fixture_hints,
+                static_fixture_projection=static_fixture_projection,
                 cleanup_worklist=cleanup_worklist,
             )
         payload = {
@@ -1518,7 +1528,7 @@ class RealWorldCleanupContract:
             == VISIBLE_OBJECT_DETECTIONS_MODE,
             "metric_map": metric_map,
             "runtime_metric_map": runtime_metric_map,
-            "fixture_hints": fixture_hints,
+            "static_fixture_projection": static_fixture_projection,
             "observed_objects": observed_objects,
             "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
             "camera_model_policy_evidence": self.camera_model_policy_payload(),
@@ -1537,13 +1547,13 @@ class RealWorldCleanupContract:
         self,
         *,
         metric_map: dict[str, Any] | None = None,
-        fixture_hints: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
         cleanup_worklist: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return realworld_contract_payloads.runtime_metric_map_payload(
             self,
             metric_map=metric_map,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             cleanup_worklist=cleanup_worklist,
             realworld_contract=REALWORLD_CONTRACT,
             runtime_metric_map_schema=RUNTIME_METRIC_MAP_SCHEMA,
@@ -1646,7 +1656,7 @@ class RealWorldCleanupContract:
             "allowed_inputs": [
                 "metric_map",
                 "runtime_metric_map",
-                "fixture_hints",
+                "static_fixture_projection",
                 "observed_objects",
                 "raw_fpv_observations",
                 "camera_model_policy_evidence",
@@ -1670,11 +1680,11 @@ class RealWorldCleanupContract:
     def cleanup_worklist_payload(
         self,
         *,
-        fixture_hints: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return realworld_contract_payloads.cleanup_worklist_payload(
             self,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             cleanup_worklist_schema=CLEANUP_WORKLIST_SCHEMA,
             minimal_map_mode=MINIMAL_MAP_MODE,
             non_actionable_handle_states=_NON_ACTIONABLE_HANDLE_STATES,
@@ -1768,12 +1778,12 @@ class RealWorldCleanupContract:
     def target_fixture_for_detection(
         self,
         detection: dict[str, Any],
-        fixture_hints: dict[str, Any],
+        static_fixture_projection: dict[str, Any],
     ) -> dict[str, Any] | None:
         return realworld_runtime_map_targets.target_fixture_for_detection(
             self,
             detection,
-            fixture_hints,
+            static_fixture_projection,
             minimal_map_mode=MINIMAL_MAP_MODE,
         )
 
@@ -2045,7 +2055,7 @@ class RealWorldCleanupContract:
         return sorted(candidates, key=lambda item: str(item["object_id"]))
 
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]:
-        candidate = self.target_fixture_for_detection(detection, self.fixture_hints())
+        candidate = self.target_fixture_for_detection(detection, self.static_fixture_projection())
         if candidate is None:
             return {
                 "candidate_fixture_id": "",
@@ -2717,11 +2727,11 @@ def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
 
 def infer_target_fixture_for_detection(
     detection: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> dict[str, Any] | None:
     return realworld_runtime_map_contract.infer_target_fixture_for_detection(
         detection,
-        fixture_hints,
+        static_fixture_projection,
         norm=_norm,
         object_category_targets=_OBJECT_CATEGORY_TARGETS,
         first_matching_fixture=_first_matching_fixture,

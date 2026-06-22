@@ -130,7 +130,7 @@ hidden target lists, and private manifests may feed graders and reports, but
 they must not appear in agent-facing MCP inputs or capability profile metadata.
 Eval-harness manifests may link maintainer-only private artifacts, but must not
 inline that private truth.
-Cleanup evals should classify a live `fixture_hints` MCP call as a trajectory
+Cleanup evals should classify a live `static_fixture_projection` MCP call as a trajectory
 violation while allowing historical artifact fields with the same name to remain
 readable for reports and map-bundle compatibility. Regression promotion records
 source result links and human labels inside `private_goal_reference` with

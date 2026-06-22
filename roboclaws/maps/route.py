@@ -36,7 +36,7 @@ class StaticRouteResult:
 
 def validate_metric_map_route(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     *,
     start_waypoint_id: str,
     goal_waypoint_id: str,
@@ -64,7 +64,7 @@ def validate_metric_map_route(
             goal_waypoint_id=goal_waypoint_id,
         )
 
-    grid = occupancy_grid_from_metric_map(metric_map, fixture_hints)
+    grid = occupancy_grid_from_metric_map(metric_map, static_fixture_projection)
     start_cell = world_to_grid(float(start.get("x", 0.0)), float(start.get("y", 0.0)), grid)
     goal_cell = world_to_grid(float(goal.get("x", 0.0)), float(goal.get("y", 0.0)), grid)
     if not grid.is_free_cell(*start_cell):

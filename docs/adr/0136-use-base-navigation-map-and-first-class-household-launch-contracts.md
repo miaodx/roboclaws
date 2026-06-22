@@ -9,7 +9,7 @@ Date: 2026-06-11
 The household-world stack accumulated several overlapping public concepts:
 
 - `map_mode=minimal|rich` exposed a selectable sparse-vs-authored map mode.
-- `fixture_hints()` encouraged agents to look for static fixture semantics
+- `static_fixture_projection()` encouraged agents to look for static fixture semantics
   before using runtime evidence.
 - `profile`, `cleanup_profile`, `evidence_lane`, `camera_labeler`, and
   `visual_grounding` mixed evidence shape with producer implementation.
@@ -41,9 +41,9 @@ Keep semantic enrichment in the Runtime Metric Map. Semantic-map-build and
 online observations produce public semantic anchors, observed objects, target
 candidates, target actionability, and generated inspection candidates.
 
-Remove `fixture_hints()` from active MCP tools after prompts and tests migrate
+Remove `static_fixture_projection()` from active MCP tools after prompts and tests migrate
 to Base Navigation Map plus Runtime Metric Map target discovery. Historical
-reports may still read old `fixture_hints` artifacts for display.
+reports may still read old `static_fixture_projection` artifacts for display.
 
 Use `evidence_lane` only for what the agent sees, and `camera_labeler` only for
 the producer used by `camera-grounded-labels`. Keep `smoke` as a verification
@@ -64,7 +64,7 @@ reloads. Legacy route IDs are read-only history display only.
   Rejected because it preserves a public abstraction that gives agents a stale
   choice between sparse context and static fixture truth.
 
-- Keep `fixture_hints()` as an empty or deprecated active MCP tool.
+- Keep `static_fixture_projection()` as an empty or deprecated active MCP tool.
   Rejected because the tool name keeps reinforcing the wrong first-call habit.
 
 - Keep `evidence_lane=smoke`.

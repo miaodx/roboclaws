@@ -468,7 +468,7 @@ def target_plausibility_for_candidate(
     if fixture is None:
         return {
             "status": "unknown_fixture",
-            "basis": "target fixture id is not in public fixture hints",
+            "basis": "target fixture id is not in public static fixture projection",
         }
     pseudo_detection = {
         "category": category,
@@ -478,7 +478,7 @@ def target_plausibility_for_candidate(
     public_target = realworld_runtime_map_targets.target_fixture_for_detection(
         contract,
         pseudo_detection,
-        contract.fixture_hints(),
+        contract.static_fixture_projection(),
         minimal_map_mode=MINIMAL_MAP_MODE,
     )
     expected = str((public_target or {}).get("fixture_id") or "")

@@ -225,7 +225,7 @@ def _task_completion_fields(run_result: Mapping[str, Any]) -> dict[str, Any]:
         "ok",
         "success",
         "cleanup_success",
-        "semantic_map_success",
+        "runtime_map_success",
         "terminate_reason",
     ):
         if key in run_result:

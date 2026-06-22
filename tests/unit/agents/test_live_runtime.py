@@ -93,6 +93,11 @@ def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -
         wire_api="chat-completions",
         profile_id="baseline",
     )
+    mimo_inside_chat = _default_sdk_model_settings_payload(
+        provider_profile="mimo-inside-openai-chat",
+        wire_api="chat-completions",
+        profile_id="baseline",
+    )
     disabled_chat = _default_sdk_model_settings_payload(
         provider_profile="mimo-tp-openai-chat",
         wire_api="chat-completions",
@@ -103,6 +108,8 @@ def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -
     assert responses["reasoning"] == {"effort": "medium"}
     assert "truncation" not in responses
     assert kimi_chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
+    assert kimi_chat["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
+    assert mimo_inside_chat["extra_body"]["thinking"] == {"type": "disabled"}
     assert disabled_chat["extra_body"]["thinking"] == {"type": "disabled"}
 
 
@@ -1066,6 +1073,93 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     assert events[0]["wire_api"] == "chat-completions"
     assert events[0]["sdk_model_settings"]["include_usage"] is True
     assert events[0]["agent_sdk_responses_features"]["available"] is False
+
+
+def test_openai_agents_runtime_applies_kimi_coding_user_agent(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIChatCompletionsModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["chat_model"] = self
+            captured["model"] = model
+            captured["client"] = openai_client
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="kimi-openai-chat",
+        metadata={
+            "agent_sdk_perf_profile": {
+                "profile_id": "baseline",
+                "provider_profile": "kimi-openai-chat",
+                "wire_api": "chat-completions",
+                "sdk_model_settings": {
+                    "tool_choice": "auto",
+                    "parallel_tool_calls": False,
+                    "model_thinking_mode": "default",
+                    "include_usage": True,
+                },
+            }
+        },
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    model_settings = captured["agent_kwargs"]["model_settings"]
+    assert captured["model"] == "kimi-k2.7-code"
+    assert captured["base_url"] == "https://api.kimi.com/coding/v1"
+    assert captured["api_key"] == "fake-kimi-key"
+    assert model_settings.include_usage is True
+    assert model_settings.extra_body == {"thinking": {"type": "enabled", "keep": "all"}}
+    assert model_settings.extra_headers == {"User-Agent": "claude-code/1.0.0"}
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["provider_profile"] == "kimi-openai-chat"
+    assert events[0]["sdk_model_settings"]["extra_headers"] == {
+        "User-Agent": "claude-code/1.0.0"
+    }
 
 
 def test_openai_agents_runtime_configures_model_input_compaction_filter(
@@ -3645,7 +3739,10 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert mimo["sdk_model_settings"]["truncation"] == "auto"
 
     chat = _resolve_agent_sdk_perf_profile(
-        _openai_agents_perf_profile_base_args(provider_profile="mimo-chat", model="mimo-v2.5")
+        _openai_agents_perf_profile_base_args(
+            provider_profile="mimo-tp-openai-chat",
+            model="mimo-v2.5",
+        )
     )
     assert chat["provider_profile"] == "mimo-tp-openai-chat"
     assert chat["wire_api"] == "chat-completions"
@@ -3655,6 +3752,18 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
         "parallel_tool_calls": False,
         "model_thinking_mode": "default",
         "include_usage": True,
+    }
+
+    kimi = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(
+            provider_profile="kimi-openai-chat",
+            model="kimi-k2.7-code",
+        )
+    )
+    assert kimi["provider_profile"] == "kimi-openai-chat"
+    assert kimi["wire_api"] == "chat-completions"
+    assert kimi["sdk_model_settings"]["extra_headers"] == {
+        "User-Agent": "claude-code/1.0.0"
     }
 
 

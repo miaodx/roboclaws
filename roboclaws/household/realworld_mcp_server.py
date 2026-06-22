@@ -37,7 +37,6 @@ from roboclaws.household.realworld_mcp_run_artifacts import (
 from roboclaws.household.report import (
     write_state_snapshot,
 )
-from roboclaws.household.report_semantic_map_artifacts import write_semantic_map_artifacts
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     camera_offsets_from_raw_fpv_observation,
@@ -100,7 +99,7 @@ def make_molmo_realworld_cleanup_mcp(
     task_surface: str = "household-world",
     task_intent: str = "cleanup",
     task_prompt: str = DEFAULT_REALWORLD_TASK,
-    fixture_hint_mode: str = "room_only",
+    static_fixture_projection_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     evidence_lane: str | None = None,
@@ -130,7 +129,7 @@ def make_molmo_realworld_cleanup_mcp(
         task_surface=task_surface,
         task_intent=task_intent,
         task_prompt=task_prompt,
-        fixture_hint_mode=fixture_hint_mode,
+        static_fixture_projection_mode=static_fixture_projection_mode,
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
         evidence_lane=evidence_lane,
@@ -167,7 +166,7 @@ class RealWorldMolmoCleanupMCPServer:
         task_surface: str = "household-world",
         task_intent: str = "cleanup",
         task_prompt: str = DEFAULT_REALWORLD_TASK,
-        fixture_hint_mode: str = "room_only",
+        static_fixture_projection_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
         evidence_lane: str | None = None,
@@ -203,7 +202,7 @@ class RealWorldMolmoCleanupMCPServer:
             scenario=scenario,
             base_contract=base_contract,
             task_prompt=task_prompt,
-            fixture_hint_mode=fixture_hint_mode,
+            static_fixture_projection_mode=static_fixture_projection_mode,
             perception_mode=perception_mode,
             map_bundle_dir=self.map_bundle_dir,
             runtime_map_prior=runtime_map_prior,
@@ -226,7 +225,7 @@ class RealWorldMolmoCleanupMCPServer:
             surface=self.task_surface,
             fallback_intent=self.task_intent,
         )
-        self.fixture_hint_mode = fixture_hint_mode
+        self.static_fixture_projection_mode = static_fixture_projection_mode
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
         self.evidence_lane = evidence_lane
@@ -406,26 +405,6 @@ class RealWorldMolmoCleanupMCPServer:
             )
             _write_json(self.run_dir / "agent_view.json", agent_view)
             _write_json(self.run_dir / "runtime_metric_map.json", runtime_metric_map)
-            run_result = {
-                "backend": self.backend_name,
-                "task_surface": self.task_surface,
-                "task_intent": self.task_intent,
-                "task_name": self.task_name,
-                "map_mode": runtime_metric_map.get("map_mode", self.contract.map_mode),
-                "minimal_map_mode": runtime_metric_map.get("minimal_map_mode", False),
-                "agent_view": agent_view,
-                "runtime_metric_map": runtime_metric_map,
-                "artifacts": {
-                    "agent_view": str(self.run_dir / "agent_view.json"),
-                    "runtime_metric_map": str(self.run_dir / "runtime_metric_map.json"),
-                },
-            }
-            write_semantic_map_artifacts(
-                self.run_dir,
-                run_result,
-                self.robot_view_steps,
-                report_asset_src=_live_report_asset_src,
-            )
         except Exception as exc:
             self.write_runtime_event(
                 "live_public_artifact_write_failed",
@@ -507,7 +486,7 @@ class RealWorldMolmoCleanupMCPServer:
                 policy=self.policy,
                 agent_driven=self.agent_driven,
                 policy_uses_private_truth=self.policy_uses_private_truth,
-                fixture_hint_mode=self.fixture_hint_mode,
+                static_fixture_projection_mode=self.static_fixture_projection_mode,
                 perception_mode=self.perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
                 runtime_map_prior_source=self.runtime_map_prior_source,
@@ -875,7 +854,7 @@ def _build_realworld_mcp_contract(
     scenario: CleanupScenario | None,
     base_contract: CleanupBackendSession | None,
     task_prompt: str,
-    fixture_hint_mode: str,
+    static_fixture_projection_mode: str,
     perception_mode: str,
     map_bundle_dir: Path | None,
     runtime_map_prior: dict[str, Any] | None,
@@ -897,7 +876,7 @@ def _build_realworld_mcp_contract(
     return RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
-        fixture_hint_mode=fixture_hint_mode,
+        static_fixture_projection_mode=static_fixture_projection_mode,
         perception_mode=perception_mode,
         map_bundle_dir=map_bundle_dir,
         runtime_map_prior=runtime_map_prior,

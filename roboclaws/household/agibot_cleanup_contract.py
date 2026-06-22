@@ -63,7 +63,7 @@ class AgibotCleanupMCPContract:
         real_movement_enabled: bool = False,
         agibot_map_artifact_dir: Path | None = None,
         scenario: CleanupScenario | None = None,
-        task_prompt: str = "Build a semantic map from Agibot G2 public evidence.",
+        task_prompt: str = "Build a Runtime Metric Map from Agibot G2 public evidence.",
     ) -> None:
         self.scenario = scenario or build_cleanup_scenario(seed=7)
         self.contract = AgibotCleanupBackendSession(self.scenario)
@@ -108,7 +108,7 @@ class AgibotCleanupMCPContract:
 
     def public_receptacles_by_id(self) -> dict[str, dict[str, Any]]:
         fixtures = {}
-        for room in self.fixture_hints().get("rooms") or []:
+        for room in self.static_fixture_projection().get("rooms") or []:
             for fixture in room.get("fixtures") or []:
                 fixture_id = str(fixture.get("fixture_id") or "")
                 if fixture_id:
@@ -134,17 +134,17 @@ class AgibotCleanupMCPContract:
         ]
         metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
             metric_map=metric_map,
-            fixture_hints=self.fixture_hints(),
+            static_fixture_projection=self.static_fixture_projection(),
         )
         return metric_map
 
-    def fixture_hints(self) -> dict[str, Any]:
-        payload = dict(self.adapter.fixture_hints())
+    def static_fixture_projection(self) -> dict[str, Any]:
+        payload = dict(self.adapter.static_fixture_projection())
         payload.setdefault("contract", REALWORLD_CONTRACT)
-        payload.setdefault("tool", "fixture_hints")
+        payload.setdefault("tool", "static_fixture_projection")
         payload.setdefault("status", "ok")
         payload.setdefault("ok", True)
-        payload.setdefault("schema", "static_fixture_semantic_map_v1")
+        payload.setdefault("schema", "static_fixture_projection_v1")
         return payload
 
     def navigate_to_room(self, room_id: str) -> dict[str, Any]:
@@ -295,10 +295,10 @@ class AgibotCleanupMCPContract:
 
     def agent_view_payload(self) -> dict[str, Any]:
         metric_map = self.metric_map()
-        fixture_hints = self.fixture_hints()
+        static_fixture_projection = self.static_fixture_projection()
         runtime_metric_map = self.runtime_metric_map_payload(
             metric_map=metric_map,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
         return {
             "contract": REALWORLD_CONTRACT,
@@ -306,7 +306,7 @@ class AgibotCleanupMCPContract:
             "structured_detections_available": False,
             "metric_map": metric_map,
             "runtime_metric_map": runtime_metric_map,
-            "fixture_hints": fixture_hints,
+            "static_fixture_projection": static_fixture_projection,
             "observed_objects": [],
             "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
             "camera_model_policy_evidence": self.camera_model_policy_payload(),
@@ -331,12 +331,16 @@ class AgibotCleanupMCPContract:
         self,
         *,
         metric_map: dict[str, Any] | None = None,
-        fixture_hints: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
         cleanup_worklist: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         del cleanup_worklist
         public_metric_map = metric_map if metric_map is not None else self.metric_map()
-        public_fixture_hints = fixture_hints if fixture_hints is not None else self.fixture_hints()
+        public_static_fixture_projection = (
+            static_fixture_projection
+            if static_fixture_projection is not None
+            else self.static_fixture_projection()
+        )
         return {
             "schema": "runtime_metric_map_v1",
             "contract": REALWORLD_CONTRACT,
@@ -349,7 +353,7 @@ class AgibotCleanupMCPContract:
                 "rooms": [dict(item) for item in public_metric_map.get("rooms") or []],
                 "fixtures": [
                     dict(fixture)
-                    for room in public_fixture_hints.get("rooms") or []
+                    for room in public_static_fixture_projection.get("rooms") or []
                     for fixture in room.get("fixtures") or []
                 ],
                 "inspection_waypoints": [
@@ -381,8 +385,10 @@ class AgibotCleanupMCPContract:
             },
         }
 
-    def cleanup_worklist_payload(self, *, fixture_hints: dict[str, Any] | None = None) -> dict:
-        del fixture_hints
+    def cleanup_worklist_payload(
+        self, *, static_fixture_projection: dict[str, Any] | None = None
+    ) -> dict:
+        del static_fixture_projection
         return {
             "schema": CLEANUP_WORKLIST_SCHEMA,
             "waypoint_source": "agibot_sdk_agent_view_export",

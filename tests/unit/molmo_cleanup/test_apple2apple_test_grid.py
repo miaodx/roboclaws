@@ -204,7 +204,7 @@ def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
     tmp_path: Path,
 ) -> None:
     run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_prior_nonzero")
-    output_dir = tmp_path / "grid" / "_offline-semantic-map-prior"
+    output_dir = tmp_path / "grid" / "_offline-runtime-map-prior"
     run_dir = output_dir / "0528_1200" / "seed-7"
     run_dir.mkdir(parents=True)
     prior_path = run_dir / "runtime_metric_map.json"

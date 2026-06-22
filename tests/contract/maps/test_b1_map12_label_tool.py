@@ -97,7 +97,7 @@ def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> Non
     )
     assert packet["review_manifest"] == ""
     assert packet["shapes"] == []
-    assert packet["semantic_map_layers"] == {
+    assert packet["source_map_layers"] == {
         "coordinate_policy": "map_native_layers_use_source_map_frame_coordinates_only",
         "driveable_ways": [],
         "fixtures": [],
@@ -111,9 +111,9 @@ def test_authored_map12_bundle_stays_removed() -> None:
     assert not REMOVED_AUTHORED_BUNDLE.exists()
 
 
-def test_label_tool_packet_has_empty_map_native_semantic_layers_without_authored_bundle() -> None:
+def test_label_tool_packet_has_empty_source_map_layers_without_authored_bundle() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
-    layers = packet["semantic_map_layers"]
+    layers = packet["source_map_layers"]
 
     assert layers["coordinate_policy"] == "map_native_layers_use_source_map_frame_coordinates_only"
     assert layers["fixtures"] == []
@@ -255,9 +255,9 @@ def test_label_tool_supports_global_tilt_without_display_frame_contract() -> Non
     assert 'id="globalTiltPivot"' in html
     assert "function applyGlobalTilt" in html
     assert "function rotateShapeAround" in html
-    assert "function rotateSemanticLayersAround" in html
-    assert "state.semanticLayers = cloneSemanticLayers" in html
-    assert "rotateSemanticLayersAround(pivot, angleRad)" in html
+    assert "function rotateSourceMapLayersAround" in html
+    assert "state.sourceMapLayers = cloneSourceMapLayers" in html
+    assert "rotateSourceMapLayersAround(pivot, angleRad)" in html
     assert '"rotated_box"' not in html
     assert '"display_frame":' not in html
     assert '"display_frame_transform"' not in html
@@ -268,14 +268,14 @@ def test_label_tool_draws_map_native_layers_from_tilted_display_state() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
     html = render_label_tool_html(packet, image_data_url_value="data:image/png;base64,abc")
 
-    assert "const fixtures = state.semanticLayers.fixtures || []" in html
-    assert "const waypoints = state.semanticLayers.inspection_waypoints || []" in html
-    assert "const ways = state.semanticLayers.driveable_ways || []" in html
+    assert "const fixtures = state.sourceMapLayers.fixtures || []" in html
+    assert "const waypoints = state.sourceMapLayers.inspection_waypoints || []" in html
+    assert "const ways = state.sourceMapLayers.driveable_ways || []" in html
     assert "drawNavigationMemory" in html
     assert "state.navigationMemoryLayer.items || []" in html
-    assert "PACKET.semantic_map_layers?.fixtures || []" not in html
-    assert "PACKET.semantic_map_layers?.inspection_waypoints || []" not in html
-    assert "PACKET.semantic_map_layers?.driveable_ways || []" not in html
+    assert "PACKET.source_map_layers?.fixtures || []" not in html
+    assert "PACKET.source_map_layers?.inspection_waypoints || []" not in html
+    assert "PACKET.source_map_layers?.driveable_ways || []" not in html
 
 
 def test_label_tool_html_exposes_layer_toggles_and_candidate_scene_panel() -> None:

@@ -24,14 +24,14 @@ REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.jso
 GENERATOR_PATH = (
     REPO_ROOT
     / "skills"
-    / "actionable-semantic-map-conversion"
+    / "runtime-map-prior-conversion"
     / "scripts"
     / ("generate_scene_room_overlay.py")
 )
 OVERRIDES_PATH = (
     REPO_ROOT
     / "skills"
-    / "actionable-semantic-map-conversion"
+    / "runtime-map-prior-conversion"
     / "examples"
     / "b1_map12_room_semantic_overrides.json"
 )

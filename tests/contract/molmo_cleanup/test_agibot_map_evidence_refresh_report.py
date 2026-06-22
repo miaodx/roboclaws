@@ -11,7 +11,7 @@ def test_map_evidence_refresh_report_surfaces_sim_boundary_and_runtime_map(
     tmp_path: Path,
 ) -> None:
     prompt = (
-        "基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor "
+        "基于当前已有 Runtime Metric Map，自主选择 3 个最值得复核的 public semantic anchor "
         "或 inspection waypoint。"
     )
     run_dir = tmp_path / "map-evidence-refresh"
@@ -29,7 +29,7 @@ def test_map_evidence_refresh_report_surfaces_sim_boundary_and_runtime_map(
 
     assert "Map Evidence Refresh Summary" in report_text
     assert "The run is not agent-driven" in report_text
-    assert "direct semantic sweep evidence, not autonomous target choice" in report_text
+    assert "direct runtime-map sweep evidence, not autonomous target choice" in report_text
     assert "Public anchors" in report_text
     assert "Observed handles" in report_text
     assert "Raw observations" in report_text

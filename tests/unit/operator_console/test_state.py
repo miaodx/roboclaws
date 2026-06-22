@@ -12,9 +12,15 @@ from roboclaws.operator_console.state import (
     resolve_display_run_dir,
 )
 
-MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-public-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
+MUJOCO_CLAUDE_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::claude-code::world-public-labels"
+)
+MUJOCO_CODEX_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
+)
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
 
 
@@ -126,6 +132,47 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
         for item in state["artifact_paths"]
     )
     assert any(item["label"] == "Console Launch Log" for item in state["artifact_paths"])
+
+
+def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatch) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0617_1606" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    dead_pid = 99999999
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+                "started_at_epoch": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "running-codex",
+                "started_at_epoch": 2.0,
+                "visual_backend_slot": {"pid": dead_pid, "held": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "driver.log").write_text("==> Codex turn 1/1\n", encoding="utf-8")
+    monkeypatch.setattr("roboclaws.operator_console.state.pid_is_active", lambda pid: False)
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "live runner process exited before terminal status"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["message"] == (
+        "Launch failed: live runner process exited before terminal status"
+    )
 
 
 def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
@@ -479,13 +526,16 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
         encoding="utf-8",
     )
     robot_map = robot_views / "0042_observe.map.png"
-    report_map = map_bundle / "report_static_navigation_map.png"
+    stale_report_map = map_bundle / "report_static_navigation_map.png"
+    bundle_preview = map_bundle / "preview.png"
     semantic_map = run_dir / "semantic_map.png"
     robot_map.write_bytes(b"robot map")
-    report_map.write_bytes(b"report map")
+    stale_report_map.write_bytes(b"stale report map")
+    bundle_preview.write_bytes(b"bundle preview")
     semantic_map.write_bytes(b"semantic map")
     os.utime(robot_map, (1, 1))
-    os.utime(report_map, (2, 2))
+    os.utime(stale_report_map, (2, 2))
+    os.utime(bundle_preview, (3, 3))
     os.utime(semantic_map, (3, 3))
     (run_dir / "run_result.json").write_text(
         json.dumps(
@@ -507,20 +557,8 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert state["latest_view_assets"]["topdown"]["path"] == (
-        "/previews/molmospaces-val_0-topdown.png"
-    )
-    assert state["latest_view_assets"]["topdown"]["display_source"] == "scene_preview_topdown"
-    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"] == {
-        "schema": "operator_console_robot_pose_overlay_v1",
-        "x_pct": 50.0,
-        "y_pct": 50.0,
-        "yaw_deg": 90.0,
-        "x": 8.544,
-        "y": 6.408,
-        "source": "current_robot_pose_on_scene_preview",
-    }
+    assert state["latest_view_assets"]["map"]["path"] == str(bundle_preview.resolve())
+    assert "topdown" not in state["latest_view_assets"]
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
@@ -546,14 +584,11 @@ def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_MAP_BUILD))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert state["latest_view_assets"]["topdown"]["path"] == (
-        "/previews/molmospaces-val_0-topdown.png"
-    )
-    assert "robot_pose_overlay" not in state["latest_view_assets"]["topdown"]
+    assert "map" not in state["latest_view_assets"]
+    assert "topdown" not in state["latest_view_assets"]
 
 
-def test_state_keeps_latest_robot_pose_overlay_after_non_pose_trace(
+def test_state_does_not_synthesize_topdown_from_pose_trace(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -589,7 +624,7 @@ def test_state_keeps_latest_robot_pose_overlay_after_non_pose_trace(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
-    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"]["yaw_deg"] == 90.0
+    assert "topdown" not in state["latest_view_assets"]
 
 
 def test_state_uses_latest_grounding_overlay_as_fpv_when_available(

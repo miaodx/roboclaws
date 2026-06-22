@@ -166,9 +166,6 @@ ROUTE_FIELD_APP_REQUIRED = (
     "data-open-background-tasks",
     "copy_command",
     "api_post",
-    "robotPoseOverlayMarkup",
-    "robot_pose_overlay",
-    "clampNumber",
 )
 
 ROUTE_FIELD_APP_FORBIDDEN = (
@@ -219,18 +216,6 @@ def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
     assert 'gate.id === "context_json" && Boolean(els.contextInput.value.trim())' not in app
-
-
-def test_static_app_renders_robot_pose_overlay() -> None:
-    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
-    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
-
-    assert "robotPoseOverlayMarkup" in app
-    assert "robot_pose_overlay" in app
-    assert "robot-pose-overlay" in app
-    assert ".robot-pose-overlay" in css
-    assert "--robot-x" in css
-    assert "--robot-yaw" in css
 
 
 def test_static_app_renders_scene_preview_assets() -> None:
@@ -289,8 +274,6 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
     b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
     assert b1_preview_files == [
-        "b1-map12-chase.png",
-        "b1-map12-fpv.png",
         "b1-map12-map.png",
         "b1-map12-topdown.png",
     ]
@@ -306,34 +289,28 @@ def test_static_app_renders_scene_preview_assets() -> None:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         assert metadata["world_id"] == world_id
         assert metadata["views"]["fpv"]["view"] == "raw_fpv"
-        assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
+        assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
+        assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
         assert metadata["views"]["chase"]["view"] == "chase_camera"
         assert metadata["views"]["chase"]["image_diagnostics"]["visual_status"] == "reviewable"
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
-        assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
-        assert (
-            metadata["views"]["map"]["scene_alignment"]
-            == metadata["views"]["topdown"]["scene_alignment"]
-        )
+        assert "semantic_projection" not in metadata["views"]["map"]
+        assert "scene_alignment" not in metadata["views"]["map"]
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
-    for view_name in ("fpv", "map", "chase", "topdown"):
+    for view_name in ("map", "topdown"):
         path = preview_dir / f"b1-map12-{view_name}.png"
         assert path.is_file()
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
-    assert b1_metadata["views"]["chase"]["provenance"] == (
-        "prepared_b1_nurec_scene_camera_preview"
-    )
+    assert b1_metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in b1_metadata["views"]
+    assert "chase" not in b1_metadata["views"]
     assert b1_metadata["views"]["topdown"]["view"] == "review_label_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
-    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["map"]["path"]
-    assert b1_metadata["views"]["chase"]["path"] != b1_metadata["views"]["fpv"]["path"]
-    assert b1_metadata["camera_preview_artifact"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 
@@ -384,7 +361,8 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="blank-chase"' in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
-    assert ">Semantic Map<" in html
+    assert ">Base Navigation Map<" in html
+    assert ">Semantic Map<" not in html
     assert ">Top-down<" in html
     assert "topdown-frame" in html
     assert "Top-down Scene View" in app
@@ -395,7 +373,7 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'resource_kind !== "physical_robot"' in app
     assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
-    assert "No chase frame yet" in app
+    assert "Missing run chase artifact" in app
     assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
@@ -438,39 +416,26 @@ def test_static_app_renders_stop_result_before_detaching_run() -> None:
     assert app.count("const checkerStatus = payload.checker_status || {};") >= 2
 
 
-def test_static_app_has_resizable_run_evidence_panel() -> None:
+def test_static_app_uses_fixed_run_evidence_panel() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
     css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
 
-    assert 'id="state-rail-resizer"' in html
-    assert 'id="evidence-strip-resizer"' in html
-    assert 'role="separator"' in html
-    assert 'class="splitter state-rail-splitter"' in html
-    assert 'class="splitter event-strip-splitter"' in html
-    assert 'title="Drag to resize raw evidence log panel"\n          hidden' in html
     assert 'href="/styles.css?v=' in html
     assert 'src="/app.js?v=' in html
-    assert 'aria-label="Resize run evidence panel"' in html
-    assert 'aria-label="Resize raw evidence log panel"' in html
-    assert "STATE_RAIL_WIDTH_KEY" in app
-    assert "EVIDENCE_STRIP_HEIGHT_KEY" in app
-    assert "startStateRailResize" in app
-    assert "startEvidenceStripResize" in app
-    assert "setPointerCapture" in app
-    assert "ArrowLeft" in app
-    assert "ArrowUp" in app
-    assert "els.evidenceStripResizer.hidden = !hidden" in app
     assert "refreshRawEvidence()" in app
     assert "forceStickToBottom: true" in app
     assert "shouldStickToBottom" in app
     assert "raw-evidence-open" in app
-    assert "--state-rail-width" in css
-    assert "--evidence-strip-height" in css
-    assert ".state-rail-splitter" in css
-    assert ".event-strip-splitter" in css
-    assert "cursor: col-resize" in css
-    assert "cursor: row-resize" in css
+    assert 'id="state-rail-resizer"' not in html
+    assert 'id="evidence-strip-resizer"' not in html
+    assert "STATE_RAIL_WIDTH_KEY" not in app
+    assert "EVIDENCE_STRIP_HEIGHT_KEY" not in app
+    assert "setPointerCapture" not in app
+    assert "--state-rail-width" not in css
+    assert "--evidence-strip-height" not in css
+    assert ".state-rail-splitter" not in css
+    assert ".event-strip-splitter" not in css
     assert ".raw-evidence" in css
     assert "overflow: auto" in css
     assert "white-space: pre" in css

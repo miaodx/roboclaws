@@ -31,6 +31,11 @@ Reviewed with grill-batch on 2026-06-16. The correspondence schema direction,
 verification thresholds, and first annotation workflow are accepted for
 preflight. Implementation is still gated on a concrete execution contract.
 
+2026-06-17 update: there is not yet an operator-authored room semantic
+manifest. Treat `assets/maps/b1-map12-alignment-review.json` as a seed/review
+placeholder until manual labeling is redone after naming conflicts are resolved.
+Do not use it as proof that room semantics are accepted.
+
 ## Goal
 
 Promote the B1 / Map 12 digital twin from a weak candidate overlay to a
@@ -73,6 +78,25 @@ Current readiness artifacts already record why the state is not verified:
 - no human-authored B1/USD anchor correspondences are available.
 - existing `scene_map_correspondence_v1` entries bind scene partitions to
   navigation areas at `candidate` level only.
+- no final room semantic labels have been reviewed; current label files are
+  placeholders or seeds, not accepted operator semantics.
+
+## Scene Asset Roles
+
+There are two B1 Gaussian/scene asset families, and they should not be merged
+under one generic "Gaussian map" assumption:
+
+- `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/` is the newer
+  split scene. It has room/partition/object labeling and is the first source for
+  Map12 registration and future actionable/manipulation-oriented tasks.
+- `data/robot-data-lab/scene-engine/data/B1_floor2_slow/` is the older full
+  Gaussian capture. It has better photorealistic visual quality, but does not
+  carry the same object-level split labels. Keep it for later open-ended visual
+  tasks after registration is understood through the newer split scene.
+
+First align Map12 against `2rd_floor_seperated`. After that, evaluate whether
+the same transform or a reviewed secondary transform can place
+`B1_floor2_slow` into the same Map12 frame for visual-only/open-task use.
 
 ## Architecture Layers
 
@@ -156,6 +180,10 @@ at `assets/maps/b1-map12-scene-correspondences.json`.
 Only human/operator-reviewed picks may use `review_status=accepted`.
 Model-generated or script-generated anchor candidates must remain
 `review_status=proposed` until reviewed.
+
+The checked-in correspondence manifest may remain empty as a fail-loud
+placeholder. Empty anchors mean no transform is verified and the fitter/review
+workflow must block rather than use old or seed-derived coordinates.
 
 ### Fitting And Residual Report
 

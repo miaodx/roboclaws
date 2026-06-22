@@ -10,9 +10,9 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from roboclaws.household.agibot_map_build_mcp_tools import (
-    AGIBOT_SEMANTIC_MAP_BUILD_TOOLS,
-    dispatch_agibot_semantic_map_build_tool,
-    register_agibot_semantic_map_build_tools,
+    AGIBOT_MAP_BUILD_TOOLS,
+    dispatch_agibot_map_build_tool,
+    register_agibot_map_build_tools,
 )
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS, AgibotSDKRunnerAdapter
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
@@ -53,20 +53,22 @@ from roboclaws.household.visual_grounding import (
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 18788
 STARTUP_TIMEOUT_S = 2.0
-MCP_SERVER_NAME = "agibot_semantic_map_build"
-AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
-AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
-DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
-AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(evidence_lane_names())
+MCP_SERVER_NAME = "agibot_map_build"
+AGIBOT_MAP_BUILD_SCHEMA = "agibot_map_build_mcp_v1"
+AGIBOT_MAP_BUILD_POLICY = "codex_agibot_map_build_pilot"
+DEFAULT_TASK_PROMPT = (
+    "Build a Runtime Metric Map from Agibot G2 public navigation and camera evidence."
+)
+AGIBOT_MAP_BUILD_LANES = frozenset(evidence_lane_names())
 
 
-def make_agibot_semantic_map_build_mcp(
+def make_agibot_map_build_mcp(
     *,
     run_dir: Path,
     context_json: Path,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
-    policy: str = AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
+    policy: str = AGIBOT_MAP_BUILD_POLICY,
     task_prompt: str = DEFAULT_TASK_PROMPT,
     runner_script: Path | None = None,
     runner_python: str | Path | None = None,
@@ -77,8 +79,8 @@ def make_agibot_semantic_map_build_mcp(
     visual_grounding_timeout_s: float | None = None,
     visual_grounding_client: VisualGroundingClient | None = None,
     scenario: CleanupScenario | None = None,
-) -> "AgibotSemanticMapBuildMCPServer":
-    return AgibotSemanticMapBuildMCPServer(
+) -> "AgibotMapBuildMCPServer":
+    return AgibotMapBuildMCPServer(
         run_dir=run_dir,
         context_json=context_json,
         host=host,
@@ -97,7 +99,7 @@ def make_agibot_semantic_map_build_mcp(
     )
 
 
-class AgibotSemanticMapBuildMCPServer:
+class AgibotMapBuildMCPServer:
     """FastMCP bridge for Agibot-backed intent=map-build pilot runs."""
 
     def __init__(
@@ -107,7 +109,7 @@ class AgibotSemanticMapBuildMCPServer:
         context_json: Path,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
-        policy: str = AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
+        policy: str = AGIBOT_MAP_BUILD_POLICY,
         task_prompt: str = DEFAULT_TASK_PROMPT,
         runner_script: Path | None = None,
         runner_python: str | Path | None = None,
@@ -168,11 +170,11 @@ class AgibotSemanticMapBuildMCPServer:
             self.scenario,
             _initial_locations(self.scenario),
             self.run_dir / "before.png",
-            title="Before Agibot semantic map build",
+            title="Before Agibot map build",
         )
-        register_agibot_semantic_map_build_tools(self)
+        register_agibot_map_build_tools(self)
         self.write_runtime_event(
-            "agibot_semantic_map_build_mcp_initialized",
+            "agibot_map_build_mcp_initialized",
             contract=REALWORLD_CONTRACT,
             policy=self.policy,
             backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
@@ -185,17 +187,17 @@ class AgibotSemanticMapBuildMCPServer:
 
     @property
     def registered_tool_names(self) -> tuple[str, ...]:
-        return AGIBOT_SEMANTIC_MAP_BUILD_TOOLS
+        return AGIBOT_MAP_BUILD_TOOLS
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
-        if name not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS:
+        if name not in AGIBOT_MAP_BUILD_TOOLS:
             raise ValueError(f"unknown Agibot intent=map-build MCP tool {name!r}")
         if self.done_event.is_set() and name != "done":
             return {"ok": False, "tool": name, "status": "error", "error_reason": "run_done"}
         request = _json_safe(kwargs)
         self._write_trace(tool=name, event="request", arguments=request)
         try:
-            response = dispatch_agibot_semantic_map_build_tool(self, name, request)
+            response = dispatch_agibot_map_build_tool(self, name, request)
         except Exception as exc:  # noqa: BLE001
             response = {
                 "ok": False,
@@ -217,16 +219,16 @@ class AgibotSemanticMapBuildMCPServer:
             self.scenario,
             _initial_locations(self.scenario),
             self.run_dir / "after.png",
-            title="After Agibot semantic map build",
+            title="After Agibot map build",
         )
         trace_events = self._read_trace_events()
         metric_map = self.adapter.metric_map()
-        fixture_hints = self.adapter.fixture_hints()
+        static_fixture_projection = self.adapter.static_fixture_projection()
         policy_events = _policy_events_from_trace(trace_events, metric_map)
         readiness = _readiness_from_trace(
             trace_events=trace_events,
             metric_map=metric_map,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             real_movement_enabled=self.real_movement_enabled,
         )
         raw_observations = _raw_fpv_observations_from_trace(
@@ -238,12 +240,12 @@ class AgibotSemanticMapBuildMCPServer:
             perception_mode=self.perception_mode,
             visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
             raw_observations=raw_observations,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             run_dir=self.run_dir,
             visual_grounding_client=self.visual_grounding_client,
         )
         run_result = {
-            "schema": AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
+            "schema": AGIBOT_MAP_BUILD_SCHEMA,
             "contract": REALWORLD_CONTRACT,
             "backend": AGIBOT_SDK_RUNNER_BACKEND,
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
@@ -281,7 +283,7 @@ class AgibotSemanticMapBuildMCPServer:
             },
             "agent_view": {
                 "metric_map": metric_map,
-                "fixture_hints": fixture_hints,
+                "static_fixture_projection": static_fixture_projection,
                 "observed_objects": [],
                 "raw_fpv_observations": raw_observations,
                 "perception_mode": self.perception_mode,
@@ -290,25 +292,25 @@ class AgibotSemanticMapBuildMCPServer:
                 "policy_view": {"policy_observation_camera": "head_color"},
                 "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
                 "forbidden_private_fields_absent": True,
-                "public_tool_names": list(AGIBOT_SEMANTIC_MAP_BUILD_TOOLS),
+                "public_tool_names": list(AGIBOT_MAP_BUILD_TOOLS),
             },
             "raw_fpv_observations": raw_observations,
             "camera_model_policy_evidence": camera_model_policy_evidence,
             "runtime_metric_map": {
                 "schema": "runtime_metric_map_v1",
-                "source": "agibot_semantic_map_build_mcp",
+                "source": "agibot_map_build_mcp",
                 "metric_map": metric_map,
-                "fixture_hints": fixture_hints,
+                "static_fixture_projection": static_fixture_projection,
                 "observed_objects": [],
                 "visited_waypoint_ids": readiness["visited_waypoint_ids"],
                 "observed_waypoint_ids": readiness["observed_waypoint_ids"],
             },
             "cleanup_policy_trace": {
                 "schema": "cleanup_policy_trace_v1",
-                "agent_review_kind": "agibot_codex_semantic_map_build_review",
+                "agent_review_kind": "agibot_codex_map_build_review",
                 "agent_reasoning_visible": True,
                 "waypoint_source": "agibot_sdk_agent_view_export",
-                "loop_style": "codex_agibot_semantic_map_build",
+                "loop_style": "codex_agibot_map_build",
                 "total_waypoints": len(metric_map.get("inspection_waypoints") or []),
                 "visited_waypoint_count": len(readiness["visited_waypoint_ids"]),
                 "observed_waypoint_count": len(readiness["observed_waypoint_ids"]),
@@ -333,7 +335,7 @@ class AgibotSemanticMapBuildMCPServer:
                 "real_movement_enabled": self.real_movement_enabled,
                 "subphase_reports": _subphase_reports(self.adapter.subphase_results, self.run_dir),
                 "gdk_imported_by_roboclaws": False,
-                "public_tool_boundary": list(AGIBOT_SEMANTIC_MAP_BUILD_TOOLS),
+                "public_tool_boundary": list(AGIBOT_MAP_BUILD_TOOLS),
             },
             "manipulation_evidence": {
                 "schema": "physical_manipulation_block_v1",
@@ -397,7 +399,7 @@ class AgibotSemanticMapBuildMCPServer:
         thread = threading.Thread(
             target=self._mcp.run,
             kwargs={"transport": "streamable-http"},
-            name=f"agibot-semantic-map-build-mcp-{self.port}",
+            name=f"agibot-map-build-mcp-{self.port}",
             daemon=True,
         )
         thread.start()
@@ -580,7 +582,7 @@ def _policy_reason(tool: str, response: dict[str, Any]) -> str:
     if tool == "metric_map":
         return "Metric map is the backend-agnostic public navigation context."
     if tool == "observe":
-        return "Agibot G2 semantic map building uses robot-local head_color evidence."
+        return "Agibot G2 map building uses robot-local head_color evidence."
     if tool.startswith("navigate"):
         return "Navigation must resolve through verified public Agibot waypoints."
     if tool in BLOCKED_MANIPULATION_TOOLS:
@@ -594,7 +596,7 @@ def _readiness_from_trace(
     *,
     trace_events: list[dict[str, Any]],
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     real_movement_enabled: bool,
 ) -> dict[str, Any]:
     responses = [
@@ -620,9 +622,9 @@ def _readiness_from_trace(
     rate = (len(observed_waypoint_ids) / total) if total else 0.0
     return {
         "schema": "real_robot_readiness_v1",
-        "status": "physical_agibot_semantic_map_build_complete"
+        "status": "physical_agibot_map_build_complete"
         if real_movement_enabled and rate >= 1.0
-        else "physical_agibot_semantic_map_build_rehearsal",
+        else "physical_agibot_map_build_rehearsal",
         "real_robot_ready": False,
         "navigation_perception_ready": bool(real_movement_enabled and rate >= 1.0),
         "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
@@ -630,12 +632,12 @@ def _readiness_from_trace(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": bool(metric_map.get("inspection_waypoints") is not None),
         "pose_stamped_waypoints": True,
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
         ),
         "physical_navigation_pilot": True,
         "physical_cleanup_ready": False,
-        "semantic_map_build": True,
+        "map_build": True,
         "inspection_waypoint_attempt_count": len(waypoint_responses),
         "inspection_waypoint_total": total,
         "reached_waypoint_count": sum(1 for item in waypoint_responses if item.get("ok")),
@@ -659,7 +661,7 @@ def _readiness_from_trace(
 
 def _normalized_evidence_lane(value: str) -> str:
     lane = str(value or CAMERA_GROUNDED_LABELS_LANE).strip() or CAMERA_GROUNDED_LABELS_LANE
-    if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
+    if lane not in AGIBOT_MAP_BUILD_LANES:
         raise ValueError(
             f"unsupported Agibot intent=map-build evidence lane {lane!r}; "
             "expected smoke|world-public-labels|camera-grounded-labels|camera-raw-fpv"
@@ -756,7 +758,7 @@ def _camera_model_policy_evidence(
     perception_mode: str,
     visual_grounding_pipeline_id: str,
     raw_observations: list[dict[str, Any]],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     run_dir: Path,
     visual_grounding_client: VisualGroundingClient | None,
 ) -> dict[str, Any]:
@@ -778,7 +780,7 @@ def _camera_model_policy_evidence(
             raw,
             trace_events=trace_events,
             visual_grounding_pipeline_id=visual_grounding_pipeline_id,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             run_dir=run_dir,
             visual_grounding_client=visual_grounding_client,
         )
@@ -818,7 +820,7 @@ def _camera_model_policy_event(
     *,
     trace_events: list[dict[str, Any]],
     visual_grounding_pipeline_id: str,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     run_dir: Path,
     visual_grounding_client: VisualGroundingClient | None,
 ) -> dict[str, Any]:
@@ -848,10 +850,12 @@ def _camera_model_policy_event(
         )
 
     request = visual_grounding_request(
-        run_id="agibot_semantic_map_build",
+        run_id="agibot_map_build",
         raw_observation=_visual_grounding_raw_observation(raw_observation),
         category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
-        fixture_hints=_fixture_hints_for_visual_grounding_request(fixture_hints),
+        static_fixture_projection=_static_fixture_projection_for_visual_grounding_request(
+            static_fixture_projection
+        ),
         pipeline_id=visual_grounding_pipeline_id,
         image=image_payload_for_raw_observation(raw_observation, base_dir=run_dir),
     )
@@ -939,11 +943,11 @@ def _visual_grounding_raw_observation(raw_observation: dict[str, Any]) -> dict[s
     return result
 
 
-def _fixture_hints_for_visual_grounding_request(
-    fixture_hints: dict[str, Any],
+def _static_fixture_projection_for_visual_grounding_request(
+    static_fixture_projection: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
             continue
         room_id = str(room.get("room_id") or "")
@@ -1009,8 +1013,8 @@ def _dominant_provenance(trace_events: list[dict[str, Any]]) -> str:
 
 def _empty_score(sweep_rate: float) -> dict[str, Any]:
     return {
-        "completion_status": "semantic_map_build_rehearsal",
-        "cleanup_status": "semantic_map_build_rehearsal",
+        "completion_status": "map_build_rehearsal",
+        "cleanup_status": "map_build_rehearsal",
         "restored_count": 0,
         "total_targets": 0,
         "object_results": [],

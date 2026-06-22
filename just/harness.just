@@ -93,7 +93,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
         --seed "${seed}" \
         --backend molmospaces_subprocess \
         --task "{{task}}" \
-        --fixture-hint-mode room_only \
+        --static-fixture-projection-mode room_only \
         --generated-mess-count "{{generated_mess_count}}" \
         --include-robot \
         --robot-name rby1m \
@@ -112,7 +112,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
 
 # ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
 # contract through MCP tools: metric_map, waypoint observe, and observed object
-# handles. Fixture hints may exist as preflight artifacts, but are not exposed as
+# handles. Static fixture projection may exist as preflight artifacts, but are not exposed as
 # callable MCP tools. It intentionally does not expose scene_objects.
 molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
@@ -245,7 +245,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
-      --fixture-hint-mode room_only \
+      --static-fixture-projection-mode room_only \
       --perception-mode raw_fpv_only \
       --generated-mess-count "{{generated_mess_count}}" \
       --include-robot \
@@ -277,7 +277,7 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
-      --fixture-hint-mode room_only \
+      --static-fixture-projection-mode room_only \
       --generated-mess-count "{{generated_mess_count}}" \
       --output-dir "${cleanup_dir}"
     .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
@@ -315,7 +315,7 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
-      --fixture-hint-mode room_only \
+      --static-fixture-projection-mode room_only \
       --include-robot \
       --record-robot-views \
       --generated-mess-count "{{generated_mess_count}}" \

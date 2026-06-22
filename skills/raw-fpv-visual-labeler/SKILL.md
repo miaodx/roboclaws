@@ -18,7 +18,7 @@ source observation neighborhood when available. Each frame may include only:
 - public frame id;
 - image artifact;
 - public waypoint or room context already visible to the cleanup agent;
-- optional public semantic-map planning hints marked non-executable.
+- optional public runtime-map planning hints marked non-executable.
 
 Never include private labels, generated hidden target ids, acceptable
 destination truth, executable observed-object handles, detector candidates, or

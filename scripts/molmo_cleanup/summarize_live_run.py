@@ -290,9 +290,9 @@ def _timing_summary(
     runtime_timing = run_result.get("runtime_timing")
     if not isinstance(runtime_timing, dict):
         runtime_timing = runtime_timing_from_trace(trace_events)
-    profile_metadata = run_result.get("evidence_lane_metadata") or run_result.get(
-        "cleanup_profile_metadata"
-    ) or {}
+    profile_metadata = (
+        run_result.get("evidence_lane_metadata") or run_result.get("cleanup_profile_metadata") or {}
+    )
     if not profile_metadata and live_timing.get("profile"):
         profile_metadata = {"profile": live_timing.get("profile")}
     skipped_work = []

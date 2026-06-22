@@ -126,7 +126,7 @@ def _assert_cleanup_result_contract(
     assert run_result["policy"] == "deterministic_sweep_baseline"
     assert run_result["policy_uses_private_truth"] is False
     assert run_result["planner_uses_private_manifest"] is False
-    assert run_result["fixture_hint_mode"] == "room_only"
+    assert run_result["static_fixture_projection_mode"] == "room_only"
     assert run_result["requested_generated_mess_count"] == 10
     assert run_result["generated_mess_count"] == 5
     assert run_result["mess_restoration_rate"] >= 0.70
@@ -247,7 +247,8 @@ def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
     assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
     assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
     assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
-    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert (run_dir / "map_bundle" / "preview.png").is_file()
+    assert not (run_dir / "map_bundle" / "report_static_navigation_map.png").exists()
     assert "agibot-robot-map-9" in report_text
     assert "Nav2 Map Bundle" in report_text
     assert any('"tool": "navigate_to_waypoint"' in line for line in trace_lines)

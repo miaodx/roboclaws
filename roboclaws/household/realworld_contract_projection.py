@@ -124,11 +124,11 @@ def _pose_stamped_waypoints_present(metric_map: dict[str, Any]) -> bool:
     return bool(waypoints) and all(required <= set(item) for item in waypoints)
 
 
-def _fixtures_from_bundle_fixture_hints(
-    fixture_hints: dict[str, Any],
+def _fixtures_from_bundle_static_fixture_projection(
+    static_fixture_projection: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     fixtures: dict[str, dict[str, Any]] = {}
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
             continue
         room_id = str(room.get("room_id") or "")
@@ -388,28 +388,30 @@ def _room_outline_by_id(
     return next((item for item in room_outlines if str(item.get("room_id") or "") == room_id), None)
 
 
-def _fixture_hints_with_scene_index_overlay(
+def _static_fixture_projection_with_scene_index_overlay(
     rooms: list[Any],
     overlay_fixtures: dict[str, dict[str, Any]],
     *,
-    fixture_hint_mode: str,
+    static_fixture_projection_mode: str,
 ) -> list[dict[str, Any]]:
     overlay_room = {
         "room_id": "isaac_scene_index",
         "room_label": "Isaac scene index fixtures",
         "fixture_source": "isaac_scene_index",
         "fixtures": [
-            _scene_index_fixture_hint_row(fixture_id, fixture, fixture_hint_mode)
+            _scene_index_static_fixture_projection_row(
+                fixture_id, fixture, static_fixture_projection_mode
+            )
             for fixture_id, fixture in sorted(overlay_fixtures.items())
         ],
     }
     return [overlay_room] + [dict(room) for room in rooms if isinstance(room, dict)]
 
 
-def _scene_index_fixture_hint_row(
+def _scene_index_static_fixture_projection_row(
     fixture_id: str,
     fixture: dict[str, Any],
-    fixture_hint_mode: str,
+    static_fixture_projection_mode: str,
 ) -> dict[str, Any]:
     pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
     return {
@@ -432,7 +434,7 @@ def _scene_index_fixture_hint_row(
         "preferred_manipulation_waypoint_id": str(
             fixture.get("preferred_manipulation_waypoint_id") or ""
         ),
-        "position_detail": fixture_hint_mode,
+        "position_detail": static_fixture_projection_mode,
         "public_fixture_source": "isaac_scene_index",
     }
 
@@ -445,10 +447,10 @@ def _first_waypoint_id(waypoints: list[dict[str, Any]]) -> str:
 
 def _rooms_from_bundle_projection(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> list[dict[str, Any]]:
     fixture_ids_by_room: dict[str, list[str]] = defaultdict(list)
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
             continue
         room_id = str(room.get("room_id") or "")
@@ -474,9 +476,11 @@ def _rooms_from_bundle_projection(
 
 def _inspection_waypoints_from_bundle_projection(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    fixture_waypoint_ids, room_fixture_ids = _bundle_fixture_projection_indexes(fixture_hints)
+    fixture_waypoint_ids, room_fixture_ids = _bundle_fixture_projection_indexes(
+        static_fixture_projection
+    )
     waypoints = []
     frame_id = str(metric_map.get("frame_id") or "map")
     for raw_waypoint in metric_map.get("inspection_waypoints") or []:
@@ -494,11 +498,11 @@ def _inspection_waypoints_from_bundle_projection(
 
 
 def _bundle_fixture_projection_indexes(
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
 ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
     room_fixture_ids: dict[str, list[str]] = defaultdict(list)
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
             continue
         _add_bundle_room_fixture_indexes(

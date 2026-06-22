@@ -68,7 +68,7 @@ def run_cleanup_routine(
     object_id: str,
     fixture_id: str,
     placement_tool: str = "auto",
-    fixture_hints: dict[str, Any] | None = None,
+    static_fixture_projection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Clean one observed object through the shared canonical routine engine."""
 
@@ -78,7 +78,7 @@ def run_cleanup_routine(
         object_id=object_id,
         fixture_id=fixture_id,
         placement_tool=placement_tool,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         target_request_key="fixture_id",
         include_object_id_in_receptacle_request=False,
         include_object_id_in_target_requests=False,
@@ -91,10 +91,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--fixture-id", default="")
     parser.add_argument("--placement-tool", default="auto")
-    parser.add_argument("--fixture-hints-json", default="")
+    parser.add_argument("--static-fixture-projection-json", default="")
     args = parser.parse_args(argv)
 
-    fixture_hints = json.loads(args.fixture_hints_json) if args.fixture_hints_json else None
+    static_fixture_projection = (
+        json.loads(args.static_fixture_projection_json)
+        if args.static_fixture_projection_json
+        else None
+    )
     payload = {
         "routine": ROUTINE_NAME,
         "public_atomic_tools": list(PUBLIC_ATOMIC_TOOLS),
@@ -102,20 +106,20 @@ def main(argv: list[str] | None = None) -> int:
         "placement_tool": normalize_placement_tool(
             args.placement_tool,
             fixture_id=args.fixture_id,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
         if args.fixture_id
         else args.placement_tool,
         "fixture_requires_open": fixture_requires_open(
             args.fixture_id,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
         if args.fixture_id
         else False,
         "tool_chain": routine_plan(
             fixture_id=args.fixture_id,
             placement_tool=args.placement_tool,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
         )
         if args.fixture_id
         else [
