@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -375,13 +376,13 @@ def main() -> None:
 
 def _load_run_results(path: Path) -> list[tuple[dict[str, Any], Path]]:
     if path.is_file():
-        return [(json.loads(path.read_text(encoding="utf-8")), path)]
+        return [(read_json_object(path, label="cleanup run result"), path)]
     results = []
     for child in sorted(path.glob("seed-*/run_result.json")):
-        results.append((json.loads(child.read_text(encoding="utf-8")), child))
+        results.append((read_json_object(child, label="cleanup run result"), child))
     if not results and (path / "run_result.json").is_file():
         child = path / "run_result.json"
-        results.append((json.loads(child.read_text(encoding="utf-8")), child))
+        results.append((read_json_object(child, label="cleanup run result"), child))
     return results
 
 
@@ -919,8 +920,7 @@ def _assert_goal_contract(data: dict[str, Any], base: Path) -> None:
     assert contract.get("goal_scope") in {"whole-room", "prompt-scoped", "agent-declared"}, contract
     artifacts = data.get("artifacts") or {}
     path = _resolve_path(base, artifacts.get("goal_contract", ""))
-    assert path.is_file(), path
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json_object(path, label="goal contract")
     assert payload == contract, (payload, contract)
 
 
@@ -1038,12 +1038,7 @@ def _assert_no_duplicate_post_place_navigation(trace_path: Path) -> None:
 
 
 def _trace_events_from_path(trace_path: Path) -> list[dict[str, Any]]:
-    events = []
-    for line in trace_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        events.append(json.loads(line))
-    return events
+    return read_jsonl_objects(trace_path, label="cleanup trace")
 
 
 def _without_internal_proof_evidence(payload: Any) -> Any:
@@ -1240,8 +1235,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
 
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
-    assert semantics_path.is_file(), nav2_bundle
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = read_json_object(semantics_path, label="Isaac scene-index Nav2 semantics")
     assert semantics.get("environment_id") == scenario_id, semantics
     assert str(semantics.get("map_id") or "").startswith(scenario_id), semantics
     assert "molmospaces-procthor-val-0-7" not in json.dumps(
@@ -1337,8 +1331,7 @@ def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str)
     assert int(counts.get("total_reviewed") or 0) == len(reviews), advisory
     artifacts = data.get("artifacts") or {}
     advisory_path = _resolve_path(base, artifacts.get("advisory_evaluation", ""))
-    assert advisory_path.is_file(), advisory_path
-    loaded = json.loads(advisory_path.read_text(encoding="utf-8"))
+    loaded = read_json_object(advisory_path, label="advisory evaluation")
     assert loaded.get("authoritative") is False, loaded
     assert "Advisory Review" in report_text, report_text[:500]
 
@@ -1812,9 +1805,8 @@ def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     artifact_hashes = nav2_bundle.get("artifact_hashes") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
-    assert semantics_path.is_file(), nav2_bundle
     assert len(str(artifact_hashes.get("semantics_json") or "")) == 64, artifact_hashes
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = read_json_object(semantics_path, label="B1 Nav2 semantics")
     assert semantics.get("schema") == "nav2_cleanup_semantics_v1", semantics
     assert semantics.get("environment_id") == "agibot-robot-map-12", semantics
     assert (semantics.get("spatial_contract") or {}).get("alignment_status") == "verified", (
@@ -1839,8 +1831,7 @@ def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None
 
 def _assert_b1_robot_consumption_manifest(base: Path, proof: dict[str, Any]) -> None:
     manifest_path = base / "b1_robot_consumption_manifest.json"
-    assert manifest_path.is_file(), manifest_path
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = read_json_object(manifest_path, label="B1 robot consumption manifest")
     assert manifest.get("schema") == "b1_map12_robot_consumption_manifest_v1", manifest
     assert manifest.get("status") == "robot_navigation_ready", manifest
     navigation = manifest.get("navigation") if isinstance(manifest.get("navigation"), dict) else {}
@@ -1880,8 +1871,7 @@ def _assert_planner_proof_requests(data: dict[str, Any], base: Path, report_text
     manifest = data.get("planner_proof_requests")
     if manifest is None and artifacts.get("planner_proof_requests"):
         path = _resolve_path(base, str(artifacts["planner_proof_requests"]))
-        assert path.is_file(), path
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest = read_json_object(path, label="planner proof requests")
     if manifest is None:
         return
     assert "Planner Proof Requests" in report_text, report_text[:500]

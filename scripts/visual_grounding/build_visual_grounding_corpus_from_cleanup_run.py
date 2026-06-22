@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
     VISUAL_GROUNDING_CATEGORY_HINTS,
 )
@@ -83,7 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_result_path = _resolve_run_result(args.run_result)
     run_dir = run_result_path.parent
-    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    try:
+        run_result = read_json_object(run_result_path, label="cleanup run result")
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     output_path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

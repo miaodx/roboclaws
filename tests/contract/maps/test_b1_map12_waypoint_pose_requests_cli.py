@@ -68,8 +68,8 @@ def test_waypoint_pose_request_cli_rejects_missing_points_source(tmp_path: Path)
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "alignment artifact must contain valid JSON object"),
-        ("[]\n", "alignment artifact must contain a JSON object"),
+        ("{not-json\n", "alignment artifact source must contain valid JSON object"),
+        ("[]\n", "alignment artifact source must contain a JSON object"),
     ),
 )
 def test_waypoint_pose_request_cli_rejects_malformed_alignment_source(
@@ -109,7 +109,7 @@ def test_waypoint_pose_request_cli_rejects_missing_alignment_source(tmp_path: Pa
     )
 
     assert completed.returncode != 0
-    assert "alignment artifact missing:" in completed.stderr
+    assert "alignment artifact source is missing:" in completed.stderr
     assert not output_path.exists()
 
 

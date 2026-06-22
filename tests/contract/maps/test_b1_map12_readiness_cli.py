@@ -14,8 +14,8 @@ SCRIPT = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "check_b1_map12_readiness
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "alignment artifact must contain valid JSON object"),
-        ("[]\n", "alignment artifact must contain a JSON object"),
+        ("{not-json\n", "alignment artifact source must contain valid JSON object"),
+        ("[]\n", "alignment artifact source must contain a JSON object"),
     ),
 )
 def test_readiness_cli_rejects_bad_alignment_artifact_source(
@@ -56,7 +56,7 @@ def test_readiness_cli_rejects_missing_alignment_artifact_source(tmp_path: Path)
     )
 
     assert completed.returncode == 2
-    assert "alignment artifact missing" in completed.stderr
+    assert "alignment artifact source is missing" in completed.stderr
     assert str(alignment_path) in completed.stderr
     assert not output_path.exists()
 
@@ -64,8 +64,8 @@ def test_readiness_cli_rejects_missing_alignment_artifact_source(tmp_path: Path)
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "navigation artifact must contain valid JSON object"),
-        ("[]\n", "navigation artifact must contain a JSON object"),
+        ("{not-json\n", "navigation artifact source must contain valid JSON object"),
+        ("[]\n", "navigation artifact source must contain a JSON object"),
     ),
 )
 def test_readiness_cli_rejects_bad_navigation_artifact_source(
@@ -106,7 +106,7 @@ def test_readiness_cli_rejects_missing_navigation_artifact_source(tmp_path: Path
     )
 
     assert completed.returncode == 2
-    assert "navigation artifact missing" in completed.stderr
+    assert "navigation artifact source is missing" in completed.stderr
     assert str(navigation_path) in completed.stderr
     assert not output_path.exists()
 

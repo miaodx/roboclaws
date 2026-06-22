@@ -66,7 +66,7 @@ def test_semantic_map_spatial_contract_normalizer_reports_missing_semantics_with
     completed = _run_normalizer(bundle_dir)
 
     assert completed.returncode == 2
-    assert "semantics missing" in completed.stderr
+    assert "semantics source is missing" in completed.stderr
     assert str(bundle_dir / "semantics.json") in completed.stderr
     assert "Traceback" not in completed.stderr
 
@@ -74,8 +74,8 @@ def test_semantic_map_spatial_contract_normalizer_reports_missing_semantics_with
 @pytest.mark.parametrize(
     ("source", "message"),
     (
-        ("{not-json\n", "semantics must contain valid JSON object"),
-        ("[]\n", "semantics must contain a JSON object"),
+        ("{not-json\n", "semantics source must contain valid JSON object"),
+        ("[]\n", "semantics source must contain a JSON object"),
     ),
 )
 def test_semantic_map_spatial_contract_normalizer_reports_bad_semantics_without_traceback(

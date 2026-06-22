@@ -26,31 +26,31 @@ def _load_module(name: str):
             "--baseline-manifest",
             "baseline.json",
             "{not-json\n",
-            "robot camera comparison manifest must contain valid JSON object",
+            "robot camera comparison manifest source must contain valid JSON object",
         ),
         (
             "--baseline-manifest",
             "baseline.json",
             "[]\n",
-            "robot camera comparison manifest must contain a JSON object",
+            "robot camera comparison manifest source must contain a JSON object",
         ),
         (
             "--raw-fpv-run-result",
             "raw_fpv.json",
             "{not-json\n",
-            "RAW-FPV run result must contain valid JSON object",
+            "RAW-FPV run result source must contain valid JSON object",
         ),
         (
             "--calibration-manifest",
             "calibration.json",
             "[]\n",
-            "calibration manifest must contain a JSON object",
+            "calibration manifest source must contain a JSON object",
         ),
         (
             "--prepared-usd-summary",
             "prepared.json",
             "{not-json\n",
-            "prepared USD summary must contain valid JSON object",
+            "prepared USD summary source must contain valid JSON object",
         ),
     ),
 )
@@ -104,7 +104,7 @@ def test_visual_parity_summary_rejects_bad_probe_manifest_source_json(
 
     captured = capsys.readouterr()
     assert rc == 2
-    assert "robot camera comparison manifest must contain a JSON object" in captured.err
+    assert "robot camera comparison manifest source must contain a JSON object" in captured.err
     assert str(probe_path) in captured.err
     assert not (output_dir / "visual_parity_summary.json").exists()
     assert not (output_dir / "report.html").exists()
@@ -116,12 +116,12 @@ def test_visual_parity_summary_rejects_bad_probe_manifest_source_json(
         (
             "--calibration-manifest",
             "missing_calibration.json",
-            "calibration manifest missing",
+            "calibration manifest source is missing",
         ),
         (
             "--prepared-usd-summary",
             "missing_prepared_usd.json",
-            "prepared USD summary missing",
+            "prepared USD summary source is missing",
         ),
     ),
 )
@@ -177,7 +177,10 @@ def test_visual_parity_summary_rejects_bad_rgb_gain_source_manifest(
 
     with pytest.raises(
         ValueError,
-        match=r"robot camera comparison manifest must contain a JSON object: .*source_manifest",
+        match=(
+            r"robot camera comparison manifest source must contain a JSON object: "
+            r".*source_manifest"
+        ),
     ):
         summary.build_summary(
             output_dir=tmp_path / "summary",

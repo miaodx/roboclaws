@@ -37,6 +37,59 @@ def test_agent_sdk_perf_matrix_dry_run_lists_rows_and_budgets(
     assert '"max_live_runs": 0' in output
 
 
+def test_agent_sdk_perf_matrix_rejects_manifest_without_rows(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "matrix.json"
+    manifest.write_text(
+        json.dumps({"schema": "agent_sdk_speedup_matrix_v1"}),
+        encoding="utf-8",
+    )
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    err = capsys.readouterr().err
+    assert "matrix manifest rows must be a non-empty JSON array" in err
+    assert str(manifest) in err
+
+
+def test_agent_sdk_perf_matrix_rejects_empty_manifest_rows(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "matrix.json"
+    manifest.write_text(
+        json.dumps({"schema": "agent_sdk_speedup_matrix_v1", "rows": []}),
+        encoding="utf-8",
+    )
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    assert "matrix manifest rows must be a non-empty JSON array" in capsys.readouterr().err
+
+
+def test_agent_sdk_perf_matrix_rejects_wrong_shaped_manifest_rows(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    manifest = tmp_path / "matrix.json"
+    manifest.write_text(
+        json.dumps({"schema": "agent_sdk_speedup_matrix_v1", "rows": ["not-a-row"]}),
+        encoding="utf-8",
+    )
+
+    status = matrix.main(["--manifest", str(manifest), "--dry-run"])
+
+    assert status == 1
+    assert "matrix manifest row 1 must be a JSON object" in capsys.readouterr().err
+
+
 def test_agent_sdk_perf_matrix_blocks_privacy_leak(
     tmp_path: Path,
     capsys,

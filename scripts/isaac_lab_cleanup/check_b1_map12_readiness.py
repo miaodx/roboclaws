@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 
 from PIL import Image, ImageStat
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import parse_map_yaml
 from roboclaws.maps.rasterize import load_pgm
 
@@ -75,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         payload = build_readiness_artifact(args.b1_root, args.map12_root)
         if args.alignment_artifact is not None:
-            alignment_payload = _read_json_object(
+            alignment_payload = read_json_object(
                 args.alignment_artifact,
                 label="alignment artifact",
             )
@@ -86,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         navigation_payload: dict[str, Any] | None = None
         if args.navigation_artifact is not None:
-            navigation_payload = _read_json_object(
+            navigation_payload = read_json_object(
                 args.navigation_artifact,
                 label="navigation artifact",
             )
@@ -130,18 +131,6 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0 if not errors else 2
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:

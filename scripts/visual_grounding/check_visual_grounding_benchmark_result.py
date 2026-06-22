@@ -357,14 +357,31 @@ def _assert_no_secret_text(text: str, label: str) -> None:
 
 def _load_json(path: Path) -> dict[str, Any]:
     _assert(path.is_file(), f"missing JSON file: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"JSON file must contain valid JSON object: {path}: {exc.msg}"
+        ) from exc
+    _assert(isinstance(payload, dict), f"JSON file must contain a JSON object: {path}")
+    return payload
 
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if line.strip():
-            rows.append(json.loads(line))
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise AssertionError(
+                    f"JSONL row must contain valid JSON object: {path}:{line_number}: {exc.msg}"
+                ) from exc
+            _assert(
+                isinstance(payload, dict),
+                f"JSONL row must contain a JSON object: {path}:{line_number}",
+            )
+            rows.append(payload)
     return rows
 
 

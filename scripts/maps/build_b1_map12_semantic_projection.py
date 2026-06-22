@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.maps.fit_b1_map12_scene_alignment import (  # noqa: E402
     B1_MAP12_CORRESPONDENCES_SCHEMA,
     SEMANTIC_ANCHOR_ROLE,
@@ -42,15 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = build_semantic_projection(
-            correspondences=_read_json_object(
+            correspondences=read_json_object(
                 args.correspondences,
                 label="correspondence manifest",
             ),
-            review_manifest=_read_json_object(args.review_manifest, label="review manifest"),
+            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
             correspondences_path=args.correspondences,
             review_manifest_path=args.review_manifest,
         )
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -228,18 +229,6 @@ def projected_room(anchors: list[dict[str, Any]], label: dict[str, Any]) -> dict
         "source_label_id": str(label.get("label_id") or ""),
         "source_anchor_ids": [item["source_anchor_id"] for item in semantic_anchors],
     }
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 if __name__ == "__main__":

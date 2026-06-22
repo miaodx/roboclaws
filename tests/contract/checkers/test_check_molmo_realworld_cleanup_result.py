@@ -1937,7 +1937,13 @@ def test_checker_rejects_b1_robot_consumption_without_manifest(
     run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
     (tmp_path / "b1_robot_consumption_manifest.json").unlink()
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        FileNotFoundError,
+        match=(
+            r"B1 robot consumption manifest source is missing: "
+            r".*b1_robot_consumption_manifest\.json"
+        ),
+    ):
         checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
 
 

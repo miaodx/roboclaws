@@ -768,6 +768,57 @@ def test_live_codex_timing_fails_aloud_on_malformed_trace_source(tmp_path: Path)
     assert "trace.jsonl:2" in timing["mcp_trace_timing"]["source_error"]
 
 
+def test_live_codex_timing_fails_aloud_on_malformed_run_result_source(
+    tmp_path: Path,
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="world-public-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    (run_dir / "run_result.json").write_text("[1]", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "request", "tool": "done", "ts": 12.0}) + "\n",
+        encoding="utf-8",
+    )
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: Codex live run_result")
+    assert "run_result.json" in source_error
+    assert "must contain a JSON object" in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert "run_result.json" in timing["mcp_trace_timing"]["source_error"]
+
+
+def test_live_codex_terminal_phase_fails_aloud_on_malformed_status_source(
+    tmp_path: Path,
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    status_path = tmp_path / "live_status.json"
+    status_path.write_text("[1]", encoding="utf-8")
+
+    try:
+        run_codex._wait_for_terminal_phase_from_status(status_path, timeout_s=0.0)
+    except ValueError as exc:
+        assert "Codex live status source must contain a JSON object" in str(exc)
+        assert str(status_path) in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected malformed live_status source to fail aloud")
+
+
 def test_live_codex_event_summary_fails_aloud_on_malformed_event_source(
     tmp_path: Path,
 ) -> None:

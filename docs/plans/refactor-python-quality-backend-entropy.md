@@ -76,7 +76,25 @@ Latest quality snapshot from 2026-06-20:
   corrupt evidence. Runtime Map Prior Snapshot conversion and B1 runtime bundle
   compilation now reuse that shared parser too, removing their duplicate
   local readers, item-list parsers, item guards, and point/pose numeric
-  validators while preserving existing source-error diagnostics. B1 Map 12
+  validators while preserving existing source-error diagnostics. Runtime Map
+  Prior Snapshot conversion now also routes Agibot `source.json` and Nav2
+  cleanup `semantics.json` object artifacts through the shared JSON-source
+  helper instead of a duplicate local reader, preserving the canonical
+  path-labelled helper wording for missing, malformed, or non-object sources.
+  B1 semantic-anchor review packet and semantic projection CLIs now route their
+  review-manifest, alignment-artifact, and correspondence-manifest inputs
+  through the shared JSON-source helper instead of duplicate local readers,
+  preserving concise CLI errors for missing, malformed, or non-object sources.
+  Goal-contract file loading now routes explicit `--goal-contract` artifacts
+  through the shared JSON-source helper too, so missing, malformed, or
+  non-object file-backed launch contracts fail with path-labelled source
+  errors before household launch/runtime consumers normalize the payload.
+  Robot-camera visual parity summary now routes its comparison, visual-sample,
+  RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
+  Isaac state artifacts through the shared JSON-source helper instead of a
+  duplicate local reader, preserving concise CLI errors for missing, malformed,
+  or non-object sources.
+  B1 Map 12
   label-tool draft export now rejects missing or invalid `polygon_role` source
   values instead of defaulting malformed draft labels to `navigation_area`,
   and explicitly supplied label-tool review manifests must now exist, parse to
@@ -88,7 +106,10 @@ Latest quality snapshot from 2026-06-20:
   or corrupt. B1 runtime bundle compilation now also treats explicit
   `--review-manifest` input as JSON-object source truth, sharing the same
   source guard as semantic projection artifacts so malformed or non-object
-  review manifests fail before validation or artifact writes. Explicit B1
+  review manifests fail before validation or artifact writes. B1 runtime
+  bundle compilation now routes review-manifest, alignment-artifact,
+  navigation-artifact, and semantic-projection JSON-object artifacts through
+  the shared source helper instead of a duplicate local reader. Explicit B1
   runtime alignment/navigation proof artifacts now use that same guard, so
   malformed or non-object robot-consumption proof evidence fails before proof
   validation or runtime bundle writes. B1 semantic projection CLI loading now
@@ -106,38 +127,68 @@ Latest quality snapshot from 2026-06-20:
   `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
-  writes. B1 waypoint pose request building now treats required
+  writes, and routes that JSON-object source through the shared source helper
+  instead of a duplicate local reader. B1 waypoint pose request building now
+  treats required
   `--alignment-artifact` input and explicit `--points` input as source truth,
   failing missing, malformed, or wrong-shaped sources before pose-request
-  artifact writes. B1 digital-twin readiness now treats explicit
+  artifact writes, and routes the alignment JSON-object source through the
+  shared source helper instead of a duplicate local reader. B1 digital-twin
+  readiness now treats explicit
   `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
-  source truth before writing readiness artifacts. B1 navigation smoke now
-  treats explicit `--readiness-artifact` and `--waypoint-pose-requests` inputs
-  as source truth too, failing missing, malformed, or non-object sources before
-  navigation smoke artifact writes. B1 navigation report rendering now treats the
-  required navigation artifact, explicit optional readiness/waypoint-request
-  artifacts, and present default sidecars as JSON-object source truth before
-  report writes. B1 manual-anchor semantic suggestion loading now treats
+  source truth before writing readiness artifacts, and routes those
+  JSON-object sources through the shared source helper instead of a duplicate
+  local reader. B1 navigation smoke now treats explicit `--readiness-artifact`
+  and `--waypoint-pose-requests` inputs as source truth too, failing missing,
+  malformed, or non-object sources before navigation smoke artifact writes, and
+  routes those JSON-object sources through the shared source helper instead of a
+  duplicate local reader. B1 navigation
+  report rendering now treats the required navigation artifact, explicit
+  optional readiness/waypoint-request artifacts, and present default sidecars
+  as JSON-object source truth before report writes, and routes those
+  JSON-object sources through the shared source helper instead of a duplicate
+  local reader. B1 manual-anchor semantic suggestion loading now treats
   explicit draft, review-manifest, and scene-diagnostic inputs as JSON-object
-  source truth before suggestion, review-packet, or review-report writes.
+  source truth before suggestion, review-packet, or review-report writes, and
+  routes those JSON-object sources through the shared source helper instead of
+  a duplicate local reader.
   Robot-camera visual parity summary loading now treats explicit
   baseline/probe manifests, RAW-FPV run results, calibration manifests,
   prepared USD summaries, paired comparison manifests, report visual sample
   manifests, and nested RGB-gain source manifests as JSON-object source truth
   before writing `visual_parity_summary.json` or `report.html`.
   B1 asset visual comparisons now treat explicit baseline/candidate navigation
-  artifacts as JSON-object source truth before writing comparison outputs.
+  artifacts as JSON-object source truth through the shared source helper before
+  writing comparison outputs.
+  Prepared semantic USD summary source loading now routes the explicit summary
+  JSON-object artifact through the shared source helper instead of a duplicate
+  local reader.
   Semantic map spatial-contract normalization now treats bundle
-  `semantics.json` as JSON-object source truth before in-place writes, and the
-  parity test reflects the current accepted B1 alignment-anchor manifest.
+  `semantics.json` as JSON-object source truth before in-place writes, and
+  routes that JSON-object source through the shared source helper instead of a
+  duplicate local reader. The parity test reflects the current accepted B1
+  alignment-anchor manifest.
   Nav2 map-bundle export now treats missing explicit `--agent-view` and
   `--run-result` sources as source-path errors before bundle writes.
+  Visual-grounding benchmark checks now treat declared result JSON and
+  prediction JSONL artifacts as object-typed source truth before benchmark
+  validation.
+  Visual-grounding benchmark runs now treat declared corpus and matrix inputs
+  as source truth before writing benchmark outputs and route those JSON-object
+  sources through the shared source helper instead of a duplicate local parser.
+  Visual-grounding cleanup-run corpus building now treats declared
+  `run_result.json` inputs as object-typed source truth before writing corpus
+  outputs and routes that JSON-object source through the shared helper instead
+  of a duplicate local reader.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
-  `correspondence_review_packet.json` or `correspondence_review.html`.
+  `correspondence_review_packet.json` or `correspondence_review.html`, and
+  routes those JSON-object sources through the shared source helper instead of
+  a duplicate local reader.
   B1 map-scene alignment fitting now treats explicit correspondences as
   JSON-object source truth before writing `alignment_residuals.json` or preview
-  artifacts.
+  artifacts, and routes that JSON-object source through the shared source
+  helper instead of a duplicate local reader.
   B1 manual alignment overlay rendering now treats explicit scene-topdown and
   alignment artifacts as JSON-object source truth before writing overlay
   metadata or preview images. Isaac segmentation AOV comparisons now treat
@@ -198,10 +249,82 @@ Latest quality snapshot from 2026-06-20:
   non-object `live_status.json`, `live_timing.json`, `run_result.json`, and
   `trace.jsonl` sources instead of rendering pending/unknown summaries from
   corrupt evidence. Agent SDK speedup matrix rows now block on present
-  malformed or non-object baseline/candidate run source artifacts instead of
-  accepting, rejecting, or recommending speedup work from empty or partial
-  performance evidence. Codex and Claude live-run timing writers now surface
-  malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
+  malformed or non-object baseline/candidate run source artifacts, and manifests
+  now require non-empty object row sources instead of
+  accepting, rejecting, recommending, or dry-running speedup work from empty,
+  partial, or zero-row evidence. Planner-proof bundle generation now treats
+  cleanup `run_result.json`, inline `planner_proof_requests`, `artifacts`, and
+  declared `planner_proof_requests.json` artifacts as explicit source truth,
+  rejecting malformed, non-object, wrong-shaped, unsupported-schema, or missing
+  declared request sources before bundle writes instead of falling through to
+  raw parser/type failures, assertions, or generic missing-request errors.
+  Planner-proof bundle prior-memory loading now treats explicit prior
+  `proof_bundle_run_manifest.json` files and standalone prior probe
+  `run_result.json` files as JSON-object source truth before prior-memory
+  merge or proof-request selection. Planner-proof bundle source loading now
+  routes cleanup run-result, declared request, prior manifest, and standalone
+  prior probe JSON-object artifacts through the shared source helper instead
+  of a duplicate local reader. Codex cleanup apple-to-apple summary source
+  loading now routes cleanup run-result and sidecar agent-view JSON-object
+  artifacts through the shared source helper instead of a duplicate local
+  reader. MolmoSpaces apple-to-apple grid source loading
+  now routes existing grid manifests and detached live-status JSON-object
+  artifacts through the shared source helper instead of a duplicate local
+  reader.
+  The cleanup checker now treats declared planner-proof request artifacts as
+  JSON-object source truth through `roboclaws.core.json_sources`, failing
+  malformed, non-object, or missing request manifests with path-labelled source
+  errors instead of raw parser tracebacks or generic assertions.
+  Cleanup checker top-level `run_result.json` loading now treats single-file,
+  `seed-*`, and run-directory fallback inputs as JSON-object source truth too,
+  failing malformed or non-object run-result sources with path-labelled source
+  errors before checker assertions.
+  Cleanup checker goal-contract artifact loading now treats declared
+  `goal_contract.json` evidence as JSON-object source truth, failing missing,
+  malformed, or non-object goal-contract artifacts with path-labelled source
+  errors before contract comparison.
+  Cleanup checker advisory-scoring artifact loading now treats declared
+  advisory-evaluation evidence as JSON-object source truth, failing missing,
+  malformed, or non-object advisory artifacts with path-labelled source errors
+  before advisory validation.
+  Cleanup checker B1 robot-consumption manifest loading now treats
+  `b1_robot_consumption_manifest.json` as JSON-object source truth, failing
+  missing, malformed, or non-object manifests with path-labelled source errors
+  before readiness validation.
+  Cleanup checker B1 robot-consumption semantics loading now treats declared
+  `semantics_json` evidence as JSON-object source truth, failing missing,
+  malformed, or non-object B1 Nav2 semantics artifacts with path-labelled
+  source errors before robot-consumption proof validation.
+  Cleanup checker Isaac scene-index map-context semantics loading now treats
+  declared `semantics_json` evidence as JSON-object source truth too, failing
+  missing, malformed, or non-object scene-index Nav2 semantics artifacts with
+  path-labelled source errors before map-context validation.
+  Cleanup checker trace JSONL loading now treats `trace.jsonl` rows as
+  object-typed source truth, failing malformed or non-object rows with
+  path-and-line-labelled source errors before public-trace privacy checks or
+  duplicate post-place navigation checks use partial evidence.
+  B1 operator-console scene previews now treat existing preview metadata and
+  declared camera artifacts as JSON-object source truth through the same shared
+  helper, failing malformed or non-object skip-existing metadata as
+  `metadata_unreadable` before metadata rewrites or companion preview deletion,
+  and surfacing malformed or non-object camera artifacts as
+  `artifact_unreadable` inside the existing unavailable preview packet.
+  Codex live timing now treats present `run_result.json` as JSON-object source
+  truth before deriving MCP timing, so malformed or non-object run-result
+  timing evidence fails the final `live_timing.json` packet with
+  `live_timing_source_error` instead of falling back to trace-derived timing
+  evidence.
+  Codex operator-handoff terminal-phase polling now treats present
+  `live_status.json` as JSON-object source truth, failing malformed or
+  non-object status sources aloud instead of collapsing them to an empty phase
+  and allowing generic operator-handoff failure handling to overwrite corrupt
+  source context.
+  Scene-sampler room-label manifest loading now treats the prepared label
+  manifest as JSON-object source truth before schema/admission validation, so
+  malformed or non-object manifests fail with path-labelled source errors
+  instead of parser tracebacks or wrong-layer shape errors.
+  Codex and Claude live-run timing writers now
+  surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing
   model/timing summaries. Eval-runner graders now fail rows aloud on present
   malformed or non-object optional sidecars (`live_status.json`,
@@ -217,8 +340,10 @@ Latest quality snapshot from 2026-06-20:
   under the run directory, rejecting missing, empty, or substitute paths instead
   of reusing CWD files or same-basename colocated files. The Codex cleanup
   apple-to-apple summary now applies the same run-dir source-truth rule to
-  declared summary artifacts and robot-view samples, rejecting missing declared
-  visual evidence instead of linking CWD substitutes or silently omitting links.
+  declared summary artifacts and robot-view samples, and treats run-result and
+  agent-view JSON packets as object-typed source truth, rejecting missing or
+  malformed source evidence instead of linking CWD substitutes, silently omitting
+  links, or falling back to an empty worklist.
   Operator-console B1 camera preview promotion now resolves declared relative
   view paths only under the source artifact directory and rejects `../` escapes,
   so stale CWD files or sibling run files cannot be promoted as current robot
@@ -627,8 +752,6 @@ confidence without postponing a stronger P1 frontier.
 - Live runtime / eval harness rows:
   `roboclaws/evals/live_runtime.py::wait_for_live_surface_completion` and
   `skills/eval-harness/scripts/run_eval_harness.py::_row_blockers`.
-- B1 preview row:
-  `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 - Behavior-test fixture-builder work in selected operator-console tests.
 - Stale small cuts: duplicated lane prose.
 
@@ -647,6 +770,7 @@ product slice that needs them:
 - `PhysicalObservationProvider`.
 - Scene-sampler public alias removal.
 - Broad behavior-test pruning.
+- Operator-console B1 preview metadata/camera-artifact source truth.
 - Closed owner families listed in `Active Candidates`.
 
 ## Evidence Ladder

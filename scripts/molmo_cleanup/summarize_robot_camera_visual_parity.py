@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_COLOR_PROFILE
 from scripts.molmo_cleanup import robot_camera_visual_parity_gates as parity_gates
 from scripts.molmo_cleanup import robot_camera_visual_parity_payloads as parity_payloads
@@ -113,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             required_scene_count=args.required_scene_count,
             required_seed_count=args.required_seed_count,
         )
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(manifest, indent=2, sort_keys=True))
@@ -236,7 +237,7 @@ def build_summary(
 
 
 def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
-    payload = _read_json_object(path, label="robot camera comparison manifest")
+    payload = read_json_object(path, label="robot camera comparison manifest")
     summary = _dict(payload.get("summary"))
     scene = _dict(payload.get("scene"))
     camera = _dict(summary.get("camera_contract_diagnostics"))
@@ -420,7 +421,7 @@ def _visual_sample_from_manifest_summary(
     manifest_path = Path(str(summary.get("path") or ""))
     if not manifest_path.is_file():
         return {}
-    payload = _read_json_object(manifest_path, label="robot camera visual sample manifest")
+    payload = read_json_object(manifest_path, label="robot camera visual sample manifest")
     locations = [
         location
         for location in _list_dicts(payload.get("locations"))
@@ -934,7 +935,7 @@ def _native_settings_used_summary(diagnostics: dict[str, Any]) -> dict[str, Any]
 
 
 def _raw_fpv_summary(path: Path) -> dict[str, Any]:
-    payload = _read_json_object(path, label="RAW-FPV run result")
+    payload = read_json_object(path, label="RAW-FPV run result")
     camera = _dict(payload.get("robot_view_camera_control"))
     agent_view = _dict(payload.get("agent_view"))
     raw_observations = _list_dicts(
@@ -979,7 +980,7 @@ def _raw_fpv_input_lane_check(raw_fpv_runs: list[dict[str, Any]]) -> dict[str, A
 
 
 def _prepared_usd_summary(path: Path) -> dict[str, Any]:
-    payload = _read_json_object(path, label="prepared USD summary")
+    payload = read_json_object(path, label="prepared USD summary")
     return {
         "status": payload.get("status"),
         "path": str(path),
@@ -1101,7 +1102,7 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
 
 
 def _calibration_manifest_summary(path: Path) -> dict[str, Any]:
-    payload = _read_json_object(path, label="calibration manifest")
+    payload = read_json_object(path, label="calibration manifest")
     calibration, calibration_source = _scene_level_render_domain_calibration(payload)
     return {
         "status": "loaded",
@@ -1671,10 +1672,10 @@ def _paired_view_delta_diagnostics(
             "probe_path": str(probe_path),
         }
     baseline_locations = _locations_by_label(
-        _read_json_object(baseline_path, label="paired baseline manifest")
+        read_json_object(baseline_path, label="paired baseline manifest")
     )
     probe_locations = _locations_by_label(
-        _read_json_object(probe_path, label="paired probe manifest")
+        read_json_object(probe_path, label="paired probe manifest")
     )
     labels = sorted(set(baseline_locations) & set(probe_locations))
     if not labels:
@@ -1826,7 +1827,7 @@ def _rgb_gain_source(manifest_path: Path) -> dict[str, Any]:
     state_path = manifest_path.parent / "isaac_state.json"
     if not state_path.is_file():
         return {}
-    state = _read_json_object(state_path, label="Isaac state")
+    state = read_json_object(state_path, label="Isaac state")
     override = _dict(state.get("robot_view_color_profile_override"))
     profile = _dict(state.get("robot_view_color_profile"))
     gain = _dict(override.get("backend_rgb_gain")) or _dict(profile.get("backend_rgb_gain"))
@@ -1965,18 +1966,6 @@ def _list_strings(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if item is not None]
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

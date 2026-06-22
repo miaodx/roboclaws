@@ -244,6 +244,118 @@ def test_codex_cleanup_apple2apple_summary_rejects_missing_robot_view_sample(
         )
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"cleanup run result source must contain valid JSON object: .*run_result\.json",
+        ),
+        (
+            "[]\n",
+            r"cleanup run result source must contain a JSON object: .*run_result\.json",
+        ),
+    ],
+)
+def test_codex_cleanup_apple2apple_summary_rejects_malformed_run_result_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_result.json").write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        run_summary._lane_summary(
+            lane_id="molmospaces-mujoco-codex",
+            run_result_path=run_dir / "run_result.json",
+            output_dir=tmp_path / "summary",
+        )
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_missing_run_result_source(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_result_path = tmp_path / "mujoco" / "seed-6" / "run_result.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"cleanup run result source is missing: .*run_result\.json",
+    ):
+        run_summary._lane_summary(
+            lane_id="molmospaces-mujoco-codex",
+            run_result_path=run_result_path,
+            output_dir=tmp_path / "summary",
+        )
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_non_object_agent_view_source(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    _write_run(
+        run_dir,
+        backend="molmospaces_subprocess",
+        scenario_id="molmospaces-procthor-val-0-6",
+        completion_status="success",
+        restored_count=1,
+        total_targets=1,
+        generated_mess_count=1,
+        robot_contract_backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        fpv_camera_prim_path=None,
+    )
+    (run_dir / "agent_view.json").write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"agent view source must contain a JSON object: .*agent_view\.json",
+    ):
+        run_summary._lane_summary(
+            lane_id="molmospaces-mujoco-codex",
+            run_result_path=run_dir / "run_result.json",
+            output_dir=tmp_path / "summary",
+        )
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_non_object_embedded_agent_view(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    _write_run(
+        run_dir,
+        backend="molmospaces_subprocess",
+        scenario_id="molmospaces-procthor-val-0-6",
+        completion_status="success",
+        restored_count=1,
+        total_targets=1,
+        generated_mess_count=1,
+        robot_contract_backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        fpv_camera_prim_path=None,
+    )
+    (run_dir / "agent_view.json").unlink()
+    run_result_path = run_dir / "run_result.json"
+    run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    run_result["agent_view"] = []
+    run_result_path.write_text(json.dumps(run_result), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"embedded agent view must contain a JSON object: .*run_result\.json",
+    ):
+        run_summary._lane_summary(
+            lane_id="molmospaces-mujoco-codex",
+            run_result_path=run_result_path,
+            output_dir=tmp_path / "summary",
+        )
+
+
 def _write_run(
     run_dir: Path,
     *,

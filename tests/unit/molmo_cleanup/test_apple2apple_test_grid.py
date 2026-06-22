@@ -210,7 +210,10 @@ def test_apple2apple_grid_filtered_execute_fails_on_malformed_existing_manifest(
     output_dir.mkdir()
     (output_dir / "apple2apple_test_grid.json").write_text("{not json", encoding="utf-8")
 
-    with pytest.raises(ValueError, match=r"apple2apple_test_grid\.json.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"grid manifest source must contain valid JSON object: .*apple2apple_test_grid",
+    ):
         run_grid.main(
             [
                 "--output-dir",
@@ -232,7 +235,10 @@ def test_apple2apple_grid_filtered_execute_fails_on_non_object_existing_manifest
     output_dir.mkdir()
     (output_dir / "apple2apple_test_grid.json").write_text("[]", encoding="utf-8")
 
-    with pytest.raises(ValueError, match=r"apple2apple_test_grid\.json.*non-object JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"grid manifest source must contain a JSON object: .*apple2apple_test_grid",
+    ):
         run_grid.main(
             [
                 "--output-dir",
@@ -381,7 +387,10 @@ def test_apple2apple_grid_execute_fails_on_malformed_live_status_source(
         live_wait_poll_s=0.1,
     )
 
-    with pytest.raises(ValueError, match=r"live_status\.json.*invalid JSON"):
+    with pytest.raises(
+        ValueError,
+        match=r"live status source must contain valid JSON object: .*live_status",
+    ):
         run_grid._execute_row(row, args)
 
 
@@ -392,9 +401,9 @@ def test_apple2apple_grid_live_status_retry_allows_transient_partial_write(
     status_path = tmp_path / "live_status.json"
     status_path.write_text("{bad", encoding="utf-8")
     attempts = {"count": 0}
-    real_read_json_object = run_grid._read_json_object
+    real_read_json_object = run_grid.read_json_object
 
-    def flaky_read_json_object(path: Path, *, source_label: str) -> dict:
+    def flaky_read_json_object(path: Path, *, label: str) -> dict:
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise ValueError("transient partial write")
@@ -402,9 +411,9 @@ def test_apple2apple_grid_live_status_retry_allows_transient_partial_write(
             json.dumps({"phase": "finished", "exit_status": 0}),
             encoding="utf-8",
         )
-        return real_read_json_object(path, source_label=source_label)
+        return real_read_json_object(path, label=label)
 
-    run_grid._read_json_object = flaky_read_json_object
+    run_grid.read_json_object = flaky_read_json_object
     run_grid._sleep = lambda _seconds: None
     run_grid._monotonic = iter([0.0, 0.0, 0.01]).__next__
 

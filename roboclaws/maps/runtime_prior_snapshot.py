@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 import math
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import parse_map_yaml
 from roboclaws.maps.navigation_memory import (
     navigation_memory_item,
@@ -100,7 +100,6 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     _require_file(navigation_memory_path)
     _require_file(nav2_yaml_path)
     _require_file(occupancy_path)
-    _require_file(source_path)
 
     navigation_memory = read_navigation_memory(
         navigation_memory_path,
@@ -115,7 +114,7 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
         origin_x=origin[0],
         origin_y=origin[1],
     )
-    source = _read_json_object(source_path, label="Agibot map source")
+    source = read_json_object(source_path, label="Agibot map")
 
     anchors: list[dict[str, Any]] = []
     waypoints: list[dict[str, Any]] = []
@@ -248,7 +247,6 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
     semantics_path = bundle_dir / "semantics.json"
     _require_file(map_yaml_path)
     _require_file(occupancy_path)
-    _require_file(semantics_path)
 
     map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
     resolution, origin = _source_map_geometry(map_yaml, label="Nav2 cleanup map.yaml")
@@ -258,7 +256,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         origin_x=float(origin[0]),
         origin_y=float(origin[1]),
     )
-    semantics = _read_json_object(semantics_path, label="Nav2 cleanup semantics")
+    semantics = read_json_object(semantics_path, label="Nav2 cleanup semantics")
     if semantics.get("schema") != "nav2_cleanup_semantics_v1":
         raise ValueError(
             "compiled cleanup bundle semantics must use schema nav2_cleanup_semantics_v1"
@@ -1143,16 +1141,6 @@ def _stable_id(prefix: str, value: str) -> str:
 def _require_file(path: Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object at {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object at {path}")
-    return payload
 
 
 def _assert_no_private_truth(value: Any) -> None:

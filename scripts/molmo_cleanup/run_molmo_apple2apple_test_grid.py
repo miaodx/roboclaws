@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -14,6 +13,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.apple2apple_test_grid import (  # noqa: E402
     DEFAULT_MAP_BUNDLE,
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
@@ -202,7 +202,7 @@ def _read_status(path: Path, *, retry_deadline: float | None = None) -> dict[str
         return {"phase": "unknown"}
     while True:
         try:
-            return _read_json_object(path, source_label="apple-to-apple live status")
+            return read_json_object(path, label="apple-to-apple live status")
         except ValueError:
             if retry_deadline is None or _monotonic() >= retry_deadline:
                 raise
@@ -218,7 +218,7 @@ def _merge_existing_grid_state(
     manifest_path = output_dir / "apple2apple_test_grid.json"
     if not manifest_path.is_file():
         return
-    existing = _read_json_object(manifest_path, source_label="apple-to-apple grid manifest")
+    existing = read_json_object(manifest_path, label="apple-to-apple grid manifest")
 
     existing_setup_rows = _rows_by_id(existing.get("setup_rows") or [])
     grid["setup_rows"] = [
@@ -350,21 +350,6 @@ def _sleep(seconds: float) -> None:
     import time
 
     time.sleep(seconds)
-
-
-def _read_json_object(path: Path, *, source_label: str) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"{source_label} source {path}: invalid JSON at line {exc.lineno} "
-            f"column {exc.colno}: {exc.msg}"
-        ) from exc
-    except OSError as exc:
-        raise ValueError(f"{source_label} source {path}: cannot be read: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ValueError(f"{source_label} source {path}: non-object JSON: {type(data).__name__}")
-    return data
 
 
 if __name__ == "__main__":
