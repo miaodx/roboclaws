@@ -47,8 +47,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--width", type=int, default=960)
-    parser.add_argument("--height", type=int, default=640)
+    parser.add_argument("--width", type=_positive_int_arg, default=960)
+    parser.add_argument("--height", type=_positive_int_arg, default=640)
     parser.add_argument(
         "--scene-topdown-render",
         type=Path,
@@ -65,8 +65,8 @@ def main(argv: list[str] | None = None) -> int:
     packet = build_scene_topdown_diagnostic(
         scene_root=args.scene_root,
         output_dir=args.output_dir,
-        width=max(1, int(args.width)),
-        height=max(1, int(args.height)),
+        width=int(args.width),
+        height=int(args.height),
         scene_topdown_render=args.scene_topdown_render,
     )
     errors = validate_scene_topdown_diagnostic(packet)
@@ -861,6 +861,16 @@ def escape_html(value: str) -> str:
     return (
         value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

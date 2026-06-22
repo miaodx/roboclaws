@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from scripts.maps.render_b1_scene_gaussian_topdown import (
@@ -41,6 +42,37 @@ def test_topdown_request_records_explicit_height_and_ray_plane_mapping() -> None
     assert view["topdown_camera_policy"]["camera_y_offset_m"] == 0.05
     assert request["topdown_pixel_to_scene_xyz"]["status"] == "perspective_ray_plane_z0"
     assert request["topdown_pixel_to_scene_xyz"]["formula"].startswith("ray =")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    (
+        ({"camera_height_m": 0.0}, "--camera-height-m must be a positive finite number"),
+        ({"camera_y_offset_m": -0.05}, "--camera-y-offset-m must be a positive finite number"),
+        ({"camera_y_offset_m": float("nan")}, "--camera-y-offset-m must be a positive"),
+        ({"target_z_m": float("inf")}, "--target-z-m must be finite"),
+        ({"fov_deg": 180.0}, "--fov-deg must be a finite value from 1 to 179 degrees"),
+    ),
+)
+def test_topdown_request_rejects_invalid_camera_geometry(
+    kwargs: dict[str, float],
+    message: str,
+) -> None:
+    base_kwargs = {
+        "camera_height_m": 28.0,
+        "camera_y_offset_m": 0.05,
+        "target_z_m": 0.6,
+        "fov_deg": 65.0,
+    }
+
+    with pytest.raises(ValueError, match=message):
+        build_topdown_camera_request(
+            scene_bounds=SCENE_BOUNDS,
+            width=960,
+            height=640,
+            camera_mode="near-vertical-topdown",
+            **{**base_kwargs, **kwargs},
+        )
 
 
 def test_topdown_packet_requires_captured_gaussian_image(tmp_path: Path) -> None:
@@ -175,6 +207,62 @@ def test_topdown_cli_requires_explicit_scene_bounds(tmp_path: Path) -> None:
 
     assert completed.returncode != 0
     assert "--scene-xy-bounds is required" in completed.stderr
+
+
+def test_topdown_cli_rejects_non_positive_dimensions(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            f"--scene-xy-bounds={','.join(str(value) for value in SCENE_BOUNDS)}",
+            "--scene-usd",
+            str(tmp_path / "scene_gs.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--width",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    (
+        ("--camera-height-m", "0", "expected a positive float"),
+        ("--camera-y-offset-m", "-0.05", "expected a positive float"),
+        ("--target-z-m", "nan", "expected a finite float"),
+        ("--fov-deg", "180", "expected a vertical FOV in degrees from 1 to 179"),
+    ),
+)
+def test_topdown_cli_rejects_invalid_camera_config(
+    tmp_path: Path,
+    flag: str,
+    value: str,
+    message: str,
+) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            f"--scene-xy-bounds={','.join(str(value) for value in SCENE_BOUNDS)}",
+            "--scene-usd",
+            str(tmp_path / "scene_gs.usda"),
+            "--output-dir",
+            str(tmp_path),
+            flag,
+            value,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
 
 
 def test_topdown_cli_can_write_request_without_capture(tmp_path: Path) -> None:

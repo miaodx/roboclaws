@@ -13,14 +13,15 @@ from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
     _default_sdk_model_settings_payload,
     _failure_from_exception,
+    _mcp_client_session_timeout_seconds,
     _RetryingModel,
-    _RoboclawsSpanRecorder,
     _should_retry_model_service_failure,
 )
 from roboclaws.agents.drivers.openai_agents_model_input import (
     _compact_model_input_items,
     _model_input_shape_summary,
 )
+from roboclaws.agents.drivers.openai_agents_spans import RoboclawsSpanRecorder
 from roboclaws.agents.live_runtime import (
     LiveAgentMCPServer,
     LiveAgentRequest,
@@ -29,6 +30,9 @@ from roboclaws.agents.live_runtime import (
 )
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
+from scripts.molmo_cleanup.openai_agents_perf_profile import (
+    resolve_agent_sdk_perf_profile as _resolve_agent_sdk_perf_profile,
+)
 from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     IncompleteTurnRecoveryPolicy,
     LiveOpenAIAgentsCleanupRunner,
@@ -46,7 +50,9 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
     _profiled_kickoff_prompt,
-    _resolve_agent_sdk_perf_profile,
+)
+from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
+    parse_args as _parse_live_openai_agents_args,
 )
 
 
@@ -1075,9 +1081,7 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     assert events[0]["agent_sdk_responses_features"]["available"] is False
 
 
-def test_openai_agents_runtime_applies_kimi_coding_user_agent(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_openai_agents_runtime_applies_kimi_coding_user_agent(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeOpenAIChatCompletionsModel:
@@ -1157,9 +1161,7 @@ def test_openai_agents_runtime_applies_kimi_coding_user_agent(
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
     assert events[0]["provider_profile"] == "kimi-openai-chat"
-    assert events[0]["sdk_model_settings"]["extra_headers"] == {
-        "User-Agent": "claude-code/1.0.0"
-    }
+    assert events[0]["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
 
 
 def test_openai_agents_runtime_configures_model_input_compaction_filter(
@@ -1255,7 +1257,12 @@ def test_openai_agents_runtime_configures_model_input_compaction_filter(
         "enabled": True,
         "mode": "retain_latest_actionable_outputs",
         "retained_recent_outputs": 2,
+        "summary_kind": "roboclaws_camera_grounded_history_summary_v1",
         "candidate_ids": ["AC"],
+        "private_artifact_policy": (
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
+        ),
     }
     assert "call_model_input_filter" not in events[0]["sdk_run_config"]
 
@@ -1291,6 +1298,475 @@ def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
     assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
     assert replacement["original_chars"] == len(large_output)
     assert "wp_19" not in json.dumps(filtered)
+
+
+def test_model_input_compaction_rejects_invalid_min_chars_env(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS", "many")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_input_compaction": {"enabled": True}},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS" in payload["detail"]
+    assert "must be a non-negative integer" in payload["detail"]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "setting_name"),
+    [
+        (
+            {"model_input_compaction": {"enabled": "sometimes"}},
+            "model_input_compaction.enabled",
+        ),
+        (
+            {
+                "model_input_compaction": {
+                    "enabled": True,
+                    "raw_fpv_image_memory": {"enabled": "sometimes"},
+                }
+            },
+            "raw_fpv_image_memory.enabled",
+        ),
+        (
+            {
+                "model_input_compaction": {
+                    "enabled": True,
+                    "camera_grounded_history": {"enabled": "sometimes"},
+                }
+            },
+            "camera_grounded_history.enabled",
+        ),
+    ],
+)
+def test_model_input_compaction_rejects_invalid_boolean_settings(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    setting_name: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata=metadata,
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert setting_name in payload["detail"]
+    assert "must be true or false" in payload["detail"]
+
+
+def test_model_input_compaction_rejects_invalid_direct_policy_limits(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "model_input_compaction": {
+                "enabled": True,
+                "raw_fpv_image_memory": {
+                    "enabled": True,
+                    "retained_full_frame_limit": "latest",
+                },
+            }
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert (
+        "OpenAI Agents SDK setting raw_fpv_image_memory.retained_full_frame_limit"
+        in payload["detail"]
+    )
+    assert "must be a positive integer, got 'latest'" in payload["detail"]
+
+
+@pytest.mark.parametrize(
+    ("config", "setting_name"),
+    [
+        ({"enabled": "sometimes"}, "model_racing_observability.enabled"),
+        (
+            {"unknown_loser_billing": "sometimes"},
+            "model_racing_observability.unknown_loser_billing",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_model_racing_boolean_settings(
+    tmp_path: Path,
+    monkeypatch,
+    config: dict[str, object],
+    setting_name: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_racing_observability": config},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert setting_name in payload["detail"]
+    assert "must be true or false" in payload["detail"]
+
+
+@pytest.mark.parametrize(
+    ("config", "setting_name", "message"),
+    [
+        (
+            {"arm_count": "many"},
+            "model_racing_observability.arm_count",
+            "must be a positive integer",
+        ),
+        (
+            {"arm_count": 0},
+            "model_racing_observability.arm_count",
+            "must be a positive integer",
+        ),
+        (
+            {"racing_multiplier": "fast"},
+            "model_racing_observability.racing_multiplier",
+            "must be a positive finite number",
+        ),
+        (
+            {"racing_multiplier": float("inf")},
+            "model_racing_observability.racing_multiplier",
+            "must be a positive finite number",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_model_racing_numeric_settings(
+    tmp_path: Path,
+    monkeypatch,
+    config: dict[str, object],
+    setting_name: str,
+    message: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_racing_observability": config},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert setting_name in payload["detail"]
+    assert message in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_retry_attempts_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS", "many")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS" in payload["detail"]
+    assert "must be a non-negative integer, got 'many'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_direct_retry_sleep_s(tmp_path: Path) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_service_retry_sleep_s": "later"},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model_service_retry_sleep_s" in payload["detail"]
+    assert "must be a non-negative number, got 'later'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_mcp_client_timeout_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S" in payload["detail"]
+    assert "must be a non-negative number, got 'eventually'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
+    tmp_path: Path,
+) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"mcp_client_session_timeout_s": -1},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting mcp_client_session_timeout_s" in payload["detail"]
+    assert "must be a non-negative number, got -1" in payload["detail"]
+
+
+def test_openai_agents_runtime_preserves_zero_mcp_client_timeout_disable(
+    tmp_path: Path,
+) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"mcp_client_session_timeout_s": 0},
+    )
+
+    assert _mcp_client_session_timeout_seconds(request) == (True, None)
+
+
+def test_openai_agents_runtime_rejects_invalid_direct_max_turns(tmp_path: Path) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"max_turns": "many"},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
+    assert "must be a positive integer, got 'many'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_non_positive_direct_max_turns(tmp_path: Path) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"max_turns": 0},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
+    assert "must be a positive integer, got 0" in payload["detail"]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "env", "expected_detail"),
+    [
+        (
+            {"provider_profile": "kimi-openai-chat"},
+            {"ROBOCLAWS_PROVIDER_PROFILE": "codex-router-responses"},
+            "conflicting OpenAI Agents SDK setting provider_profile",
+        ),
+        (
+            {"model": "gpt-5.5"},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL": "kimi-k2.7-code"},
+            "conflicting OpenAI Agents SDK setting model",
+        ),
+        (
+            {"base_url": "https://codex-one.example.test/v1"},
+            {"CODEX_BASE_URL": "https://codex-two.example.test/v1"},
+            "conflicting OpenAI Agents SDK setting base_url",
+        ),
+        (
+            {"api_key": "metadata-key"},
+            {"CODEX_API_KEY": "env-key"},
+            "conflicting OpenAI Agents SDK setting api_key",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_conflicting_provider_model_env_settings(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    env: dict[str, str],
+    expected_detail: str,
+) -> None:
+    base_env = {
+        "CODEX_BASE_URL": "https://codex.example.test/v1",
+        "CODEX_API_KEY": "fake-codex-key",
+    }
+    base_env.update(env)
+    for key, value in base_env.items():
+        monkeypatch.setenv(key, value)
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata=metadata,
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert expected_detail in payload["detail"]
+
+
+def test_openai_agents_runtime_allows_matching_provider_model_env_aliases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("MM_BASE_URL", "https://codex.example.test/v1/")
+    monkeypatch.setenv("MM_API_KEY", "fake-codex-key")
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_PROFILE", "minimax-responses")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "MiniMax-M3")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="minimax-responses",
+        model="minimax",
+        metadata={
+            "provider_profile": "minimax-responses",
+            "base_url": "https://codex.example.test/v1",
+            "api_key": "fake-codex-key",
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.exit_status == 0
+    assert captured["model"] == "MiniMax-M3"
+    assert captured["base_url"] == "https://codex.example.test/v1"
+    assert captured["api_key"] == "fake-codex-key"
 
 
 def test_model_input_shape_summary_is_aggregate_only() -> None:
@@ -1896,6 +2372,38 @@ def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
     OpenAIAgentsLiveRuntime().run(request)
 
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is False
+
+
+def test_openai_agents_runtime_rejects_invalid_cache_tools_metadata(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"cache_tools_list": "sometimes"},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.exit_status == 1
+    assert result.reason == "provider_config_failure"
+    assert "OpenAI Agents SDK setting cache_tools_list must be true or false" in result.detail
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting cache_tools_list must be true or false" in payload["detail"]
+
+
+def test_openai_agents_live_runner_rejects_invalid_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "sometimes")
+
+    with pytest.raises(ValueError, match="ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST"):
+        _parse_live_openai_agents_args([])
 
 
 def test_openai_agents_runtime_configures_mcp_client_session_timeout(
@@ -3637,6 +4145,7 @@ def _expected_raw_fpv_image_memory_policy(retained_full_frame_limit: int) -> dic
 
 def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
     baseline = _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args())
 
     assert baseline["profile_id"] == "baseline"
@@ -3648,6 +4157,8 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
+    assert baseline["cache_tools_list"] is True
+    assert baseline["mcp_client_session_timeout_s"] == 30.0
     assert baseline["context_soft_limit_tokens"] is None
     assert baseline["camera_grounded_composite_tools"]["enabled"] is False
     assert baseline["camera_grounded_composite_tools"]["tool_names"] == []
@@ -3672,6 +4183,206 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
         "trace_include_sensitive_data": False,
         "workflow_name": "roboclaws-openai-agents-live",
     }
+
+
+def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", "mimo_compact_v1")
+
+    with pytest.raises(ValueError, match="conflicting OpenAI Agents SDK performance profile"):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="gpt_compact_v1")
+        )
+
+
+def test_openai_agents_perf_profile_accepts_matching_cli_and_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", "gpt_compact_v1")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="gpt_compact_v1")
+    )
+
+    assert profile["profile_id"] == "gpt_compact_v1"
+    assert profile["source"] == "cli+environment"
+
+
+def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "repeat_full_prompt")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "10")
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "0")
+
+    conflict_cases = [
+        (
+            {"continuation_mode": "state_summary_only"},
+            "conflicting OpenAI Agents SDK setting continuation_mode",
+        ),
+        ({"max_turns": 11}, "conflicting OpenAI Agents SDK setting max_turns"),
+        (
+            {"model_service_retry_sleep_s": 2.0},
+            "conflicting OpenAI Agents SDK setting model_service_retry_sleep_s",
+        ),
+        ({"model_racing": True}, "conflicting OpenAI Agents SDK setting model_racing"),
+    ]
+
+    for overrides, expected_error in conflict_cases:
+        with pytest.raises(ValueError, match=expected_error):
+            _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
+
+
+def test_openai_agents_perf_profile_rejects_conflicting_mcp_timeout_cli_and_env(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "45")
+
+    with pytest.raises(
+        ValueError,
+        match="conflicting OpenAI Agents SDK setting mcp_client_session_timeout_s",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=30.0)
+        )
+
+
+def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "state_summary_only")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "9")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "45")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "yes")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(
+            agent_sdk_perf_profile="custom",
+            continuation_mode="state_summary_only",
+            max_turns=9,
+            mcp_client_session_timeout_s=45.0,
+            model_service_retry_sleep_s=1.5,
+            model_racing=True,
+        )
+    )
+
+    assert profile["continuation_mode"] == "state_summary_only"
+    assert profile["max_turns"] == 9
+    assert profile["mcp_client_session_timeout_s"] == 45.0
+    assert profile["model_service_retry_sleep_s"] == 1.5
+    assert profile["model_racing_observability"]["enabled"] is True
+
+
+def test_openai_agents_perf_profile_rejects_invalid_mcp_timeout_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number"
+        ),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=None)
+        )
+
+
+def test_openai_agents_perf_profile_rejects_invalid_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "sometimes")
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK boolean setting must be true or false",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(cache_tools_list=None)
+        )
+
+
+def test_openai_agents_perf_profile_uses_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "off")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(cache_tools_list=None)
+    )
+
+    assert profile["cache_tools_list"] is False
+
+
+def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
+
+    with pytest.raises(ValueError, match="mcp_client_session_timeout_s must be non-negative"):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=-1.0)
+        )
+
+
+def test_openai_agents_perf_profile_rejects_invalid_integer_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET", "many")
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(raw_fpv_candidate_budget=None)
+        )
+
+
+def test_openai_agents_perf_profile_rejects_invalid_direct_integer(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(raw_fpv_candidate_budget="many")
+        )
+
+
+def test_openai_agents_perf_profile_rejects_non_positive_max_turns(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting max_turns must be positive",
+    ):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(max_turns=0))
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_error"),
+    [
+        (
+            {"model_racing": True, "model_racing_arm_count": 0},
+            "OpenAI Agents SDK setting model_racing_arm_count must be positive when "
+            "model_racing is enabled",
+        ),
+        (
+            {"raw_fpv_image_memory": True, "raw_fpv_image_memory_retain": 0},
+            "OpenAI Agents SDK setting raw_fpv_image_memory_retain must be positive when "
+            "raw_fpv_image_memory is enabled",
+        ),
+        (
+            {"camera_grounded_history_compaction": True, "camera_grounded_history_retain": 0},
+            "OpenAI Agents SDK setting camera_grounded_history_retain must be positive when "
+            "camera_grounded_history_compaction is enabled",
+        ),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_non_positive_enabled_feature_counts(
+    monkeypatch,
+    overrides: dict[str, object],
+    expected_error: str,
+) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN", raising=False)
+
+    with pytest.raises(ValueError, match=expected_error):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
 
 
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
@@ -3762,9 +4473,7 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     )
     assert kimi["provider_profile"] == "kimi-openai-chat"
     assert kimi["wire_api"] == "chat-completions"
-    assert kimi["sdk_model_settings"]["extra_headers"] == {
-        "User-Agent": "claude-code/1.0.0"
-    }
+    assert kimi["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
 
 
 def test_openai_agents_perf_profile_accepts_thinking_mode_override(monkeypatch) -> None:
@@ -4058,7 +4767,7 @@ def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
 
 def test_openai_agents_span_recorder_writes_sanitized_span_events(tmp_path: Path) -> None:
     spans_path = tmp_path / "openai-agents-spans.jsonl"
-    recorder = _RoboclawsSpanRecorder(
+    recorder = RoboclawsSpanRecorder(
         spans_path,
         runtime_config={
             "runtime": "openai-agents-live",

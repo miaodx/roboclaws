@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -146,19 +147,32 @@ def optional_str(value: Any) -> str | None:
     return text if text else None
 
 
-def positive_int(value: Any, default: int) -> int:
+def positive_int(value: Any, default: int, *, setting_name: str = "value") -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValueError(f"{setting_name} must be a positive integer; got {value!r}")
     try:
         parsed = int(value)
     except (TypeError, ValueError):
-        return default
-    return parsed if parsed > 0 else default
+        raise ValueError(f"{setting_name} must be a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise ValueError(f"{setting_name} must be a positive integer; got {value!r}")
+    return parsed
 
 
-def float_or_zero(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
+def float_or_zero(value: Any, *, setting_name: str = "value") -> float:
+    if value is None:
         return 0.0
+    if isinstance(value, bool):
+        raise ValueError(f"{setting_name} must be a finite number; got {value!r}")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{setting_name} must be a finite number; got {value!r}") from None
+    if not math.isfinite(parsed):
+        raise ValueError(f"{setting_name} must be a finite number; got {value!r}")
+    return parsed
 
 
 def json_object_from_text(text: str) -> dict[str, Any]:

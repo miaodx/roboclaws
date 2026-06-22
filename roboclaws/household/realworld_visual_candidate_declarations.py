@@ -441,6 +441,28 @@ def camera_label_producer_candidates(
             ),
         }
     client_config = getattr(contract.visual_grounding_client, "config", None)
+    auth_mode = str(getattr(client_config, "auth_mode", "none"))
+    image = image_payload_for_raw_observation(
+        raw_observation,
+        base_dir=contract.visual_grounding_artifact_base_dir,
+    )
+    if not _image_payload_is_usable(image):
+        return {
+            "ok": True,
+            "candidates": [],
+            "visual_grounding_pipeline": pipeline_summary_from_response(
+                visual_grounding_failure_response(
+                    pipeline_id=contract.visual_grounding_pipeline_id,
+                    reason="missing_raw_fpv_image",
+                    message=(
+                        "non-sim camera-grounded-labels camera labeler requires "
+                        "a readable raw FPV image artifact"
+                    ),
+                    latency_ms=0,
+                ),
+                auth_mode=auth_mode,
+            ),
+        }
     request = visual_grounding_request(
         run_id=contract.visual_grounding_run_id or contract.scenario.scenario_id,
         raw_observation=raw_observation,
@@ -449,10 +471,7 @@ def camera_label_producer_candidates(
             contract.static_fixture_projection()
         ),
         pipeline_id=contract.visual_grounding_pipeline_id,
-        image=image_payload_for_raw_observation(
-            raw_observation,
-            base_dir=contract.visual_grounding_artifact_base_dir,
-        ),
+        image=image,
         proposer={
             "producer_id": str(getattr(client_config, "proposer_id", "") or ""),
             "model_id": str(getattr(client_config, "proposer_model_id", "") or ""),
@@ -460,7 +479,6 @@ def camera_label_producer_candidates(
     )
     try:
         response = contract.visual_grounding_client.request_candidates(request)
-        auth_mode = str(getattr(client_config, "auth_mode", "none"))
         pipeline = pipeline_summary_from_response(response, auth_mode=auth_mode)
     except VisualGroundingContractError as exc:
         return {
@@ -503,6 +521,14 @@ def camera_label_producer_candidates(
         ),
         "visual_grounding_pipeline": pipeline,
     }
+
+
+def _image_payload_is_usable(image: dict[str, Any]) -> bool:
+    if not str(image.get("bytes_base64") or ""):
+        return False
+    width = image.get("width")
+    height = image.get("height")
+    return isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0
 
 
 def _resolved_destination_fixture_id(

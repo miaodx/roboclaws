@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -26,8 +27,6 @@ from roboclaws.household.scene_camera_comparison import (
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
     _backend_swap_geometry_contract,
-    _camera_intrinsics_contract_from_capture,
-    _camera_pose_contract_from_capture,
     _candidate_color_calibrations,
     _canonical_camera_control_views,
     _contact_sheet_entries,
@@ -40,18 +39,22 @@ from roboclaws.household.scene_camera_comparison import (
     _native_isaac_render_diagnostics,
     _normalize_color_profile_for_replay,
     _offline_color_profile_replay,
-    _projection_diagnostics,
     _render_domain_calibration,
     _render_domain_contract_probe,
     _render_domain_source_diagnostics,
     _render_domain_view_triage,
     _room_camera_control_views,
-    _room_scale_contract_from_capture,
     _room_wall_light_diagnostics,
     _scene_camera_lighting_profile,
-    _scene_frame_transform_from_capture,
     _shadow_parity_probe,
     render_scene_camera_comparison_report,
+)
+from roboclaws.household.scene_camera_geometry_contract import (
+    camera_intrinsics_contract_from_capture,
+    camera_pose_contract_from_capture,
+    projection_diagnostics,
+    room_scale_contract_from_scene_capture,
+    scene_frame_transform_from_capture,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -377,7 +380,7 @@ def _manifest() -> dict[str, object]:
             "interpretation": "The scene probe treats vertical_fov_deg as canonical.",
         },
         "projection_diagnostics": {
-            "schema": "canonical_camera_projection_diagnostics_v1",
+            "schema": "canonical_cameraprojection_diagnostics_v1",
             "status": "same_projected_geometry_within_threshold",
             "projection_threshold_px": 0.5,
             "resolution": {"width": 960, "height": 640},
@@ -1052,7 +1055,7 @@ def test_scene_camera_room_wall_light_diagnostics_flag_wall_specific_delta(
 
 def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:
     manifest = _manifest()
-    diagnostics = _projection_diagnostics(manifest)
+    diagnostics = projection_diagnostics(manifest)
 
     assert diagnostics["status"] == "same_projected_geometry_within_threshold"
     assert diagnostics["max_pixel_delta"] == pytest.approx(0.0)
@@ -1723,7 +1726,7 @@ def test_room_camera_control_views_use_same_canonical_pose_contract() -> None:
 
 
 def test_scene_frame_transform_from_capture_uses_usd_bounds_distance() -> None:
-    transform = _scene_frame_transform_from_capture(
+    transform = scene_frame_transform_from_capture(
         canonical_views=[
             {
                 "view_id": "view_01_table",
@@ -1763,7 +1766,7 @@ def test_scene_frame_transform_from_capture_uses_usd_bounds_distance() -> None:
 
 
 def test_scene_frame_transform_from_capture_flags_targets_outside_usd_bounds() -> None:
-    transform = _scene_frame_transform_from_capture(
+    transform = scene_frame_transform_from_capture(
         canonical_views=[
             {
                 "view_id": "view_01_table",
@@ -1793,7 +1796,7 @@ def test_scene_frame_transform_from_capture_flags_targets_outside_usd_bounds() -
 
 
 def test_scene_frame_transform_from_capture_accepts_surface_aim_above_usd_bounds() -> None:
-    transform = _scene_frame_transform_from_capture(
+    transform = scene_frame_transform_from_capture(
         canonical_views=[
             {
                 "view_id": "view_01_table",
@@ -1828,7 +1831,7 @@ def test_scene_frame_transform_from_capture_accepts_surface_aim_above_usd_bounds
 
 
 def test_camera_pose_contract_from_capture_checks_backend_pose_delta() -> None:
-    contract = _camera_pose_contract_from_capture(
+    contract = camera_pose_contract_from_capture(
         canonical_views=[
             {
                 "view_id": "view_01_table",
@@ -1866,7 +1869,7 @@ def test_camera_pose_contract_from_capture_checks_backend_pose_delta() -> None:
 
 
 def test_camera_intrinsics_contract_declares_vertical_fov_precedence() -> None:
-    contract = _camera_intrinsics_contract_from_capture(
+    contract = camera_intrinsics_contract_from_capture(
         requested_lens={
             "vertical_fov_deg": 45.0,
             "focal_length_mm": 24.0,
@@ -1899,7 +1902,7 @@ def test_camera_intrinsics_contract_declares_vertical_fov_precedence() -> None:
 
 
 def test_room_scale_contract_compares_room_outline_to_isaac_scene_bounds() -> None:
-    contract = _room_scale_contract_from_capture(
+    contract = room_scale_contract_from_scene_capture(
         room_views=[
             {
                 "view_id": "room_01_room_2",
@@ -1941,7 +1944,7 @@ def test_room_scale_contract_compares_room_outline_to_isaac_scene_bounds() -> No
 
 
 def test_room_scale_contract_flags_room_outline_mismatch() -> None:
-    contract = _room_scale_contract_from_capture(
+    contract = room_scale_contract_from_scene_capture(
         room_views=[
             {
                 "view_id": "room_01_room_2",
@@ -1999,6 +2002,50 @@ def test_molmospaces_view_specs_use_anchor_orbit_not_focus_camera_heuristic() ->
         "camera_orbit": {"distance_m": 4.4, "azimuth_deg": 90.0, "elevation_deg": 28.0},
     }
     assert "robot_pose" not in specs[0]
+
+
+def test_scene_camera_comparison_cli_rejects_non_positive_render_dimensions(
+    tmp_path: Path,
+) -> None:
+    script = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmospaces_scene_camera_comparison.py"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--scene-usd-path",
+            str(tmp_path / "missing.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--render-width",
+            "0",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--scene-usd-path",
+            str(tmp_path / "missing.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--render-height",
+            "-1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
 
 
 def test_scene_camera_comparison_recipe_checks_prepared_usd_before_running(tmp_path: Path) -> None:

@@ -77,15 +77,17 @@ def _validate_request_image(image: Any) -> None:
         raise VisualGroundingContractError("image must be an object")
     if not isinstance(image.get("bytes_base64"), str):
         raise VisualGroundingContractError("image.bytes_base64 must be a string")
+    if not image["bytes_base64"]:
+        raise VisualGroundingContractError("image.bytes_base64 is required")
     _validate_base64(image.get("bytes_base64"))
     for field in ("width", "height"):
         if not isinstance(image.get(field), int):
             raise VisualGroundingContractError(f"image.{field} must be an integer")
+        if image[field] <= 0:
+            raise VisualGroundingContractError(f"image.{field} must be positive")
 
 
 def _validate_base64(raw: Any) -> None:
-    if not raw:
-        return
     try:
         base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError) as exc:

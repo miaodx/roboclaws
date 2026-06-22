@@ -31,7 +31,7 @@ def test_worker_command_args_include_state_path_and_command(tmp_path: Path) -> N
 
 def test_parse_last_json_object_tolerates_worker_stdout_noise() -> None:
     payload = worker_runner.parse_last_json_object(
-        "loading assets...\n{\"ok\": true, \"tool\": \"init\"}\n",
+        'loading assets...\n{"ok": true, "tool": "init"}\n',
         worker_name="Test",
     )
 
@@ -181,6 +181,25 @@ def test_worker_timeout_uses_override_or_command_default(
         )
         == 1.0
     )
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "invalid"])
+def test_worker_timeout_rejects_invalid_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("TEST_WORKER_TIMEOUT_S", value)
+
+    with pytest.raises(
+        ValueError,
+        match=r"TEST_WORKER_TIMEOUT_S must be a positive finite number of seconds",
+    ):
+        worker_runner.worker_timeout_s(
+            command="snapshot",
+            override_env_var="TEST_WORKER_TIMEOUT_S",
+            command_timeouts={"snapshot": 4.0},
+            default_timeout_s=1.0,
+        )
 
 
 def test_worker_env_applies_defaults_and_removes_host_keys(

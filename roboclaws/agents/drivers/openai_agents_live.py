@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -14,15 +15,17 @@ from roboclaws.agents.drivers.openai_agents_model_input import (
     _input_compaction_config,
     _model_input_compaction_filter,
 )
+from roboclaws.agents.drivers.openai_agents_spans import (
+    RoboclawsSpanRecorder,
+    append_span_limitation,
+)
 from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, LiveAgentRuntime
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.provider_registry import (
     PROVIDER_PROFILE_CODEX_RESPONSES,
     PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
     WIRE_CHAT_COMPLETIONS,
-    normalize_provider_route,
-    provider_route_spec,
-    route_base_url,
+    openai_agents_runtime_settings,
 )
 from roboclaws.agents.thinking_policy import apply_model_thinking_policy
 
@@ -182,9 +185,9 @@ def _run_openai_agents(
             "skill_context": parts.skill_context_summary,
         },
     )
-    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=parts.runtime_config)
+    span_processor = RoboclawsSpanRecorder(spans_path, runtime_config=parts.runtime_config)
     if add_trace_processor is None:
-        _append_span_limitation(
+        append_span_limitation(
             spans_path,
             runtime_config=parts.runtime_config,
             reason="sdk_trace_processor_api_unavailable",
@@ -194,7 +197,7 @@ def _run_openai_agents(
         try:
             add_trace_processor(span_processor)
         except Exception as exc:
-            _append_span_limitation(
+            append_span_limitation(
                 spans_path,
                 runtime_config=parts.runtime_config,
                 reason="sdk_trace_processor_registration_failed",
@@ -534,59 +537,126 @@ def _default_sdk_run_config_payload() -> dict[str, Any]:
     }
 
 
-def _bool_setting(value: Any, *, default: bool) -> bool:
+def _bool_setting(
+    value: Any,
+    setting_name: str,
+    *,
+    default: bool,
+    empty_uses_default: bool = True,
+) -> bool:
     if value is None:
         return default
     if isinstance(value, bool):
         return value
-    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+    if value == "" and empty_uses_default:
+        return default
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+    if (normalized := str(value).strip().lower()) in true_values | false_values:
+        return normalized in true_values
+    raise ValueError(
+        f"OpenAI Agents SDK setting {setting_name} must be true or false, got {value!r}"
+    )
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: Any, setting_name: str, *, default: int) -> int:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        )
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(1, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        )
+    return parsed
+
+
+def _positive_float(value: Any, setting_name: str, *, default: float) -> float:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        )
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        )
+    return parsed
 
 
 def _max_turns(request: LiveAgentRequest) -> int:
     if request.max_turns is not None:
         return request.max_turns
     configured = request.metadata.get("max_turns") if isinstance(request.metadata, dict) else None
-    try:
-        value = int(configured) if configured is not None else DEFAULT_OPENAI_AGENTS_MAX_TURNS
-    except (TypeError, ValueError):
+    if configured is None:
         return DEFAULT_OPENAI_AGENTS_MAX_TURNS
-    return max(1, value)
+    try:
+        value = int(configured)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
+            f"got {configured!r}"
+        ) from exc
+    if value < 1:
+        raise ValueError(
+            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
+            f"got {configured!r}"
+        )
+    return value
 
 
 def _cache_tools_list(request: LiveAgentRequest) -> bool:
-    configured = None
-    if isinstance(request.metadata, dict):
-        configured = request.metadata.get("cache_tools_list")
+    source = "cache_tools_list"
+    configured = request.metadata.get(source) if isinstance(request.metadata, dict) else None
     if configured is None:
+        source = "ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST"
         configured = os.environ.get("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST")
-    if configured is None:
-        return True
-    if isinstance(configured, bool):
-        return configured
-    return str(configured).strip().lower() not in {"0", "false", "no", "off"}
+    return _bool_setting(configured, source, default=True, empty_uses_default=False)
 
 
 def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:
     configured = None
+    source = "mcp_client_session_timeout_s"
     if isinstance(request.metadata, dict):
         configured = request.metadata.get("mcp_client_session_timeout_s")
     if configured is None:
-        configured = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
+        raw_env = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
+        if raw_env is not None:
+            configured = raw_env
+            source = MCP_CLIENT_SESSION_TIMEOUT_ENV
     if configured is None or str(configured).strip() == "":
         return False, None
     try:
         value = float(configured)
-    except (TypeError, ValueError):
-        return False, None
-    if value <= 0:
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
+            f"({source}) must be a non-negative number, got {configured!r}"
+        ) from exc
+    if value < 0:
+        raise ValueError(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
+            f"({source}) must be a non-negative number, got {configured!r}"
+        )
+    if value == 0:
         return True, None
     return True, round(value, 3)
 
@@ -663,13 +733,21 @@ def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, A
         config = metadata.get("model_racing_observability")
     if not isinstance(config, dict):
         config = {}
-    enabled = _bool_setting(config.get("enabled"), default=False)
-    arm_count = _positive_int(config.get("arm_count"), default=1)
+    enabled = _bool_setting(
+        config.get("enabled"), "model_racing_observability.enabled", default=False
+    )
+    arm_count = _positive_int(
+        config.get("arm_count"), "model_racing_observability.arm_count", default=1
+    )
     if not enabled:
         arm_count = 1
     else:
         arm_count = max(2, arm_count)
-    configured_multiplier = float(config.get("racing_multiplier") or arm_count)
+    configured_multiplier = _positive_float(
+        config.get("racing_multiplier"),
+        "model_racing_observability.racing_multiplier",
+        default=float(arm_count),
+    )
     racing_multiplier = max(float(arm_count), configured_multiplier) if enabled else 1.0
     racing_mode = str(
         config.get("mode") or ("get_response_racing_v1" if enabled else "per_arm_observability_v1")
@@ -694,7 +772,11 @@ def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, A
         ),
         "unknown_loser_billing": True
         if enabled
-        else bool(config.get("unknown_loser_billing", False)),
+        else _bool_setting(
+            config.get("unknown_loser_billing"),
+            "model_racing_observability.unknown_loser_billing",
+            default=False,
+        ),
         "private_artifact_policy": (
             "records model-call arm lifecycle, winner/cancel fields, timing, provider/model ids, "
             "and usage availability only; raw prompts, model text, tool payload bodies, "
@@ -766,205 +848,6 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     return payload
 
 
-class _RoboclawsSpanRecorder:
-    """Tracing processor that writes sanitized SDK span metadata.
-
-    The OpenAI Agents SDK span export can include raw model input/output and
-    function input/output. Roboclaws keeps only identifiers, timing, span type,
-    model/usage, MCP tool names, and error metadata so live artifacts stay useful
-    without persisting prompts, credentials, or private evaluator truth.
-    """
-
-    def __init__(self, path: Path, *, runtime_config: dict[str, Any]) -> None:
-        self.path = path
-        self.runtime_config = runtime_config
-        self.active = True
-
-    def on_trace_start(self, trace: Any) -> None:
-        self._append(
-            {
-                "event": "trace_start",
-                "ts_epoch": time.time(),
-                "trace_id": str(getattr(trace, "trace_id", "") or ""),
-                "workflow_name": str(getattr(trace, "name", "") or ""),
-            }
-        )
-
-    def on_trace_end(self, trace: Any) -> None:
-        self._append(
-            {
-                "event": "trace_end",
-                "ts_epoch": time.time(),
-                "trace_id": str(getattr(trace, "trace_id", "") or ""),
-                "workflow_name": str(getattr(trace, "name", "") or ""),
-            }
-        )
-
-    def on_span_start(self, span: Any) -> None:
-        self._append(_sanitized_span_event(span, event="span_start", runtime_config=None))
-
-    def on_span_end(self, span: Any) -> None:
-        self._append(_sanitized_span_event(span, event="span_end", runtime_config=None))
-
-    def shutdown(self) -> None:
-        self.active = False
-
-    def force_flush(self) -> None:
-        return None
-
-    def _append(self, payload: dict[str, Any]) -> None:
-        if not self.active:
-            return
-        payload.setdefault("schema", "openai_agents_sanitized_span_v1")
-        payload.setdefault("runtime", self.runtime_config.get("runtime"))
-        payload.setdefault("provider_profile", self.runtime_config.get("provider_profile"))
-        payload.setdefault("model", self.runtime_config.get("model"))
-        _append_event(self.path, _drop_empty(payload))
-
-
-def _append_span_limitation(
-    path: Path,
-    *,
-    runtime_config: dict[str, Any],
-    reason: str,
-    exc: Exception | None = None,
-) -> None:
-    payload = {
-        "schema": "openai_agents_sanitized_span_v1",
-        "event": "span_capture_unavailable",
-        "ts_epoch": time.time(),
-        "runtime": runtime_config.get("runtime"),
-        "provider_profile": runtime_config.get("provider_profile"),
-        "model": runtime_config.get("model"),
-        "reason": reason,
-    }
-    if exc is not None:
-        payload["error_type"] = exc.__class__.__name__
-        payload["message"] = str(exc)
-    _append_event(path, _drop_empty(payload))
-
-
-def _sanitized_span_event(
-    span: Any,
-    *,
-    event: str,
-    runtime_config: dict[str, Any] | None,
-) -> dict[str, Any]:
-    span_data = getattr(span, "span_data", None)
-    exported = _span_data_export(span_data)
-    payload: dict[str, Any] = {
-        "schema": "openai_agents_sanitized_span_v1",
-        "event": event,
-        "ts_epoch": time.time(),
-        "trace_id": str(getattr(span, "trace_id", "") or ""),
-        "span_id": str(getattr(span, "span_id", "") or ""),
-        "parent_id": str(getattr(span, "parent_id", "") or ""),
-        "started_at": getattr(span, "started_at", None),
-        "ended_at": getattr(span, "ended_at", None),
-        "duration_s": _iso_duration_seconds(
-            getattr(span, "started_at", None),
-            getattr(span, "ended_at", None),
-        ),
-        "span_type": str(_span_export_value(exported, "type") or getattr(span_data, "type", "")),
-        "span_name": _safe_span_name(exported, span_data),
-        "error": _sanitized_span_error(getattr(span, "error", None)),
-        "usage": _span_usage(exported),
-        "mcp": _span_mcp(exported),
-        "model": _span_model(exported),
-    }
-    if runtime_config:
-        payload.update(
-            {
-                "runtime": runtime_config.get("runtime"),
-                "provider_profile": runtime_config.get("provider_profile"),
-                "model": runtime_config.get("model"),
-            }
-        )
-    return _drop_empty(payload)
-
-
-def _span_data_export(span_data: Any) -> dict[str, Any]:
-    if span_data is None or not hasattr(span_data, "export"):
-        return {}
-    try:
-        exported = span_data.export()
-    except Exception:
-        return {}
-    return exported if isinstance(exported, dict) else {}
-
-
-def _span_export_value(exported: dict[str, Any], key: str) -> Any:
-    if key in exported:
-        return exported[key]
-    data = exported.get("data")
-    if isinstance(data, dict):
-        return data.get(key) or data.get(f"sdk_span_{key}")
-    return None
-
-
-def _safe_span_name(exported: dict[str, Any], span_data: Any) -> str:
-    span_type = str(_span_export_value(exported, "type") or getattr(span_data, "type", "") or "")
-    name = _span_export_value(exported, "name")
-    if span_type == "function":
-        return str(name or "")
-    if span_type in {"agent", "task", "turn", "custom", "mcp_list_tools"}:
-        return str(name or "")
-    return ""
-
-
-def _span_usage(exported: dict[str, Any]) -> dict[str, Any]:
-    usage = _span_export_value(exported, "usage")
-    return _to_jsonable(usage) if isinstance(usage, dict) else {}
-
-
-def _span_mcp(exported: dict[str, Any]) -> dict[str, Any]:
-    mcp: dict[str, Any] = {}
-    mcp_data = exported.get("mcp_data")
-    if isinstance(mcp_data, dict):
-        for key in ("server", "tool_name", "name"):
-            if key in mcp_data:
-                mcp[key] = mcp_data[key]
-    server = exported.get("server")
-    if server:
-        mcp["server"] = server
-    result = exported.get("result")
-    if isinstance(result, list):
-        mcp["tool_names"] = [str(item) for item in result]
-        mcp["tool_count"] = len(result)
-    return _to_jsonable(mcp) if mcp else {}
-
-
-def _span_model(exported: dict[str, Any]) -> str:
-    model = _span_export_value(exported, "model")
-    return str(model or "")
-
-
-def _sanitized_span_error(error: Any) -> dict[str, Any]:
-    if not isinstance(error, dict):
-        return {}
-    payload: dict[str, Any] = {}
-    message = str(error.get("message") or "")
-    if message:
-        payload["message"] = message
-    data = error.get("data")
-    if isinstance(data, dict):
-        payload["data_keys"] = sorted(str(key) for key in data.keys())
-    return payload
-
-
-def _iso_duration_seconds(started_at: Any, ended_at: Any) -> float | None:
-    if not started_at or not ended_at:
-        return None
-    from datetime import datetime
-
-    try:
-        start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
-        end = datetime.fromisoformat(str(ended_at).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return round(max(0.0, (end - start).total_seconds()), 3)
-
-
 def _drop_empty(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if not _is_empty_json_value(value)}
 
@@ -1016,11 +899,13 @@ def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | fl
     metadata = dict(request.metadata)
     attempts = _non_negative_int(
         metadata.get("model_service_retry_attempts"),
+        setting_name="model_service_retry_attempts",
         env_name=MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
         default=DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
     )
     sleep_s = _non_negative_float(
         metadata.get("model_service_retry_sleep_s"),
+        setting_name="model_service_retry_sleep_s",
         env_name=MODEL_SERVICE_RETRY_SLEEP_ENV,
         default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     )
@@ -1256,7 +1141,9 @@ class _RetryingModel(_AgentsModel):
             if isinstance(self.runtime_config.get("model_racing_observability"), dict)
             else {}
         )
-        return _positive_int(config.get("arm_count"), default=1)
+        return _positive_int(
+            config.get("arm_count"), "model_racing_observability.arm_count", default=1
+        )
 
     async def _race_get_response(
         self,
@@ -1828,51 +1715,21 @@ def _int_from_any(value: Any) -> int | None:
 
 def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
-    raw_provider = str(
-        metadata.get("provider_profile")
-        or request.provider_profile
-        or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER")
-        or os.environ.get("ROBOCLAWS_PROVIDER_PROFILE")
-        or PROVIDER_PROFILE_CODEX_RESPONSES
-    ).strip()
-    try:
-        provider = normalize_provider_route(raw_provider, default=PROVIDER_PROFILE_CODEX_RESPONSES)
-        route = provider_route_spec(provider)
-    except KeyError as exc:
-        raise RuntimeError(
-            "openai-agents-live supports provider profiles codex-router-responses, "
-            "mimo-mify-responses, minimax-responses, mimo-tp-openai-chat, "
-            "mimo-inside-openai-chat, and kimi-openai-chat"
-        ) from exc
-    if "openai-agents-sdk" not in route.supported_engines:
-        raise RuntimeError(f"openai-agents-live does not support provider profile {provider}")
-
-    base_url = str(metadata.get("base_url") or route_base_url(route))
-    api_key = str(
-        metadata.get("api_key")
-        or (os.environ.get(route.api_key_env or "") if route.api_key_env else "")
-        or ""
+    settings = openai_agents_runtime_settings(
+        provider_profile=metadata.get("provider_profile"),
+        request_provider_profile=request.provider_profile,
+        model=metadata.get("model"),
+        request_model=request.model,
+        base_url=metadata.get("base_url"),
+        api_key=metadata.get("api_key"),
     )
-    model = str(
-        metadata.get("model")
-        or request.model
-        or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-        or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-        or route.default_model_id
-    )
-    if route.base_url_env == "CODEX_BASE_URL":
-        _require_setting(provider, route.base_url_env, base_url)
-    if route.api_key_env:
-        _require_setting(provider, route.api_key_env, api_key)
-    return {
-        "provider_profile": provider,
-        "wire_api": route.wire_api,
-        "wire_source": route.wire_source,
-        "route_status": route.status_for_engine("openai-agents-sdk"),
-        "base_url": base_url,
-        "api_key": api_key,
-        "model": model,
-    }
+    if settings["base_url_env"] == "CODEX_BASE_URL":
+        _require_setting(
+            settings["provider_profile"], settings["base_url_env"], settings["base_url"]
+        )
+    if settings["api_key_env"]:
+        _require_setting(settings["provider_profile"], settings["api_key_env"], settings["api_key"])
+    return settings
 
 
 def _require_setting(provider: str, name: str, value: str) -> None:
@@ -1880,26 +1737,52 @@ def _require_setting(provider: str, name: str, value: str) -> None:
         raise RuntimeError(f"{provider} requires {name}")
 
 
-def _non_negative_int(value: Any, *, env_name: str, default: int) -> int:
+def _non_negative_int(value: Any, *, setting_name: str, env_name: str, default: int) -> int:
+    source = setting_name
     if value is None:
         raw_env = os.environ.get(env_name)
-        value = raw_env if raw_env not in {None, ""} else default
+        if raw_env not in {None, ""}:
+            value = raw_env
+            source = env_name
+        else:
+            value = default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-    return max(0, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative integer, got {value!r}"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative integer, got {value!r}"
+        )
+    return parsed
 
 
-def _non_negative_float(value: Any, *, env_name: str, default: float) -> float:
+def _non_negative_float(value: Any, *, setting_name: str, env_name: str, default: float) -> float:
+    source = setting_name
     if value is None:
         raw_env = os.environ.get(env_name)
-        value = raw_env if raw_env not in {None, ""} else default
+        if raw_env not in {None, ""}:
+            value = raw_env
+            source = env_name
+        else:
+            value = default
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    return max(0.0, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative number, got {value!r}"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative number, got {value!r}"
+        )
+    return parsed
 
 
 def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
@@ -1912,6 +1795,14 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
             detail=detail,
         )
     lowered = detail.lower()
+    if any(
+        item in lowered
+        for item in (
+            "roboclaws_openai_agents_",
+            "openai agents sdk setting",
+        )
+    ):
+        return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(item in lowered for item in ("requires codex_base_url", "requires codex_api_key")):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(

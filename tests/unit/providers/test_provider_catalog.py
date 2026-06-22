@@ -9,6 +9,7 @@ from roboclaws.agents.provider_registry import (
     ROUTE_EXPERIMENTAL,
     ROUTE_HEALTHY,
     ROUTE_PROVISIONAL,
+    _main,
     default_enabled_models,
     default_enabled_provider_routes,
     model_aliases,
@@ -143,7 +144,30 @@ def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
     assert route.supported_engines == ("openai-agents-sdk",)
     assert route.base_url_env == "MIMO_BASE_URL"
     assert route.api_key_env == "MIMO_API_KEY"
+    assert route.required_env_keys == ("MIMO_BASE_URL", "MIMO_API_KEY")
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_PROVISIONAL
+
+
+def test_mimo_inside_readiness_requires_base_url_and_api_key() -> None:
+    missing_base_url = provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile="mimo-inside-openai-chat",
+        env={"MIMO_API_KEY": "key"},
+    )
+
+    assert missing_base_url["ok"] is False
+    assert missing_base_url["missing_env"] == ["MIMO_BASE_URL"]
+    assert "MIMO_BASE_URL and MIMO_API_KEY" in missing_base_url["message"]
+
+    ready = provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile="mimo-inside-openai-chat",
+        env={"MIMO_BASE_URL": "https://inside.example/v1", "MIMO_API_KEY": "key"},
+    )
+
+    assert ready["ok"] is True
+    assert ready["missing_env"] == []
+    assert ready["model"] == "mimo-1000"
 
 
 def test_provider_route_aliases_normalize_to_public_profiles() -> None:
@@ -198,3 +222,34 @@ def test_provider_readiness_reports_status_and_missing_env() -> None:
     assert readiness["provider"] == "mimo-mify-responses"
     assert readiness["route_status"] == ROUTE_DEGRADED
     assert readiness["missing_env"] == ["XM_LLM_API_KEY"]
+
+
+def test_provider_readiness_rejects_unknown_model_override() -> None:
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile="codex-router-responses",
+        model="not-in-provider-catalog",
+        env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["missing_env"] == []
+    assert readiness["model"] == "not-in-provider-catalog"
+    assert "unknown model 'not-in-provider-catalog'" in readiness["message"]
+    assert "provider_profile codex-router-responses" in readiness["message"]
+
+
+def test_provider_registry_cli_dispatches_route_and_json_commands(
+    tmp_path,
+    capsys,
+) -> None:
+    output = tmp_path / "providers.json"
+
+    assert _main(["json", "--output", str(output)]) == 0
+    assert "codex-router-responses" in output.read_text(encoding="utf-8")
+    assert _main(["default-model", "minimax-responses"]) == 0
+    assert capsys.readouterr().out.strip() == "MiniMax-M3"
+    assert _main(["model-id", "minimax-highspeed"]) == 0
+    assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
+    assert _main(["supports-engine", "minimax-responses", "openai-agents-sdk"]) == 0
+    assert _main(["supports-engine", "mimo-tp-openai-chat", "codex-cli"]) == 1

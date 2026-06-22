@@ -163,8 +163,8 @@ def scene_probe_camera_control_request(
         "coordinate_convention": WORLD_Z_UP_ORBIT_CONVENTION,
         "calibration_status": calibration_status,
         "render_resolution": {
-            "width": _positive_int(width),
-            "height": _positive_int(height),
+            "width": _positive_int(width, field_name="render_resolution.width"),
+            "height": _positive_int(height, field_name="render_resolution.height"),
         },
         "camera_orbit": orbit,
         "lens": lens_payload,
@@ -210,8 +210,8 @@ def canonical_scene_camera_control_request(
         "coordinate_convention": scene_frame,
         "calibration_status": calibration_status,
         "render_resolution": {
-            "width": _positive_int(width),
-            "height": _positive_int(height),
+            "width": _positive_int(width, field_name="render_resolution.width"),
+            "height": _positive_int(height, field_name="render_resolution.height"),
         },
         "lens": lens_payload,
         "lighting_profile": lighting,
@@ -231,8 +231,8 @@ def normalize_camera_control_request(
     if isinstance(payload, list):
         return scene_probe_camera_control_request(
             [dict(item) for item in payload if isinstance(item, dict)],
-            width=width or 1,
-            height=height or 1,
+            width=_positive_int(width, field_name="render_resolution.width"),
+            height=_positive_int(height, field_name="render_resolution.height"),
         )
     if not isinstance(payload, dict):
         raise ValueError("camera control request must be an object or a view list")
@@ -240,11 +240,11 @@ def normalize_camera_control_request(
     if not isinstance(raw_views, list):
         raise ValueError("camera control request must include a views list")
     request = dict(payload)
-    resolution = dict(request.get("render_resolution") or {})
-    request["render_resolution"] = {
-        "width": _positive_int(width if width is not None else resolution.get("width", 1)),
-        "height": _positive_int(height if height is not None else resolution.get("height", 1)),
-    }
+    request["render_resolution"] = _render_resolution(
+        request.get("render_resolution"),
+        width=width,
+        height=height,
+    )
     request.setdefault("schema", CAMERA_CONTROL_REQUEST_SCHEMA)
     request.setdefault("api_name", CAMERA_CONTROL_API_NAME)
     request.setdefault("camera_model", ANCHOR_ORBIT_CAMERA_MODEL)
@@ -601,9 +601,50 @@ def _vec3(value: Any, *, default: list[float]) -> list[float]:
     return [float(value[0]), float(value[1]), float(value[2])]
 
 
-def _positive_int(value: Any) -> int:
-    try:
+def _render_resolution(
+    value: Any,
+    *,
+    width: int | None,
+    height: int | None,
+) -> dict[str, int]:
+    needs_payload_resolution = width is None or height is None
+    if needs_payload_resolution and not isinstance(value, dict):
+        raise ValueError("camera control request render_resolution must be an object")
+    resolution = value if isinstance(value, dict) else {}
+    return {
+        "width": _positive_int(
+            width if width is not None else _required_resolution_value(resolution, "width"),
+            field_name="render_resolution.width",
+        ),
+        "height": _positive_int(
+            height if height is not None else _required_resolution_value(resolution, "height"),
+            field_name="render_resolution.height",
+        ),
+    }
+
+
+def _required_resolution_value(resolution: dict[str, Any], key: str) -> Any:
+    if key not in resolution:
+        raise ValueError(f"camera control request render_resolution.{key} is required")
+    return resolution[key]
+
+
+def _positive_int(value: Any, *, field_name: str = "value") -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
         parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = 1
-    return max(1, parsed)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value.strip())
+        except ValueError:
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}") from None
+    else:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    return parsed

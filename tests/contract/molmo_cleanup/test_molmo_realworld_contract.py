@@ -2836,7 +2836,9 @@ def test_realworld_camera_model_policy_records_sim_pipeline_provenance() -> None
     _assert_no_forbidden_keys(response)
 
 
-def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() -> None:
+def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback(
+    tmp_path: Path,
+) -> None:
     client = _StaticVisualGroundingClient(
         {
             "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
@@ -2871,6 +2873,11 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
     observation = contract.observe()
+    _attach_raw_fpv_test_image(
+        contract,
+        tmp_path=tmp_path,
+        relative_path="robot_views/raw_fpv_001.png",
+    )
     response = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"]
     )
@@ -2886,6 +2893,56 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
     assert policy["model_provenance"] == "external_visual_grounding_service"
     assert policy["visual_grounding_failure_count"] == 1
     assert contract.model_declared_observations_payload()["observation_count"] == 0
+    assert client.last_request is not None
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_camera_labels_missing_raw_image_fails_before_sidecar() -> None:
+    client = _StaticVisualGroundingClient(
+        {
+            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
+            "status": "ok",
+            "pipeline": {
+                "pipeline_id": "grounding-dino",
+                "stages": [
+                    {
+                        "stage": "proposer",
+                        "producer_id": "grounding-dino",
+                        "model_id": "fake",
+                        "status": "ok",
+                        "latency_ms": 4,
+                    }
+                ],
+            },
+            "candidates": [
+                {
+                    "category": "mug",
+                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+                    "confidence": 0.8,
+                }
+            ],
+        }
+    )
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        visual_grounding_client=client,
+        visual_grounding_pipeline_id="grounding-dino",
+    )
+
+    observation = contract.observe()
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"]
+    )
+    evidence = response["model_declared_observation_evidence"]
+    policy = contract.camera_model_policy_payload()
+
+    assert response["ok"] is True
+    assert response["model_declared_observations"] == []
+    assert evidence["visual_grounding_pipeline"]["status"] == "failed"
+    assert evidence["visual_grounding_pipeline"]["failure_reason"] == "missing_raw_fpv_image"
+    assert policy["visual_grounding_failure_count"] == 1
+    assert client.last_request is None
     _assert_no_forbidden_keys(response)
 
 
@@ -2938,12 +2995,11 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
     observation = contract.observe()
-    image_path = tmp_path / "robot_views" / "raw_fpv_001.png"
-    image_path.parent.mkdir(parents=True)
-    Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
-    contract._raw_fpv_observations[-1]["image_artifacts"] = {  # noqa: SLF001
-        "fpv": "robot_views/raw_fpv_001.png"
-    }
+    _attach_raw_fpv_test_image(
+        contract,
+        tmp_path=tmp_path,
+        relative_path="robot_views/raw_fpv_001.png",
+    )
     response = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"]
     )
@@ -2985,7 +3041,9 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     _assert_no_forbidden_keys(response)
 
 
-def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> None:
+def test_realworld_camera_labels_http_destination_hint_is_evidence_only(
+    tmp_path: Path,
+) -> None:
     client = _StaticVisualGroundingClient(
         {
             "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
@@ -3025,6 +3083,11 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
     )
 
     observation = contract.observe()
+    _attach_raw_fpv_test_image(
+        contract,
+        tmp_path=tmp_path,
+        relative_path="robot_views/raw_fpv_001.png",
+    )
     response = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"]
     )
@@ -3069,6 +3132,18 @@ class _StaticVisualGroundingClient:
     def request_candidates(self, request: dict) -> dict:
         self.last_request = request
         return self.response
+
+
+def _attach_raw_fpv_test_image(
+    contract: RealWorldCleanupContract,
+    *,
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    image_path = tmp_path / relative_path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
+    contract._raw_fpv_observations[-1]["image_artifacts"] = {"fpv": str(image_path)}  # noqa: SLF001
 
 
 def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:

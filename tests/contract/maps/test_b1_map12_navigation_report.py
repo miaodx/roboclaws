@@ -10,11 +10,29 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     readiness_artifact_with_navigation,
 )
 from scripts.isaac_lab_cleanup.render_b1_map12_navigation_report import main as render_main
+from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import parse_args as smoke_parse_args
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import (
     _write_reviewable_image,
     navigation_payload,
     static_readiness_payload,
 )
+
+
+def test_b1_map12_navigation_smoke_rejects_non_positive_render_dimensions() -> None:
+    for flag, value in (("--render-width", "0"), ("--render-height", "-1")):
+        try:
+            smoke_parse_args([flag, value])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_b1_map12_navigation_smoke_accepts_positive_render_dimensions() -> None:
+    args = smoke_parse_args(["--render-width", "1280", "--render-height", "720"])
+
+    assert args.render_width == 1280
+    assert args.render_height == 720
 
 
 def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) -> None:

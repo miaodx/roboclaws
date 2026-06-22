@@ -321,6 +321,7 @@ def _normalize_surface(value: str) -> str:
 
 
 def _normalize_world(value: str | None, *, surface_id: str) -> WorldSpec:
+    _reject_blank_axis(value, axis="world")
     world_id = _strip_named(value, "world") if value else DEFAULT_WORLD_BY_SURFACE[surface_id]
     try:
         spec = world_spec(world_id)
@@ -335,6 +336,7 @@ def _normalize_world(value: str | None, *, surface_id: str) -> WorldSpec:
 
 
 def _normalize_backend(value: str | None, *, world: WorldSpec) -> BackendSpec:
+    _reject_blank_axis(value, axis="backend")
     backend_id = _strip_named(value, "backend") if value else world.default_backend
     spec = BACKEND_SPECS.get(backend_id)
     if spec is None:
@@ -360,6 +362,7 @@ def _normalize_agent_engine(value: str) -> AgentEngineSpec:
 
 
 def _normalize_preset(value: str | None, *, surface: TaskSurfaceSpec) -> TaskPresetSpec | None:
+    _reject_blank_axis(value, axis="preset")
     raw = str(value or "").strip()
     if raw.startswith("preset="):
         raw = raw.removeprefix("preset=")
@@ -389,6 +392,7 @@ def _normalize_intent(
     prompt: str,
     preset: TaskPresetSpec | None,
 ) -> str:
+    _reject_blank_axis(value, axis="intent")
     raw = str(value or "").strip()
     if raw.startswith("intent="):
         raw = raw.removeprefix("intent=")
@@ -514,6 +518,12 @@ def _resolve_provider_profile(
     agent_engine: AgentEngineSpec,
     provider_profile: str | None,
 ) -> str | None:
+    default_profile = agent_engine.default_provider_profile or "no provider"
+    _reject_blank_axis(
+        provider_profile,
+        axis="provider_profile",
+        hint=f"omit provider_profile= to use {default_profile}",
+    )
     if not agent_engine.supported_provider_profiles:
         if provider_profile:
             raise LaunchError(f"agent_engine '{agent_engine.id}' does not accept provider_profile")
@@ -541,6 +551,14 @@ def _resolve_provider_profile(
             f"expected {'|'.join(agent_engine.supported_provider_profiles)}",
         )
     return selected
+
+
+def _reject_blank_axis(value: str | None, *, axis: str, hint: str | None = None) -> None:
+    if value is not None and not value.strip():
+        raise LaunchError(
+            f"{axis}= must be non-empty when provided",
+            hint or f"omit {axis}= to use the default",
+        )
 
 
 def _dispatch_runner_for_selection(
@@ -597,8 +615,7 @@ def _normalize_scenario_setup_overrides(
     if _override_value(overrides, "generated_mess_count") is not None:
         raise LaunchError(
             "generated_mess_count is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-cleanup-related-objects "
-            "and relocation_count=<N>",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects and relocation_count=<N>",
         )
     default_setup = preset.default_scenario_setup if preset else ENVIRONMENT_SETUP_BASELINE
     setup = _override_value(overrides, "scenario_setup") or default_setup

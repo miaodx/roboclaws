@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import sys
@@ -27,6 +28,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -48,12 +50,10 @@ DEFAULT_CONTRAST_RUN_DIRS = (
     Path("output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7"),
 )
 DEFAULT_RUNTIME_MAP_PRIOR = Path(
-    "output/household/direct-map-build/direct-camera-grounded-labels/"
-    "seed-7/runtime_metric_map.json"
+    "output/household/direct-map-build/direct-camera-grounded-labels/seed-7/runtime_metric_map.json"
 )
 DEFAULT_OUTPUT_ROOT = Path("output/molmo/raw-fpv-perception-probe")
 DEFAULT_MODEL = "gpt-5.5"
-DEFAULT_CODEX_BASE_URL = "https://api.openai.com/v1"
 
 SCREEN_GRID_REGIONS = (
     "upper_left",
@@ -228,10 +228,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
         default="both",
     )
-    parser.add_argument("--max-frames-per-source", type=int, default=18)
-    parser.add_argument("--threshold", type=int, default=5)
-    parser.add_argument("--max-candidates", type=int, default=3)
-    parser.add_argument("--timeout-s", type=float, default=120.0)
+    parser.add_argument("--max-frames-per-source", type=_positive_int_arg, default=18)
+    parser.add_argument("--threshold", type=_positive_int_arg, default=5)
+    parser.add_argument("--max-candidates", type=_candidate_limit_arg, default=3)
+    parser.add_argument("--timeout-s", type=_positive_float_arg, default=120.0)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     return parser.parse_args(argv)
 
@@ -245,13 +245,13 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     frames = collect_observation_frames(
         raw_run_dirs=raw_run_dirs,
         contrast_run_dirs=contrast_run_dirs,
-        max_frames_per_source=max(1, int(args.max_frames_per_source)),
+        max_frames_per_source=int(args.max_frames_per_source),
     )
     runtime_map_prior = _load_json_if_exists(args.runtime_map_prior)
     public_inputs = build_public_inputs(
         frames,
         runtime_map_prior=runtime_map_prior,
-        max_candidates=max(1, min(3, int(args.max_candidates))),
+        max_candidates=int(args.max_candidates),
     )
     labels = load_probe_labels(
         tuple(args.private_labels or ()),
@@ -294,7 +294,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             frames=frames,
             labels=labels,
             predictions=variant_predictions,
-            threshold=max(1, int(args.threshold)),
+            threshold=int(args.threshold),
         )
         matrix.append(
             {
@@ -341,7 +341,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "status": status,
         "generated_at": _utc_timestamp(),
         "output_dir": str(output_run_dir),
-        "threshold": max(1, int(args.threshold)),
+        "threshold": int(args.threshold),
         "source_runs": {
             "raw": [str(path) for path in raw_run_dirs],
             "contrast": [str(path) for path in contrast_run_dirs],
@@ -386,16 +386,26 @@ def collect_observation_frames(
     max_frames_per_source: int,
 ) -> list[ObservationFrame]:
     frames: list[ObservationFrame] = []
-    for source_kind, run_dirs in (
-        ("raw_failure", raw_run_dirs),
-        ("contrast", contrast_run_dirs),
-    ):
-        for run_dir in run_dirs:
-            run_dir = run_dir.expanduser()
-            if not run_dir.exists():
-                continue
-            collected = _collect_frames_from_run_dir(run_dir, source_kind=source_kind)
-            frames.extend(collected[:max_frames_per_source])
+    raw_source_frames = []
+    for run_dir in raw_run_dirs:
+        run_dir = run_dir.expanduser()
+        if not run_dir.exists():
+            raise FileNotFoundError(f"RAW-FPV source run directory does not exist: {run_dir}")
+        raw_source_frames.extend(
+            _collect_frames_from_run_dir(run_dir, source_kind="raw_failure")[:max_frames_per_source]
+        )
+    if not raw_source_frames:
+        source_dirs = ", ".join(str(path.expanduser()) for path in raw_run_dirs)
+        raise ValueError(
+            f"RAW-FPV source run directories did not yield any usable FPV frames: {source_dirs}"
+        )
+    frames.extend(raw_source_frames)
+    for run_dir in contrast_run_dirs:
+        run_dir = run_dir.expanduser()
+        if not run_dir.exists():
+            continue
+        collected = _collect_frames_from_run_dir(run_dir, source_kind="contrast")
+        frames.extend(collected[:max_frames_per_source])
     return frames
 
 
@@ -608,14 +618,20 @@ def load_probe_labels(
     else:
         label_paths = tuple(paths)
     for path in label_paths:
-        if not path.is_file():
-            continue
+        _require_input_file(path, purpose="RAW-FPV private label manifest")
         payload = _load_json(path)
-        for item in payload.get("labels") or []:
+        rows = payload.get("labels", [])
+        if not isinstance(rows, list):
+            raise ValueError(
+                f"RAW-FPV private label manifest must contain a list in 'labels': {path}"
+            )
+        for index, item in enumerate(rows):
             label = _label_from_payload(
                 item,
                 private=True,
                 default_hidden_target=default_hidden_target,
+                row_index=index,
+                source_path=path,
             )
             if label.frame_id in frame_ids:
                 labels.append(label)
@@ -664,25 +680,30 @@ def _dedupe_labels(labels: list[ProbeLabel]) -> list[ProbeLabel]:
 
 
 def load_predictions(path: Path | None) -> dict[str, dict[str, dict[str, Any]]]:
-    if path is None or not path.is_file():
+    if path is None:
         return {}
+    _require_input_file(path, purpose="RAW-FPV prediction manifest")
     payload = _load_json(path)
-    rows = payload.get("predictions") or payload.get("runs") or []
+    rows = payload.get("predictions") if "predictions" in payload else payload.get("runs", [])
+    if not isinstance(rows, list):
+        raise ValueError(
+            f"RAW-FPV prediction manifest must contain a list in 'predictions' or 'runs': {path}"
+        )
     predictions: dict[str, dict[str, dict[str, Any]]] = {}
-    for row in rows:
+    for index, row in enumerate(rows):
         if not isinstance(row, dict):
-            continue
+            raise ValueError(f"RAW-FPV prediction row {index} must be an object: {path}")
         variant_id = str(row.get("variant_id") or "baseline_json")
         frame_id = str(row.get("frame_id") or "")
         if not frame_id:
-            continue
+            raise ValueError(f"RAW-FPV prediction row {index} is missing frame_id: {path}")
         response = row.get("response")
         if response is None:
             response = row.get("output")
         if isinstance(response, str):
             response = _json_object_from_text(response)
         if not isinstance(response, dict):
-            response = {"schema": RESPONSE_SCHEMA, "candidates": []}
+            raise ValueError(f"RAW-FPV prediction row {index} response must be an object: {path}")
         predictions.setdefault(variant_id, {})[frame_id] = response
     return predictions
 
@@ -896,9 +917,10 @@ def execute_provider_variant(
     predictions = {}
     variant_payload = (public_inputs.get("variants") or {}).get(variant_id) or {}
     requests = _provider_requests_for_variant(variant_id, variant_payload)
-    api_config = _provider_config(provider)
+    api_config = _provider_config(provider, model=model)
     if api_config.get("error"):
         return "provider_config_error", [api_config["error"]], predictions
+    resolved_model = str(api_config["model"])
     for request in requests:
         request_id = str(request.get("request_id") or "")
         image_paths = [Path(str(path)) for path in request.get("image_paths") or []]
@@ -908,7 +930,7 @@ def execute_provider_variant(
             response_payload = _call_responses_api(
                 base_url=str(api_config["base_url"]),
                 api_key=str(api_config["api_key"]),
-                model=model,
+                model=resolved_model,
                 prompt=prompt,
                 image_paths=image_paths,
                 timeout_s=timeout_s,
@@ -1282,8 +1304,30 @@ def _label_from_payload(
     *,
     private: bool,
     default_hidden_target: bool,
+    row_index: int,
+    source_path: Path,
 ) -> ProbeLabel:
+    if not isinstance(item, dict):
+        raise ValueError(f"RAW-FPV private label row {row_index} must be an object: {source_path}")
+    if not str(item.get("frame_id") or item.get("source_observation_id") or ""):
+        raise ValueError(
+            "RAW-FPV private label row "
+            f"{row_index} is missing frame_id or source_observation_id: {source_path}"
+        )
+    if not str(item.get("object_id") or ""):
+        raise ValueError(
+            f"RAW-FPV private label row {row_index} is missing object_id: {source_path}"
+        )
+    if not str(item.get("category") or ""):
+        raise ValueError(
+            f"RAW-FPV private label row {row_index} is missing category: {source_path}"
+        )
     bbox = _bbox_tuple(item.get("bbox") or item.get("image_bbox"))
+    if bbox is None and not item.get("coarse_regions"):
+        raise ValueError(
+            "RAW-FPV private label row "
+            f"{row_index} must include bbox/image_bbox or coarse_regions: {source_path}"
+        )
     coarse_regions = tuple(
         region
         for region in (item.get("coarse_regions") or _coarse_regions_from_bbox(bbox))
@@ -1637,14 +1681,43 @@ def _call_responses_api(
         raise RuntimeError(f"responses API returned HTTP {exc.code}: {message}") from exc
 
 
-def _provider_config(provider: str) -> dict[str, Any]:
+def _provider_config(provider: str, *, model: str) -> dict[str, Any]:
     if provider != "codex-router-responses":
         return {"error": {"type": "unsupported_provider", "provider": provider}}
-    base_url = os.environ.get("CODEX_BASE_URL", DEFAULT_CODEX_BASE_URL)
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile=provider,
+        model=model,
+        env=dict(os.environ),
+    )
+    if not readiness.get("ok"):
+        if str(readiness.get("model_family") or "") == "unknown":
+            return {
+                "error": {
+                    "type": "unknown_model",
+                    "provider": str(readiness.get("provider_profile") or provider),
+                    "model": str(readiness.get("model") or model),
+                    "message": str(readiness.get("message") or ""),
+                }
+            }
+        missing_env = list(readiness.get("missing_env") or [])
+        if missing_env:
+            return {"error": {"type": "missing_env", "env": str(missing_env[0])}}
+        return {
+            "error": {
+                "type": "provider_readiness_error",
+                "provider": provider,
+                "message": str(readiness.get("message") or ""),
+            }
+        }
+    resolved_model = resolve_model(str(readiness.get("model") or model)).model_id
+    base_url = os.environ.get("CODEX_BASE_URL", "")
     api_key = os.environ.get("CODEX_API_KEY", "")
+    if not base_url:
+        return {"error": {"type": "missing_env", "env": "CODEX_BASE_URL"}}
     if not api_key:
         return {"error": {"type": "missing_env", "env": "CODEX_API_KEY"}}
-    return {"base_url": base_url, "api_key": api_key}
+    return {"base_url": base_url, "api_key": api_key, "model": resolved_model}
 
 
 def _write_provider_artifacts(
@@ -1819,6 +1892,11 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
     return {}
 
 
+def _require_input_file(path: Path, *, purpose: str) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(f"{purpose} does not exist: {path}")
+
+
 def _output_run_dir(output_root: Path, run_id: str) -> Path:
     if run_id:
         return output_root / _safe_filename(run_id)
@@ -1839,6 +1917,33 @@ def load_dotenv(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _candidate_limit_arg(value: str) -> int:
+    parsed = _positive_int_arg(value)
+    if parsed > 3:
+        raise argparse.ArgumentTypeError(f"expected a candidate limit from 1 to 3; got {value!r}")
+    return parsed
+
+
+def _positive_float_arg(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}") from None
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

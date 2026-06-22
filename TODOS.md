@@ -19,6 +19,25 @@ Each entry should answer:
 
 ## Missing Work
 
+- **Reusable automatic Map12 ↔ Gaussian top-down alignment**
+  - Created: 2026-06-18.
+  - Updated: 2026-06-18.
+  - Status: Parked automation follow-up; manual point-based alignment is the
+    current working route.
+  - Why: For future Gaussian assets and Agibot maps, we want automatic
+    map-scene matching instead of hand-picking anchors. Current contour and
+    semantic-center probes are useful seeds but failed residual gates on B1 /
+    Map 12.
+  - Next action: Try stronger geometry features or reviewed structural anchors
+    before promoting any automatic result. Keep outputs `candidate_seed_only`
+    until residual gates pass against independent anchors.
+  - Evidence:
+    `scripts/maps/auto_align_b1_map12_scene_topdown.py`;
+    `output/b1-map12/auto-alignment-probe-tracked-draft/auto_alignment_probe.json`;
+    `docs/status/active/b1-map12-verified-map-scene-alignment.md`.
+  - Try now: Yes for research/probes; no for accepted alignment promotion
+    without passing residual evidence.
+
 - **Autonomous-nav decision reasoning in `report.html`**
   - Created: 2026-05-11.
   - Updated: 2026-06-11.

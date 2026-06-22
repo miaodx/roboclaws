@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import sys
@@ -17,6 +16,8 @@ if __package__ in {None, ""}:
 
 from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_COLOR_PROFILE
 from scripts.molmo_cleanup import robot_camera_visual_parity_gates as parity_gates
+from scripts.molmo_cleanup import robot_camera_visual_parity_payloads as parity_payloads
+from scripts.molmo_cleanup.robot_camera_visual_parity_report import render_visual_parity_report
 
 SCHEMA = "roboclaws_robot_camera_visual_parity_summary_v1"
 ROBOT_CAMERA_MANIFEST_SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
@@ -226,7 +227,7 @@ def build_summary(
         "recommended_next_action": _recommended_next_action(checks),
     }
     _write_json(output_dir / "visual_parity_summary.json", manifest)
-    (output_dir / "report.html").write_text(_render_report(manifest), encoding="utf-8")
+    (output_dir / "report.html").write_text(render_visual_parity_report(manifest), encoding="utf-8")
     return manifest
 
 
@@ -238,7 +239,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
-    object_parity = _best_object_parity_audit(
+    object_parity = parity_payloads.best_object_parity_audit(
         summary.get("object_visual_parity_audit"),
         summary.get("object_parity_audit"),
         payload.get("object_visual_parity_audit"),
@@ -252,7 +253,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         summary.get("native_isaac_render_diagnostics")
         or payload.get("native_isaac_render_diagnostics")
     )
-    capture_quality = _capture_quality_probe_summary(payload)
+    capture_quality = parity_payloads.capture_quality_probe_summary(payload)
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -270,7 +271,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
             "scene_usd_path": scene.get("scene_usd_path"),
         },
         "scene_signature": _scene_signature(scene),
-        "metric_scene_signature": _metric_scene_signature(scene, capture_quality),
+        "metric_scene_signature": parity_payloads.metric_scene_signature(scene, capture_quality),
         "location_count": summary.get("location_count"),
         "successful_location_count": summary.get("successful_location_count"),
         "fpv_mean_abs_rgb_avg": summary.get("fpv_mean_abs_rgb_avg"),
@@ -284,7 +285,9 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "object_parity_status": object_parity.get("status"),
         "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
         "object_parity_item_count": object_parity.get("item_count"),
-        "object_visual_parity_audit": _compact_object_visual_parity_audit(object_parity),
+        "object_visual_parity_audit": parity_payloads.compact_object_visual_parity_audit(
+            object_parity
+        ),
         "object_render_gate_status": object_render.get("status"),
         "object_gate_status": object_render.get("object_gate_status"),
         "object_gate_failure_count": object_render.get("object_gate_failure_count"),
@@ -295,7 +298,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "native_isaac_default_render_settings_changed": native_isaac_render.get(
             "default_render_settings_changed"
         ),
-        "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
+        "native_isaac_render_diagnostics": parity_payloads.compact_native_isaac_render_diagnostics(
             native_isaac_render
         ),
         "capture_quality_probe": capture_quality,
@@ -309,318 +312,6 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         ),
         "render_domain_checks": _render_checks_by_id(render_checks),
     }
-
-
-def _compact_object_visual_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
-    if not audit:
-        return {}
-    category_summary = _list_dicts(audit.get("category_status_summary"))
-    if not category_summary:
-        category_summary = _object_category_status_summary_from_items(
-            _list_dicts(audit.get("items"))
-        )
-    return {
-        "schema": audit.get("schema"),
-        "status": audit.get("status"),
-        "item_count": audit.get("item_count"),
-        "object_count": audit.get("object_count"),
-        "receptacle_count": audit.get("receptacle_count"),
-        "high_priority_gap_count": audit.get("high_priority_gap_count"),
-        "binding_status_counts": audit.get("binding_status_counts") or {},
-        "category_status_counts": audit.get("category_status_counts") or {},
-        "pose_status_counts": audit.get("pose_status_counts") or {},
-        "support_status_counts": audit.get("support_status_counts") or {},
-        "state_status_counts": audit.get("state_status_counts") or {},
-        "render_contract_status_counts": audit.get("render_contract_status_counts") or {},
-        "category_status_summary": category_summary,
-        "recommended_next_action": audit.get("recommended_next_action"),
-    }
-
-
-def _best_object_parity_audit(*candidates: Any) -> dict[str, Any]:
-    audits = [_dict(candidate) for candidate in candidates if _dict(candidate)]
-    if not audits:
-        return {}
-    return max(audits, key=_object_parity_audit_completeness_score)
-
-
-def _object_parity_audit_completeness_score(audit: dict[str, Any]) -> tuple[int, int, int]:
-    return (
-        len(_list_dicts(audit.get("category_status_summary"))),
-        len(_list_dicts(audit.get("items"))),
-        len(_list_dicts(audit.get("high_priority_items"))),
-    )
-
-
-def _object_category_status_summary_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for item in items:
-        mujoco = _dict(item.get("mujoco"))
-        isaac = _dict(item.get("isaac"))
-        category = (
-            _object_category_key(mujoco.get("category"))
-            or _object_category_key(isaac.get("category"))
-            or _object_category_key(isaac.get("usd_category"))
-            or "unknown"
-        )
-        grouped.setdefault(category, []).append(item)
-    rows = []
-    for category, category_items in sorted(grouped.items()):
-        rows.append(
-            {
-                "category": category,
-                "item_count": len(category_items),
-                "kind_counts": _status_counts(item.get("kind") for item in category_items),
-                "binding_status_counts": _status_counts(
-                    item.get("binding_status") for item in category_items
-                ),
-                "category_status_counts": _status_counts(
-                    item.get("category_status") for item in category_items
-                ),
-                "pose_status_counts": _status_counts(
-                    item.get("pose_status") for item in category_items
-                ),
-                "support_status_counts": _status_counts(
-                    item.get("support_status") for item in category_items
-                ),
-                "state_status_counts": _status_counts(
-                    item.get("state_status") for item in category_items
-                ),
-                "rgb_view_evidence_status_counts": _status_counts(
-                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
-                ),
-                "render_contract_status_counts": _status_counts(
-                    _dict(item.get("render_contract_delta")).get("status")
-                    for item in category_items
-                ),
-            }
-        )
-    return rows
-
-
-def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
-    if not diagnostics:
-        return {}
-    capture_quality = _dict(diagnostics.get("capture_quality_settings"))
-    return {
-        "schema": diagnostics.get("schema"),
-        "status": diagnostics.get("status"),
-        "renderer_mode": diagnostics.get("renderer_mode"),
-        "capture_method": diagnostics.get("capture_method"),
-        "settings_api_available": diagnostics.get("settings_api_available"),
-        "available_setting_count": diagnostics.get("available_setting_count"),
-        "missing_setting_count": diagnostics.get("missing_setting_count"),
-        "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
-        "render_product_paths": diagnostics.get("render_product_paths") or [],
-        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
-        "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
-        "tone_mapping": diagnostics.get("tone_mapping") or {},
-        "camera_exposure": diagnostics.get("camera_exposure") or {},
-        "ocio": diagnostics.get("ocio") or {},
-        "color_correction": diagnostics.get("color_correction") or {},
-        "color_grading": diagnostics.get("color_grading") or {},
-        "renderer": diagnostics.get("renderer") or {},
-        "capture_quality_settings": capture_quality,
-        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
-    }
-
-
-def _capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
-    scene = _dict(payload.get("scene"))
-    summary = _dict(payload.get("summary"))
-    native_source = _dict(summary.get("native_isaac_render_diagnostics")) or _dict(
-        payload.get("native_isaac_render_diagnostics")
-    )
-    native = _dict(_dict(native_source).get("primary")) or native_source
-    native_capture_quality = _dict(native.get("capture_quality_settings"))
-    explicit = _dict(payload.get("capture_quality_probe"))
-    render_resolution = _dict(explicit.get("render_resolution_requested")) or {
-        "width": scene.get("render_width"),
-        "height": scene.get("render_height"),
-    }
-    saved_resolution = _dict(explicit.get("render_resolution_saved")) or {
-        "width": scene.get("saved_report_width") or scene.get("render_width"),
-        "height": scene.get("saved_report_height") or scene.get("render_height"),
-    }
-    metric_resolution = _dict(explicit.get("metric_resolution")) or {
-        "width": scene.get("metric_width") or saved_resolution.get("width"),
-        "height": scene.get("metric_height") or saved_resolution.get("height"),
-    }
-    render_resolution = _clean_resolution(render_resolution)
-    saved_resolution = _clean_resolution(saved_resolution) or render_resolution
-    metric_resolution = _clean_resolution(metric_resolution) or saved_resolution
-    saved_mode = str(explicit.get("saved_image_mode") or "")
-    if not saved_mode:
-        saved_mode = (
-            "direct_capture"
-            if saved_resolution == render_resolution
-            else "downsampled_from_render_capture"
-        )
-    metric_mode = str(explicit.get("metric_image_mode") or "")
-    if not metric_mode:
-        metric_mode = (
-            "direct_capture"
-            if metric_resolution == render_resolution
-            else "downsampled_from_render_capture"
-        )
-    render_settle_frames = (
-        explicit.get("render_settle_frames")
-        if "render_settle_frames" in explicit
-        else native_capture_quality.get("render_settle_frames")
-    )
-    return {
-        "schema": explicit.get("schema") or "robot_camera_capture_quality_probe_v1",
-        "status": explicit.get("status") or "inferred_from_manifest",
-        "render_resolution_requested": render_resolution,
-        "render_resolution_saved": saved_resolution,
-        "metric_resolution": metric_resolution,
-        "saved_image_mode": saved_mode,
-        "metric_image_mode": metric_mode,
-        "direct_capture_metrics": metric_mode == "direct_capture",
-        "downsampled_metrics": metric_mode != "direct_capture",
-        "downsample_filter": explicit.get("downsample_filter") or "",
-        "render_settle_frames": int(render_settle_frames or 0),
-        "samples_per_pixel": _quality_setting_row(
-            explicit,
-            native_capture_quality,
-            "samples_per_pixel",
-        ),
-        "anti_aliasing": _quality_setting_row(explicit, native_capture_quality, "anti_aliasing"),
-        "tonemap_operator": _quality_setting_row(
-            explicit,
-            native_capture_quality,
-            "tonemap_operator",
-        ),
-        "exposure_bias": _quality_setting_row(
-            explicit,
-            native_capture_quality,
-            "exposure_bias",
-        ),
-        "colorcorr_gain": _quality_setting_row(
-            explicit,
-            native_capture_quality,
-            "colorcorr_gain",
-        ),
-        "denoise": _quality_setting_row(explicit, native_capture_quality, "denoise"),
-        "taa": _quality_setting_row(explicit, native_capture_quality, "taa"),
-        "texture_filtering": _quality_setting_row(
-            explicit,
-            native_capture_quality,
-            "texture_filtering",
-        ),
-        "policy_classification": explicit.get("policy_classification") or "capture_quality_probe",
-        "default_renderer_promotion": explicit.get("default_renderer_promotion") is True,
-    }
-
-
-def _quality_setting_row(
-    explicit: dict[str, Any],
-    native_capture_quality: dict[str, Any],
-    name: str,
-) -> dict[str, Any]:
-    row = _dict(explicit.get(name)) or _dict(native_capture_quality.get(name))
-    if row:
-        return row
-    return {
-        "name": name,
-        "status": "not_available",
-        "value": None,
-        "setting_path": "",
-        "default_render_settings_changed": False,
-    }
-
-
-def _capture_quality_settings_summary(
-    capture_quality: dict[str, Any],
-    native_diagnostics: dict[str, Any],
-) -> dict[str, Any]:
-    native_capture_quality = _dict(native_diagnostics.get("capture_quality_settings"))
-    return {
-        "render_settle_frames": capture_quality.get("render_settle_frames"),
-        "samples_per_pixel": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "samples_per_pixel",
-        ),
-        "anti_aliasing": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "anti_aliasing",
-        ),
-        "tonemap_operator": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "tonemap_operator",
-        ),
-        "exposure_bias": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "exposure_bias",
-        ),
-        "colorcorr_gain": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "colorcorr_gain",
-        ),
-        "denoise": _quality_setting_row(capture_quality, native_capture_quality, "denoise"),
-        "taa": _quality_setting_row(capture_quality, native_capture_quality, "taa"),
-        "texture_filtering": _quality_setting_row(
-            capture_quality,
-            native_capture_quality,
-            "texture_filtering",
-        ),
-    }
-
-
-def _is_capture_quality_probe(capture_quality: dict[str, Any]) -> bool:
-    if not capture_quality:
-        return False
-    render_resolution = _dict(capture_quality.get("render_resolution_requested"))
-    render_size = (
-        int(render_resolution.get("width") or 0),
-        int(render_resolution.get("height") or 0),
-    )
-    return (
-        capture_quality.get("metric_image_mode") != "direct_capture"
-        or capture_quality.get("saved_image_mode") != "direct_capture"
-        or int(capture_quality.get("render_settle_frames") or 0) > 0
-        or render_size not in {(0, 0), (540, 360)}
-        or _has_requested_quality_setting(capture_quality)
-    )
-
-
-def _has_requested_quality_setting(capture_quality: dict[str, Any]) -> bool:
-    for key in (
-        "samples_per_pixel",
-        "anti_aliasing",
-        "tonemap_operator",
-        "exposure_bias",
-        "colorcorr_gain",
-        "denoise",
-        "taa",
-        "texture_filtering",
-    ):
-        row = _dict(capture_quality.get(key))
-        if not row:
-            continue
-        if row.get("default_render_settings_changed") is True:
-            return True
-        if str(row.get("status") or "") in {"requested", "applied", "set_failed"}:
-            return True
-        if row.get("requested_value") is not None:
-            return True
-    return False
-
-
-def _clean_resolution(value: dict[str, Any]) -> dict[str, int]:
-    try:
-        width = int(value.get("width"))
-        height = int(value.get("height"))
-    except (TypeError, ValueError):
-        return {}
-    if width <= 0 or height <= 0:
-        return {}
-    return {"width": width, "height": height}
 
 
 def _native_isaac_render_diagnostics_check(
@@ -1047,7 +738,7 @@ def _render_difference_probe_batch(
         "status": "ranked_probe_batch_available" if rows else "no_probe_batch",
         "row_count": len(rows),
         "ranked_rows": rows,
-        "policy_classification_counts": _status_counts(
+        "policy_classification_counts": parity_payloads.status_counts(
             row.get("policy_classification") for row in rows
         ),
         "chase_regression_tolerance": chase_regression_tolerance,
@@ -1107,7 +798,7 @@ def _render_difference_probe_row(
         "metric_image_mode": capture_quality.get("metric_image_mode") or "",
         "downsample_filter": capture_quality.get("downsample_filter") or "",
         "render_settle_frames": capture_quality.get("render_settle_frames"),
-        "capture_quality_settings": _capture_quality_settings_summary(
+        "capture_quality_settings": parity_payloads.capture_quality_settings_summary(
             capture_quality,
             _dict(probe.get("native_isaac_render_diagnostics")),
         ),
@@ -1153,7 +844,7 @@ def _probe_policy_classification(
         return "rejected"
     if report_side_only:
         return "report_side_only"
-    if _is_capture_quality_probe(capture_quality):
+    if parity_payloads.is_capture_quality_probe(capture_quality):
         return "capture_quality_probe"
     if row.get("fpv_improved") and native_settings.get("recorded"):
         return "native_default_candidate"
@@ -1176,7 +867,7 @@ def _probe_policy_classification_reason(
         return "auxiliary chase mean-abs-RGB regressed above tolerance"
     if report_side_only:
         return "probe uses report-side RGB/view compensation, not native renderer settings"
-    if _is_capture_quality_probe(capture_quality):
+    if parity_payloads.is_capture_quality_probe(capture_quality):
         if int(capture_quality.get("render_settle_frames") or 0) > 0:
             return (
                 "probe is a render-settle capture-quality row with direct same-size metrics; "
@@ -1882,7 +1573,7 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
     label = str(summary.get("label") or "").lower()
     path_text = str(summary.get("path") or "").lower()
     evidence = f"{label} {path_text}"
-    if _is_capture_quality_probe(_dict(summary.get("capture_quality_probe"))) or any(
+    if parity_payloads.is_capture_quality_probe(_dict(summary.get("capture_quality_probe"))) or any(
         token in evidence
         for token in (
             "hires",
@@ -1934,7 +1625,7 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
 
 def _residual_class_distribution(locations: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
     return {
-        view: _status_counts(
+        view: parity_payloads.status_counts(
             _dict(_dict(_dict(location.get("image_diffs")).get(view)).get("residual")).get(
                 "residual_class"
             )
@@ -2192,33 +1883,6 @@ def _scene_signature(scene: dict[str, Any]) -> str:
     )
 
 
-def _metric_scene_signature(
-    scene: dict[str, Any],
-    capture_quality: dict[str, Any],
-) -> str:
-    metric = _dict(capture_quality.get("metric_resolution"))
-    return "|".join(
-        str(value)
-        for value in (
-            scene.get("scene_source"),
-            scene.get("scene_index"),
-            scene.get("seed"),
-            scene.get("generated_mess_count"),
-            metric.get("width") or scene.get("render_width"),
-            metric.get("height") or scene.get("render_height"),
-        )
-    )
-
-
-def _object_category_key(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
-
-
-def _status_counts(values: Any) -> dict[str, int]:
-    collected = [str(value) for value in values if value]
-    return {name: collected.count(name) for name in sorted(set(collected))}
-
-
 def _render_checks_by_id(render_domain_checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
     checks = {}
     for item in render_domain_checks.get("checks") or []:
@@ -2306,502 +1970,6 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def _render_report(manifest: dict[str, Any]) -> str:
-    checks = _dict(manifest.get("checks"))
-    four_check = _dict(manifest.get("four_check_audit"))
-    report_side = _dict(manifest.get("report_side_visual_parity"))
-    default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
-    visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
-    render_difference_probe_batch = _render_render_difference_probe_batch(
-        _dict(manifest.get("render_difference_probe_batch"))
-    )
-    capture_quality_summary = _render_capture_quality_summary(manifest)
-    object_audit_rows = _render_object_visual_parity_audit_rows(manifest)
-    four_check_rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('source_status') or item.get('probe_status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('decision') or ''))}</td>"
-        "</tr>"
-        for item in four_check.get("rows") or []
-        if isinstance(item, dict)
-    )
-    rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(check_id)}</td>"
-        f"<td>{html.escape(str(_dict(check).get('status') or ''))}</td>"
-        f"<td>{html.escape(str(_dict(check).get('interpretation') or ''))}</td>"
-        "</tr>"
-        for check_id, check in checks.items()
-    )
-    baseline_rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(str(item.get('path') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
-        f"<td>{html.escape(_capture_quality_cell(item))}</td>"
-        f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('chase_mean_abs_rgb_avg') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
-        "</tr>"
-        for item in manifest.get("baselines") or []
-        if isinstance(item, dict)
-    )
-    probe_rows = "\n".join(
-        "<tr>"
-        f"<td>{html.escape(str(item.get('label') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('probe_kind') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
-        f"<td>{html.escape(_capture_quality_cell(item))}</td>"
-        f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
-        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
-        "</tr>"
-        for item in manifest.get("probes") or []
-        if isinstance(item, dict)
-    )
-    baseline_header = (
-        "<tr><th>Manifest</th><th>Scene</th><th>Capture Quality</th><th>FPV</th><th>Chase</th>"
-        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
-        "<th>Gate Failures</th><th>Render Gate</th></tr>"
-    )
-    probe_header = (
-        "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>Capture Quality</th><th>FPV</th>"
-        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
-        "<th>Gate Failures</th><th>Render Gate</th></tr>"
-    )
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Robot Camera Visual Parity</title>
-  <style>
-    body {{ font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 16px 0; }}
-    th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }}
-    th {{ background: #f3f3f3; }}
-    code {{ background: #f6f6f6; padding: 1px 4px; }}
-    .visual-samples {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-      gap: 18px;
-    }}
-    .sample {{ border: 1px solid #d7d7d7; padding: 12px; background: #fafafa; }}
-    .sample h3 {{ margin: 0 0 6px; font-size: 16px; }}
-    .view-grid {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 8px;
-    }}
-    figure {{ margin: 0; }}
-    img {{
-      display: block;
-      width: 100%;
-      height: auto;
-      border: 1px solid #ccc;
-      background: #111;
-      cursor: zoom-in;
-    }}
-    figcaption {{ color: #555; font-size: 12px; margin-top: 4px; }}
-    .muted {{ color: #666; }}
-    .lightbox {{
-      align-items: center;
-      background: rgb(0 0 0 / 0.86);
-      display: none;
-      inset: 0;
-      justify-content: center;
-      padding: 28px;
-      position: fixed;
-      z-index: 1000;
-    }}
-    .lightbox[aria-hidden="false"] {{ display: flex; }}
-    .lightbox__figure {{
-      max-height: 94vh;
-      max-width: min(1200px, 96vw);
-    }}
-    .lightbox__figure img {{
-      border-color: #444;
-      cursor: default;
-      max-height: 88vh;
-      object-fit: contain;
-      width: auto;
-      max-width: 100%;
-    }}
-    .lightbox__figure figcaption {{
-      color: #f3f3f3;
-      font-size: 14px;
-      margin-top: 8px;
-      text-align: center;
-    }}
-    .lightbox__close {{
-      background: #fff;
-      border: 0;
-      border-radius: 4px;
-      color: #111;
-      cursor: pointer;
-      font: inherit;
-      padding: 8px 12px;
-      position: fixed;
-      right: 24px;
-      top: 18px;
-    }}
-  </style>
-</head>
-<body>
-  <h1>Robot Camera Visual Parity</h1>
-  <p>Status: <code>{html.escape(str(manifest.get("status")))}</code></p>
-  <p>Report-side visual parity:
-    <code>{html.escape(str(report_side.get("status") or ""))}</code>
-    ({html.escape(str(report_side.get("policy_scope") or ""))})
-  </p>
-  <p>Default-rendering visual parity:
-    <code>{html.escape(str(default_rendering.get("status") or ""))}</code>
-    ({html.escape(str(default_rendering.get("policy_scope") or ""))})
-  </p>
-  <p>{html.escape(str(manifest.get("recommended_next_action") or ""))}</p>
-  <h2>Four-Check Audit</h2>
-  <p>{html.escape(str(four_check.get("interpretation") or ""))}</p>
-  <table>
-    <thead>
-      <tr><th>Check</th><th>Status</th><th>Source Status</th><th>Decision</th></tr>
-    </thead>
-    <tbody>{four_check_rows}</tbody>
-  </table>
-  <h2>Visual Samples</h2>
-  {visual_samples}
-  <h2>Capture Quality Probe Metadata</h2>
-  {capture_quality_summary}
-  <h2>Render Difference Probe Batch</h2>
-  {render_difference_probe_batch}
-  <h2>Checks</h2>
-  <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
-  <h2>Baselines</h2>
-  <table><thead>{baseline_header}</thead><tbody>{baseline_rows}</tbody></table>
-  <h2>Probes</h2>
-  <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
-  <h2>Object Visual Parity Audit</h2>
-  {object_audit_rows}
-  <div
-    class="lightbox"
-    data-lightbox
-    aria-hidden="true"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Image preview"
-  >
-    <button class="lightbox__close" type="button" data-lightbox-close>Close</button>
-    <figure class="lightbox__figure">
-      <img data-lightbox-image alt="">
-      <figcaption data-lightbox-caption></figcaption>
-    </figure>
-  </div>
-  <script>
-    (() => {{
-      const lightbox = document.querySelector("[data-lightbox]");
-      if (!lightbox) return;
-      const preview = lightbox.querySelector("[data-lightbox-image]");
-      const caption = lightbox.querySelector("[data-lightbox-caption]");
-      const closeButton = lightbox.querySelector("[data-lightbox-close]");
-
-      const close = () => {{
-        lightbox.setAttribute("aria-hidden", "true");
-        preview.removeAttribute("src");
-        preview.setAttribute("alt", "");
-        caption.textContent = "";
-      }};
-
-      const open = (image) => {{
-        const figureCaption = image.closest("figure")?.querySelector("figcaption");
-        const label = figureCaption?.textContent || image.getAttribute("alt") || "Image preview";
-        preview.setAttribute("src", image.currentSrc || image.src);
-        preview.setAttribute("alt", image.getAttribute("alt") || label);
-        caption.textContent = label;
-        lightbox.setAttribute("aria-hidden", "false");
-        closeButton.focus();
-      }};
-
-      document.querySelectorAll("img:not([data-lightbox-image])").forEach((image) => {{
-        image.setAttribute("role", "button");
-        image.setAttribute("tabindex", "0");
-        image.setAttribute("title", "Open image preview");
-        image.addEventListener("click", () => open(image));
-        image.addEventListener("keydown", (event) => {{
-          if (event.key === "Enter" || event.key === " ") {{
-            event.preventDefault();
-            open(image);
-          }}
-        }});
-      }});
-
-      closeButton.addEventListener("click", close);
-      lightbox.addEventListener("click", (event) => {{
-        if (event.target === lightbox) close();
-      }});
-      document.addEventListener("keydown", (event) => {{
-        if (event.key === "Escape" && lightbox.getAttribute("aria-hidden") === "false") {{
-          close();
-        }}
-      }});
-    }})();
-  </script>
-</body>
-</html>
-"""
-
-
-def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
-    rows = []
-    sources = [("baseline", item) for item in _list_dicts(manifest.get("baselines"))]
-    sources.extend(("probe", item) for item in _list_dicts(manifest.get("probes")))
-    for source_kind, summary in sources:
-        audit = _dict(summary.get("object_visual_parity_audit"))
-        for category in _list_dicts(audit.get("category_status_summary")):
-            rows.append(
-                "<tr>"
-                f"<td>{html.escape(source_kind)}</td>"
-                f"<td>{html.escape(str(summary.get('label') or summary.get('path') or ''))}</td>"
-                f"<td>{html.escape(str(summary.get('scene_signature') or ''))}</td>"
-                f"<td>{html.escape(str(audit.get('status') or ''))}</td>"
-                f"<td>{html.escape(str(category.get('category') or ''))}</td>"
-                f"<td>{html.escape(str(category.get('item_count') or 0))}</td>"
-                + _json_counts_cell(category, "binding_status_counts")
-                + _json_counts_cell(category, "category_status_counts")
-                + _json_counts_cell(category, "state_status_counts")
-                + _json_counts_cell(category, "object_gate_status_counts")
-                + _json_counts_cell(category, "rgb_view_evidence_status_counts")
-                + _json_counts_cell(category, "render_contract_status_counts")
-                + "</tr>"
-            )
-    if not rows:
-        return "<p class='muted'>No object visual parity category summaries were recorded.</p>"
-    return (
-        "<table><thead><tr><th>Source</th><th>Manifest</th><th>Scene</th>"
-        "<th>Audit Status</th><th>Category</th><th>Items</th><th>Binding</th>"
-        "<th>Category Status</th><th>State</th><th>Object Gate</th>"
-        "<th>RGB Evidence</th><th>Render</th></tr></thead><tbody>"
-        + "\n".join(rows)
-        + "</tbody></table>"
-    )
-
-
-def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
-    sources = [("baseline", item) for item in _list_dicts(manifest.get("baselines"))]
-    sources.extend(("probe", item) for item in _list_dicts(manifest.get("probes")))
-    rows = []
-    for source_kind, item in sources:
-        capture_quality = _dict(item.get("capture_quality_probe"))
-        if not capture_quality:
-            continue
-        anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
-        tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
-        exposure_bias = _dict(capture_quality.get("exposure_bias"))
-        colorcorr_gain = _dict(capture_quality.get("colorcorr_gain"))
-        denoise = _dict(capture_quality.get("denoise"))
-        taa = _dict(capture_quality.get("taa"))
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(source_kind)}</td>"
-            f"<td>{html.escape(str(item.get('label') or item.get('path') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('probe_kind') or 'baseline'))}</td>"
-            f"<td>{html.escape(_resolution_label(capture_quality.get('render_resolution_requested')))}</td>"
-            f"<td>{html.escape(_resolution_label(capture_quality.get('render_resolution_saved')))}</td>"
-            f"<td>{html.escape(_resolution_label(capture_quality.get('metric_resolution')))}</td>"
-            f"<td>{html.escape(str(capture_quality.get('saved_image_mode') or ''))}</td>"
-            f"<td>{html.escape(str(capture_quality.get('metric_image_mode') or ''))}</td>"
-            f"<td>{html.escape(str(capture_quality.get('downsample_filter') or ''))}</td>"
-            f"<td>{html.escape(str(capture_quality.get('render_settle_frames') or 0))}</td>"
-            f"<td>{html.escape(str(anti_aliasing.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(tonemap_operator.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(exposure_bias.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(colorcorr_gain.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(denoise.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(taa.get('status') or ''))}</td>"
-            f"<td>{html.escape(str(capture_quality.get('policy_classification') or ''))}</td>"
-            "</tr>"
-        )
-    if not rows:
-        return "<p class='muted'>No capture-quality probe metadata was recorded.</p>"
-    return (
-        "<p class='muted'>Direct high-resolution review images and downsampled "
-        "same-size metrics are tracked separately here. These rows do not promote "
-        "native renderer defaults.</p>"
-        "<table><thead><tr><th>Source</th><th>Manifest</th><th>Kind</th>"
-        "<th>Render Size</th><th>Saved Size</th><th>Metric Size</th>"
-        "<th>Saved Mode</th><th>Metric Mode</th><th>Filter</th><th>Settle</th>"
-        "<th>AA</th><th>Tone Op</th><th>Exposure</th><th>Colorcorr</th>"
-        "<th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
-        + "\n".join(rows)
-        + "</tbody></table>"
-    )
-
-
-def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
-    rows = []
-    for row in _list_dicts(batch.get("ranked_rows")):
-        native = _dict(row.get("native_settings_used"))
-        residual_classes = html.escape(
-            json.dumps(row.get("residual_class_distribution") or {}, sort_keys=True)
-        )
-        rows.append(
-            "<tr>"
-            f"<td>{_html_value(row.get('rank'))}</td>"
-            f"<td>{_html_value(row.get('label'))}</td>"
-            f"<td>{_html_value(row.get('probe_kind'))}</td>"
-            f"<td>{_html_value(row.get('fpv_mean_abs_rgb_delta_vs_baseline'))}</td>"
-            f"<td>{_html_value(row.get('chase_mean_abs_rgb_delta_vs_baseline'))}</td>"
-            f"<td>{_html_value(_resolution_label(row.get('render_resolution_requested')))}</td>"
-            f"<td>{_html_value(_resolution_label(row.get('render_resolution_saved')))}</td>"
-            f"<td>{_html_value(_resolution_label(row.get('metric_resolution')))}</td>"
-            f"<td>{_html_value(row.get('metric_image_mode'))}<br>"
-            f"<code>filter={_html_value(row.get('downsample_filter'))}</code></td>"
-            f"<td>{_html_value(row.get('render_settle_frames'))}</td>"
-            f"<td>{_html_value(row.get('policy_classification'))}</td>"
-            f"<td>{_html_value(row.get('classification_reason'))}</td>"
-            f"<td>{residual_classes}</td>"
-            f"<td>{_html_value(native.get('status'))}<br>"
-            f"<code>changed={_html_value(native.get('default_render_settings_changed'))}</code>"
-            f"<br><code>aa={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('anti_aliasing')).get('status'))}</code>"
-            f"<br><code>exposure={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('exposure_bias')).get('status'))}</code>"
-            f"<br><code>colorcorr={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('colorcorr_gain')).get('status'))}</code>"
-            f"<br><code>denoise={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('denoise')).get('status'))}</code>"
-            "</td>"
-            "</tr>"
-        )
-    if not rows:
-        return "<p class='muted'>No render-difference probe manifests were provided.</p>"
-    return (
-        "<p class='muted'>" + html.escape(str(batch.get("interpretation") or "")) + "</p>"
-        "<table><thead><tr><th>Rank</th><th>Label</th><th>Kind</th>"
-        "<th>FPV Delta</th><th>Chase Delta</th><th>Render Size</th>"
-        "<th>Saved Size</th><th>Metric Size</th><th>Metric Mode</th>"
-        "<th>Settle</th><th>Candidate Status</th>"
-        "<th>Reason</th><th>Residual Classes</th><th>Native Settings</th></tr></thead><tbody>"
-        + "\n".join(rows)
-        + "</tbody></table>"
-    )
-
-
-def _capture_quality_cell(item: dict[str, Any]) -> str:
-    capture_quality = _dict(item.get("capture_quality_probe"))
-    if not capture_quality:
-        return ""
-    parts = [
-        f"render={_resolution_label(capture_quality.get('render_resolution_requested'))}",
-        f"saved={_resolution_label(capture_quality.get('render_resolution_saved'))}",
-        f"metric={_resolution_label(capture_quality.get('metric_resolution'))}",
-        f"metric_mode={capture_quality.get('metric_image_mode') or ''}",
-        f"settle={capture_quality.get('render_settle_frames')}",
-    ]
-    if capture_quality.get("downsample_filter"):
-        parts.append(f"filter={capture_quality.get('downsample_filter')}")
-    tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
-    if tonemap_operator:
-        parts.append(f"tone_op={tonemap_operator.get('status') or ''}")
-    return "; ".join(parts)
-
-
-def _resolution_label(value: Any) -> str:
-    resolution = _dict(value)
-    width = resolution.get("width")
-    height = resolution.get("height")
-    return f"{width}x{height}" if width and height else ""
-
-
-def _html_value(value: Any) -> str:
-    return html.escape("" if value is None else str(value))
-
-
-def _json_counts_cell(item: dict[str, Any], key: str) -> str:
-    return "<td>" + html.escape(json.dumps(item.get(key) or {}, sort_keys=True)) + "</td>"
-
-
-def _render_visual_samples(samples: list[dict[str, Any]]) -> str:
-    if not samples:
-        return "<p class='muted'>No image samples were available in the input manifests.</p>"
-    cards = []
-    for sample in samples:
-        title = " / ".join(
-            part
-            for part in (
-                str(sample.get("kind") or ""),
-                str(sample.get("label") or ""),
-                str(sample.get("location_label") or ""),
-            )
-            if part
-        )
-        metrics = f"FPV {sample.get('fpv_mean_abs_rgb')}, chase {sample.get('chase_mean_abs_rgb')}"
-        missing = _list_strings(sample.get("missing_images"))
-        missing_note = (
-            "<p class='muted'>Missing images: " + html.escape(", ".join(missing)) + "</p>"
-            if missing
-            else ""
-        )
-        cards.append(
-            "<section class='sample'>"
-            f"<h3>{html.escape(title)}</h3>"
-            f"<p class='muted'>{html.escape(str(sample.get('scene_signature') or ''))}</p>"
-            f"<p>{html.escape(metrics)}</p>"
-            + _render_visual_sample_view(sample, "fpv")
-            + _render_visual_sample_view(sample, "chase")
-            + missing_note
-            + "</section>"
-        )
-    return "<div class='visual-samples'>" + "\n".join(cards) + "</div>"
-
-
-def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
-    images = _dict(_dict(sample.get("images")).get(view))
-    mujoco = images.get("mujoco")
-    isaac = images.get("isaac")
-    if not mujoco and not isaac:
-        return ""
-    residual = sample.get(f"{view}_residual_class") or ""
-    view_note = ""
-    view_badge = ""
-    if view == "chase":
-        source_note = " / ".join(
-            part
-            for part in (
-                str(sample.get("chase_mujoco_source") or ""),
-                str(sample.get("chase_isaac_source") or ""),
-            )
-            if part
-        )
-        note = str(sample.get("chase_contract_note") or "")
-        if source_note:
-            note = f"{note} Sources: {source_note}."
-        view_note = f"<p class='muted'>{html.escape(note)}</p>" if note else ""
-        if not sample.get("chase_same_camera_contract"):
-            view_badge = " non-comparable auxiliary"
-    cells = []
-    for backend, path in (("MuJoCo", mujoco), ("Isaac", isaac)):
-        if not path:
-            continue
-        cells.append(
-            "<figure>"
-            f"<img src='{html.escape(str(path), quote=True)}' "
-            f"alt='{html.escape(backend)} {html.escape(view.upper())}'>"
-            f"<figcaption>{html.escape(backend)} {html.escape(view.upper())}</figcaption>"
-            "</figure>"
-        )
-    return (
-        f"<h4>{html.escape(view.upper())} "
-        f"<span class='muted'>{html.escape(str(residual) + view_badge)}</span></h4>"
-        + view_note
-        + "<div class='view-grid'>"
-        + "\n".join(cells)
-        + "</div>"
-    )
 
 
 if __name__ == "__main__":

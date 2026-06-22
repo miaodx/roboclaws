@@ -244,6 +244,30 @@ def test_runtime_map_prior_loader_accepts_raw_runtime_map_and_snapshot(tmp_path:
     )
 
 
+def test_runtime_map_prior_loader_rejects_unknown_raw_schema(tmp_path: Path) -> None:
+    prior_path = tmp_path / "runtime_metric_map.json"
+    prior_path.write_text('{"schema": "wrong"}\n', encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="runtime map prior artifact must be raw runtime_metric_map_v1",
+    ):
+        _load_runtime_map_prior(prior_path)
+
+
+def test_runtime_map_prior_loader_rejects_snapshot_with_invalid_runtime_map() -> None:
+    with pytest.raises(
+        ValueError,
+        match="runtime map prior snapshot runtime_metric_map must use schema runtime_metric_map_v1",
+    ):
+        runtime_metric_map_from_prior_artifact(
+            {
+                "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
+                "runtime_metric_map": {"schema": "wrong"},
+            }
+        )
+
+
 def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     tmp_path: Path,
 ) -> None:

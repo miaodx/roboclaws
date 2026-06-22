@@ -34,7 +34,7 @@ def capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
         default_width=saved_resolution["width"],
         default_height=saved_resolution["height"],
     )
-    render_settle_frames = max(0, int(getattr(args, "render_settle_frames", 0) or 0))
+    render_settle_frames = int(getattr(args, "render_settle_frames", 0) or 0)
     saved_mode = (
         "direct_capture"
         if saved_resolution == render_resolution
@@ -101,12 +101,12 @@ def ensure_capture_quality_probe_manifest(manifest: dict[str, Any]) -> dict[str,
     if existing:
         return existing
     scene = _dict(manifest.get("scene"))
-    width = int(scene.get("render_width") or 540)
-    height = int(scene.get("render_height") or 360)
-    saved_width = int(scene.get("saved_report_width") or width)
-    saved_height = int(scene.get("saved_report_height") or height)
-    metric_width = int(scene.get("metric_width") or saved_width)
-    metric_height = int(scene.get("metric_height") or saved_height)
+    width = _required_positive_int(scene, "render_width")
+    height = _required_positive_int(scene, "render_height")
+    saved_width = _optional_positive_int(scene, "saved_report_width", default=width)
+    saved_height = _optional_positive_int(scene, "saved_report_height", default=height)
+    metric_width = _optional_positive_int(scene, "metric_width", default=saved_width)
+    metric_height = _optional_positive_int(scene, "metric_height", default=saved_height)
     probe = {
         "schema": "robot_camera_capture_quality_probe_v1",
         "status": "inferred_legacy_manifest",
@@ -166,11 +166,43 @@ def render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
 
 
 def resolution_dict(width: Any, height: Any) -> dict[str, int]:
-    width_int = int(width)
-    height_int = int(height)
-    if width_int <= 0 or height_int <= 0:
-        raise ValueError(f"resolution must be positive, got {width_int}x{height_int}")
+    width_int = _positive_int(width, field_name="width")
+    height_int = _positive_int(height, field_name="height")
     return {"width": width_int, "height": height_int}
+
+
+def _required_positive_int(data: dict[str, Any], field_name: str) -> int:
+    if field_name not in data:
+        raise ValueError(f"legacy comparison manifest scene.{field_name} is required")
+    return _positive_int(data[field_name], field_name=f"scene.{field_name}")
+
+
+def _optional_positive_int(data: dict[str, Any], field_name: str, *, default: int) -> int:
+    value = data.get(field_name)
+    if value is None or value == "":
+        return default
+    return _positive_int(value, field_name=f"scene.{field_name}")
+
+
+def _positive_int(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+        parsed = int(value)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value.strip())
+        except ValueError:
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}") from None
+    else:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    return parsed
 
 
 def _paired_dimension(

@@ -1,9 +1,9 @@
 ---
 plan_scope: b1-map12-verified-map-scene-alignment
-status: Draft
+status: In progress
 created: 2026-06-16
-last_reviewed: 2026-06-16
-implementation_allowed: false
+last_reviewed: 2026-06-18
+implementation_allowed: true
 source:
   - user request to promote B1 / Map 12 digital twin from candidate overlay to trustworthy map-scene alignment
   - user note that current bbox-to-map correspondence is poor and must not be treated as a good baseline
@@ -28,13 +28,36 @@ related_context:
 ## Status
 
 Reviewed with grill-batch on 2026-06-16. The correspondence schema direction,
-verification thresholds, and first annotation workflow are accepted for
-preflight. Implementation is still gated on a concrete execution contract.
+verification thresholds, and first annotation workflow are accepted. The
+implementation slice now has fitter/readiness/probe evidence, but final
+room/area semantic acceptance is still pending.
 
 2026-06-17 update: there is not yet an operator-authored room semantic
 manifest. Treat `assets/maps/b1-map12-alignment-review.json` as a seed/review
 placeholder until manual labeling is redone after naming conflicts are resolved.
 Do not use it as proof that room semantics are accepted.
+
+2026-06-18 update: the misleading old source-map-frame
+`output/b1-map12/runtime-delete-smoke/review_labels_topdown.png` was deleted
+locally. Automatic contour alignment against the cropped B1 Gaussian top-down
+was attempted with
+`scripts/maps/auto_align_b1_map12_scene_topdown.py`; it remains
+`candidate_seed_only` because residuals against the manual draft anchors are
+mean `2.152082 m` and max `2.595962 m`. The same probe now also tries semantic
+label/partition center matching; that candidate is worse, with best mean
+residual `7.891215 m` and max `11.003484 m`. A tracked manual draft snapshot
+now lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`.
+The explicit verification-only manual fallback passes global rigid alignment
+with mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
+area/partition ids and must not be committed as the final accepted
+correspondence asset.
+
+Semantic suggestion pass:
+`scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` compares the manual
+anchors against the current Map12 review polygons and B1 scene partition bounds.
+It found only 1 strong candidate out of 7 anchors, so the current evidence is
+not strong enough to auto-fill final `navigation_area_id` /
+`asset_partition_id` values.
 
 ## Goal
 
@@ -143,9 +166,9 @@ Add a first-class map-scene correspondence manifest, for example:
   "target_scene_frame": "b1_rebuilt_scene_usd_world",
   "bbox_seed_policy": "known_poor_seed_only",
   "scene_projection_policy": {
-    "horizontal_axes": ["x", "z"],
-    "up_axis": "y",
-    "source": "usd_stage_up_axis_and_robot_pose_convention"
+    "horizontal_axes": ["x", "y"],
+    "up_axis": "z",
+    "source": "2rd_floor_seperated_scene_topdown_policy"
   },
   "anchors": [
     {
@@ -342,6 +365,9 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
+- `scripts/maps/auto_align_b1_map12_scene_topdown.py`
+- `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
+- `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `tests/contract/maps/test_b1_map12_verified_alignment.py`
 - `tests/contract/maps/test_b1_map12_digital_twin_readiness.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
@@ -350,15 +376,15 @@ them before claiming `verified` requires an explicit plan update.
 
 ```bash
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences assets/maps/b1-map12-scene-correspondences.json \
-  --map-bundle assets/maps/agibot-robot-map-12 \
-  --output-dir output/b1-map12/alignment
+  --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --output-dir output/b1-map12/manual-draft-alignment
 
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
   --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 \
-  --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
-  --output output/b1-map12/alignment/readiness_with_alignment.json
+  --alignment-artifact output/b1-map12/manual-draft-alignment/alignment_residuals.json \
+  --output output/b1-map12/manual-draft-alignment/readiness_with_alignment.json
 
 ./scripts/dev/run_pytest_standalone.sh \
   tests/contract/maps/test_b1_map12_verified_alignment.py \
@@ -367,8 +393,10 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   -q
 ```
 
-The exact `--alignment-artifact` argument is proposed; implementation should
-add or adjust it explicitly.
+The manual draft proof above is verification-only. The final production proof
+must use `assets/maps/b1-map12-scene-correspondences.json` after the same
+anchors receive reviewed real `navigation_area_id` and `asset_partition_id`
+values.
 
 ## Definition Of Done
 

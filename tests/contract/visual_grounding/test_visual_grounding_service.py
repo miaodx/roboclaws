@@ -67,6 +67,26 @@ def test_configurable_service_rejects_contract_fake_adapter_mode_from_cli() -> N
     assert "invalid choice" in result.stderr
 
 
+def test_configurable_service_rejects_invalid_adapter_mode_from_env(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("VISUAL_GROUNDING_ADAPTER_MODE", "contract-fake")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SERVICE_SCRIPT),
+            "--list-adapters",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "VISUAL_GROUNDING_ADAPTER_MODE must be one of auto, real, unavailable" in result.stderr
+
+
 def test_configurable_service_contract_fake_pipeline_does_not_dispatch_fake_success() -> None:
     server = _start_service(pipeline_id="contract-fake", adapter_mode="auto")
     try:
@@ -218,6 +238,71 @@ def test_real_mode_reports_grounding_dino_device_unavailable(monkeypatch) -> Non
     assert stage["runtime"]["requested_dtype"] == "float16"
     assert stage["runtime_parameters"]["box_threshold"] == 0.25
     assert response["diagnostics"]["runtime"]["requested_device"] == "cuda"
+
+
+def test_real_mode_rejects_malformed_request_runtime_parameter(monkeypatch) -> None:
+    def should_not_load_model(
+        _model_id: str,
+        _requested_device: str,
+        _requested_dtype: str,
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
+        raise AssertionError("invalid runtime parameters should fail before model loading")
+
+    monkeypatch.setattr(adapters, "_load_grounding_dino", should_not_load_model)
+    request = _request("grounding-dino", image=_jpeg_image_payload())
+    request["pipeline_request"]["proposer"]["runtime_parameters"] = {
+        "box_threshold": "not-a-number",
+    }
+
+    response = adapters.visual_grounding_service_response(
+        payload=request,
+        configured_pipeline_id="grounding-dino",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "invalid_runtime_parameter"
+    assert "runtime_parameters.box_threshold" in response["error"]["message"]
+    assert response["pipeline"]["stages"][0]["status"] == "invalid_runtime_parameter"
+    assert response["pipeline"]["stages"][0]["runtime_parameters"]["box_threshold"] == (
+        "not-a-number"
+    )
+
+    request["pipeline_request"]["proposer"]["runtime_parameters"] = {"box_threshold": True}
+    response = adapters.visual_grounding_service_response(
+        payload=request,
+        configured_pipeline_id="grounding-dino",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "invalid_runtime_parameter"
+
+
+def test_real_mode_rejects_malformed_env_runtime_parameter(monkeypatch) -> None:
+    def should_not_load_model(
+        _model_id: str,
+        *,
+        producer_id: str,
+    ) -> Any:
+        raise AssertionError(f"invalid runtime env should fail before loading {producer_id} model")
+
+    monkeypatch.setenv("VISUAL_GROUNDING_YOLO_IMAGE_SIZE", "wide")
+    monkeypatch.setattr(adapters, "_load_yolo_model", should_not_load_model)
+
+    response = adapters.visual_grounding_service_response(
+        payload=_request("yolo-world", image=_jpeg_image_payload()),
+        configured_pipeline_id="yolo-world",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "invalid_runtime_parameter"
+    assert "VISUAL_GROUNDING_YOLO_IMAGE_SIZE" in response["error"]["message"]
+    assert response["pipeline"]["stages"][0]["status"] == "invalid_runtime_parameter"
 
 
 def test_real_mode_dispatches_yolo_world_through_standard_yolo_loader(monkeypatch) -> None:

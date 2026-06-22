@@ -285,6 +285,32 @@ def test_live_surface_product_waits_for_detached_codex_status(
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0310/seed-7")
 
 
+def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    seen_timeout = object()
+
+    def fake_run(command: list[str], **kwargs: Any) -> Any:
+        nonlocal seen_timeout
+        seen_timeout = kwargs.get("timeout")
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        run_dir = Path(output_arg.removeprefix("output_dir=")) / "0615_0310" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    live_runtime.run_live_surface_product(**_live_surface_kwargs(tmp_path / "trial-0000"))
+
+    assert seen_timeout is None
+
+
 def test_live_surface_product_recovers_completed_artifact_after_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -337,6 +363,48 @@ def test_live_surface_product_recovers_completed_artifact_after_timeout(
     record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
     assert record["returncode"] == "timeout_after_completion"
     assert record["timeout_completion_grace_s"] == 30.0
+
+
+def test_live_timeout_completion_grace_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    from roboclaws.evals import live_runtime
+
+    monkeypatch.delenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", raising=False)
+    assert live_runtime.live_timeout_completion_grace_s() == 30.0
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "0")
+    assert live_runtime.live_timeout_completion_grace_s() == 0.0
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "7.5")
+    assert live_runtime.live_timeout_completion_grace_s() == 7.5
+
+
+@pytest.mark.parametrize("value", ["bad", "nan", "inf", "-1"])
+def test_live_timeout_completion_grace_rejects_invalid_env(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", value)
+
+    with pytest.raises(
+        ValueError,
+        match=r"ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S must be a non-negative finite",
+    ):
+        live_runtime.live_timeout_completion_grace_s()
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "soon"])
+def test_live_surface_timeout_rejects_invalid_config(value: str) -> None:
+    from roboclaws.evals import live_runtime
+
+    kwargs = _live_surface_kwargs(Path("trial-0000"), live_timeout_s=value)  # type: ignore[arg-type]
+
+    with pytest.raises(
+        ValueError,
+        match=r"live_timeout_s must be a positive finite number of seconds",
+    ):
+        live_runtime.live_surface_timeout_s(kwargs)
 
 
 def test_live_surface_product_recovers_after_detached_wait_deadline(
@@ -554,17 +622,15 @@ def test_open_ended_positive_predicates_pass_with_public_runtime_evidence(
     assert payload["aggregate"]["failed"] == 0
     assert payload["aggregate"]["open_ended"]["by_category"]["negative_search"]["passed"] == 1
     assert payload["aggregate"]["open_ended"]["by_category"]["area_inspection"]["passed"] == 1
-    assert (
-        payload["aggregate"]["open_ended"]["by_category"]["positive_observable"]["passed"] == 1
-    )
+    assert payload["aggregate"]["open_ended"]["by_category"]["positive_observable"]["passed"] == 1
     assert payload["aggregate"]["open_ended"]["telemetry"]["tool_call_count"] == 3
     results = {result["identity"]["sample_id"]: result for result in payload["results"]}
-    room_predicate = results["open_ended.room4_anchor_seed7"]["grader_outputs"][
-        "open_ended"
-    ]["success_predicate"]
-    living_predicate = results["open_ended.living_waypoint_seed7"]["grader_outputs"][
-        "open_ended"
-    ]["success_predicate"]
+    room_predicate = results["open_ended.room4_anchor_seed7"]["grader_outputs"]["open_ended"][
+        "success_predicate"
+    ]
+    living_predicate = results["open_ended.living_waypoint_seed7"]["grader_outputs"]["open_ended"][
+        "success_predicate"
+    ]
     assert room_predicate["passed"] is True
     assert room_predicate["evidence"]["anchor_id"] == "anchor_waypoint_generated_exploration_005"
     assert living_predicate["passed"] is True
@@ -687,9 +753,12 @@ def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_ancho
     assert results["open_ended.room4_anchor_seed7"]["grader_outputs"]["trajectory"]["status"] == (
         "passed"
     )
-    assert results["open_ended.living_waypoint_seed7"]["grader_outputs"]["open_ended"][
-        "success_predicate"
-    ]["passed"] is True
+    assert (
+        results["open_ended.living_waypoint_seed7"]["grader_outputs"]["open_ended"][
+            "success_predicate"
+        ]["passed"]
+        is True
+    )
 
 
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
@@ -885,17 +954,17 @@ def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     )
 
     payload = json.loads(run.results_path.read_text())
-    assert payload["aggregate"]["sample_count"] == 20
-    assert payload["aggregate"]["passed"] == 20
+    assert payload["aggregate"]["sample_count"] == 15
+    assert payload["aggregate"]["passed"] == 15
     assert payload["aggregate"]["failed"] == 0
     sampler_projection = payload["aggregate"]["sampler_projection"]
-    assert sampler_projection["summary"]["ready_sample_count"] == 20
-    assert sampler_projection["summary"]["remaining_sample_count"] == 20
-    assert sampler_projection["summary"]["partial_source_count"] == 0
+    assert sampler_projection["summary"]["ready_sample_count"] == 15
+    assert sampler_projection["summary"]["remaining_sample_count"] == 25
+    assert sampler_projection["summary"]["partial_source_count"] == 1
     assert sampler_projection["summary"]["blocked_source_count"] == 0
     assert sampler_projection["summary"]["rejected_source_count"] == 2
-    assert sampler_projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
-    assert sampler_projection["scene_sources"]["procthor-10k-val"]["needed_count"] == 0
+    assert sampler_projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert sampler_projection["scene_sources"]["procthor-10k-val"]["needed_count"] == 5
     assert sampler_projection["scene_sources"]["procthor-objaverse-val"]["ready_count"] == 10
     assert sampler_projection["scene_sources"]["procthor-objaverse-val"]["needed_count"] == 0
     assert sampler_projection["scene_sources"]["ithor"]["support_status"] == "rejected"
@@ -907,15 +976,15 @@ def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     )
     report_html = run.report_path.read_text()
     assert "Scene Sampler Projection" in report_html
-    assert "Ready samples: 20 /" in report_html
-    assert "remaining:\n    20" in report_html
+    assert "Ready samples: 15 /" in report_html
+    assert "remaining:\n    25" in report_html
 
 
 def test_sampler_admission_rejects_heuristic_category_provenance(tmp_path: Path) -> None:
     sample = json.loads(
         (
             Path(__file__).resolve().parents[3]
-            / "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+            / "evals/household_world/samples/scene_sampler/procthor-10k-val_10_map_build.json"
         ).read_text(encoding="utf-8")
     )
     sample["sample_id"] = "scene_sampler.heuristic_rejected"

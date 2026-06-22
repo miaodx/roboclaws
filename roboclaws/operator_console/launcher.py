@@ -26,9 +26,10 @@ from roboclaws.launch.environment_setup import (
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.launch_support import (
-    ALLOWED_ENV_OVERRIDES,
+    apply_env_overrides,
     docker_container_ids_with_mount,
-    validate_env_overrides,
+    provider_env_overrides_for_route,
+    public_env_overrides,
 )
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
@@ -230,10 +231,12 @@ def start_console_run(
     env_overrides = dict(request.env_overrides or {})
     if request.provider_profile:
         overrides.setdefault("provider_profile", request.provider_profile)
-        env_overrides.setdefault("ROBOCLAWS_PROVIDER_PROFILE", request.provider_profile)
     if request.scenario_setup:
         overrides.setdefault("scenario_setup", request.scenario_setup)
-    run_env = _apply_env_overrides(route, run_env, env_overrides)
+    env_overrides = provider_env_overrides_for_route(
+        route, overrides, env_overrides, error_type=ConsoleLaunchError
+    )
+    run_env = apply_env_overrides(route, run_env, env_overrides, error_type=ConsoleLaunchError)
     readiness = route_readiness(root, route, overrides=overrides, gates=gate_payload, env=run_env)
     if not readiness["can_start"]:
         raise ConsoleLaunchError(str(readiness["blocker"]))
@@ -302,7 +305,9 @@ def start_console_run(
         "backend_id": route.backend_id,
         "intent_id": selected_intent,
         "agent_engine_id": route.agent_engine_id,
-        "provider_profile": request.provider_profile or route.provider_profile or "",
+        "provider_profile": env_overrides.get("ROBOCLAWS_PROVIDER_PROFILE")
+        or route.provider_profile
+        or "",
         "evidence_lane": route.evidence_lane,
         "scenario_setup": request.scenario_setup or route.scenario_setup,
         "phase": "starting",
@@ -315,7 +320,7 @@ def start_console_run(
         "mcp_port": mcp_port,
         "mcp_url": mcp_url,
         "argv": argv,
-        "env_overrides": _public_env_overrides(env_overrides),
+        "env_overrides": public_env_overrides(env_overrides),
         "run_dir": str(run_dir),
     }
     (run_dir / "operator_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -351,8 +356,12 @@ def route_readiness(
         }
 
     override_map = overrides or {}
-    env_override_map = _provider_env_overrides_for_route(route, override_map, env_overrides or {})
-    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_override_map)
+    env_override_map = provider_env_overrides_for_route(
+        route, override_map, env_overrides or {}, error_type=ConsoleLaunchError
+    )
+    env_map = apply_env_overrides(
+        route, load_repo_dotenv(root, env), env_override_map, error_type=ConsoleLaunchError
+    )
     gate_map = gates or {}
     if runtime_tasks is None:
         _, port = requested_mcp_endpoint(override_map)
@@ -546,45 +555,6 @@ def _normalized_launch_overrides(
     return normalized
 
 
-def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
-    validate_env_overrides(route, env_overrides, error_type=ConsoleLaunchError)
-
-
-def _provider_env_overrides_for_route(
-    route: ConsoleLaunchSelection,
-    overrides: dict[str, str],
-    env_overrides: dict[str, str],
-) -> dict[str, str]:
-    merged = dict(env_overrides)
-    provider_profile = str(overrides.get("provider_profile") or "")
-    if not provider_profile:
-        return merged
-    merged.setdefault("ROBOCLAWS_PROVIDER_PROFILE", provider_profile)
-    return merged
-
-
-def _apply_env_overrides(
-    route: ConsoleLaunchSelection,
-    env_map: dict[str, str],
-    env_overrides: dict[str, str],
-) -> dict[str, str]:
-    clean = {str(key): str(value) for key, value in env_overrides.items() if str(value) != ""}
-    _validate_env_overrides(route, clean)
-    if not clean:
-        return env_map
-    merged = dict(env_map)
-    merged.update(clean)
-    return merged
-
-
-def _public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
-    return {
-        str(key): str(value)
-        for key, value in env_overrides.items()
-        if key in ALLOWED_ENV_OVERRIDES and str(value) != ""
-    }
-
-
 def _provider_status(route: ConsoleLaunchSelection, env_map: dict[str, str]) -> dict[str, Any]:
     if route.agent_engine_id == "codex-cli":
         return _with_evidence_lane_compatibility(
@@ -627,8 +597,14 @@ def _with_evidence_lane_compatibility(
             provider_profile=provider,
             model_id=model,
         )
-    except (KeyError, ValueError):
-        return status
+    except (KeyError, ValueError) as exc:
+        blocked = dict(status)
+        blocked["ok"] = False
+        blocked["message"] = (
+            "provider/evidence-lane compatibility lookup failed for "
+            f"{selection.agent_engine_id}+{provider} on {selection.evidence_lane}: {exc}"
+        )
+        return blocked
     enriched = dict(status)
     enriched["evidence_lane_compatible"] = compatibility.allowed
     if not compatibility.allowed:
@@ -637,10 +613,7 @@ def _with_evidence_lane_compatibility(
 
 
 def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
-    provider = (
-        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
-        or default_provider_profile("claude-code")
-    )
+    provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile("claude-code")
     model = env_map.get("ROBOCLAWS_CLAUDE_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
     return provider_readiness(
         agent_engine="claude-code",
@@ -651,10 +624,7 @@ def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
 
 
 def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
-    provider = (
-        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
-        or default_provider_profile("codex-cli")
-    )
+    provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile("codex-cli")
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
     return provider_readiness(
         agent_engine="codex-cli",
@@ -665,9 +635,8 @@ def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
 
 
 def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
-    provider = (
-        env_map.get("ROBOCLAWS_PROVIDER_PROFILE")
-        or default_provider_profile("openai-agents-sdk")
+    provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile(
+        "openai-agents-sdk"
     )
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
     return provider_readiness(

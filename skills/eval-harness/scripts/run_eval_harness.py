@@ -23,6 +23,15 @@ PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
 DETACHED_LIVE_PRODUCT_TIMEOUT_S = 3600.0
 DINO_SIDECAR_AUTOSTART_ENV = "ROBOCLAWS_EVAL_HARNESS_AUTOSTART_DINO_SIDECAR"
 DINO_SIDECAR_STARTUP_TIMEOUT_S = 15.0
+ROW_BLOCKER_REQUIREMENT_PRIORITY = {
+    "codex_provider": 0,
+    "openai_agents_package": 1,
+    "just": 2,
+    "python_env": 3,
+    "dino_sidecar": 4,
+    "runtime_map_prior": 5,
+    "docker": 6,
+}
 
 spec = importlib.util.spec_from_file_location("eval_harness_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -101,50 +110,53 @@ def _execute_harness(manifest: dict[str, Any]) -> None:
 def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[str, str]]:
     blockers: list[dict[str, str]] = []
     requirements = row.get("requires") or []
-    axes = row.get("axes") or {}
-    priority = {
-        "codex_provider": 0,
-        "openai_agents_package": 1,
-        "just": 2,
-        "python_env": 3,
-        "dino_sidecar": 4,
-        "runtime_map_prior": 5,
-        "docker": 6,
-    }
-    for requirement in sorted(requirements, key=lambda item: priority.get(str(item), 100)):
-        if requirement == "just" and shutil.which("just") is None:
-            blockers.append(_environment_blocker("just is not on PATH"))
-        elif requirement == "python_env" and not (REPO_ROOT / ".venv" / "bin" / "python").exists():
-            blockers.append(_environment_blocker(".venv/bin/python is missing"))
-        elif requirement == "docker" and shutil.which("docker") is None:
-            blockers.append(_environment_blocker("docker is not on PATH"))
-        elif requirement == "codex_provider" and not _has_codex_provider(axes):
-            blockers.append(
-                {
-                    "category": "model_or_provider_unavailable",
-                    "detail": (
-                        "codex-router-responses requires CODEX_BASE_URL and CODEX_API_KEY; "
-                        "mimo-mify-responses requires XM_LLM_API_KEY; "
-                        "minimax-responses requires MM_API_KEY"
-                    ),
-                }
-            )
-        elif requirement == "openai_agents_package" and not _has_module("agents"):
-            blockers.append(_environment_blocker("openai-agents package is not installed"))
-        elif requirement == "dino_sidecar":
-            if blockers:
-                continue
-            if not _ensure_dino_sidecar(manifest):
-                blockers.append(
-                    _environment_blocker("Grounding DINO visual-grounding sidecar is not reachable")
-                )
-        elif requirement == "runtime_map_prior" and not _runtime_prior_available(manifest):
-            blockers.append(
-                _environment_blocker(
-                    "map-build prior artifact is required before cleanup consumer row"
-                )
-            )
+    for requirement in sorted(
+        requirements,
+        key=lambda item: ROW_BLOCKER_REQUIREMENT_PRIORITY.get(str(item), 100),
+    ):
+        blocker = _requirement_blocker(
+            str(requirement),
+            row=row,
+            manifest=manifest,
+            prior_blockers=blockers,
+        )
+        if blocker:
+            blockers.append(blocker)
     return blockers
+
+
+def _requirement_blocker(
+    requirement: str,
+    *,
+    row: dict[str, Any],
+    manifest: dict[str, Any],
+    prior_blockers: list[dict[str, str]],
+) -> dict[str, str] | None:
+    axes = row.get("axes") or {}
+    if requirement == "just" and shutil.which("just") is None:
+        return _environment_blocker("just is not on PATH")
+    if requirement == "python_env" and not (REPO_ROOT / ".venv" / "bin" / "python").exists():
+        return _environment_blocker(".venv/bin/python is missing")
+    if requirement == "docker" and shutil.which("docker") is None:
+        return _environment_blocker("docker is not on PATH")
+    if requirement == "codex_provider" and not _has_codex_provider(axes):
+        return {
+            "category": "model_or_provider_unavailable",
+            "detail": (
+                "codex-router-responses requires CODEX_BASE_URL and CODEX_API_KEY; "
+                "mimo-mify-responses requires XM_LLM_API_KEY; "
+                "minimax-responses requires MM_API_KEY"
+            ),
+        }
+    if requirement == "openai_agents_package" and not _has_module("agents"):
+        return _environment_blocker("openai-agents package is not installed")
+    if requirement == "dino_sidecar" and not prior_blockers and not _ensure_dino_sidecar(manifest):
+        return _environment_blocker("Grounding DINO visual-grounding sidecar is not reachable")
+    if requirement == "runtime_map_prior" and not _runtime_prior_available(manifest):
+        return _environment_blocker(
+            "map-build prior artifact is required before cleanup consumer row"
+        )
+    return None
 
 
 def _environment_blocker(detail: str) -> dict[str, str]:
@@ -695,7 +707,8 @@ def _exit_status(manifest: dict[str, Any]) -> int:
     blocked = [
         row
         for row in manifest["rows"]
-        if row.get("selected") and row.get("status") == "blocked"
+        if row.get("selected")
+        and row.get("status") == "blocked"
         and row.get("requirement", "required") == "required"
     ]
     failed = [

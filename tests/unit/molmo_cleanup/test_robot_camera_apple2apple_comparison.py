@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image, ImageDraw
 
 from scripts.molmo_cleanup import robot_camera_apple2apple_camera_contract as camera_contract
@@ -30,6 +31,169 @@ def _load_module(path: Path, name: str):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def test_robot_camera_comparison_rejects_invalid_location_count(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_location_count_invalid",
+    )
+
+    try:
+        run_camera.main(
+            [
+                "--output-dir",
+                str(tmp_path),
+                "--refresh-report-only",
+                "--location-count",
+                "0",
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid location count to fail at parse time")
+
+
+def test_robot_camera_comparison_accepts_positive_location_count(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_location_count_valid",
+    )
+    seen = {}
+
+    def fake_refresh_report_only(output_dir, **_kwargs):
+        seen["output_dir"] = output_dir
+        return {"status": "success"}
+
+    monkeypatch.setattr(run_camera, "refresh_report_only", fake_refresh_report_only)
+
+    status = run_camera.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--refresh-report-only",
+            "--location-count",
+            "1",
+        ]
+    )
+
+    assert status == 0
+    assert seen["output_dir"] == tmp_path
+
+
+def test_robot_camera_comparison_rejects_non_positive_render_dimensions(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_dimensions_invalid",
+    )
+
+    for flag, value in (("--render-width", "0"), ("--render-height", "-1")):
+        try:
+            run_camera.main(
+                [
+                    "--output-dir",
+                    str(tmp_path),
+                    "--refresh-report-only",
+                    flag,
+                    value,
+                ]
+            )
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_robot_camera_comparison_accepts_positive_render_dimensions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_dimensions_valid",
+    )
+    seen = {}
+
+    def fake_refresh_report_only(output_dir, **_kwargs):
+        seen["output_dir"] = output_dir
+        return {"status": "success"}
+
+    monkeypatch.setattr(run_camera, "refresh_report_only", fake_refresh_report_only)
+
+    status = run_camera.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--refresh-report-only",
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+        ]
+    )
+
+    assert status == 0
+    assert seen["output_dir"] == tmp_path
+
+
+def test_robot_camera_comparison_rejects_negative_render_settle_frames(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_settle_invalid",
+    )
+
+    try:
+        run_camera.main(
+            [
+                "--output-dir",
+                str(tmp_path),
+                "--refresh-report-only",
+                "--render-settle-frames",
+                "-1",
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render settle frames to fail at parse time")
+
+
+def test_robot_camera_comparison_accepts_zero_render_settle_frames(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_settle_zero",
+    )
+    seen = {}
+
+    def fake_refresh_report_only(output_dir, **_kwargs):
+        seen["output_dir"] = output_dir
+        return {"status": "success"}
+
+    monkeypatch.setattr(run_camera, "refresh_report_only", fake_refresh_report_only)
+
+    status = run_camera.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--refresh-report-only",
+            "--render-settle-frames",
+            "0",
+        ]
+    )
+
+    assert status == 0
+    assert seen["output_dir"] == tmp_path
 
 
 def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
@@ -152,6 +316,42 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
         metric_path = output_dir / location["metric_views"]["fpv"][backend]
         assert Image.open(saved_path).size == (6, 4)
         assert Image.open(metric_path).size == (3, 2)
+
+
+def test_robot_camera_capture_quality_infers_legacy_scene_dimensions() -> None:
+    manifest = {
+        "scene": {
+            "render_width": "12",
+            "render_height": "8",
+            "saved_report_width": 6,
+            "saved_report_height": 4,
+            "metric_width": 3,
+            "metric_height": 2,
+        }
+    }
+
+    probe = capture_quality.ensure_capture_quality_probe_manifest(manifest)
+
+    assert probe["status"] == "inferred_legacy_manifest"
+    assert probe["render_resolution_requested"] == {"width": 12, "height": 8}
+    assert probe["render_resolution_saved"] == {"width": 6, "height": 4}
+    assert probe["metric_resolution"] == {"width": 3, "height": 2}
+    assert manifest["capture_quality_probe"] is probe
+
+
+def test_robot_camera_capture_quality_rejects_missing_legacy_scene_dimensions() -> None:
+    with pytest.raises(
+        ValueError,
+        match="legacy comparison manifest scene.render_width is required",
+    ):
+        capture_quality.ensure_capture_quality_probe_manifest({"scene": {"render_height": 8}})
+
+
+def test_robot_camera_capture_quality_rejects_invalid_legacy_scene_dimensions() -> None:
+    with pytest.raises(ValueError, match="scene.render_width must be a positive integer"):
+        capture_quality.ensure_capture_quality_probe_manifest(
+            {"scene": {"render_width": False, "render_height": 8}}
+        )
 
 
 def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
