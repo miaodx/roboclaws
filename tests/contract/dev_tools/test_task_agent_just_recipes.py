@@ -37,9 +37,7 @@ CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 LIVE_CLAUDE_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
-LIVE_OPENAI_AGENTS_RUNNER = (
-    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
-)
+LIVE_OPENAI_AGENTS_RUNNER = REPO_ROOT / "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
 AGIBOT_MAP_BUILD_CODEX_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
 )
@@ -848,6 +846,8 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
     assert "--model-thinking-mode" in molmo_text
     assert "ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE" in molmo_text
     assert "--context-soft-limit-tokens" in molmo_text
+    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL ROBOCLAWS_PROVIDER_PROFILE" in molmo_text
+    assert "ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_OPENAI_AGENTS_MODEL" in molmo_text
     assert "openai-agents-live" not in trace_household_cleanup_run("codex")
 
     plan = resolve_surface_launch(

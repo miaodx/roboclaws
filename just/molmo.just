@@ -584,8 +584,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           roboclaws_codex_provider_args codex_model_args
         elif [[ "$driver" == "openai-agents-live" ]]; then
           openai_agents_profile="$(roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
-          openai_agents_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
-          openai_agents_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
+          openai_agents_model="$(roboclaws_code_agent_model ROBOCLAWS_OPENAI_AGENTS_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
+          openai_agents_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_OPENAI_AGENTS_MODEL codex-router-responses)"
         elif [[ "$driver" == "claude-live" ]]; then
           claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CLAUDE_MODEL auto-claude)"
           roboclaws_claude_provider_args claude_model_args claude_env_args
@@ -759,7 +759,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
             http_proxy https_proxy all_proxy no_proxy \
             DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
-            ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL \
+            ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL ROBOCLAWS_OPENAI_AGENTS_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
             ROBOCLAWS_PROVIDER_TIMING_PROXY \
             ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL \
