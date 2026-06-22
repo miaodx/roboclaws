@@ -19,12 +19,23 @@ from scripts.maps.fit_b1_map12_scene_alignment import (
     validate_alignment_residual_artifact,
     validate_correspondence_manifest,
 )
-from scripts.maps.render_b1_map12_correspondence_review import build_review_packet
+from scripts.maps.render_b1_map12_correspondence_review import (
+    build_review_packet,
+    render_review_report,
+)
+from scripts.maps.render_b1_scene_gaussian_topdown import (
+    TOPDOWN_RENDER_SCHEMA,
+    build_topdown_camera_request,
+)
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "fit_b1_map12_scene_alignment.py"
+REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence_review.py"
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+VENDOR_MAP12_BUNDLE = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
+)
 
 
 def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, object]:
@@ -34,9 +45,9 @@ def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, ob
         "target_scene_frame": "b1_rebuilt_scene_usd_world",
         "bbox_seed_policy": "known_poor_seed_only",
         "scene_projection_policy": {
-            "horizontal_axes": ["x", "z"],
-            "up_axis": "y",
-            "source": "usd_stage_up_axis_and_robot_pose_convention",
+            "horizontal_axes": ["x", "y"],
+            "up_axis": "z",
+            "source": "2rd_floor_seperated_scene_topdown_policy",
         },
         "anchors": anchors,
     }
@@ -45,7 +56,7 @@ def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, ob
 def accepted_anchor(
     anchor_id: str,
     map_xy: tuple[float, float],
-    scene_xz: tuple[float, float],
+    scene_xy: tuple[float, float],
     *,
     navigation_area_id: str,
     asset_partition_id: str,
@@ -56,7 +67,7 @@ def accepted_anchor(
         "navigation_area_id": navigation_area_id,
         "asset_partition_id": asset_partition_id,
         "map_xy": [map_xy[0], map_xy[1]],
-        "scene_xyz": [scene_xz[0], 0.0, scene_xz[1]],
+        "scene_xyz": [scene_xy[0], scene_xy[1], 0.0],
         "evidence": {
             "map_image": "output/b1-map12/alignment/map_anchor.png",
             "scene_image": "output/b1-map12/alignment/scene_anchor.png",
@@ -67,6 +78,38 @@ def accepted_anchor(
         "map_coordinate_source": "operator_map_pick",
         "scene_coordinate_source": "operator_scene_pick",
     }
+
+
+def scene_topdown_render_packet(tmp_path: Path) -> Path:
+    scene_image = tmp_path / "scene_topdown.png"
+    scene_image.write_bytes(b"P5\n2 2\n255\n" + bytes([0, 80, 160, 255]))
+    request = build_topdown_camera_request(
+        scene_bounds=(-2.0, -1.0, 4.0, 5.0),
+        width=2,
+        height=2,
+        camera_height_m=28.0,
+        camera_y_offset_m=0.05,
+        target_z_m=0.6,
+        fov_deg=65.0,
+        camera_mode="near-vertical-topdown",
+    )
+    scene_packet_path = tmp_path / "scene_gaussian_topdown.json"
+    scene_packet_path.write_text(
+        json.dumps(
+            {
+                "schema": TOPDOWN_RENDER_SCHEMA,
+                "topdown_image": str(scene_image),
+                "geometry_status": "rendered_gaussian_scene_topdown",
+                "up_axis": "z",
+                "horizontal_axes": ["x", "y"],
+                "scene_xy_bounds": {"min_x": -2.0, "min_y": -1.0, "max_x": 4.0, "max_y": 5.0},
+                "pixel_to_scene_xyz": request["topdown_pixel_to_scene_xyz"],
+                "camera": request["views"][0],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return scene_packet_path
 
 
 def passing_anchors() -> list[dict[str, object]]:
@@ -120,6 +163,20 @@ def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
     assert (
         "accepted anchor bbox_seed_prefill must not use known-poor bbox seed coordinates" in errors
     )
+
+
+def test_manifest_rejects_legacy_y_up_xz_projection_policy() -> None:
+    manifest = correspondence_manifest(anchors=passing_anchors()[:1])
+    manifest["scene_projection_policy"] = {
+        "horizontal_axes": ["x", "z"],
+        "up_axis": "y",
+        "source": "legacy_y_up_policy",
+    }
+
+    errors = validate_correspondence_manifest(manifest)
+
+    assert "scene_projection_policy.horizontal_axes must be ['x', 'y']" in errors
+    assert "scene_projection_policy.up_axis must be z" in errors
 
 
 def test_fitter_keeps_alignment_candidate_without_six_reviewed_anchors(tmp_path: Path) -> None:
@@ -354,7 +411,7 @@ def test_alignment_fitter_cli_writes_residual_artifact(tmp_path: Path) -> None:
     assert payload["validation"]["status"] == "passed"
 
 
-def test_review_packet_keeps_proposed_anchor_pending() -> None:
+def test_review_packet_keeps_proposed_anchor_pending(tmp_path: Path) -> None:
     manifest = correspondence_manifest(
         anchors=[
             {
@@ -373,6 +430,7 @@ def test_review_packet_keeps_proposed_anchor_pending() -> None:
     packet = build_review_packet(
         manifest,
         map_bundle=RAW_MAP12_BUNDLE,
+        scene_topdown_render_path=scene_topdown_render_packet(tmp_path),
     )
 
     assert packet["schema"] == "b1_map12_correspondence_review_packet_v1"
@@ -384,7 +442,120 @@ def test_review_packet_keeps_proposed_anchor_pending() -> None:
     )
 
 
-def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready() -> None:
+def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
+    tmp_path: Path,
+) -> None:
+    scene_packet_path = scene_topdown_render_packet(tmp_path)
+    scene_image = tmp_path / "scene_topdown.png"
+
+    packet = build_review_packet(
+        correspondence_manifest(anchors=[]),
+        map_bundle=VENDOR_MAP12_BUNDLE,
+        correspondences_path=REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json",
+        scene_topdown_render_path=scene_packet_path,
+        output_dir=tmp_path,
+    )
+
+    assert packet["source_map"]["map_yaml"].endswith("nav2.yaml")
+    assert packet["source_map"]["source_image"].endswith("occupancy.pgm")
+    assert packet["source_map"]["image"].endswith("map12_source_map.png")
+    assert packet["source_map"]["image_role"] == "browser_ready_picker_preview"
+    assert Path(packet["source_map"]["image"]).is_file()
+    assert packet["source_map"]["width_px"] > 0
+    assert packet["source_map"]["height_px"] > 0
+    assert packet["source_map"]["pixel_to_map_xy"]["origin_x"] == pytest.approx(-35.1000022888)
+    assert packet["scene_topdown"]["status"] == "available"
+    assert packet["scene_topdown"]["source_image"] == str(scene_image)
+    assert packet["scene_topdown"]["image"].endswith("scene_topdown.png")
+    assert Path(packet["scene_topdown"]["image"]).is_file()
+    assert packet["scene_topdown"]["geometry_status"] == "rendered_gaussian_scene_topdown"
+    assert packet["scene_topdown"]["display_role"] == "rendered_gaussian_scene_topdown"
+    assert packet["scene_topdown"]["pixel_to_scene_xyz"]["status"] == "perspective_ray_plane_z0"
+    assert packet["scene_topdown"]["pixel_to_scene_xyz"]["source"] == (
+        "rendered_gaussian_scene_topdown_ray_plane_pick"
+    )
+    assert packet["scene_topdown"]["pixel_to_scene_xyz"]["z_plane"] == 0.0
+    assert packet["export_manifest_template"]["scene_projection_policy"] == {
+        "horizontal_axes": ["x", "y"],
+        "source": "2rd_floor_seperated_scene_topdown_policy",
+        "up_axis": "z",
+    }
+    assert packet["export_manifest_template"]["anchors"] == []
+
+
+def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Path) -> None:
+    scene_packet_path = scene_topdown_render_packet(tmp_path)
+    packet = build_review_packet(
+        correspondence_manifest(anchors=[]),
+        map_bundle=VENDOR_MAP12_BUNDLE,
+        correspondences_path=tmp_path / "b1-map12-scene-correspondences.json",
+        scene_topdown_render_path=scene_packet_path,
+        output_dir=tmp_path,
+    )
+
+    html = render_review_report(
+        packet,
+        output_dir=tmp_path,
+        packet_path=tmp_path / "correspondence_review_packet.json",
+        correspondences_path=tmp_path / "b1-map12-scene-correspondences.json",
+    )
+
+    assert 'id="two-map-anchor-picker"' in html
+    assert "map12_source_map.png" in html
+    assert "scene_topdown.png" in html
+    assert 'id="mapImage"' in html
+    assert 'id="sceneImage"' in html
+    assert "B1 Gaussian Scene Top-Down" in html
+    assert "Rendered Gaussian scene picks may be accepted" in html
+    assert '<option value="accepted">accepted</option>' in html
+    assert 'scenePolicy.status === "non_metric"' not in html
+    assert "function mapPixelToMapXY" in html
+    assert "function scenePixelToSceneXYZ" in html
+    assert "function downloadCorrespondenceManifest" in html
+    assert "b1-map12-scene-correspondences.draft.json" in html
+    assert "map_xy" in html
+    assert "scene_xyz" in html
+    assert "scene_pick_policy" in html
+    assert "rendered_gaussian_scene_topdown_ray_plane_pick" in html
+
+
+def test_review_packet_rejects_label_inventory_scene_context(tmp_path: Path) -> None:
+    scene_image = tmp_path / "scene_topdown.png"
+    scene_image.write_bytes(b"P5\n2 2\n255\n" + bytes([0, 80, 160, 255]))
+    scene_packet_path = tmp_path / "scene_topdown_diagnostic.json"
+    scene_packet_path.write_text(
+        json.dumps(
+            {
+                "schema": "b1_scene_topdown_diagnostic_v1",
+                "topdown_image": str(scene_image),
+                "geometry_status": "label_inventory_only",
+                "up_axis": "z",
+                "horizontal_axes": ["x", "y"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="scene top-down render must use schema"):
+        build_review_packet(
+            correspondence_manifest(anchors=[]),
+            map_bundle=VENDOR_MAP12_BUNDLE,
+            scene_topdown_render_path=scene_packet_path,
+            output_dir=tmp_path,
+        )
+
+
+def test_review_packet_requires_scene_topdown_render_file(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="required scene top-down render missing"):
+        build_review_packet(
+            correspondence_manifest(anchors=[]),
+            map_bundle=VENDOR_MAP12_BUNDLE,
+            scene_topdown_render_path=tmp_path / "missing.json",
+            output_dir=tmp_path,
+        )
+
+
+def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready(tmp_path: Path) -> None:
     anchor = accepted_anchor(
         "seed_anchor",
         (-1.0, 2.0),
@@ -398,6 +569,7 @@ def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready() -> Non
     packet = build_review_packet(
         manifest,
         map_bundle=RAW_MAP12_BUNDLE,
+        scene_topdown_render_path=scene_topdown_render_packet(tmp_path),
     )
 
     assert packet["review_status"] == "manifest_needs_fix"
@@ -405,3 +577,62 @@ def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready() -> Non
     assert packet["fit_ready_anchor_count"] == 0
     assert packet["anchors"][0]["uses_known_poor_bbox_seed"] is True
     assert "replace seed-derived coordinates" in packet["anchors"][0]["review_action"]
+
+
+def test_review_cli_requires_scene_topdown_render_argument(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "scene_correspondences.json"
+    manifest_path.write_text(
+        json.dumps(correspondence_manifest(anchors=[])),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REVIEW_SCRIPT),
+            "--correspondences",
+            str(manifest_path),
+            "--map-bundle",
+            str(VENDOR_MAP12_BUNDLE),
+            "--output-dir",
+            str(tmp_path / "review"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "--scene-topdown-render" in completed.stderr
+
+
+def test_review_cli_writes_packet_with_rendered_scene_topdown(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "scene_correspondences.json"
+    manifest_path.write_text(
+        json.dumps(correspondence_manifest(anchors=[])),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "review"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REVIEW_SCRIPT),
+            "--correspondences",
+            str(manifest_path),
+            "--map-bundle",
+            str(VENDOR_MAP12_BUNDLE),
+            "--scene-topdown-render",
+            str(scene_topdown_render_packet(tmp_path)),
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(completed.stdout)
+    packet = json.loads((output_dir / "correspondence_review_packet.json").read_text())
+    assert summary["status"] == "review_pending"
+    assert packet["scene_topdown"]["geometry_status"] == "rendered_gaussian_scene_topdown"
+    assert (output_dir / "correspondence_review.html").is_file()

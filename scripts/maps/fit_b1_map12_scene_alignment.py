@@ -23,6 +23,8 @@ TARGET_SCENE_FRAME = "b1_rebuilt_scene_usd_world"
 KNOWN_POOR_BBOX_SEED_POLICY = "known_poor_seed_only"
 KNOWN_POOR_BBOX_SEED_SOURCE = "known_poor_bbox_seed"
 BBOX_FIT_METHOD = "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds"
+SCENE_PROJECTION_HORIZONTAL_AXES = ["x", "y"]
+SCENE_PROJECTION_UP_AXIS = "z"
 
 MIN_GLOBAL_ACCEPTED_ANCHORS = 6
 MIN_GLOBAL_NON_COLLINEAR_ANCHORS = 4
@@ -135,6 +137,7 @@ def build_alignment_residuals(
             anchors,
             selected_transform=None,
             output_dir=output_dir,
+            manifest=manifest,
         )
         return {
             **common,
@@ -150,7 +153,11 @@ def build_alignment_residuals(
                 "Too few accepted correspondence anchors.",
                 matched_anchor_count=len(anchors),
             ),
-            "area_alignment": area_alignment_reports(anchors, selected_transform=None),
+            "area_alignment": area_alignment_reports(
+                anchors,
+                selected_transform=None,
+                manifest=manifest,
+            ),
             "transform_candidates": [],
             "diagnostic_affine_transform": {},
             "previews": preview_paths,
@@ -173,11 +180,16 @@ def build_alignment_residuals(
     )
     selected_metrics = residual_metrics([row["residual_m"] for row in selected_residuals])
     leave_one_out = leave_one_out_residuals(anchors, selected.get("transform_type") or "", manifest)
-    area_alignment = area_alignment_reports(anchors, selected_transform=selected_transform)
+    area_alignment = area_alignment_reports(
+        anchors,
+        selected_transform=selected_transform,
+        manifest=manifest,
+    )
     preview_paths = write_alignment_previews(
         anchors,
         selected_transform=selected_transform,
         output_dir=output_dir,
+        manifest=manifest,
     )
     return {
         **common,
@@ -237,11 +249,15 @@ def validate_correspondence_manifest(payload: dict[str, Any]) -> list[str]:
     )
     projection = scene_projection_policy(payload)
     _require(
-        projection["horizontal_axes"] in (["x", "z"], ["x", "y"]),
-        "scene_projection_policy.horizontal_axes must be ['x', 'z'] or ['x', 'y']",
+        projection["horizontal_axes"] == SCENE_PROJECTION_HORIZONTAL_AXES,
+        "scene_projection_policy.horizontal_axes must be ['x', 'y']",
         errors,
     )
-    _require(bool(payload.get("anchors")), "anchors must not be empty", errors)
+    _require(
+        projection["up_axis"] == SCENE_PROJECTION_UP_AXIS,
+        "scene_projection_policy.up_axis must be z",
+        errors,
+    )
     seen: set[str] = set()
     for index, raw_anchor in enumerate(payload.get("anchors") or [], start=1):
         anchor = raw_anchor if isinstance(raw_anchor, dict) else {}
@@ -378,11 +394,11 @@ def scene_projection_policy(payload: dict[str, Any]) -> dict[str, Any]:
     raw = _dict(payload.get("scene_projection_policy"))
     axes = raw.get("horizontal_axes")
     if not isinstance(axes, list) or len(axes) != 2:
-        axes = ["x", "z"]
+        axes = SCENE_PROJECTION_HORIZONTAL_AXES
     return {
         "horizontal_axes": [str(axes[0]), str(axes[1])],
-        "up_axis": str(raw.get("up_axis") or "y"),
-        "source": str(raw.get("source") or "usd_stage_up_axis_and_robot_pose_convention"),
+        "up_axis": str(raw.get("up_axis") or SCENE_PROJECTION_UP_AXIS),
+        "source": str(raw.get("source") or "2rd_floor_seperated_scene_topdown_policy"),
     }
 
 
@@ -630,6 +646,7 @@ def area_alignment_reports(
     anchors: list[dict[str, Any]],
     *,
     selected_transform: dict[str, Any] | None,
+    manifest: dict[str, Any],
 ) -> list[dict[str, Any]]:
     by_area: dict[str, list[dict[str, Any]]] = {}
     for anchor in anchors:
@@ -644,7 +661,9 @@ def area_alignment_reports(
             len(area_anchors) >= MIN_AREA_ACCEPTED_ANCHORS
             and non_collinear_count(source) >= MIN_AREA_NON_COLLINEAR_ANCHORS
         ):
-            target = np.array([anchor_scene_xy(item, {}) for item in area_anchors], dtype=float)
+            target = np.array(
+                [anchor_scene_xy(item, manifest) for item in area_anchors], dtype=float
+            )
             local_transform = fit_similarity_transform(source, target)
             residual_values = np.linalg.norm(
                 apply_transform_array(source, local_transform) - target, axis=1
@@ -673,7 +692,7 @@ def area_alignment_reports(
             continue
         inherited_status = "candidate"
         if selected_transform is not None:
-            rows = residual_rows(area_anchors, selected_transform, {})
+            rows = residual_rows(area_anchors, selected_transform, manifest)
             residual_values = [row["residual_m"] for row in rows]
             metrics = residual_metrics(residual_values)
             inherited_status = (
@@ -709,13 +728,14 @@ def write_alignment_previews(
     *,
     selected_transform: dict[str, Any] | None,
     output_dir: Path,
+    manifest: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     preview_dir = output_dir / "previews"
     preview_dir.mkdir(parents=True, exist_ok=True)
     before = preview_dir / "alignment_before.png"
     after = preview_dir / "alignment_after.png"
-    draw_alignment_preview(anchors, before, transform=None)
-    draw_alignment_preview(anchors, after, transform=selected_transform)
+    draw_alignment_preview(anchors, before, transform=None, manifest=manifest or {})
+    draw_alignment_preview(anchors, after, transform=selected_transform, manifest=manifest or {})
     return {
         "before_overlay": str(before),
         "after_overlay": str(after),
@@ -728,6 +748,7 @@ def draw_alignment_preview(
     path: Path,
     *,
     transform: dict[str, Any] | None,
+    manifest: dict[str, Any],
 ) -> None:
     image = Image.new("RGB", (960, 720), color=(255, 255, 255))
     draw = ImageDraw.Draw(image)
@@ -737,7 +758,7 @@ def draw_alignment_preview(
         image.save(path)
         return
     map_points = [np.array(anchor["map_xy"], dtype=float) for anchor in anchors]
-    scene_points = [np.array(anchor_scene_xy(anchor, {}), dtype=float) for anchor in anchors]
+    scene_points = [np.array(anchor_scene_xy(anchor, manifest), dtype=float) for anchor in anchors]
     predicted_points = [
         apply_transform_point(point, transform) if transform is not None else point
         for point in map_points

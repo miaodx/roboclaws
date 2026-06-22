@@ -259,6 +259,12 @@ ruff format --check .
    truth, benchmark-specific hints, or opaque multi-tool task shortcuts in
    server adapters. Put strategy in skills first; put reusable public robot
    capabilities in MCP only after the promotion rule is satisfied.
+8. **No silent fallback or compatibility shims**: do not add backward-compatible
+   branches for obsolete call shapes, artifact names, providers, surfaces, or
+   generated files unless the human explicitly requests that compatibility. If
+   a required dependency, config, runtime, or artifact is missing or malformed,
+   fail loudly with an actionable error instead of substituting another source
+   or silently degrading behavior.
 
 ---
 
@@ -274,20 +280,21 @@ This is a thin demo repo. Priorities:
 
 ### 5.1 Legacy support policy
 
-This repo has no general backward-compatibility burden. When you see code, docs,
-tests, skills, or recipes labeled `legacy`, `current-contract`, or kept only for
-compatibility, treat them as removal or replacement candidates, not as APIs to
-preserve.
+This repo has no backward-compatibility burden unless the human explicitly asks
+for it. When you see code, docs, tests, skills, or recipes labeled `legacy`,
+`current-contract`, or kept only for compatibility, treat them as removal or
+replacement candidates, not as APIs to preserve.
 
 Prefer the current docs and active profile contracts over preserving old paths.
 If a legacy surface conflicts with a cleaner current design, update or delete
 the legacy surface and its tests/docs in the same scoped change. Preserve a
-legacy path only when the user explicitly asks for it or when it is still the
-sole working route for the requested demo.
+legacy path only when the user explicitly asks for it.
 
 Do not add lower-level runner, artifact, `just`, or dispatcher shims solely for
 old names or old call shapes. Persisted schema and artifact version identifiers
 remain versioned contracts unless the active task explicitly changes them.
+When a current contract requires a specific artifact or runtime, missing input
+is a blocker, not permission to fall back to an older artifact.
 
 ---
 
