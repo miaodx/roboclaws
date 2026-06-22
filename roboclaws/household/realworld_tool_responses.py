@@ -7,7 +7,6 @@ from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 
 
 class ToolResponseContract(Protocol):
-    map_mode: str
     _held_handle: str | None
 
     def _ok(self, tool: str, **payload: Any) -> dict[str, Any]: ...
@@ -18,17 +17,12 @@ def public_fixture_response_id(
     contract: ToolResponseContract,
     internal_fixture_id: str,
     requested_fixture_id: str,
-    *,
-    minimal_map_mode: str,
 ) -> str:
-    if contract.map_mode != minimal_map_mode:
-        return internal_fixture_id
     if requested_fixture_id.startswith("anchor_"):
         return requested_fixture_id
     return realworld_runtime_map_targets.public_fixture_reference_id(
         contract,
         internal_fixture_id,
-        minimal_map_mode=minimal_map_mode,
     )
 
 

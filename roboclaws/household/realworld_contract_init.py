@@ -9,14 +9,13 @@ from roboclaws.household import (
     realworld_runtime_map_targets,
 )
 from roboclaws.maps.bundle import validate_nav2_map_bundle
-from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
+from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from_bundle
 
 
 def validate_contract_options(
     *,
     static_fixture_projection_mode: str,
     perception_mode: str,
-    map_mode: str,
 ) -> None:
     helpers = _contract_helpers()
     if static_fixture_projection_mode not in {"room_only", "exact_fixtures"}:
@@ -24,9 +23,6 @@ def validate_contract_options(
     if perception_mode not in helpers.REALWORLD_PERCEPTION_MODES:
         allowed = ", ".join(sorted(helpers.REALWORLD_PERCEPTION_MODES))
         raise ValueError(f"perception_mode must be one of: {allowed}")
-    if map_mode not in helpers.REALWORLD_MAP_MODES:
-        allowed = ", ".join(sorted(helpers.REALWORLD_MAP_MODES))
-        raise ValueError(f"map_mode must be one of: {allowed}")
 
 
 def init_profile_and_acceptance(
@@ -74,33 +70,38 @@ def init_visual_grounding(
     target.visual_grounding_run_id = visual_grounding_run_id
 
 
-def init_map_projection(target: Any, map_bundle_dir: str | Path | None) -> None:
+def init_map_projection(
+    target: Any,
+    map_bundle_dir: str | Path | None,
+    *,
+    allow_synthetic_map_projection: bool = False,
+) -> None:
     target.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
+    target.allow_synthetic_map_projection = bool(allow_synthetic_map_projection)
     target.map_bundle_validation = None
     target._bundle_metric_map_template = None
-    target._bundle_static_fixture_projection_template = None
+    target._bundle_static_landmarks_template = None
     if target.map_bundle_dir is not None:
         _init_bundle_map_projection(target)
-    else:
+    elif allow_synthetic_map_projection:
         _init_scenario_map_projection(target)
+    else:
+        raise ValueError(
+            "map_bundle_dir is required for product runtime base inspection_waypoints; "
+            "generate or select a canonical Nav2 map bundle, or pass "
+            "allow_synthetic_map_projection=True only for offline generation or explicit "
+            "synthetic tests"
+        )
 
 
 def init_public_map_projection(target: Any) -> None:
-    helpers = _contract_helpers()
-    if target.map_mode == helpers.MINIMAL_MAP_MODE:
-        _init_minimal_public_map_projection(target)
-        return
-    target._public_rooms = target._rooms
-    target._public_fixtures = target._fixtures
-    target._public_waypoints = target._waypoints
-    target._private_waypoint_by_public_id = {}
+    _init_public_map_projection(target)
 
 
 def initial_waypoint_id(target: Any) -> str:
-    helpers = _contract_helpers()
-    first_waypoint = target._waypoints[0]["waypoint_id"] if target._waypoints else ""
-    if target.map_mode == helpers.MINIMAL_MAP_MODE and target._public_waypoints:
+    if target._public_waypoints:
         return str(target._public_waypoints[0]["waypoint_id"])
+    first_waypoint = target._waypoints[0]["waypoint_id"] if target._waypoints else ""
     return str(first_waypoint)
 
 
@@ -161,22 +162,17 @@ def _init_bundle_map_projection(target: Any) -> None:
     validation.raise_for_errors()
     target.map_bundle_validation = validation.as_dict()
     target._bundle_metric_map_template = metric_map_from_bundle(target.map_bundle_dir)
-    target._bundle_static_fixture_projection_template = static_fixture_projection_from_bundle(
-        target.map_bundle_dir,
-        static_fixture_projection_mode=target.static_fixture_projection_mode,
-    )
-    target._fixtures = (
-        realworld_contract_projection._fixtures_from_bundle_static_fixture_projection(
-            target._bundle_static_fixture_projection_template
-        )
+    target._bundle_static_landmarks_template = static_landmarks_from_bundle(target.map_bundle_dir)
+    target._fixtures = realworld_contract_projection._fixtures_from_bundle_static_landmarks(
+        target._bundle_static_landmarks_template
     )
     target._rooms = realworld_contract_projection._rooms_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_static_fixture_projection_template,
+        target._bundle_static_landmarks_template,
     )
     target._waypoints = realworld_contract_projection._inspection_waypoints_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_static_fixture_projection_template,
+        target._bundle_static_landmarks_template,
     )
     target._scene_index_fixture_overlay = (
         realworld_contract_projection._scene_index_public_fixture_overlay(
@@ -205,30 +201,46 @@ def _init_scenario_map_projection(target: Any) -> None:
     target._scene_index_fixture_overlay = {}
 
 
-def _init_minimal_public_map_projection(target: Any) -> None:
-    source_metric_map = (
-        target._bundle_metric_map_template
-        if target._bundle_metric_map_template is not None
-        else target._fallback_metric_map_template()
-    )
+def _init_public_map_projection(target: Any) -> None:
+    source_metric_map = _source_metric_map_for_public_projection(target)
     target._public_rooms = realworld_contract_projection._public_room_hints_from_metric_map(
         source_metric_map,
         fallback_rooms=target._rooms,
     )
     target._public_fixtures = {}
-    target._public_waypoints = (
-        realworld_contract_projection._minimal_generated_exploration_waypoints(
-            source_metric_map,
-            fallback_waypoints=target._waypoints,
-            public_rooms=target._public_rooms,
+    if target._bundle_metric_map_template is not None:
+        target._public_waypoints = (
+            realworld_contract_projection._public_base_waypoints_from_artifact(
+                source_metric_map,
+                public_rooms=target._public_rooms,
+            )
         )
+        target._private_waypoint_by_public_id = (
+            realworld_contract_projection._private_waypoint_map_for_public_base_waypoints(
+                target._public_waypoints,
+                target._waypoints,
+            )
+        )
+        return
+    target._public_waypoints = realworld_contract_projection._synthetic_exploration_waypoints(
+        source_metric_map,
+        fallback_waypoints=target._waypoints,
+        public_rooms=target._public_rooms,
     )
     target._private_waypoint_by_public_id = (
-        realworld_contract_projection._private_waypoint_map_for_generated_candidates(
+        realworld_contract_projection._private_waypoint_map_for_synthetic_exploration(
             target._public_waypoints,
             target._waypoints,
         )
     )
+
+
+def _source_metric_map_for_public_projection(target: Any) -> dict[str, Any]:
+    if target._bundle_metric_map_template is not None:
+        return target._bundle_metric_map_template
+    if target.allow_synthetic_map_projection:
+        return target._fallback_metric_map_template()
+    raise AssertionError("product runtime public map projection requires a canonical map bundle")
 
 
 def _contract_helpers() -> Any:

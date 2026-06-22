@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from roboclaws.household.manipulation_provenance import (
     planner_backed_probe_evidence,
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
-from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, MINIMAL_MAP_MODE
+from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
@@ -49,7 +50,73 @@ def _load_module(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
+    if path == DEMO_PATH:
+        run_realworld_cleanup = module.run_realworld_cleanup
+
+        def run_synthetic_realworld_cleanup(**kwargs):
+            kwargs.setdefault("allow_synthetic_map_projection", True)
+            return run_realworld_cleanup(**kwargs)
+
+        module.run_realworld_cleanup = run_synthetic_realworld_cleanup
+    elif path == SMOKE_PATH:
+        run_smoke = module.run_smoke
+
+        def run_synthetic_smoke(**kwargs):
+            kwargs.setdefault("allow_synthetic_map_projection", True)
+            return run_smoke(**kwargs)
+
+        module.run_smoke = run_synthetic_smoke
     return module
+
+
+def test_checker_parses_robot_head_camera_fpv_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_molmo_realworld_cleanup_result.py",
+            "run_result.json",
+            "--require-robot-head-camera-fpv",
+        ],
+    )
+
+    args = checker.parse_args()
+
+    assert args.require_robot_head_camera_fpv is True
+
+
+def test_checker_rejects_legacy_canonical_robot_view_camera_control_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_molmo_realworld_cleanup_result.py",
+            "run_result.json",
+            "--require-canonical-robot-view-camera-control",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        checker.parse_args()
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "--require-canonical-robot-view-camera-control is obsolete" in stderr
+    assert "use --require-robot-head-camera-fpv" in stderr
+
+
+def test_checker_rejects_legacy_canonical_robot_view_camera_control_override() -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    with pytest.raises(ValueError, match="use require_robot_head_camera_fpv"):
+        checker._result_assert_options({"require_canonical_robot_view_camera_control": True})
 
 
 def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
@@ -162,7 +229,6 @@ def test_checker_can_require_generated_target_inspection_candidates(tmp_path: Pa
         seed=7,
         map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
-        map_mode="minimal",
     )
     result["runtime_metric_map"]["generated_target_inspection_candidates"] = []
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
@@ -202,7 +268,6 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
         seed=7,
         map_build=True,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
-        map_mode="minimal",
     )
     result["observed_objects"] = []
     result["model_declared_observations"] = []
@@ -228,7 +293,7 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
         require_runtime_metric_map=True,
         require_map_build=True,
         require_camera_model_policy=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
     )
     assert result["runtime_metric_map"]["target_candidates"]
 
@@ -443,7 +508,7 @@ def test_checker_rejects_agibot_map_build_without_map_build_gate(
         )
 
 
-def test_checker_can_require_minimal_map_map_build(tmp_path: Path) -> None:
+def test_checker_can_require_base_navigation_map_map_build(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -451,7 +516,6 @@ def test_checker_can_require_minimal_map_map_build(tmp_path: Path) -> None:
         output_dir=tmp_path,
         seed=7,
         map_build=True,
-        map_mode="minimal",
     )
 
     checker._assert_result(
@@ -462,7 +526,7 @@ def test_checker_can_require_minimal_map_map_build(tmp_path: Path) -> None:
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
         require_map_build=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
     )
     assert result["agent_view"]["metric_map"]["rooms"]
     assert result["agent_view"]["metric_map"]["room_category_hints"]
@@ -485,7 +549,6 @@ def test_checker_allows_map_build_robot_timeline_without_cleanup_actions(
         output_dir=tmp_path,
         seed=7,
         map_build=True,
-        map_mode="minimal",
     )
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
@@ -507,7 +570,7 @@ def test_checker_allows_map_build_robot_timeline_without_cleanup_actions(
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
         require_map_build=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_robot_views=True,
     )
     assert not any(
@@ -520,7 +583,7 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=MINIMAL_MAP_MODE)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     result["runtime_metric_map"]["observed_objects"][0]["target_receptacle_id"] = "sink_01"
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
 
@@ -539,7 +602,7 @@ def test_checker_rejects_target_candidate_private_leak(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode="minimal")
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     result["runtime_metric_map"]["target_candidates"][0]["target_receptacle_id"] = "sink_01"
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
 
@@ -551,7 +614,7 @@ def test_checker_rejects_target_candidate_private_leak(tmp_path: Path) -> None:
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_minimal_map=True,
+            require_base_navigation_map=True,
         )
 
 
@@ -561,7 +624,7 @@ def test_checker_rejects_non_actionable_target_candidate_without_reason(
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode="minimal")
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     candidate = next(
         item
         for item in result["runtime_metric_map"]["target_candidates"]
@@ -578,7 +641,7 @@ def test_checker_rejects_non_actionable_target_candidate_without_reason(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_minimal_map=True,
+            require_base_navigation_map=True,
         )
 
 
@@ -590,7 +653,6 @@ def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> Non
         output_dir=tmp_path,
         seed=7,
         map_build=True,
-        map_mode="minimal",
     )
     result["runtime_metric_map"]["public_semantic_anchors"][0]["promotion_status"] = "promoted"
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
@@ -604,7 +666,7 @@ def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> Non
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
             require_map_build=True,
-            require_minimal_map=True,
+            require_base_navigation_map=True,
         )
 
 
@@ -703,7 +765,7 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
     )
 
 
-def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
+def test_checker_allows_base_navigation_map_waypoint_honesty_for_scan_only_sweep(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -713,7 +775,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
         output_dir=tmp_path,
         seed=7,
         map_build=True,
-        map_mode="minimal",
     )
 
     checker._assert_result(
@@ -724,12 +785,12 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
         require_map_build=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_waypoint_honesty=True,
     )
 
 
-def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
+def test_checker_allows_base_navigation_map_waypoint_honesty_for_open_ended_scan_only(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -738,7 +799,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     result["task_intent"] = "open-ended"
     result["terminated_by"] = "agent_done"
@@ -768,7 +828,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
         min_generated_mess_count=5,
         allow_partial_cleanup=True,
         require_runtime_metric_map=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_waypoint_honesty=True,
     )
 
@@ -782,7 +842,6 @@ def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     result["generated_mess_count"] = 0
     result["requested_generated_mess_count"] = 0
@@ -820,12 +879,12 @@ def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
         min_generated_mess_count=0,
         allow_partial_cleanup=True,
         require_runtime_metric_map=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_completion_claim=True,
     )
 
 
-def test_checker_rejects_minimal_map_waypoint_honesty_for_cleanup_scan_only(
+def test_checker_rejects_base_navigation_map_waypoint_honesty_for_cleanup_scan_only(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -834,7 +893,6 @@ def test_checker_rejects_minimal_map_waypoint_honesty_for_cleanup_scan_only(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     trace = result["cleanup_policy_trace"]
     trace["loop_style"] = "scan_only"
@@ -849,12 +907,12 @@ def test_checker_rejects_minimal_map_waypoint_honesty_for_cleanup_scan_only(
             min_generated_mess_count=5,
             allow_partial_cleanup=True,
             require_runtime_metric_map=True,
-            require_minimal_map=True,
+            require_base_navigation_map=True,
             require_waypoint_honesty=True,
         )
 
 
-def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
+def test_checker_allows_base_navigation_map_waypoint_honesty_for_survey_first_cleanup(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -863,7 +921,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
 
     checker._assert_result(
@@ -873,7 +930,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_waypoint_honesty=True,
     )
     trace = result["cleanup_policy_trace"]
@@ -884,7 +941,7 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
     assert trace["post_place_observe_count"] >= trace["placed_object_count"]
 
 
-def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_cleanup(
+def test_checker_allows_base_navigation_map_waypoint_honesty_for_online_interleaved_cleanup(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -893,7 +950,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_clea
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     trace = result["cleanup_policy_trace"]
     trace["loop_style"] = "interleaved_cleanup_loop"
@@ -906,12 +962,12 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_clea
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_waypoint_honesty=True,
     )
 
 
-def test_checker_allows_minimal_map_without_map_build_metadata(
+def test_checker_allows_base_navigation_map_without_map_build_metadata(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
@@ -920,12 +976,9 @@ def test_checker_allows_minimal_map_without_map_build_metadata(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     result["map_build"] = None
     result["map_build_mode"] = None
-    result["agent_metric_mode"] = "minimal"
-    result["agent_runtime_minimal"] = True
 
     checker._assert_result(
         result,
@@ -934,7 +987,7 @@ def test_checker_allows_minimal_map_without_map_build_metadata(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_runtime_metric_map=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_waypoint_honesty=True,
     )
 
@@ -948,7 +1001,6 @@ def test_checker_rejects_minimal_interleaved_cleanup_without_full_sweep(
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
     )
     trace = result["cleanup_policy_trace"]
     trace["loop_style"] = "interleaved_cleanup_loop"
@@ -963,7 +1015,7 @@ def test_checker_rejects_minimal_interleaved_cleanup_without_full_sweep(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
-            require_minimal_map=True,
+            require_base_navigation_map=True,
             require_waypoint_honesty=True,
         )
 
@@ -1014,14 +1066,14 @@ def test_checker_accepts_isaac_scene_index_map_context(
     )
 
 
-def test_checker_accepts_isaac_scene_index_minimal_map_context(
+def test_checker_accepts_isaac_scene_index_base_navigation_map_context(
     tmp_path: Path,
 ) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     scene_bindings = _isaac_selected_scene_bindings()
     data = _isaac_runtime_result(tmp_path, scene_bindings)
     _write_isaac_scene_index(tmp_path, scene_bindings)
-    _add_isaac_scene_index_minimal_map_context(data, tmp_path)
+    _add_isaac_scene_index_base_navigation_map_context(data, tmp_path)
 
     checker._assert_isaac_runtime(
         data,
@@ -1554,7 +1606,7 @@ def test_checker_requires_robot_head_camera_fpv(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=0,
         allow_partial_cleanup=True,
-        require_canonical_robot_view_camera_control=True,
+        require_robot_head_camera_fpv=True,
     )
 
 
@@ -1582,7 +1634,7 @@ def test_checker_rejects_backend_local_robot_view_when_head_camera_required(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 
@@ -1610,7 +1662,7 @@ def test_checker_rejects_canonical_free_camera_when_head_camera_required(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 
@@ -1643,7 +1695,7 @@ def test_checker_rejects_head_camera_contract_without_head_camera_source(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 
@@ -1822,7 +1874,7 @@ def test_checker_accepts_waypoint_honesty_when_loop_is_survey_first(
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=MINIMAL_MAP_MODE)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     result["cleanup_policy_trace"]["loop_style"] = "survey_first_cleanup_loop"
     result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] = False
 
@@ -2277,7 +2329,6 @@ def test_checker_accepts_live_raw_fpv_map_build_shape(tmp_path: Path) -> None:
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        map_mode="minimal",
         perception_mode="raw_fpv_only",
         map_build=True,
     )
@@ -2339,7 +2390,7 @@ def test_checker_accepts_live_raw_fpv_map_build_shape(tmp_path: Path) -> None:
         require_agent_driven=True,
         require_runtime_metric_map=True,
         require_map_build=True,
-        require_minimal_map=True,
+        require_base_navigation_map=True,
         require_raw_fpv_observations=True,
         min_sweep_coverage=1.0,
     )
@@ -2596,7 +2647,6 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
     anchor_probe = demo.run_realworld_cleanup(
         output_dir=tmp_path / "anchor-probe",
         seed=7,
-        map_mode=MINIMAL_MAP_MODE,
     )
     toy_anchor = _candidate_fixture_id_for_object(anchor_probe, "observed_001")
     proof_path = _write_strict_planner_proof(
@@ -2626,7 +2676,6 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
         seed=7,
         planner_proof_run_result=proof_path,
         use_planner_proof_for_cleanup_primitives=True,
-        map_mode=MINIMAL_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"
@@ -2712,7 +2761,6 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
     anchor_probe = demo.run_realworld_cleanup(
         output_dir=tmp_path / "anchor-probe",
         seed=7,
-        map_mode=MINIMAL_MAP_MODE,
     )
     proof_paths = [
         _write_strict_planner_proof(
@@ -2731,7 +2779,6 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         seed=7,
         planner_proof_run_results=proof_paths,
         use_planner_proof_for_cleanup_primitives=True,
-        map_mode=MINIMAL_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"
@@ -3935,25 +3982,25 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
     }
 
 
-def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Path) -> None:
+def _add_isaac_scene_index_base_navigation_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
-    map_id = f"{scenario_id}_minimal_map"
+    map_id = f"{scenario_id}_base_navigation_map"
     public_room = _isaac_scene_index_room()
     room_category_hints = [_room_category_hint(public_room)]
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "minimal-navigation-map-v1",
+        "map_version": "base-navigation-map-v1",
         "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": "rby1m",
-        "parameter_hash": "unit-scene-index-minimal-map-context",
+        "parameter_hash": "unit-scene-index-base-navigation-map-context",
     }
     candidates = [
         {
             "waypoint_id": "generated_exploration_001",
             "waypoint_source": "generated_exploration_candidate",
-            "purpose": "minimal_map_exploration",
+            "purpose": "base_navigation_map_exploration",
             "x": 2.99,
             "y": 4.983,
             "room_id": "room_2",
@@ -3969,7 +4016,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         {
             "waypoint_id": "generated_exploration_002",
             "waypoint_source": "generated_exploration_candidate",
-            "purpose": "minimal_map_exploration",
+            "purpose": "base_navigation_map_exploration",
             "x": 7.973,
             "y": 2.512,
             "room_id": "room_2",
@@ -3985,19 +4032,17 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
     ]
     metric_map = {
         "schema": "real_robot_map_bundle_v1",
-        "mode": "minimal",
         "map_bundle": dict(map_bundle),
         "rooms": [public_room],
         "room_category_hints": room_category_hints,
         "driveable_ways": [],
-        "minimal_map": {"enabled": True},
+        "base_navigation_map": {"enabled": True},
         "inspection_waypoints": list(candidates),
         "generated_exploration_candidates": list(candidates),
     }
     runtime_map = {
         "schema": "runtime_metric_map_v1",
-        "map_mode": "minimal",
-        "minimal_map_mode": True,
+        "source_map_mutated": False,
         "static_map": {
             "map_bundle": dict(map_bundle),
             "rooms": [public_room],
@@ -4017,14 +4062,12 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
     }
     static_fixture_projection = {
         "schema": "static_fixture_projection_v1",
-        "mode": "minimal",
         "rooms": [],
     }
     data["scenario_id"] = scenario_id
     isaac_runtime = data["isaac_runtime"]
     assert isinstance(isaac_runtime, dict)
     isaac_runtime["scenario_source"] = "isaac_scene_index"
-    data["map_mode"] = "minimal"
     data["agent_view"] = {
         "metric_map": metric_map,
         "static_fixture_projection": static_fixture_projection,
@@ -4039,7 +4082,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
                 "schema": "nav2_cleanup_semantics_v1",
                 "environment_id": scenario_id,
                 "map_id": map_id,
-                "map_version": "minimal-navigation-map-v1",
+                "map_version": "base-navigation-map-v1",
                 "rooms": [public_room],
                 "fixtures": [],
                 "inspection_waypoints": [],
@@ -4052,7 +4095,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "schema": "nav2_map_bundle_snapshot_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "minimal-navigation-map-v1",
+        "map_version": "base-navigation-map-v1",
         "source_provenance": "molmospaces_base_navigation_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},

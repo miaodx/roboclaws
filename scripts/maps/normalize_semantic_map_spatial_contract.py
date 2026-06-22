@@ -30,17 +30,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    for bundle_dir in args.bundle_dirs:
-        _normalize_bundle(bundle_dir)
-        print(f"normalized spatial contract: {bundle_dir}")
-    return 0
+    try:
+        for bundle_dir in args.bundle_dirs:
+            _normalize_bundle(bundle_dir)
+            print(f"normalized spatial contract: {bundle_dir}")
+        return 0
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 def _normalize_bundle(bundle_dir: Path) -> None:
     semantics_path = Path(bundle_dir) / "semantics.json"
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
-    if not isinstance(semantics, dict):
-        raise SystemExit(f"semantics.json must be a JSON object: {semantics_path}")
+    semantics = _read_json_object(semantics_path, label="semantics")
     frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
     alignment_status = ALIGNMENT_STATUS_NATIVE
     semantics["spatial_contract"] = source_frame_spatial_contract(
@@ -60,6 +62,18 @@ def _normalize_bundle(bundle_dir: Path) -> None:
         json.dumps(semantics, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _read_json_object(path: Path, *, label: str) -> dict:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 if __name__ == "__main__":

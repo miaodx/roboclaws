@@ -52,14 +52,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    manifest = json.loads(args.correspondences.read_text(encoding="utf-8"))
-    packet = build_review_packet(
-        manifest,
-        map_bundle=args.map_bundle,
-        correspondences_path=args.correspondences,
-        scene_topdown_render_path=args.scene_topdown_render,
-        output_dir=args.output_dir,
-    )
+    try:
+        manifest = _read_json_object(args.correspondences, label="correspondence manifest")
+        packet = build_review_packet(
+            manifest,
+            map_bundle=args.map_bundle,
+            correspondences_path=args.correspondences,
+            scene_topdown_render_path=args.scene_topdown_render,
+            output_dir=args.output_dir,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     args.output_dir.mkdir(parents=True, exist_ok=True)
     packet_path = args.output_dir / "correspondence_review_packet.json"
     report_path = args.output_dir / "correspondence_review.html"
@@ -255,11 +259,7 @@ def browser_ready_map_image(source_image_path: Path, *, output_dir: Path | None)
 def scene_topdown_render_context(
     scene_topdown_render_path: Path, *, output_dir: Path | None = None
 ) -> dict[str, Any]:
-    if not Path(scene_topdown_render_path).is_file():
-        raise FileNotFoundError(
-            f"required scene top-down render missing: {scene_topdown_render_path}"
-        )
-    packet = json.loads(Path(scene_topdown_render_path).read_text(encoding="utf-8"))
+    packet = _read_json_object(Path(scene_topdown_render_path), label="scene top-down render")
     if packet.get("schema") != TOPDOWN_RENDER_SCHEMA:
         raise ValueError(
             f"scene top-down render must use schema {TOPDOWN_RENDER_SCHEMA}; "
@@ -310,6 +310,18 @@ def local_review_image(source_image_path: Path, *, output_dir: Path | None) -> P
     output_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_image_path, output_path)
     return output_path
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def export_manifest_template(manifest: dict[str, Any]) -> dict[str, Any]:

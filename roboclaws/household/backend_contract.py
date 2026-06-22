@@ -281,8 +281,6 @@ def validate_cleanup_run_options(
     include_robot: bool,
     record_robot_views: bool,
     generated_mess_count: int,
-    map_mode: str,
-    allowed_map_modes: frozenset[str],
 ) -> None:
     validate_cleanup_backend_capability_request(
         backend_name=backend_name,
@@ -291,9 +289,6 @@ def validate_cleanup_run_options(
     )
     if generated_mess_count < 0:
         raise ValueError("generated_mess_count must be >= 0")
-    if map_mode not in allowed_map_modes:
-        allowed = ", ".join(sorted(allowed_map_modes))
-        raise ValueError(f"map_mode must be one of: {allowed}")
 
 
 def attach_cleanup_backend_runtime_metadata(

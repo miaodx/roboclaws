@@ -214,7 +214,14 @@ def scene_partitions(scene_root: Path) -> list[dict[str, Any]]:
 def load_scene_topdown_render(path: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"required scene top-down render missing: {path}")
-    packet = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        packet = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"scene top-down render must contain valid JSON object: {path}: {exc.msg}"
+        ) from exc
+    if not isinstance(packet, dict):
+        raise ValueError(f"scene top-down render must contain a JSON object: {path}")
     if packet.get("schema") != TOPDOWN_RENDER_SCHEMA:
         raise ValueError(
             f"scene top-down render must use schema {TOPDOWN_RENDER_SCHEMA}; "

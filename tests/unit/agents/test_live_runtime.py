@@ -202,6 +202,39 @@ def test_live_agent_result_reads_existing_cli_artifacts(tmp_path: Path) -> None:
     assert result.artifact_paths["openai_agents_spans"] == run_dir / "openai-agents-spans.jsonl"
 
 
+def test_live_agent_result_keeps_missing_artifacts_optional(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    result = live_agent_result_from_artifacts(run_dir)
+
+    assert result.phase == "unknown"
+    assert result.run_result_present is False
+    assert result.task_completion == {}
+
+
+def test_live_agent_result_fails_on_malformed_live_status_source(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "live_status.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"live_status\.json.*invalid JSON"):
+        live_agent_result_from_artifacts(run_dir)
+
+
+def test_live_agent_result_fails_on_non_object_run_result_source(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (run_dir / "run_result.json").write_text(json.dumps(["ok"]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"run_result\.json.*non-object JSON"):
+        live_agent_result_from_artifacts(run_dir)
+
+
 def test_openai_agents_runtime_missing_sdk_writes_normalized_failure(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1500,72 +1533,11 @@ def test_openai_agents_runtime_rejects_invalid_model_racing_numeric_settings(
     assert message in payload["detail"]
 
 
-def test_openai_agents_runtime_rejects_invalid_retry_attempts_env(
-    tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS", "many")
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS" in payload["detail"]
-    assert "must be a non-negative integer, got 'many'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_invalid_direct_retry_sleep_s(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"model_service_retry_sleep_s": "later"},
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting model_service_retry_sleep_s" in payload["detail"]
-    assert "must be a non-negative number, got 'later'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_invalid_mcp_client_timeout_env(
-    tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S" in payload["detail"]
-    assert "must be a non-negative number, got 'eventually'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
+def _assert_openai_agents_config_failure(
     tmp_path: Path,
+    *,
+    metadata: dict[str, object] | None = None,
+    detail: str,
 ) -> None:
     request = LiveAgentRequest(
         run_id="household-world.cleanup",
@@ -1573,7 +1545,7 @@ def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
         kickoff_prompt="clean the room",
         mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
         run_dir=tmp_path / "run",
-        metadata={"mcp_client_session_timeout_s": -1},
+        metadata=metadata or {},
     )
 
     result = OpenAIAgentsLiveRuntime().run(request)
@@ -1582,8 +1554,144 @@ def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
     assert result.reason == "provider_config_failure"
     payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
     assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting mcp_client_session_timeout_s" in payload["detail"]
-    assert "must be a non-negative number, got -1" in payload["detail"]
+    assert detail in payload["detail"]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "env", "expected_detail"),
+    [
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS": "many"},
+            "model_service_retry_attempts "
+            "(ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS) must be a "
+            "non-negative integer, got 'many'",
+        ),
+        (
+            {"model_service_retry_attempts": True},
+            {},
+            "model_service_retry_attempts (model_service_retry_attempts) must be a "
+            "non-negative integer, got True",
+        ),
+        (
+            {"model_service_retry_attempts": float("inf")},
+            {},
+            "model_service_retry_attempts (model_service_retry_attempts) must be a "
+            "non-negative integer, got inf",
+        ),
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS": "inf"},
+            "model_service_retry_attempts "
+            "(ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS) must be a "
+            "non-negative integer, got 'inf'",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_retry_attempt_numeric_values(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    env: dict[str, str],
+    expected_detail: str,
+) -> None:
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    _assert_openai_agents_config_failure(tmp_path, metadata=metadata, detail=expected_detail)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "env", "expected_detail"),
+    [
+        (
+            {"model_service_retry_sleep_s": "later"},
+            {},
+            "model_service_retry_sleep_s (model_service_retry_sleep_s) must be a "
+            "finite non-negative number, got 'later'",
+        ),
+        (
+            {"model_service_retry_sleep_s": True},
+            {},
+            "model_service_retry_sleep_s (model_service_retry_sleep_s) must be a "
+            "finite non-negative number, got True",
+        ),
+        (
+            {"model_service_retry_sleep_s": float("nan")},
+            {},
+            "model_service_retry_sleep_s (model_service_retry_sleep_s) must be a "
+            "finite non-negative number, got nan",
+        ),
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S": "inf"},
+            "model_service_retry_sleep_s "
+            "(ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S) must be a "
+            "finite non-negative number, got 'inf'",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_retry_sleep_numeric_values(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    env: dict[str, str],
+    expected_detail: str,
+) -> None:
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    _assert_openai_agents_config_failure(tmp_path, metadata=metadata, detail=expected_detail)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "env", "expected_detail"),
+    [
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S": "eventually"},
+            "mcp_client_session_timeout_s "
+            "(ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S) must be a "
+            "finite non-negative number, got 'eventually'",
+        ),
+        (
+            {"mcp_client_session_timeout_s": -1},
+            {},
+            "mcp_client_session_timeout_s (mcp_client_session_timeout_s) must be a "
+            "finite non-negative number, got -1",
+        ),
+        (
+            {"mcp_client_session_timeout_s": True},
+            {},
+            "mcp_client_session_timeout_s (mcp_client_session_timeout_s) must be a "
+            "finite non-negative number, got True",
+        ),
+        (
+            {"mcp_client_session_timeout_s": float("nan")},
+            {},
+            "mcp_client_session_timeout_s (mcp_client_session_timeout_s) must be a "
+            "finite non-negative number, got nan",
+        ),
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S": "inf"},
+            "mcp_client_session_timeout_s "
+            "(ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S) must be a "
+            "finite non-negative number, got 'inf'",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_mcp_timeout_numeric_values(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    env: dict[str, str],
+    expected_detail: str,
+) -> None:
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    _assert_openai_agents_config_failure(tmp_path, metadata=metadata, detail=expected_detail)
 
 
 def test_openai_agents_runtime_preserves_zero_mcp_client_timeout_disable(
@@ -1601,44 +1709,25 @@ def test_openai_agents_runtime_preserves_zero_mcp_client_timeout_disable(
     assert _mcp_client_session_timeout_seconds(request) == (True, None)
 
 
-def test_openai_agents_runtime_rejects_invalid_direct_max_turns(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"max_turns": "many"},
+@pytest.mark.parametrize(
+    ("value", "expected_detail"),
+    [
+        ("many", "must be a positive integer, got 'many'"),
+        (0, "must be a positive integer, got 0"),
+        (True, "must be a positive integer, got True"),
+        (float("inf"), "must be a positive integer, got inf"),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_direct_max_turns(
+    tmp_path: Path,
+    value: object,
+    expected_detail: str,
+) -> None:
+    _assert_openai_agents_config_failure(
+        tmp_path,
+        metadata={"max_turns": value},
+        detail=f"OpenAI Agents SDK setting max_turns {expected_detail}",
     )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
-    assert "must be a positive integer, got 'many'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_non_positive_direct_max_turns(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"max_turns": 0},
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
-    assert "must be a positive integer, got 0" in payload["detail"]
 
 
 @pytest.mark.parametrize(
@@ -1696,6 +1785,55 @@ def test_openai_agents_runtime_rejects_conflicting_provider_model_env_settings(
     payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
     assert payload["reason"] == "provider_config_failure"
     assert expected_detail in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_unknown_model_env(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "not-in-provider-catalog")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model is unknown" in payload["detail"]
+    assert "not-in-provider-catalog" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_route_incompatible_model_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MM_API_KEY", "fake-mm-key")
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_PROFILE", "minimax-responses")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "gpt-5.5")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model is incompatible" in payload["detail"]
+    assert (
+        "model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"
+        in (payload["detail"])
+    )
 
 
 def test_openai_agents_runtime_allows_matching_provider_model_env_aliases(
@@ -1816,7 +1954,7 @@ def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None
         "tool": "metric_map",
         "map_id": "home",
         "map_version": "v1",
-        "mode": "minimal",
+        "base_navigation_map": {"enabled": True},
         "inspection_waypoints": [
             {
                 "waypoint_id": f"wp_{idx}",
@@ -2653,6 +2791,75 @@ def _assert_openai_agents_timeline_and_checker(
     assert "--expect-policy" in checker_command
     assert "openai_agents_agent" in checker_command
     assert "--require-clean-agent-run" in checker_command
+
+
+@pytest.mark.parametrize(
+    ("source_name", "source_text", "expected_detail"),
+    [
+        ("run_result.json", "{not-json}\n", "run_result.json: invalid JSON"),
+        (
+            "trace.jsonl",
+            json.dumps({"event": "request", "tool": "done"}) + "\n[]\n",
+            "trace.jsonl:2: non-object JSON: list",
+        ),
+    ],
+)
+def test_openai_agents_live_timing_fails_aloud_on_malformed_mcp_timing_source(
+    tmp_path: Path,
+    source_name: str,
+    source_text: str,
+    expected_detail: str,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = _parse_live_openai_agents_args(
+        [
+            "--run-dir",
+            str(run_dir),
+            "--repo-root",
+            str(_isolated_repo_root(tmp_path)),
+            "--status-path",
+            str(run_dir / "live_status.json"),
+            "--provider-profile",
+            "codex-router-responses",
+            "--model",
+            "gpt-5.5",
+            "--client-url",
+            "http://127.0.0.1:18788/mcp",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "18788",
+            "--lock-path",
+            str(tmp_path / "live.lock"),
+            "--server-startup-timeout-s",
+            "1",
+            "--kickoff-prompt",
+            "clean the room",
+            "--backend",
+            "molmospaces_subprocess",
+            "--task",
+            "clean",
+            "--min-generated-mess-count",
+            "5",
+            "--profile",
+            "smoke",
+        ]
+    )
+    runner = LiveOpenAIAgentsCleanupRunner(args)
+    (run_dir / source_name).write_text(source_text, encoding="utf-8")
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: OpenAI Agents live source")
+    assert expected_detail in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert expected_detail in timing["mcp_trace_timing"]["source_error"]
 
 
 def test_openai_agents_camera_grounded_composite_profile_adds_private_server_flag(
@@ -3585,7 +3792,7 @@ def test_openai_agents_cleanup_runner_compact_continuation_preserves_composite_c
         port=18788,
         lock_path=tmp_path / "live.lock",
         provider_profile="mimo-mify-responses",
-        model="mimo-v2.5",
+        model="xiaomi/mimo-v2.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
@@ -3969,6 +4176,52 @@ def test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures(
     assert "image_region" not in json.dumps(detail)
 
 
+def test_openai_agents_budget_guard_fails_aloud_on_malformed_trace_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"request","tool":"navigate_to_visual_candidate"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
+        _budget_failure_from_run_state(
+            run_dir,
+            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
+            {
+                "profile_id": "raw_fpv_budgeted_v1",
+                "context_hard_limit_tokens": None,
+                "raw_fpv_candidate_budget": 1,
+                "max_observe_per_waypoint": None,
+            },
+        )
+
+
+def test_openai_agents_budget_guard_fails_aloud_on_non_object_trace_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(["not", "a", "trace-event"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"trace\.jsonl:1.*non-object JSON"):
+        _budget_failure_from_run_state(
+            run_dir,
+            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
+            {
+                "profile_id": "raw_fpv_budgeted_v1",
+                "context_hard_limit_tokens": None,
+                "raw_fpv_candidate_budget": 1,
+                "max_observe_per_waypoint": None,
+            },
+        )
+
+
 def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -4273,20 +4526,6 @@ def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
     assert profile["model_racing_observability"]["enabled"] is True
 
 
-def test_openai_agents_perf_profile_rejects_invalid_mcp_timeout_env(monkeypatch) -> None:
-    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
-
-    with pytest.raises(
-        ValueError,
-        match=(
-            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number"
-        ),
-    ):
-        _resolve_agent_sdk_perf_profile(
-            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=None)
-        )
-
-
 def test_openai_agents_perf_profile_rejects_invalid_cache_tools_env(monkeypatch) -> None:
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "sometimes")
 
@@ -4309,12 +4548,36 @@ def test_openai_agents_perf_profile_uses_cache_tools_env(monkeypatch) -> None:
     assert profile["cache_tools_list"] is False
 
 
-def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) -> None:
-    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
+@pytest.mark.parametrize(
+    ("env_value", "direct_value", "expected_error"),
+    [
+        (
+            "eventually",
+            None,
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number",
+        ),
+        ("nan", None, "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("inf", None, "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", -1.0, "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("nan"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("inf"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("-inf"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_invalid_mcp_timeout_values(
+    monkeypatch,
+    env_value: str,
+    direct_value: float | None,
+    expected_error: str,
+) -> None:
+    if env_value:
+        monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", env_value)
+    else:
+        monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
 
-    with pytest.raises(ValueError, match="mcp_client_session_timeout_s must be non-negative"):
+    with pytest.raises(ValueError, match=expected_error):
         _resolve_agent_sdk_perf_profile(
-            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=-1.0)
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=direct_value)
         )
 
 
@@ -4340,6 +4603,43 @@ def test_openai_agents_perf_profile_rejects_invalid_direct_integer(monkeypatch) 
         _resolve_agent_sdk_perf_profile(
             _openai_agents_perf_profile_base_args(raw_fpv_candidate_budget="many")
         )
+
+
+@pytest.mark.parametrize(
+    ("env_name", "overrides", "expected_error"),
+    [
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS",
+            {"max_turns": True},
+            "OpenAI Agents SDK setting max_turns must be an integer",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET",
+            {"raw_fpv_candidate_budget": True},
+            "OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S",
+            {"mcp_client_session_timeout_s": True},
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S",
+            {"model_service_retry_sleep_s": True},
+            "OpenAI Agents SDK setting model_service_retry_sleep_s must be a non-negative number",
+        ),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_boolean_numeric_values(
+    monkeypatch,
+    env_name: str,
+    overrides: dict[str, object],
+    expected_error: str,
+) -> None:
+    monkeypatch.delenv(env_name, raising=False)
+
+    with pytest.raises(ValueError, match=expected_error):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
 
 
 def test_openai_agents_perf_profile_rejects_non_positive_max_turns(monkeypatch) -> None:
@@ -4474,6 +4774,36 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert kimi["provider_profile"] == "kimi-openai-chat"
     assert kimi["wire_api"] == "chat-completions"
     assert kimi["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
+
+
+def test_openai_agents_perf_profile_rejects_route_incompatible_model(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=("model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(
+                provider_profile="minimax-responses",
+                model="gpt-5.5",
+            )
+        )
+
+
+def test_openai_agents_perf_profile_rejects_unknown_model(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=("unknown model 'not-in-provider-catalog' for provider_profile minimax-responses"),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(
+                provider_profile="minimax-responses",
+                model="not-in-provider-catalog",
+            )
+        )
 
 
 def test_openai_agents_perf_profile_accepts_thinking_mode_override(monkeypatch) -> None:
@@ -4669,6 +4999,20 @@ def test_openai_agents_event_metrics_parse_tool_errors(tmp_path: Path) -> None:
     assert "Waited 5.0 seconds" in metrics["tool_error_messages_sample"][0]
 
 
+def test_openai_agents_event_metrics_fail_aloud_on_malformed_event_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        '{"event":"result"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"openai-agents-events\.jsonl:2.*invalid JSON"):
+        _openai_agents_event_metrics(run_dir)
+
+
 def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
     tmp_path: Path,
 ) -> None:
@@ -4857,6 +5201,20 @@ def test_openai_agents_span_metrics_parse_span_artifacts(tmp_path: Path) -> None
     assert "Raw prompts" in metrics["sanitization_note"]
 
 
+def test_openai_agents_span_metrics_fail_aloud_on_non_object_span_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        json.dumps(["not", "an", "event"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"openai-agents-spans\.jsonl:1.*non-object JSON"):
+        _openai_agents_span_metrics(run_dir)
+
+
 def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -4962,6 +5320,20 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     assert growth["raw_fpv_observation_count"] == 1
     assert growth["continuation_attempt_count"] == 1
     assert growth["tool_response_bytes_total"] > 0
+
+
+def test_openai_agents_context_growth_metrics_fail_aloud_on_malformed_trace_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"request","tool":"observe"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
+        _context_growth_metrics(run_dir, {})
 
 
 def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Path) -> None:

@@ -171,9 +171,7 @@ def build_pose_request_artifact(
 
 
 def load_alignment_for_requests(path: Path) -> tuple[dict[str, Any], list[str]]:
-    if not path.is_file():
-        return {}, [f"alignment artifact missing: {path}"]
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = _read_json_object(path, label="alignment artifact")
     if payload.get("schema") != ALIGNMENT_RESIDUALS_SCHEMA:
         return payload, [f"unexpected alignment artifact schema: {payload.get('schema')!r}"]
     errors = validate_alignment_residual_artifact(payload)
@@ -196,9 +194,7 @@ def load_alignment_for_requests(path: Path) -> tuple[dict[str, Any], list[str]]:
 
 def load_points(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.points is not None:
-        payload = json.loads(args.points.read_text(encoding="utf-8"))
-        if not isinstance(payload, list):
-            raise ValueError("--points must be a JSON array")
+        payload = _read_json_array(args.points, label="points")
         return [point if isinstance(point, dict) else {} for point in payload]
     if args.x is None or args.y is None:
         raise ValueError("provide either --points or both --x and --y")
@@ -213,6 +209,30 @@ def load_points(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.yaw_deg is not None:
         point["yaw_deg"] = float(args.yaw_deg)
     return [point]
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
+
+
+def _read_json_array(path: Path, *, label: str) -> list[Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON array: {path}: {exc.msg}") from exc
+    if not isinstance(payload, list):
+        raise ValueError(f"{label} must contain a JSON array: {path}")
+    return payload
 
 
 def coverage_decision(alignment: dict[str, Any]) -> dict[str, Any]:

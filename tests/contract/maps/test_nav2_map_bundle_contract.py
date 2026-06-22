@@ -2,21 +2,27 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
+from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
-from roboclaws.maps.bundle import validate_nav2_map_bundle, write_nav2_map_bundle
-from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
+from roboclaws.maps.bundle import (
+    static_landmarks_from_fixture_projection,
+    validate_nav2_map_bundle,
+    write_nav2_map_bundle,
+)
+from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from_bundle
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
@@ -26,16 +32,16 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        static_fixture_projection=agent_view["static_fixture_projection"],
+        static_landmarks=_static_landmarks(agent_view),
     )
 
     validation = validate_nav2_map_bundle(bundle_dir)
     projected_map = metric_map_from_bundle(bundle_dir)
-    projected_projection = static_fixture_projection_from_bundle(bundle_dir)
+    static_landmarks = static_landmarks_from_bundle(bundle_dir)
     waypoints = projected_map["inspection_waypoints"]
     route = validate_metric_map_route(
         projected_map,
-        projected_projection,
+        static_landmarks,
         start_waypoint_id=str(waypoints[0]["waypoint_id"]),
         goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
     )
@@ -44,8 +50,7 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
     assert validation.ok, validation.as_dict()
     assert projected_map["schema"] == "real_robot_map_bundle_v1"
     assert projected_map["map_bundle"]["schema"] == "nav2_map_bundle_v1"
-    assert projected_projection["schema"] == "static_fixture_projection_v1"
-    assert projected_projection["contains_runtime_observations"] is False
+    assert static_landmarks == []
     assert route.ok is True
     assert route.navigation_backend == SIM_COSTMAP_PLANNER
     assert route.path_length_m > 0
@@ -57,7 +62,7 @@ def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) ->
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        static_fixture_projection=agent_view["static_fixture_projection"],
+        static_landmarks=_static_landmarks(agent_view),
     )
     semantics_path = bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
@@ -76,7 +81,7 @@ def test_nav2_projection_rejects_map_yaml_without_image(tmp_path: Path) -> None:
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        static_fixture_projection=agent_view["static_fixture_projection"],
+        static_landmarks=_static_landmarks(agent_view),
     )
     map_yaml_path = bundle_dir / "map.yaml"
     map_yaml = "\n".join(
@@ -96,7 +101,7 @@ def test_nav2_projection_rejects_semantics_without_waypoints(tmp_path: Path) -> 
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        static_fixture_projection=agent_view["static_fixture_projection"],
+        static_landmarks=_static_landmarks(agent_view),
     )
     semantics_path = bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
@@ -104,7 +109,25 @@ def test_nav2_projection_rejects_semantics_without_waypoints(tmp_path: Path) -> 
     semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
     with pytest.raises(AssertionError, match="semantics.json must contain inspection_waypoints"):
-        static_fixture_projection_from_bundle(bundle_dir)
+        static_landmarks_from_bundle(bundle_dir)
+
+
+def test_nav2_projection_rejects_non_object_semantics(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    (bundle_dir / "semantics.json").write_text("[]\n", encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert "semantics.json must contain a JSON object" in validation.errors
+    with pytest.raises(AssertionError, match="semantics.json must contain a JSON object"):
+        metric_map_from_bundle(bundle_dir)
 
 
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
@@ -121,23 +144,168 @@ def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
     assert (bundle_dir / "semantics.json").is_file()
 
 
-def test_bundle_writer_normalizes_wide_room_only_static_fixture_projection(tmp_path: Path) -> None:
+def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> None:
+    exporter = _load_module(EXPORTER_PATH, "export_bundle")
+    checker = _load_module(CHECKER_PATH, "check_bundle")
+    agent_view_path = tmp_path / "agent_view.json"
+    asset_root = tmp_path / "assets" / "maps"
+    bundle_dir = asset_root / "molmospaces" / "procthor-objaverse-val" / "10"
+    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
+
+    exporter.main(
+        [
+            "--agent-view",
+            str(agent_view_path),
+            "--molmospaces-scene-source",
+            "procthor-objaverse-val",
+            "--molmospaces-scene-index",
+            "10",
+            "--map-asset-root",
+            str(asset_root),
+        ]
+    )
+    checker.main([str(bundle_dir)])
+
+    assert (bundle_dir / "map.yaml").is_file()
+    assert (bundle_dir / "semantics.json").is_file()
+
+
+def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: Path) -> None:
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text("{", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "agent view source is unreadable" in result.stderr
+    assert str(agent_view_path) in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Path) -> None:
+    agent_view_path = tmp_path / "missing_agent_view.json"
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "agent view source is missing" in result.stderr
+    assert str(agent_view_path) in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "exported").exists()
+
+
+def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: Path) -> None:
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text('["not", "a", "run_result"]', encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--run-result",
+            str(run_result_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "run result payload must be a JSON object" in result.stderr
+    assert "got list" in result.stderr
+    assert str(run_result_path) in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_exporter_cli_reports_missing_run_result_without_traceback(tmp_path: Path) -> None:
+    run_result_path = tmp_path / "missing_run_result.json"
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--run-result",
+            str(run_result_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "run result source is missing" in result.stderr
+    assert str(run_result_path) in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / "exported").exists()
+
+
+def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) -> None:
+    invalid_bundle = tmp_path / "missing-scene-bundle"
+    invalid_bundle.mkdir()
+
+    result = subprocess.run(
+        [str(REPO_ROOT / ".venv" / "bin" / "python"), str(CHECKER_PATH), str(invalid_bundle)],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "nav2-map-bundle invalid" in result.stderr
+    assert "missing required artifact: map.yaml" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_bundle_writer_normalizes_wide_room_only_static_landmarks(tmp_path: Path) -> None:
     agent_view = _wide_room_only_agent_view()
     bundle_dir = tmp_path / "molmospaces-procthor-val-0-7"
 
     write_nav2_map_bundle(
         bundle_dir,
         metric_map=agent_view["metric_map"],
-        static_fixture_projection=agent_view["static_fixture_projection"],
+        static_landmarks=_static_landmarks(agent_view),
     )
 
     validation = validate_nav2_map_bundle(bundle_dir)
     projected_map = metric_map_from_bundle(bundle_dir)
-    projected_projection = static_fixture_projection_from_bundle(bundle_dir)
+    static_landmarks = static_landmarks_from_bundle(bundle_dir)
     waypoints = projected_map["inspection_waypoints"]
     route = validate_metric_map_route(
         projected_map,
-        projected_projection,
+        static_landmarks,
         start_waypoint_id=str(waypoints[0]["waypoint_id"]),
         goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
     )
@@ -147,7 +315,7 @@ def test_bundle_writer_normalizes_wide_room_only_static_fixture_projection(tmp_p
     assert validation.ok, validation.as_dict()
     assert projected_map["width"] > agent_view["metric_map"]["width"]
     assert route.ok is True
-    for fixture in semantics["fixtures"]:
+    for fixture in semantics["static_landmarks"]:
         waypoint = waypoint_by_id[fixture["preferred_inspection_waypoint_id"]]
         pose = fixture["pose"]
         assert (pose["x"], pose["y"]) != (waypoint["x"], waypoint["y"])
@@ -156,8 +324,8 @@ def test_bundle_writer_normalizes_wide_room_only_static_fixture_projection(tmp_p
 def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
     agent_view = _wide_room_only_agent_view()
     metric_map = agent_view["metric_map"]
-    static_fixture_projection = agent_view["static_fixture_projection"]
-    first_fixture = static_fixture_projection["rooms"][0]["fixtures"][0]
+    static_landmarks = _static_landmarks(agent_view)
+    first_fixture = static_landmarks[0]
     start_waypoint = dict(metric_map["inspection_waypoints"][0])
     start_waypoint["x"] = 1.5
     metric_map = dict(metric_map)
@@ -173,7 +341,7 @@ def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
 
     result = validate_metric_map_route(
         metric_map,
-        static_fixture_projection,
+        static_landmarks,
         start_waypoint_id=str(metric_map["inspection_waypoints"][0]["waypoint_id"]),
         goal_waypoint_id="blocked_goal",
     )
@@ -192,7 +360,7 @@ def test_route_validation_rejects_invalid_metric_map_width() -> None:
     with pytest.raises(ValueError, match="metric_map.width must be an integer"):
         validate_metric_map_route(
             metric_map,
-            agent_view["static_fixture_projection"],
+            _static_landmarks(agent_view),
             start_waypoint_id=str(waypoints[0]["waypoint_id"]),
             goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
         )
@@ -207,43 +375,79 @@ def test_nav2_bundle_writer_rejects_missing_metric_map_height(tmp_path: Path) ->
         write_nav2_map_bundle(
             tmp_path / "bundle",
             metric_map=metric_map,
-            static_fixture_projection=agent_view["static_fixture_projection"],
+            static_landmarks=_static_landmarks(agent_view),
         )
 
 
 def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_bundle_dir=PREBUILT_BUNDLE,
-        map_mode=MINIMAL_MAP_MODE,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     metric_map = contract.metric_map()
     static_fixture_projection = contract.static_fixture_projection()
     waypoints = metric_map["inspection_waypoints"]
+    semantics = json.loads((CANONICAL_SCENE_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+    source_waypoints = semantics["inspection_waypoints"]
     navigation = contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
 
-    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
-    assert metric_map["map_id"] == "molmo-cleanup-default-7_base_navigation_map"
+    assert metric_map["map_bundle"]["environment_id"] == "molmospaces-procthor-10k-val-0"
+    assert metric_map["map_id"] == semantics["map_id"]
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert all(item["visited"] is False for item in waypoints)
     assert static_fixture_projection["rooms"] == []
-    assert waypoints[0]["waypoint_source"] == "generated_exploration_candidate"
+    assert [item["waypoint_id"] for item in waypoints] == [
+        item["waypoint_id"] for item in source_waypoints
+    ]
+    assert waypoints[0]["waypoint_source"] == source_waypoints[0]["waypoint_source"]
+    assert waypoints[0]["x"] == source_waypoints[0]["x"]
+    assert waypoints[0]["y"] == source_waypoints[0]["y"]
+    assert "fixture_ids" not in waypoints[0]
+    assert metric_map["base_navigation_map"]["source"] == "map_artifact_inspection_waypoints"
     assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
     assert navigation["route_validation"]["ok"] is True
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
+def test_realworld_contract_observes_objects_from_selected_prebuilt_bundle() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_bundle_dir=PREBUILT_BUNDLE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    metric_map = contract.metric_map()
+    semantics = json.loads((PREBUILT_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+
+    assert semantics["static_landmarks"]
+    assert observation["visible_object_detections"]
+    assert metric_map["runtime_metric_map"]["observed_objects"]
+
+
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
+        allow_synthetic_map_projection=True,
     )
     return {
         "metric_map": contract.metric_map(),
         "static_fixture_projection": contract.static_fixture_projection(),
     }
+
+
+def _static_landmarks(agent_view: dict) -> list[dict]:
+    return static_landmarks_from_fixture_projection(agent_view["static_fixture_projection"])
+
+
+def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        if observation["visible_object_detections"]:
+            return observation
+    raise AssertionError("expected at least one visible object detection")
 
 
 def _load_module(path: Path, name: str):

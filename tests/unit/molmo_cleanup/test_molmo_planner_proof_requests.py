@@ -1612,6 +1612,36 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
 
 
+def test_proof_result_summary_surfaces_non_object_run_result_source_error(
+    tmp_path: Path,
+) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    proof_dir.mkdir(parents=True)
+    (proof_dir / "run_result.json").write_text('["not", "a", "packet"]', encoding="utf-8")
+
+    summary = proof_result_summary_from_commands(
+        [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "run_result": str(proof_dir / "run_result.json"),
+                "report": str(proof_dir / "report.html"),
+            }
+        ]
+    )
+
+    assert summary["result_count"] == 1
+    assert summary["missing_result_count"] == 0
+    result = summary["results"][0]
+    assert result["run_result_exists"] is True
+    assert result["status"] == "unreadable"
+    assert result["task_feasibility_status"] == "unknown"
+    assert result["visual_status"] == "unknown"
+    assert result["blockers"][0]["code"] == "proof_run_result_unreadable"
+    assert "non-object JSON: list" in result["blockers"][0]["message"]
+
+
 def test_proof_result_summary_carries_planner_proof_quality(tmp_path: Path) -> None:
     proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
     views_dir = proof_dir / "planner_views"

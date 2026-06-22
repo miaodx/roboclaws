@@ -131,6 +131,43 @@ def test_source_room_labels_reads_adjacent_scene_json(tmp_path: Path) -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ("{", "malformed source scene JSON"),
+        (json.dumps([]), "source scene JSON must be a JSON object"),
+        (json.dumps({"rooms": {}}), "source scene JSON rooms must be a JSON array"),
+        (json.dumps({"rooms": ["room_1"]}), "source scene JSON rooms must contain JSON objects"),
+    ],
+)
+def test_source_room_labels_fails_on_corrupt_adjacent_scene_json(
+    tmp_path: Path,
+    payload: str,
+    error: str,
+) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    scene_xml = tmp_path / "val_5.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    scene_xml.with_suffix(".json").write_text(payload, encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match=error):
+        source_room_labels(scene_xml)
+
+
+def test_source_room_labels_fails_on_empty_source_scene_json_before_ithor_fallback(
+    tmp_path: Path,
+) -> None:
+    from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
+
+    scene_xml = tmp_path / "FloorPlan301_physics.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    (tmp_path / "FloorPlan301.json").write_text(json.dumps({"rooms": []}), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="source scene JSON has no room labels"):
+        source_room_labels(scene_xml)
+
+
 def test_source_room_labels_uses_explicit_ithor_floorplan_provenance(tmp_path: Path) -> None:
     from scripts.molmo_cleanup.molmospaces_worker_init import source_room_labels
 

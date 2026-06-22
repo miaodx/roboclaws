@@ -82,8 +82,6 @@ def runtime_static_map_payload(
     *,
     metric_map: dict[str, Any],
     static_fixture_projection: dict[str, Any],
-    map_mode: str,
-    minimal_map_mode: str,
     assert_no_forbidden_agent_view_keys: Any,
 ) -> dict[str, Any]:
     fixtures = []
@@ -115,8 +113,6 @@ def runtime_static_map_payload(
         "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
         "map_bundle": dict(metric_map.get("map_bundle") or {}),
         "contains_runtime_observations": False,
-        "map_mode": map_mode,
-        "minimal_map_mode": map_mode == minimal_map_mode,
         "generated_exploration_candidates": [
             dict(item) for item in metric_map.get("generated_exploration_candidates") or []
         ],

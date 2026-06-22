@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from roboclaws.evals.dependencies import dependency_failure, resolve_artifact_dependencies
+from roboclaws.evals.live_artifacts import (
+    discover_live_surface_run_dir,
+    load_live_eval_json,
+)
 from roboclaws.evals.models import (
     MISSING_NOT_APPLICABLE,
     MISSING_SENTINELS,
@@ -62,15 +66,15 @@ def run_live_eval_trial(
 ) -> EvalResult:
     """Run and grade one live-agent eval trial through the product surface."""
 
-    dependency_artifacts = resolve_artifact_dependencies(
-        sample,
-        repetition_index=repetition_index,
-        sample_artifacts=sample_artifacts,
-    )
-    failure = dependency_failure(dependency_artifacts)
-    if failure is not None:
-        return hooks.failed_result_from_dependency(trial, run_dir, failure)
     try:
+        dependency_artifacts = resolve_artifact_dependencies(
+            sample,
+            repetition_index=repetition_index,
+            sample_artifacts=sample_artifacts,
+        )
+        failure = dependency_failure(dependency_artifacts)
+        if failure is not None:
+            return hooks.failed_result_from_dependency(trial, run_dir, failure)
         run_result = live_product_runner(
             **live_product_run_kwargs(
                 sample,
@@ -83,10 +87,13 @@ def run_live_eval_trial(
                 live_timeout_s=live_timeout_s,
             )
         )
+        effective_run_dir = _live_eval_effective_run_dir(
+            run_result,
+            trial_run_dir=run_dir,
+        )
     except Exception as exc:  # noqa: BLE001 - eval packets must classify runner failures.
         return hooks.blocked_result_from_exception(trial, exc)
 
-    effective_run_dir = Path(str(run_result.get("eval_effective_run_dir") or run_dir))
     grader_outputs = hooks.grade_trial(
         sample=sample,
         run_dir=effective_run_dir,
@@ -122,6 +129,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     command = live_surface_command(kwargs, output_dir=sample_run_root)
     env = live_surface_env(kwargs, base_env=os.environ)
     timeout_s = explicit_live_surface_timeout_s(kwargs)
+    started_wall_time_s = time.time()
     started = time.monotonic()
     record: dict[str, Any] = {
         "command": command,
@@ -146,11 +154,14 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             output_dir=sample_run_root,
             fallback_run_dir=sample_run_dir,
             stdout=exc.stdout or "",
+            started_wall_time_s=started_wall_time_s,
         )
         sample_run_dir = wait_for_timed_out_live_surface_artifact(
             kwargs,
             output_dir=sample_run_root,
             effective_run_dir=sample_run_dir,
+            started_wall_time_s=started_wall_time_s,
+            allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
         )
         record.update(
             {
@@ -165,7 +176,11 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         )
         run_result_path = sample_run_dir / "run_result.json"
         run_result = _load_json(run_result_path)
-        if run_result:
+        if run_result and _live_surface_already_complete(
+            sample_run_dir,
+            allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
+            require_terminal_status=_live_surface_route_can_detach(kwargs),
+        ):
             record["returncode"] = "timeout_after_completion"
             _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
             run_result["eval_effective_run_dir"] = str(sample_run_dir)
@@ -178,6 +193,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         output_dir=sample_run_root,
         fallback_run_dir=sample_run_dir,
         stdout=completed.stdout,
+        started_wall_time_s=started_wall_time_s,
     )
     record.update(
         {
@@ -201,6 +217,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
                 effective_run_dir=sample_run_dir,
                 elapsed_s=time.monotonic() - started,
                 allow_open_ended_checker_failure=True,
+                started_wall_time_s=started_wall_time_s,
             )
             run_result["eval_effective_run_dir"] = str(sample_run_dir)
             return run_result
@@ -212,6 +229,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         effective_run_dir=sample_run_dir,
         elapsed_s=time.monotonic() - started,
         allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
+        started_wall_time_s=started_wall_time_s,
     )
     record["effective_run_dir"] = str(sample_run_dir)
     record["live_status"] = _load_json(sample_run_dir / "live_status.json")
@@ -244,8 +262,8 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
         f"seed={kwargs['seed']}",
         f"output_dir={output_dir}",
         f"run_dir={live_surface_run_dir(kwargs, output_dir=output_dir)}",
-        f"scene_source={kwargs['scene_source']}",
-        f"scene_index={kwargs['scene_index']}",
+        f"scene_source={_live_surface_scene_source(kwargs)}",
+        f"scene_index={_live_surface_scene_index(kwargs)}",
     ]
     if sample is not None and sample.preset not in {"", MISSING_NOT_APPLICABLE}:
         command.append(f"preset={sample.preset}")
@@ -276,43 +294,6 @@ def live_surface_run_dir(kwargs: dict[str, Any], *, output_dir: Path) -> Path:
     return output_dir / f"seed-{int(kwargs['seed'])}"
 
 
-def discover_live_surface_run_dir(
-    kwargs: dict[str, Any],
-    *,
-    output_dir: Path,
-    fallback_run_dir: Path,
-    stdout: str = "",
-) -> Path:
-    """Return the actual artifact directory created by the public live route."""
-
-    seed_leaf = f"seed-{int(kwargs['seed'])}"
-    candidates = [fallback_run_dir]
-    stdout_dir = _live_surface_run_dir_from_stdout(stdout)
-    if stdout_dir is not None:
-        candidates.append(stdout_dir)
-    candidates.extend(
-        sorted(
-            (candidate for candidate in output_dir.glob(f"*/{seed_leaf}") if candidate.is_dir()),
-            key=lambda item: item.stat().st_mtime,
-            reverse=True,
-        )
-    )
-    candidates.extend(
-        sorted(
-            (candidate for candidate in output_dir.glob(seed_leaf) if candidate.is_dir()),
-            key=lambda item: item.stat().st_mtime,
-            reverse=True,
-        )
-    )
-    for candidate in candidates:
-        if _live_surface_run_dir_has_evidence(candidate):
-            return candidate
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return fallback_run_dir
-
-
 def wait_for_live_surface_completion(
     kwargs: dict[str, Any],
     *,
@@ -321,15 +302,18 @@ def wait_for_live_surface_completion(
     elapsed_s: float = 0.0,
     poll_s: float = 1.0,
     allow_open_ended_checker_failure: bool = False,
+    started_wall_time_s: float | None = None,
 ) -> Path:
     """Wait for a detached live product route to finish when the route returns early."""
 
+    require_terminal_status = _live_surface_route_can_detach(kwargs)
     if _live_surface_already_complete(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        require_terminal_status=require_terminal_status,
     ):
         return effective_run_dir
-    if not _live_surface_route_can_detach(kwargs):
+    if not require_terminal_status:
         return effective_run_dir
 
     timeout_s = live_surface_timeout_s(kwargs)
@@ -339,19 +323,31 @@ def wait_for_live_surface_completion(
             kwargs,
             output_dir=output_dir,
             fallback_run_dir=effective_run_dir,
+            started_wall_time_s=started_wall_time_s,
         )
-        if _live_surface_poll_completed(
+        if _live_surface_already_complete(
             effective_run_dir,
             allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+            require_terminal_status=True,
         ):
             return effective_run_dir
         time.sleep(max(poll_s, 0.05))
-    return _recover_live_surface_after_wait_timeout(
+    effective_run_dir = wait_for_timed_out_live_surface_artifact(
         kwargs,
         output_dir=output_dir,
         effective_run_dir=effective_run_dir,
         poll_s=poll_s,
-        timeout_s=timeout_s,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        started_wall_time_s=started_wall_time_s,
+    )
+    if _live_surface_already_complete(
+        effective_run_dir,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        require_terminal_status=True,
+    ):
+        return effective_run_dir
+    raise TimeoutError(
+        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
     )
 
 
@@ -359,10 +355,11 @@ def _live_surface_already_complete(
     effective_run_dir: Path,
     *,
     allow_open_ended_checker_failure: bool,
+    require_terminal_status: bool,
 ) -> bool:
-    return (
-        (effective_run_dir / "run_result.json").is_file() and not allow_open_ended_checker_failure
-    ) or _live_surface_run_is_terminal(
+    if (effective_run_dir / "run_result.json").is_file() and not require_terminal_status:
+        return True
+    return _live_surface_run_is_terminal(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
     )
@@ -387,52 +384,14 @@ def _live_surface_wait_deadline(*, timeout_s: float, elapsed_s: float) -> float:
     return time.monotonic() + remaining_s
 
 
-def _live_surface_poll_completed(
-    effective_run_dir: Path,
-    *,
-    allow_open_ended_checker_failure: bool,
-) -> bool:
-    if not (effective_run_dir / "run_result.json").is_file():
-        return _live_surface_run_is_terminal(
-            effective_run_dir,
-            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-        )
-    status = _load_json(effective_run_dir / "live_status.json")
-    if status and status.get("exit_status") in {0}:
-        return True
-    return _live_surface_run_is_terminal(
-        effective_run_dir,
-        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-    )
-
-
-def _recover_live_surface_after_wait_timeout(
-    kwargs: dict[str, Any],
-    *,
-    output_dir: Path,
-    effective_run_dir: Path,
-    poll_s: float,
-    timeout_s: float,
-) -> Path:
-    effective_run_dir = wait_for_timed_out_live_surface_artifact(
-        kwargs,
-        output_dir=output_dir,
-        effective_run_dir=effective_run_dir,
-        poll_s=poll_s,
-    )
-    if (effective_run_dir / "run_result.json").is_file():
-        return effective_run_dir
-    raise TimeoutError(
-        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
-    )
-
-
 def wait_for_timed_out_live_surface_artifact(
     kwargs: dict[str, Any],
     *,
     output_dir: Path,
     effective_run_dir: Path,
     poll_s: float = 1.0,
+    allow_open_ended_checker_failure: bool = False,
+    started_wall_time_s: float | None = None,
 ) -> Path:
     """Give detached routes a short grace window after subprocess timeout."""
 
@@ -444,14 +403,20 @@ def wait_for_timed_out_live_surface_artifact(
             kwargs,
             output_dir=output_dir,
             fallback_run_dir=effective_run_dir,
+            started_wall_time_s=started_wall_time_s,
         )
-        if (effective_run_dir / "run_result.json").is_file():
+        if _live_surface_already_complete(
+            effective_run_dir,
+            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+            require_terminal_status=True,
+        ):
             return effective_run_dir
         time.sleep(max(poll_s, 0.05))
     return discover_live_surface_run_dir(
         kwargs,
         output_dir=output_dir,
         fallback_run_dir=effective_run_dir,
+        started_wall_time_s=started_wall_time_s,
     )
 
 
@@ -463,31 +428,46 @@ def live_timeout_completion_grace_s() -> float:
 
 
 def _non_negative_timeout_value(value: object, setting_name: str) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
-        ) from exc
-    if not math.isfinite(parsed) or parsed < 0:
-        raise ValueError(
-            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
-        )
-    return parsed
+    return _finite_timeout_value(
+        value,
+        setting_name,
+        allow_zero=True,
+    )
 
 
 def _positive_timeout_value(value: object, setting_name: str) -> float:
+    return _finite_timeout_value(
+        value,
+        setting_name,
+        allow_zero=False,
+    )
+
+
+def _finite_timeout_value(
+    value: object,
+    setting_name: str,
+    *,
+    allow_zero: bool,
+) -> float:
+    lower_bound = "non-negative" if allow_zero else "positive"
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
-        ) from exc
-    if not math.isfinite(parsed) or parsed <= 0:
-        raise ValueError(
-            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
-        )
+        raise ValueError(_timeout_value_error(setting_name, lower_bound, value)) from exc
+    if not math.isfinite(parsed) or parsed < 0 or (parsed == 0 and not allow_zero):
+        raise ValueError(_timeout_value_error(setting_name, lower_bound, value))
     return parsed
+
+
+def _timeout_value_error(
+    setting_name: str,
+    lower_bound_description: str,
+    value: object,
+) -> str:
+    return (
+        f"{setting_name} must be a {lower_bound_description} finite number of seconds, "
+        f"got {value!r}"
+    )
 
 
 def live_product_run_kwargs(
@@ -530,7 +510,6 @@ def product_run_kwargs(
 ) -> dict[str, Any]:
     """Return shared cleanup product-run kwargs for direct and live eval trials."""
 
-    launch_overrides = sample.launch_overrides or {}
     map_build = sample.intent == "map-build" or sample.preset == "map-build"
     kwargs: dict[str, Any] = {
         "output_dir": run_dir,
@@ -540,8 +519,8 @@ def product_run_kwargs(
         "evidence_lane": evidence_lane(sample, budget=budget),
         "map_build": map_build,
         "generated_mess_count": generated_mess_count(sample),
-        "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
-        "scene_index": int(launch_overrides.get("scene_index") or 0),
+        "scene_source": scene_source(sample),
+        "scene_index": scene_index(sample),
         "run_metadata_overrides": {
             "eval_sample_id": sample.sample_id,
             "eval_sample_version": sample.version,
@@ -582,16 +561,39 @@ def task_prompt(sample: EvalSample) -> str:
 
 def generated_mess_count(sample: EvalSample) -> int:
     reference = sample.private_goal_reference
-    if isinstance(reference.get("generated_mess_count"), int):
-        return int(reference["generated_mess_count"])
+    if "generated_mess_count" in reference:
+        return _non_negative_int_value(
+            reference.get("generated_mess_count"),
+            "private_goal_reference.generated_mess_count",
+        )
     launch_overrides = sample.launch_overrides or {}
     for key in ("generated_mess_count", "relocation_count"):
         value = launch_overrides.get(key)
         if value is not None:
-            return int(value)
+            return _non_negative_int_value(value, f"launch_overrides.{key}")
     if sample.intent == "map-build":
         return 0
     return 10
+
+
+def scene_source(sample: EvalSample) -> str:
+    launch_overrides = sample.launch_overrides or {}
+    if "scene_source" not in launch_overrides:
+        return "procthor-10k-val"
+    return _non_empty_string_value(
+        launch_overrides.get("scene_source"),
+        "launch_overrides.scene_source",
+    )
+
+
+def scene_index(sample: EvalSample) -> int:
+    launch_overrides = sample.launch_overrides or {}
+    if "scene_index" not in launch_overrides:
+        return 0
+    return _non_negative_int_value(
+        launch_overrides.get("scene_index"),
+        "launch_overrides.scene_index",
+    )
 
 
 def _goal_contract_json(sample: EvalSample) -> str:
@@ -642,10 +644,40 @@ def _is_smoke_budget(kwargs: dict[str, Any]) -> bool:
 
 
 def _generated_mess_count(kwargs: dict[str, Any]) -> int:
-    try:
-        return int(kwargs.get("generated_mess_count") or 0)
-    except (TypeError, ValueError):
+    value = kwargs.get("generated_mess_count")
+    if value is None or value == "":
         return 0
+    return _non_negative_int_value(value, "generated_mess_count")
+
+
+def _live_surface_scene_index(kwargs: dict[str, Any]) -> int:
+    return _non_negative_int_value(kwargs["scene_index"], "scene_index")
+
+
+def _live_surface_scene_source(kwargs: dict[str, Any]) -> str:
+    return _non_empty_string_value(kwargs["scene_source"], "scene_source")
+
+
+def _non_empty_string_value(value: object, setting_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{setting_name} must be a non-empty string, got {value!r}")
+    return value
+
+
+def _non_negative_int_value(value: object, setting_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("+"):
+            text = text[1:]
+        if text.isdecimal():
+            return int(text)
+    raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
 
 
 def _public_backend_from_implementation(backend: str) -> str:
@@ -660,13 +692,28 @@ def _public_backend_from_implementation(backend: str) -> str:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return load_live_eval_json(path)
+
+
+def _live_eval_effective_run_dir(run_result: object, *, trial_run_dir: Path) -> Path:
+    if not isinstance(run_result, dict):
+        raise ValueError("live eval run_result must be an object")
+    if "eval_effective_run_dir" not in run_result:
+        raise ValueError("live eval run_result is missing eval_effective_run_dir")
+    raw_path = run_result.get("eval_effective_run_dir")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        raise ValueError(f"eval_effective_run_dir must be a non-empty string, got {raw_path!r}")
+    effective_run_dir = Path(raw_path)
+    trial_root = trial_run_dir.resolve()
+    effective_root = effective_run_dir.resolve()
+    if not effective_root.is_relative_to(trial_root):
+        raise ValueError(
+            f"eval_effective_run_dir must stay under trial run_dir {trial_run_dir}, "
+            f"got {effective_run_dir}"
+        )
+    if not effective_run_dir.is_dir():
+        raise ValueError(f"eval_effective_run_dir does not exist: {effective_run_dir}")
+    return effective_run_dir
 
 
 def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
@@ -709,26 +756,6 @@ def _live_surface_run_is_terminal(
 def _is_open_ended_checker_failure(status: dict[str, Any]) -> bool:
     reason = str(status.get("reason") or "").lower()
     return "cleanup checker exited with status" in reason
-
-
-def _live_surface_run_dir_has_evidence(path: Path) -> bool:
-    return (
-        (path / "run_result.json").is_file()
-        or (path / "live_status.json").is_file()
-        or (path / "trace.jsonl").is_file()
-    )
-
-
-def _live_surface_run_dir_from_stdout(stdout: str) -> Path | None:
-    for raw_line in stdout.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("Artifacts"):
-            continue
-        _, _, value = line.partition(":")
-        path = value.strip()
-        if path:
-            return Path(path)
-    return None
 
 
 def _live_surface_route_can_detach(kwargs: dict[str, Any]) -> bool:

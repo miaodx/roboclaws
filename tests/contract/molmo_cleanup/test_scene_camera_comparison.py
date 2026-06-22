@@ -1625,6 +1625,63 @@ def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_targe
     assert anchors[0]["isaac_support_position"] == [123.0, 456.0, 0.0]
 
 
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ("{", "malformed scene metadata JSON"),
+        (json.dumps([]), "scene metadata JSON must be a JSON object"),
+        (json.dumps({"objects": []}), "scene metadata JSON objects must be a JSON object"),
+        (
+            json.dumps({"objects": {"sink_01": []}}),
+            "scene metadata JSON objects values must be JSON objects",
+        ),
+    ],
+)
+def test_isaac_view_specs_fail_on_corrupt_scene_metadata_source(
+    tmp_path: Path,
+    payload: str,
+    error: str,
+) -> None:
+    scene_dir = tmp_path / "flattened-semantic-usd" / "scene"
+    scene_dir.mkdir(parents=True)
+    scene_usd = scene_dir / "scene_semantic.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    (scene_dir / "scene_metadata.json").write_text(payload, encoding="utf-8")
+    anchors = [
+        {
+            "anchor_id": "sink_01",
+            "anchor_kind": "receptacle",
+            "category": "Sink",
+            "room_id": "room_3",
+            "molmospaces_position": [9.5, 1.8, 0.5],
+        }
+    ]
+
+    with pytest.raises(RuntimeError, match=error):
+        _isaac_view_specs(anchors, scene_usd_path=scene_usd, scene_index=1)
+
+
+def test_isaac_view_specs_allow_missing_optional_scene_metadata(tmp_path: Path) -> None:
+    scene_dir = tmp_path / "flattened-semantic-usd" / "scene"
+    scene_dir.mkdir(parents=True)
+    scene_usd = scene_dir / "scene_semantic.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    anchors = [
+        {
+            "anchor_id": "sink_01",
+            "anchor_kind": "receptacle",
+            "category": "Sink",
+            "room_id": "room_3",
+            "molmospaces_position": [9.5, 1.8, 0.5],
+        }
+    ]
+
+    specs = _isaac_view_specs(anchors, scene_usd_path=scene_usd, scene_index=1)
+
+    assert specs[0]["target_source"] == "missing_isaac_usd_prim_path"
+    assert specs[0]["usd_prim_path"] == ""
+
+
 def test_canonical_camera_control_views_carry_explicit_pose_not_lane_orbit() -> None:
     anchors = [
         {

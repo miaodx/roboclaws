@@ -9,6 +9,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from functools import partial
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +23,10 @@ from roboclaws.operator_console.launcher import (
     route_readiness,
 )
 from roboclaws.operator_console.locks import ResourceLock, ResourceLockError
+from roboclaws.operator_console.prompt_preview import (
+    PromptPreviewRequest,
+    build_prompt_preview,
+)
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import (
     get_selection,
@@ -235,6 +240,167 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
+@pytest.mark.parametrize(
+    ("request_fields", "expected_error"),
+    [
+        (
+            {
+                "agent_engine_id": "openai-agents-sdk",
+                "evidence_lane": "camera-raw-fpv",
+                "overrides": {},
+                "env_overrides": {"ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "many"},
+            },
+            "raw_fpv_candidate_budget must be an integer",
+        ),
+        (
+            {
+                "agent_engine_id": "codex-cli",
+                "evidence_lane": "world-public-labels",
+                "overrides": {"relocation_count": "abc"},
+            },
+            "relocation_count must be an integer",
+        ),
+    ],
+)
+def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_inputs(
+    tmp_path: Path,
+    request_fields: dict[str, object],
+    expected_error: str,
+) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/prompt-preview",
+            method="POST",
+            data=json.dumps(
+                {
+                    "world_id": "molmospaces/procthor-objaverse-val/0",
+                    "backend_id": "mujoco",
+                    "intent_id": "cleanup",
+                    "provider_profile": "codex-router-responses",
+                    "scenario_setup": "relocate-cleanup-related-objects",
+                    "prompt": "收拾杯子",
+                    **request_fields,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert expected_error in payload["error"]
+
+
+@pytest.mark.parametrize(
+    ("env_overrides", "expected_error"),
+    [
+        (
+            {"ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "-1"},
+            "max_observe_per_waypoint must be non-negative",
+        ),
+        (
+            {"ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET": "-1"},
+            "done_retry_budget must be non-negative",
+        ),
+    ],
+)
+def test_prompt_preview_rejects_invalid_openai_agents_numeric_env_values(
+    env_overrides: dict[str, str],
+    expected_error: str,
+) -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                prompt="收拾杯子",
+                env_overrides=env_overrides,
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_error"),
+    [
+        ({"relocation_count": "abc"}, "relocation_count must be an integer"),
+        ({"relocation_count": "-3"}, "relocation_count must be non-negative"),
+    ],
+)
+def test_prompt_preview_rejects_invalid_relocation_count(
+    overrides: dict[str, str],
+    expected_error: str,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                prompt="收拾杯子",
+                overrides={
+                    "scenario_setup": "relocate-cleanup-related-objects",
+                    **overrides,
+                },
+            ),
+        )
+
+
+def test_prompt_preview_uses_valid_openai_agents_numeric_env_overrides() -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    payload = build_prompt_preview(
+        route,
+        PromptPreviewRequest(
+            prompt="收拾杯子",
+            overrides={"relocation_count": "4"},
+            env_overrides={
+                "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "3",
+                "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "2",
+                "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET": "0",
+            },
+        ),
+    )
+
+    assert "run budget of 3 raw-FPV candidate attempts" in payload["agent_kickoff_prompt"]
+    assert "use at most 2 observe response(s)" in payload["agent_kickoff_prompt"]
+    assert "retry done at most 0 time(s)" in payload["agent_kickoff_prompt"]
+
+
+def test_prompt_preview_keeps_existing_prompt_minimums_for_zero_budget_env() -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    payload = build_prompt_preview(
+        route,
+        PromptPreviewRequest(
+            prompt="收拾杯子",
+            env_overrides={
+                "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "0",
+                "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "0",
+            },
+        ),
+    )
+
+    assert "run budget of 1 raw-FPV candidate attempts" in payload["agent_kickoff_prompt"]
+    assert "use at most 1 observe response(s)" in payload["agent_kickoff_prompt"]
+
+
 def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(
     tmp_path: Path,
 ) -> None:
@@ -369,17 +535,85 @@ def test_redaction_removes_secret_values_and_headers(tmp_path: Path) -> None:
     assert "live-token" not in redacted_artifact_text(artifact)
 
 
-def test_just_console_run_recipe_is_public() -> None:
+def test_operator_console_serves_only_operator_output_artifacts(tmp_path: Path) -> None:
+    output_artifact = (
+        tmp_path / "output" / "operator-console" / "runs" / "run-a" / "console-launch.log"
+    )
+    output_artifact.parent.mkdir(parents=True)
+    output_artifact.write_text("Authorization: Bearer live-token\nvisible tail\n", encoding="utf-8")
+    repo_file = tmp_path / "README.md"
+    repo_file.write_text("repo source should not be an artifact\n", encoding="utf-8")
+
+    output_rel = output_artifact.relative_to(tmp_path).as_posix()
+    repo_rel = repo_file.relative_to(tmp_path).as_posix()
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        artifact_url = f"http://{host}:{port}/artifacts/{urllib.parse.quote(output_rel)}"
+        with urllib.request.urlopen(artifact_url) as response:
+            assert response.read().decode("utf-8") == output_artifact.read_text(encoding="utf-8")
+
+        raw_url = f"http://{host}:{port}/api/raw/{urllib.parse.quote(output_rel)}"
+        with urllib.request.urlopen(raw_url) as response:
+            redacted = response.read().decode("utf-8")
+
+        repo_url = f"http://{host}:{port}/artifacts/{urllib.parse.quote(repo_rel)}"
+        with pytest.raises(urllib.error.HTTPError) as repo_error:
+            urllib.request.urlopen(repo_url)
+        raw_repo_url = f"http://{host}:{port}/api/raw/{urllib.parse.quote(repo_rel)}"
+        with pytest.raises(urllib.error.HTTPError) as raw_repo_error:
+            urllib.request.urlopen(raw_repo_url)
+
+        escape_url = (
+            f"http://{host}:{port}/artifacts/"
+            f"{urllib.parse.quote('output/operator-console/../README.md')}"
+        )
+        with pytest.raises(urllib.error.HTTPError) as escape_error:
+            urllib.request.urlopen(escape_url)
+        raw_escape_url = (
+            f"http://{host}:{port}/api/raw/"
+            f"{urllib.parse.quote('output/operator-console/../README.md')}"
+        )
+        with pytest.raises(urllib.error.HTTPError) as raw_escape_error:
+            urllib.request.urlopen(raw_escape_url)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert "live-token" not in redacted
+    assert "visible tail" in redacted
+    assert repo_error.value.code == 404
+    assert raw_repo_error.value.code == 404
+    assert escape_error.value.code == 404
+    assert raw_escape_error.value.code == 404
+
+
+def test_just_console_run_recipe_is_public_and_uses_public_bind_defaults() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    result = subprocess.run(
+    summary_result = subprocess.run(
         [_just_bin(), "--summary"],
         cwd=repo_root,
         check=True,
         capture_output=True,
         text=True,
     )
-    summary = set(result.stdout.split())
+    summary = set(summary_result.stdout.split())
     assert "console::run" in summary
+
+    dry_run_result = subprocess.run(
+        [_just_bin(), "--dry-run", "console::run"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    dry_run_output = dry_run_result.stdout + dry_run_result.stderr
+    assert '-m roboclaws.operator_console --host "0.0.0.0" --port "8765"' in dry_run_output
 
 
 def test_operator_console_cli_defaults_to_all_interfaces() -> None:
@@ -388,13 +622,6 @@ def test_operator_console_cli_defaults_to_all_interfaces() -> None:
 
     assert run_server.call_args.args[1] == "0.0.0.0"
     assert run_server.call_args.args[2] == 8765
-
-
-def test_just_console_run_defaults_to_all_interfaces() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    recipe = (repo_root / "just" / "console.just").read_text(encoding="utf-8")
-
-    assert 'run host="0.0.0.0" port="8765":' in recipe
 
 
 def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
@@ -814,6 +1041,20 @@ def _blocked_operator_control_payload(
     return json.loads(exc_info.value.read().decode("utf-8"))
 
 
+@contextmanager
+def _console_server(root: Path):
+    handler = partial(ConsoleRequestHandler, root=root)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def _exercise_allowlisted_operator_control(
     root: Path, run_id: str
 ) -> tuple[
@@ -835,12 +1076,7 @@ def _exercise_allowlisted_operator_control(
             "requires_reobserve": True,
         }
 
-    handler = partial(ConsoleRequestHandler, root=root)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        host, port = server.server_address
+    with _console_server(root) as (host, port):
         with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
             payload = _post_operator_control_payload(
                 host,
@@ -869,10 +1105,6 @@ def _exercise_allowlisted_operator_control(
                 "forward_m": 2.0,
             },
         )
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
 
     return payload, blocked_payload, large_payload
 
@@ -926,6 +1158,108 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
 
     _assert_allowlisted_operator_control_response(payload, blocked_payload, large_payload)
     _assert_operator_control_artifacts(tmp_path, run_dir, route)
+
+
+def test_operator_console_control_endpoint_rejects_malformed_control_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-control-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    (run_dir / "operator_control.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator control source contains invalid JSON" in payload["error"]
+    assert "operator_control.jsonl:2" in payload["error"]
+    assert (run_dir / "operator_control.jsonl").read_text(encoding="utf-8") == "\n{not-json}\n"
+
+
+def test_operator_console_control_endpoint_rejects_non_object_control_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-control-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    (run_dir / "operator_control.jsonl").write_text("[]\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator control source row must be an object" in payload["error"]
+    assert "operator_control.jsonl:1" in payload["error"]
+    assert (run_dir / "operator_control.jsonl").read_text(encoding="utf-8") == "[]\n"
+
+
+def test_operator_console_control_endpoint_rejects_malformed_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-control-state-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator state source contains invalid JSON" in payload["error"]
+    assert "operator_state.json" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "{not-json"
+    assert not (run_dir / "operator_control.jsonl").exists()
+
+
+def test_operator_console_control_endpoint_rejects_non_object_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-control-state-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator state source must be a JSON object" in payload["error"]
+    assert "operator_state.json" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert not (run_dir / "operator_control.jsonl").exists()
+
+
+def test_operator_console_control_endpoint_does_not_overwrite_corrupt_state_after_tool_call(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-control-state-after-call-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+
+    async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
+        assert mcp_url == "http://127.0.0.1:19999/mcp"
+        assert action == "observe"
+        assert arguments == {}
+        state_path.write_text("{corrupt-after-call", encoding="utf-8")
+        return {"ok": True, "tool": action, "status": "ok"}
+
+    with _console_server(tmp_path) as (host, port):
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            payload = _blocked_operator_control_payload(
+                host,
+                port,
+                run_id,
+                {"action": "observe"},
+            )
+
+    assert "operator state source contains invalid JSON" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "{corrupt-after-call"
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "operator_control.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["event"] for row in rows] == ["request", "response"]
+    assert not (run_dir / "operator_interventions.json").exists()
 
 
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(
@@ -1126,6 +1460,102 @@ def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path:
     assert payload["run_id"] == run_id
     assert payload["phase"] == "stopped_by_operator"
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_operator_console_stop_endpoint_rejects_non_object_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-stop-state-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert "operator stop source error" in payload["error"]
+    assert "operator_state.json must contain a JSON object" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
+def test_operator_console_stop_endpoint_rejects_malformed_live_status_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-live-status-stop-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    attempt_dir = run_dir / "0619_1112" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    status_path = attempt_dir / "live_status.json"
+    status_path.write_text("{bad-live-status", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with (
+            patch("roboclaws.operator_console.launcher._stop_live_child_run") as stop_child,
+            patch("roboclaws.operator_console.launcher._terminate_process_group") as stop_wrapper,
+            pytest.raises(urllib.error.HTTPError) as exc_info,
+        ):
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert "operator stop source error" in payload["error"]
+    assert "live_status.json contains invalid JSON" in payload["error"]
+    assert status_path.read_text(encoding="utf-8") == "{bad-live-status"
+    stop_child.assert_not_called()
+    stop_wrapper.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
 
 
 def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:

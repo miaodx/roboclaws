@@ -35,7 +35,11 @@ def test_realworld_mcp_smoke_uses_shared_fixture_style_semantic_loop(
 
     monkeypatch.setattr(module, "run_semantic_cleanup_loop", wrapped_shared_loop)
 
-    result = module.run_smoke(output_dir=tmp_path, seed=7)
+    result = module.run_smoke(
+        output_dir=tmp_path,
+        seed=7,
+        allow_synthetic_map_projection=True,
+    )
 
     assert calls
     assert all(call["target_request_key"] == "fixture_id" for call in calls)

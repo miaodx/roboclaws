@@ -14,7 +14,11 @@ SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agen
 def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     smoke = _load_smoke_module()
 
-    run_result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+    run_result = smoke.run_smoke(
+        output_dir=tmp_path,
+        seed=7,
+        allow_synthetic_map_projection=True,
+    )
     trace_text = (tmp_path / "trace.jsonl").read_text(encoding="utf-8")
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
 

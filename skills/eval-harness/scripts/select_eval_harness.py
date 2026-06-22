@@ -304,7 +304,11 @@ def _changed_files_from_git(since: str) -> list[str]:
         text=True,
     )
     if result.returncode != 0:
-        return []
+        detail = (result.stderr or result.stdout).strip()
+        message = f"git diff --name-only {since!r} failed"
+        if detail:
+            message = f"{message}: {detail}"
+        raise RuntimeError(message)
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 

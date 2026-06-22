@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"nav2-map-bundle invalid: {args.bundle_dir}", file=sys.stderr)
         for error in result.errors:
             print(f"- {error}", file=sys.stderr)
-    result.raise_for_errors()
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

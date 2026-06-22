@@ -525,7 +525,7 @@ def scenario_from_map_bundle(
     generated_mess_count: int,
 ) -> CleanupScenario:
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
-    raw_fixtures = [dict(item) for item in semantics.get("fixtures") or []]
+    raw_fixtures = [dict(item) for item in semantics.get("static_landmarks") or []]
     if not raw_fixtures:
         return build_cleanup_scenario(seed=seed)
 

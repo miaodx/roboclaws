@@ -13,6 +13,7 @@ from roboclaws.household.ci_live_reports import (
     base_status,
     diagnostic_path_for_entry,
     entry_by_name,
+    latest_seed_artifact_dir,
     publish_diagnostic_seed_run,
     publish_seed_run,
     report_path_for_entry,
@@ -255,6 +256,8 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
 
     def fake_run_checked(_command, **_kwargs):
+        empty_latest_seed = output_dir / entry.name / "0513_2300" / "seed-7"
+        empty_latest_seed.mkdir(parents=True)
         seed_dir = output_dir / entry.name / "0513_2217" / "seed-7"
         seed_dir.mkdir(parents=True)
         (seed_dir / "live_status.json").write_text('{"phase":"failed"}\n', encoding="utf-8")
@@ -271,11 +274,23 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
 
     assert status["status"] == "failed"
     assert status["diagnostic_path"] == diagnostic_path_for_entry(entry.name, seed=7)
+    assert status["run_dir"].endswith("0513_2217/seed-7")
     diagnostic_root = publish_root / entry.name / "diagnostics" / "seed-7"
     assert (diagnostic_root / "diagnostics.html").is_file()
     assert (diagnostic_root / "claude-events.jsonl").read_text(encoding="utf-8")
+    assert not (diagnostic_root / "0513_2300").exists()
     payload = json.loads((publish_root / entry.name / "status.json").read_text(encoding="utf-8"))
     assert payload["diagnostic_path"] == status["diagnostic_path"]
+
+
+def test_latest_seed_artifact_dir_ignores_seed_dirs_without_diagnostic_evidence(
+    tmp_path: Path,
+) -> None:
+    entry_output_dir = tmp_path / "runs" / "kimi-k2.6"
+    (entry_output_dir / "0513_2217" / "seed-7").mkdir(parents=True)
+    (entry_output_dir / "0513_2300" / "seed-7").mkdir(parents=True)
+
+    assert latest_seed_artifact_dir(entry_output_dir, seed=7) is None
 
 
 def test_live_claude_print_command_uses_verbose_for_stream_json(
@@ -425,6 +440,37 @@ def test_live_claude_writes_live_timing_and_model_call_metrics(tmp_path: Path) -
     assert rows[0]["schema"] == "roboclaws_model_call_metric_v1"
     assert rows[0]["agent_engine"] == "claude-code"
     assert rows[0]["input_tokens"] == 100
+
+
+def test_live_claude_timing_fails_aloud_on_malformed_trace_source(tmp_path: Path) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        claude_provider_summary="mimo-tp-anthropic",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        profile="world-public-labels",
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "request", "tool": "done"}) + "\n{not-json}\n",
+        encoding="utf-8",
+    )
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: Claude live source")
+    assert "trace.jsonl:2" in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert "trace.jsonl:2" in timing["mcp_trace_timing"]["source_error"]
 
 
 def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
@@ -688,6 +734,57 @@ def test_live_codex_failure_status_includes_reason(tmp_path: Path, monkeypatch) 
     assert payload["phase"] == "failed"
     assert payload["exit_status"] == 1
     assert payload["reason"] == "startup failed"
+
+
+def test_live_codex_timing_fails_aloud_on_malformed_trace_source(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="world-public-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "request", "tool": "done", "ts": 12.0}) + "\n[]\n",
+        encoding="utf-8",
+    )
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: Codex live source")
+    assert "trace.jsonl:2" in source_error
+    assert "non-object JSON: list" in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert "trace.jsonl:2" in timing["mcp_trace_timing"]["source_error"]
+
+
+def test_live_codex_event_summary_fails_aloud_on_malformed_event_source(
+    tmp_path: Path,
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    events_path = tmp_path / "codex-events.jsonl"
+    events_path.write_text(
+        json.dumps({"type": "turn_completed"}) + "\n{not-json}\n",
+        encoding="utf-8",
+    )
+
+    try:
+        run_codex._combined_codex_event_summary([events_path])
+    except ValueError as exc:
+        assert "Codex live source" in str(exc)
+        assert "codex-events.jsonl:2" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected malformed Codex event source to fail aloud")
 
 
 def test_live_codex_prompts_block_plan_tool() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -26,10 +27,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    payload = build_verification_manifest(
-        json.loads(args.draft.read_text(encoding="utf-8")),
-        source_draft=args.draft,
-    )
+    try:
+        payload = build_verification_manifest(
+            read_draft_packet(args.draft),
+            source_draft=args.draft,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(
@@ -49,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
 def build_verification_manifest(
     draft: dict[str, Any], *, source_draft: Path = DEFAULT_DRAFT
 ) -> dict[str, Any]:
+    if not isinstance(draft, dict):
+        raise ValueError("manual draft must contain a JSON object")
     anchors = [
         dict(anchor)
         for anchor in draft.get("anchors") or []
@@ -78,7 +85,7 @@ def build_verification_manifest(
         "verification_only": True,
         "source_draft": source_draft.as_posix(),
         "notes": [
-            "Generated for local residual verification after automatic alignment failed.",
+            "Generated for local residual verification from proposed manual draft anchors.",
             "Do not commit this as assets/maps/b1-map12-scene-correspondences.json.",
             "Do not use alignment anchors as room semantic evidence.",
         ],
@@ -93,6 +100,18 @@ def has_explicit_picks(anchor: dict[str, Any]) -> bool:
         and isinstance(anchor.get("scene_xyz"), list)
         and len(anchor["scene_xyz"]) == 3
     )
+
+
+def read_draft_packet(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"manual draft missing: {path}")
+    try:
+        draft = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"manual draft must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(draft, dict):
+        raise ValueError(f"manual draft must contain a JSON object: {path}")
+    return draft
 
 
 if __name__ == "__main__":

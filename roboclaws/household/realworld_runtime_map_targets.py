@@ -11,7 +11,6 @@ from roboclaws.household import (
 )
 from roboclaws.household.target_query import resolve_target_query
 
-MINIMAL_MAP_MODE = "minimal"
 RAW_FPV_ONLY_MODE = "raw_fpv_only"
 CAMERA_MODEL_POLICY_MODE = "camera_model_policy"
 
@@ -35,7 +34,6 @@ _float_or_zero = realworld_visual_candidates._float_or_zero
 
 
 class RuntimeMapTargetContract(Protocol):
-    map_mode: str
     perception_mode: str
     sanitize_world_labels: bool
     _camera_adjustment_events: Sequence[dict[str, Any]]
@@ -387,7 +385,6 @@ def target_candidate_evidence_lane(contract: RuntimeMapTargetContract) -> str:
 def runtime_public_semantic_anchors(
     contract: RuntimeMapTargetContract,
     *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
     assert_no_forbidden_agent_view_keys: Any = None,
 ) -> list[dict[str, Any]]:
     anchors: list[dict[str, Any]] = []
@@ -396,7 +393,6 @@ def runtime_public_semantic_anchors(
         contract,
         anchors=anchors,
         seen=seen,
-        minimal_map_mode=minimal_map_mode,
     )
     _append_fixture_public_semantic_anchors(contract, anchors=anchors, seen=seen)
     _append_prior_public_semantic_anchors(contract, anchors=anchors, seen=seen)
@@ -406,22 +402,12 @@ def runtime_public_semantic_anchors(
     return anchors
 
 
-def seed_public_fixture_anchor_ids_from_prior_anchors(
-    contract: RuntimeMapTargetContract,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
-) -> None:
-    if contract.map_mode != minimal_map_mode:
-        return
+def seed_public_fixture_anchor_ids_from_prior_anchors(contract: RuntimeMapTargetContract) -> None:
     for anchor in contract._runtime_map_anchor_priors:
         anchor_id = str(anchor.get("anchor_id") or "")
         if not _is_place_anchor(anchor) or not anchor_id:
             continue
-        fixture_id = best_internal_fixture_for_anchor(
-            contract,
-            anchor,
-            minimal_map_mode=minimal_map_mode,
-        )
+        fixture_id = best_internal_fixture_for_anchor(contract, anchor)
         if fixture_id:
             contract._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
 
@@ -429,11 +415,7 @@ def seed_public_fixture_anchor_ids_from_prior_anchors(
 def seed_public_fixture_anchor_ids_for_waypoint(
     contract: RuntimeMapTargetContract,
     waypoint: dict[str, Any],
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> None:
-    if contract.map_mode != minimal_map_mode:
-        return
     private_waypoint = contract._private_waypoint_for_public_waypoint(waypoint)
     for fixture_id in private_waypoint.get("fixture_ids") or []:
         fixture_id = str(fixture_id or "")
@@ -444,13 +426,10 @@ def seed_public_fixture_anchor_ids_for_waypoint(
 def public_runtime_fixture_candidates(
     contract: RuntimeMapTargetContract,
     *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
     assert_no_forbidden_agent_view_keys: Any = None,
 ) -> list[dict[str, Any]]:
-    if contract.map_mode != minimal_map_mode:
-        return []
     candidates = []
-    for anchor in runtime_public_semantic_anchors(contract, minimal_map_mode=minimal_map_mode):
+    for anchor in runtime_public_semantic_anchors(contract):
         if not _is_place_anchor(anchor):
             continue
         anchor_id = str(anchor.get("anchor_id") or "")
@@ -459,7 +438,6 @@ def public_runtime_fixture_candidates(
         fixture_id = internal_fixture_id_for_public_anchor(
             contract,
             anchor_id,
-            minimal_map_mode=minimal_map_mode,
         )
         fixture = contract._fixtures.get(fixture_id) if fixture_id else {}
         category = str(anchor.get("category") or (fixture or {}).get("category") or "")
@@ -470,7 +448,6 @@ def public_runtime_fixture_candidates(
                 public_waypoint_for_private_fixture(
                     contract,
                     fixture_id,
-                    minimal_map_mode=minimal_map_mode,
                 ).get("waypoint_id")
                 if fixture_id
                 else ""
@@ -501,42 +478,25 @@ def target_fixture_for_detection(
     contract: RuntimeMapTargetContract,
     detection: dict[str, Any],
     static_fixture_projection: dict[str, Any],
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> dict[str, Any] | None:
-    if contract.map_mode == minimal_map_mode:
-        return minimal_target_fixture_for_detection(
-            contract,
-            detection,
-            minimal_map_mode=minimal_map_mode,
-        )
-    return realworld_runtime_map_contract.infer_target_fixture_for_detection(
+    return runtime_anchor_target_fixture_for_detection(
+        contract,
         detection,
-        static_fixture_projection,
-        norm=_norm,
-        object_category_targets=_OBJECT_CATEGORY_TARGETS,
-        first_matching_fixture=_first_matching_fixture,
-        fixture_requires_open=_fixture_requires_open,
     )
 
 
 def resolve_runtime_anchor_target_fixture_id(
     contract: RuntimeMapTargetContract,
     category: str,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str:
-    if contract.map_mode != minimal_map_mode:
-        return ""
     pseudo_detection = {
         "category": category,
         "name": category,
         "support_estimate": {"fixture_id": ""},
     }
-    target = minimal_target_fixture_for_detection(
+    target = runtime_anchor_target_fixture_for_detection(
         contract,
         pseudo_detection,
-        minimal_map_mode=minimal_map_mode,
     )
     return str((target or {}).get("fixture_id") or "")
 
@@ -544,11 +504,7 @@ def resolve_runtime_anchor_target_fixture_id(
 def public_fixture_reference_payload(
     contract: RuntimeMapTargetContract,
     value: Any,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> Any:
-    if contract.map_mode != minimal_map_mode:
-        return value
     fixture_keys = {
         "fixture_id",
         "receptacle_id",
@@ -567,14 +523,12 @@ def public_fixture_reference_payload(
                 result[key] = public_fixture_reference_id(
                     contract,
                     item,
-                    minimal_map_mode=minimal_map_mode,
                 )
             elif key == "fixture_ids" and isinstance(item, list):
                 result[key] = [
                     public_fixture_reference_id(
                         contract,
                         str(raw_item),
-                        minimal_map_mode=minimal_map_mode,
                     )
                     for raw_item in item
                 ]
@@ -582,7 +536,6 @@ def public_fixture_reference_payload(
                 result[key] = public_fixture_reference_payload(
                     contract,
                     item,
-                    minimal_map_mode=minimal_map_mode,
                 )
         return result
     if isinstance(value, list):
@@ -590,7 +543,6 @@ def public_fixture_reference_payload(
             public_fixture_reference_payload(
                 contract,
                 item,
-                minimal_map_mode=minimal_map_mode,
             )
             for item in value
         ]
@@ -600,10 +552,8 @@ def public_fixture_reference_payload(
 def public_fixture_reference_id(
     contract: RuntimeMapTargetContract,
     fixture_id: str,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str:
-    if not fixture_id or contract.map_mode != minimal_map_mode:
+    if not fixture_id:
         return fixture_id
     if fixture_id.startswith("anchor_"):
         return fixture_id
@@ -625,15 +575,12 @@ def public_anchor_id_for_fixture(contract: RuntimeMapTargetContract, fixture_id:
 def internal_fixture_id_for_public_reference(
     contract: RuntimeMapTargetContract,
     fixture_id: str | None,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str | None:
     if fixture_id is None:
         return None
     resolved = internal_fixture_id_for_public_anchor(
         contract,
         str(fixture_id),
-        minimal_map_mode=minimal_map_mode,
     )
     return resolved or str(fixture_id)
 
@@ -641,29 +588,22 @@ def internal_fixture_id_for_public_reference(
 def internal_fixture_id_for_public_anchor(
     contract: RuntimeMapTargetContract,
     anchor_id: str,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str:
     if not anchor_id:
         return ""
-    if contract.map_mode != minimal_map_mode:
-        return anchor_id
     for fixture_id, public_anchor_id in contract._public_anchor_ids_by_private_fixture_id.items():
         if public_anchor_id == anchor_id:
             return fixture_id
     anchor = next(
         (
             item
-            for item in runtime_public_semantic_anchors(
-                contract,
-                minimal_map_mode=minimal_map_mode,
-            )
+            for item in runtime_public_semantic_anchors(contract)
             if str(item.get("anchor_id") or "") == anchor_id
         ),
         {},
     )
     fixture_id = (
-        best_internal_fixture_for_anchor(contract, anchor, minimal_map_mode=minimal_map_mode)
+        best_internal_fixture_for_anchor(contract, anchor)
         if _is_place_anchor(anchor)
         else ""
     )
@@ -675,8 +615,6 @@ def internal_fixture_id_for_public_anchor(
 def public_waypoint_for_private_fixture(
     contract: RuntimeMapTargetContract,
     fixture_id: str,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> dict[str, Any]:
     private_waypoint_id = contract._preferred_waypoint_for_fixture(fixture_id)
     private_waypoint = next(
@@ -687,8 +625,6 @@ def public_waypoint_for_private_fixture(
         ),
         {},
     )
-    if contract.map_mode != minimal_map_mode:
-        return private_waypoint
     for public_id, mapped in contract._private_waypoint_by_public_id.items():
         if str(mapped.get("waypoint_id") or "") == str(private_waypoint.get("waypoint_id") or ""):
             return contract._waypoint_by_id(public_id) or {}
@@ -698,16 +634,8 @@ def public_waypoint_for_private_fixture(
 def public_waypoint_id_for_private_fixture(
     contract: RuntimeMapTargetContract,
     fixture_id: str,
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str:
-    if contract.map_mode != minimal_map_mode:
-        return contract._preferred_waypoint_for_fixture(fixture_id)
-    waypoint = public_waypoint_for_private_fixture(
-        contract,
-        fixture_id,
-        minimal_map_mode=minimal_map_mode,
-    )
+    waypoint = public_waypoint_for_private_fixture(contract, fixture_id)
     public_waypoint_id = str(waypoint.get("waypoint_id") or "")
     return public_waypoint_id or contract._current_waypoint_id
 
@@ -715,8 +643,6 @@ def public_waypoint_id_for_private_fixture(
 def best_internal_fixture_for_anchor(
     contract: RuntimeMapTargetContract,
     anchor: dict[str, Any],
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> str:
     category = str(anchor.get("category") or "")
     waypoint_id = str(anchor.get("waypoint_id") or "")
@@ -740,16 +666,11 @@ def best_internal_fixture_for_anchor(
     return ""
 
 
-def minimal_target_fixture_for_detection(
+def runtime_anchor_target_fixture_for_detection(
     contract: RuntimeMapTargetContract,
     detection: dict[str, Any],
-    *,
-    minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> dict[str, Any] | None:
-    public_runtime_fixtures = public_runtime_fixture_candidates(
-        contract,
-        minimal_map_mode=minimal_map_mode,
-    )
+    public_runtime_fixtures = public_runtime_fixture_candidates(contract)
     public_hints = {
         "rooms": [
             {
@@ -772,7 +693,6 @@ def minimal_target_fixture_for_detection(
     requested = internal_fixture_id_for_public_reference(
         contract,
         str((detection.get("support_estimate") or {}).get("fixture_id") or ""),
-        minimal_map_mode=minimal_map_mode,
     )
     if not requested:
         return None
@@ -781,7 +701,6 @@ def minimal_target_fixture_for_detection(
             internal_fixture_id_for_public_reference(
                 contract,
                 str(fixture.get("fixture_id") or ""),
-                minimal_map_mode=minimal_map_mode,
             )
             == requested
         ):
@@ -805,10 +724,7 @@ def _append_generated_public_semantic_anchors(
     *,
     anchors: list[dict[str, Any]],
     seen: set[str],
-    minimal_map_mode: str,
 ) -> None:
-    if contract.map_mode != minimal_map_mode:
-        return
     for waypoint in contract._public_waypoints:
         waypoint_id = str(waypoint.get("waypoint_id") or "")
         if waypoint_id not in contract._observed_waypoint_ids:
@@ -875,7 +791,7 @@ def _room_area_public_semantic_anchor(
         "affordances": ["navigate", "observe"],
         "aliases": [room_id, room_label],
         "producer_type": "generated_exploration_candidate",
-        "producer_id": "minimal_map_exploration",
+        "producer_id": "base_navigation_map_exploration",
         "confidence": 0.8 if room_label else 0.6,
         "freshness": "current_run",
         "actionability": "actionable",
@@ -906,7 +822,7 @@ def _waypoint_public_semantic_anchor(
         "pose": contract._waypoint_pose(waypoint),
         "affordances": ["observe"],
         "producer_type": "generated_exploration_candidate",
-        "producer_id": "minimal_map_exploration",
+        "producer_id": "base_navigation_map_exploration",
         "confidence": 1.0,
         "freshness": "current_run",
         "actionability": "actionable",

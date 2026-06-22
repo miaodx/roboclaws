@@ -222,6 +222,17 @@ def test_static_app_renders_scene_preview_assets() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
     preview_dir = STATIC_ROOT / "previews"
 
+    _assert_scene_preview_app_wiring(app)
+    molmospaces_preview_files = _assert_molmospaces_preview_files(preview_dir)
+    _assert_b1_world_spec_omits_static_map_previews()
+    _assert_molmospaces_preview_metadata(preview_dir)
+    _assert_b1_camera_preview_metadata(preview_dir)
+    assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
+    assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
+    assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
+
+
+def _assert_scene_preview_app_wiring(app: str) -> None:
     assert "renderSelectedScenePreview" in app
     assert "renderSelectedScenePreview(route);" in app
     assert "route.preview_assets" in app
@@ -230,6 +241,8 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "state.activeRunId" in app
     assert "Grounding will appear after a camera-grounded run starts." in app
 
+
+def _assert_molmospaces_preview_files(preview_dir: Path) -> list[str]:
     expected_preview_files = sorted(
         {
             *(
@@ -251,6 +264,10 @@ def test_static_app_renders_scene_preview_assets() -> None:
         if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
     )
     assert molmospaces_preview_files == expected_preview_files
+    return molmospaces_preview_files
+
+
+def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
     metadata_files = sorted(
         path.name
         for path in preview_dir.glob("molmospaces-*-preview.json")
@@ -270,18 +287,10 @@ def test_static_app_renders_scene_preview_assets() -> None:
         }
     )
     assert metadata_files == expected_metadata_files
-    assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
-    assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
-    b1_preview_assets = dict(WORLD_SPECS["b1-map12"].preview_assets)
-    assert "topdown" not in b1_preview_assets
-    assert "map" not in b1_preview_assets
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
-        for view_name in ("fpv", "map", "chase", "topdown"):
-            path = preview_dir / Path(preview_by_view[view_name]).name
-            assert path.is_file()
-            assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        _assert_preview_png_files_exist(preview_dir, preview_by_view)
         scene_slug = Path(preview_by_view["fpv"]).name.rsplit("-", 1)[0]
         metadata_path = preview_dir / f"{scene_slug}-preview.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -297,6 +306,22 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
+
+
+def _assert_preview_png_files_exist(preview_dir: Path, preview_by_view: dict[str, str]) -> None:
+    for view_name in ("fpv", "map", "chase", "topdown"):
+        path = preview_dir / Path(preview_by_view[view_name]).name
+        assert path.is_file()
+        assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def _assert_b1_world_spec_omits_static_map_previews() -> None:
+    b1_preview_assets = dict(WORLD_SPECS["b1-map12"].preview_assets)
+    assert "topdown" not in b1_preview_assets
+    assert "map" not in b1_preview_assets
+
+
+def _assert_b1_camera_preview_metadata(preview_dir: Path) -> None:
     for view_name in ("fpv", "chase"):
         path = preview_dir / f"b1-map12-{view_name}.png"
         assert path.is_file()
@@ -317,7 +342,6 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "map" not in b1_metadata["views"]
     assert "topdown" not in b1_metadata["views"]
     assert "diagnostic_views" not in b1_metadata
-    assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:

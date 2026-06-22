@@ -52,7 +52,7 @@ openai-agents = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "editables"]
 build-backend = "hatchling.build"
 
 [tool.hatch.metadata]

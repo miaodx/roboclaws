@@ -236,15 +236,21 @@ def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+    ):
         if not line.strip():
             continue
+        source = f"{path}:{line_number}"
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            events.append(item)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"OpenAI Agents budget {source}: invalid JSON: {exc.msg}") from exc
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"OpenAI Agents budget source {source}: non-object JSON: {type(item).__name__}"
+            )
+        events.append(item)
     return events
 
 

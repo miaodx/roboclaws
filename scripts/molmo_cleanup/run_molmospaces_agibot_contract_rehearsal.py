@@ -115,7 +115,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="contract-rehearsal",
         help=(
             "contract-rehearsal runs the original one-waypoint contract smoke; "
-            "prehardware runs the minimal-map online map-build/cleanup rehearsal."
+            "prehardware runs the Base Navigation Map online map-build/cleanup rehearsal."
         ),
     )
     parser.add_argument(

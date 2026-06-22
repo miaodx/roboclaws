@@ -144,6 +144,46 @@ def test_b1_scene_topdown_overlay_rejects_label_inventory_as_input(tmp_path: Pat
         raise AssertionError("label inventory diagnostic must not feed Gaussian label overlay")
 
 
+def test_b1_scene_topdown_overlay_rejects_bad_render_packet_source_json(
+    tmp_path: Path,
+) -> None:
+    bad_packet = tmp_path / "scene_gaussian_topdown.json"
+    bad_packet.write_text("{not-json\n", encoding="utf-8")
+
+    try:
+        build_scene_topdown_diagnostic(
+            scene_root=SCENE_ROOT,
+            output_dir=tmp_path / "overlay",
+            scene_topdown_render=bad_packet,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        assert "scene top-down render must contain valid JSON object" in message
+        assert str(bad_packet) in message
+    else:
+        raise AssertionError("malformed scene top-down render packet must fail aloud")
+
+
+def test_b1_scene_topdown_overlay_rejects_non_object_render_packet_source_json(
+    tmp_path: Path,
+) -> None:
+    bad_packet = tmp_path / "scene_gaussian_topdown.json"
+    bad_packet.write_text("[]\n", encoding="utf-8")
+
+    try:
+        build_scene_topdown_diagnostic(
+            scene_root=SCENE_ROOT,
+            output_dir=tmp_path / "overlay",
+            scene_topdown_render=bad_packet,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        assert "scene top-down render must contain a JSON object" in message
+        assert str(bad_packet) in message
+    else:
+        raise AssertionError("non-object scene top-down render packet must fail aloud")
+
+
 def _write_fake_scene_topdown_packet(tmp_path: Path) -> Path:
     request = build_topdown_camera_request(
         scene_bounds=(-2.0, -4.0, 8.0, 4.0),

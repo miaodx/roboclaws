@@ -81,8 +81,8 @@ from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
 from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
     assert_agibot_map_build_result as _assert_agibot_map_build_result,
 )
-from scripts.molmo_cleanup.realworld_minimal_map_checker import (
-    assert_minimal_map as _assert_minimal_map,
+from scripts.molmo_cleanup.realworld_base_navigation_map_checker import (
+    assert_base_navigation_map as _assert_base_navigation_map,
 )
 from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
     assert_waypoint_honesty,
@@ -90,6 +90,7 @@ from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
 )
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
+LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG = "--require-canonical-robot-view-camera-control"
 
 
 class _ResultOptions(dict[str, Any]):
@@ -98,6 +99,11 @@ class _ResultOptions(dict[str, Any]):
 
 
 def _result_assert_options(overrides: dict[str, Any]) -> _ResultOptions:
+    if "require_canonical_robot_view_camera_control" in overrides:
+        raise ValueError(
+            "require_canonical_robot_view_camera_control is obsolete; "
+            "use require_robot_head_camera_fpv instead."
+        )
     opts = _ResultOptions(
         {
             "expect_task": None,
@@ -153,7 +159,7 @@ def _add_evidence_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-completion-claim", action="store_true")
     parser.add_argument("--require-map-build", action="store_true")
     parser.add_argument("--require-agibot-g2-hardware", action="store_true")
-    parser.add_argument("--require-minimal-map", action="store_true")
+    parser.add_argument("--require-base-navigation-map", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
     parser.add_argument("--require-visual-grounding-failure", action="store_true")
     parser.add_argument("--require-model-declared-observations", action="store_true")
@@ -238,12 +244,10 @@ def _add_isaac_checker_args(parser: argparse.ArgumentParser) -> None:
 
 def _add_robot_camera_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--require-canonical-robot-view-camera-control",
+        LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG,
         action="store_true",
-        help=(
-            "Legacy alias for --require-robot-head-camera-fpv. Canonical free-camera "
-            "control is no longer accepted as agent-facing FPV proof."
-        ),
+        dest="unsupported_legacy_robot_view_camera_control",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--require-robot-head-camera-fpv",
@@ -255,6 +259,17 @@ def _add_robot_camera_checker_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _reject_legacy_robot_view_camera_control_flag(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> None:
+    if args.unsupported_legacy_robot_view_camera_control:
+        parser.error(
+            f"{LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG} is obsolete; "
+            "use --require-robot-head-camera-fpv."
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Validate ADR-0003 real-world-style Molmo cleanup artifacts."
@@ -264,7 +279,9 @@ def parse_args() -> argparse.Namespace:
     _add_planner_checker_args(parser)
     _add_isaac_checker_args(parser)
     _add_robot_camera_checker_args(parser)
-    return parser.parse_args()
+    args = parser.parse_args()
+    _reject_legacy_robot_view_camera_control_flag(parser, args)
+    return args
 
 
 def main() -> None:
@@ -310,7 +327,7 @@ def main() -> None:
             require_completion_claim=args.require_completion_claim,
             require_map_build=args.require_map_build,
             require_agibot_g2_hardware=args.require_agibot_g2_hardware,
-            require_minimal_map=args.require_minimal_map,
+            require_base_navigation_map=args.require_base_navigation_map,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
             require_visual_grounding_failure=args.require_visual_grounding_failure,
             require_model_declared_observations=args.require_model_declared_observations,
@@ -351,10 +368,7 @@ def main() -> None:
             require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
             require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
             require_isaac_scene_index_map_context=(args.require_isaac_scene_index_map_context),
-            require_canonical_robot_view_camera_control=(
-                args.require_canonical_robot_view_camera_control
-                or args.require_robot_head_camera_fpv
-            ),
+            require_robot_head_camera_fpv=args.require_robot_head_camera_fpv,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -509,8 +523,8 @@ def _assert_agent_view_and_runtime_map(
         open_ended_intent=_is_open_ended_intent(data),
         map_build=map_build,
     )
-    if opts["require_minimal_map"]:
-        _assert_minimal_map(data, agent_view)
+    if opts["require_base_navigation_map"]:
+        _assert_base_navigation_map(data, agent_view)
     if opts["require_runtime_metric_map"]:
         _assert_runtime_metric_map(
             data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {},
@@ -650,7 +664,7 @@ def _assert_optional_agent_observation_gates(
         _assert_clean_agent_run(data, min_complete_count=opts["min_semantic_accepted_count"])
     if opts["require_robot_views"]:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
-    if opts["require_canonical_robot_view_camera_control"]:
+    if opts["require_robot_head_camera_fpv"]:
         _assert_robot_head_camera_fpv(data, base)
     if opts["require_advisory_scoring"]:
         _assert_advisory_scoring(data, base, report_text)
@@ -1141,10 +1155,6 @@ def _assert_robot_head_camera_fpv(data: dict[str, Any], base: Path) -> None:
         )
 
 
-def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path) -> None:
-    _assert_robot_head_camera_fpv(data, base)
-
-
 def _assert_nonblank_image(path: Path, label: str) -> None:
     assert path.is_file(), path
     try:
@@ -1218,8 +1228,8 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(nav2_bundle, scenario_id)
-    if _is_minimal_metric_map(metric_map, runtime_map):
-        _assert_minimal_map(data, agent_view)
+    if _is_base_navigation_map(metric_map, runtime_map):
+        _assert_base_navigation_map(data, agent_view)
         _assert_isaac_scene_index_generated_candidate_scale(metric_map)
         _assert_isaac_scene_index_generated_candidate_scale(static_map or runtime_map)
     else:
@@ -1272,12 +1282,10 @@ def _assert_isaac_scene_index_room_scale(metric_map: dict[str, Any]) -> None:
     assert max_width > 2.5 or max_depth > 2.5, rooms
 
 
-def _is_minimal_metric_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
-    minimal_map = metric_map.get("minimal_map") or {}
-    return (
-        metric_map.get("mode") == "minimal"
-        or runtime_map.get("minimal_map_mode") is True
-        or minimal_map.get("enabled") is True
+def _is_base_navigation_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
+    base_map = metric_map.get("base_navigation_map") or {}
+    return bool(
+        base_map.get("enabled") is True or runtime_map.get("generated_exploration_candidates")
     )
 
 

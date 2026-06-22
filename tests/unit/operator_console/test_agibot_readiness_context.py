@@ -41,6 +41,14 @@ def test_agibot_readiness_requires_readable_context_json(tmp_path: Path) -> None
     assert invalid_context_gate["status"] == "needs_action"
     assert "not readable JSON" in invalid_context_gate["message"]
 
+    non_object_context = tmp_path / "non-object-context.json"
+    non_object_context.write_text("[]", encoding="utf-8")
+    non_object = _agibot_readiness(tmp_path, context_json=non_object_context)
+    assert non_object["can_start"] is False
+    non_object_context_gate = _gate(non_object, "context_json")
+    assert non_object_context_gate["status"] == "needs_action"
+    assert "must contain a JSON object" in non_object_context_gate["message"]
+
 
 def _agibot_readiness(tmp_path: Path, *, context_json: str | Path) -> dict[str, object]:
     return route_readiness(

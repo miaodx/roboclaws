@@ -18,7 +18,6 @@ from roboclaws.maps.bundle_validation import (
 )
 from roboclaws.maps.rasterize import (
     OccupancyGrid,
-    fixtures_from_static_projection,
     load_pgm,
     occupancy_grid_from_metric_map,
     world_to_grid,
@@ -134,13 +133,13 @@ def write_nav2_map_bundle_snapshot(
     *,
     run_dir: Path,
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> dict[str, Any]:
     bundle_dir = run_dir / "map_bundle"
     snapshot = write_nav2_map_bundle(
         bundle_dir,
         metric_map=metric_map,
-        static_fixture_projection=static_fixture_projection,
+        static_landmarks=static_landmarks,
     )
     snapshot["schema"] = NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA
     snapshot["snapshot_root"] = "map_bundle"
@@ -182,11 +181,11 @@ def write_nav2_map_bundle(
     bundle_dir: Path,
     *,
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    metric_map, static_fixture_projection = _normalized_bundle_inputs(
+    metric_map, static_landmarks = _normalized_bundle_inputs(
         metric_map,
-        static_fixture_projection,
+        static_landmarks,
     )
     profiles_dir = bundle_dir / "profiles"
     costmaps_dir = bundle_dir / "costmaps"
@@ -220,13 +219,11 @@ def write_nav2_map_bundle(
     costmap_params_path = bundle_dir / paths["costmap_params"]
     preview_path = bundle_dir / paths["preview_png"]
 
-    grid = occupancy_grid_from_metric_map(metric_map, static_fixture_projection)
+    grid = occupancy_grid_from_metric_map(metric_map, static_landmarks)
     write_pgm(map_pgm_path, grid)
     map_yaml_path.write_text(_map_yaml(metric_map), encoding="utf-8")
     semantics_path.write_text(
-        json.dumps(
-            _semantics_payload(metric_map, static_fixture_projection), indent=2, sort_keys=True
-        )
+        json.dumps(_semantics_payload(metric_map, static_landmarks), indent=2, sort_keys=True)
         + "\n",
         encoding="utf-8",
     )
@@ -265,6 +262,26 @@ def write_nav2_map_bundle(
             "They do not encode movable-object target truth or private scoring data."
         ),
     }
+
+
+def static_landmarks_from_fixture_projection(
+    static_fixture_projection: dict[str, Any],
+) -> list[dict[str, Any]]:
+    landmarks: list[dict[str, Any]] = []
+    for room in static_fixture_projection.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        room_id = str(room.get("room_id") or "")
+        for fixture in room.get("fixtures") or []:
+            if not isinstance(fixture, dict):
+                continue
+            landmark = dict(fixture)
+            landmark_id = str(landmark.get("landmark_id") or landmark.get("fixture_id") or "")
+            if landmark_id:
+                landmark["landmark_id"] = landmark_id
+            landmark.setdefault("room_id", room_id)
+            landmarks.append(landmark)
+    return landmarks
 
 
 def _existing_bundle_snapshot(
@@ -388,17 +405,17 @@ def _costmap_yaml(metric_map: dict[str, Any]) -> str:
 
 def _normalized_bundle_inputs(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+    static_landmarks: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     normalized_map = copy.deepcopy(metric_map)
-    normalized_projection = copy.deepcopy(static_fixture_projection)
-    _normalize_room_only_fixture_poses(normalized_map, normalized_projection)
-    return normalized_map, normalized_projection
+    normalized_landmarks = copy.deepcopy(static_landmarks)
+    _normalize_room_only_landmark_poses(normalized_map, normalized_landmarks)
+    return normalized_map, normalized_landmarks
 
 
-def _normalize_room_only_fixture_poses(
+def _normalize_room_only_landmark_poses(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> None:
     rooms_by_id = {str(room.get("room_id") or ""): room for room in metric_map.get("rooms") or []}
     waypoints_by_room: dict[str, list[dict[str, Any]]] = {}
@@ -406,39 +423,36 @@ def _normalize_room_only_fixture_poses(
         waypoints_by_room.setdefault(str(waypoint.get("room_id") or ""), []).append(waypoint)
 
     next_slot_by_room: dict[str, int] = {}
-    for projection_room in static_fixture_projection.get("rooms") or []:
-        if not isinstance(projection_room, dict):
+    for landmark in static_landmarks:
+        if not isinstance(landmark, dict):
             continue
-        room_id = str(projection_room.get("room_id") or "")
-        room = rooms_by_id.get(room_id) or projection_room
+        room_id = str(landmark.get("room_id") or "")
+        room = rooms_by_id.get(room_id) or {}
         waypoints = waypoints_by_room.get(room_id, [])
         if not waypoints:
             continue
-        for fixture in projection_room.get("fixtures") or []:
-            if not isinstance(fixture, dict):
-                continue
-            if str(fixture.get("position_detail") or "") != "room_only":
-                continue
-            if not _fixture_blocks_waypoint(fixture, waypoints):
-                continue
-            candidates = _fixture_slot_candidates(room, fixture)
-            offset = next_slot_by_room.get(room_id, 0)
-            candidate, index = _next_nonblocking_fixture_pose(
-                fixture,
-                waypoints=waypoints,
-                candidates=candidates,
-                offset=offset,
-            )
-            if candidate is None:
-                continue
-            pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-            fixture["pose"] = {
-                "frame_id": str(pose.get("frame_id") or "map"),
-                "x": round(candidate[0], 3),
-                "y": round(candidate[1], 3),
-                "yaw": float(pose.get("yaw") or 0.0),
-            }
-            next_slot_by_room[room_id] = (offset + index + 1) % max(len(candidates), 1)
+        if str(landmark.get("position_detail") or "") != "room_only":
+            continue
+        if not _fixture_blocks_waypoint(landmark, waypoints):
+            continue
+        candidates = _fixture_slot_candidates(room, landmark)
+        offset = next_slot_by_room.get(room_id, 0)
+        candidate, index = _next_nonblocking_fixture_pose(
+            landmark,
+            waypoints=waypoints,
+            candidates=candidates,
+            offset=offset,
+        )
+        if candidate is None:
+            continue
+        pose = landmark.get("pose") if isinstance(landmark.get("pose"), dict) else {}
+        landmark["pose"] = {
+            "frame_id": str(pose.get("frame_id") or "map"),
+            "x": round(candidate[0], 3),
+            "y": round(candidate[1], 3),
+            "yaw": float(pose.get("yaw") or 0.0),
+        }
+        next_slot_by_room[room_id] = (offset + index + 1) % max(len(candidates), 1)
 
 
 def _fixture_blocks_waypoint(
@@ -525,7 +539,7 @@ def _room_bounds(room: dict[str, Any]) -> tuple[float, float, float, float]:
 
 
 def _semantics_payload(
-    metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
+    metric_map: dict[str, Any], static_landmarks: list[dict[str, Any]]
 ) -> dict[str, Any]:
     metadata = (
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
@@ -553,7 +567,7 @@ def _semantics_payload(
             geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
             alignment_status=ALIGNMENT_STATUS_NATIVE,
         ),
-        "fixtures": fixtures_from_static_projection(static_fixture_projection),
+        "static_landmarks": [dict(landmark) for landmark in static_landmarks],
         "inspection_waypoints": metric_map.get("inspection_waypoints") or [],
         "driveable_ways": metric_map.get("driveable_ways") or [],
         "provenance": {
@@ -603,7 +617,7 @@ def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | N
         label = str(room.get("room_label") or room.get("room_id") or "")
         draw.text((cx - 28, cy - 7), label[:18], fill=(15, 39, 82, 255))
 
-    for fixture in semantics.get("fixtures") or []:
+    for fixture in semantics.get("static_landmarks") or []:
         pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
         x, y = project(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
         draw.rectangle((x - 7, y - 5, x + 7, y + 5), fill=(130, 82, 32, 230))
@@ -645,14 +659,14 @@ def _pad_preview_canvas(image: Image.Image) -> Image.Image:
 
 
 def _write_preview(
-    path: Path, metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
+    path: Path, metric_map: dict[str, Any], static_landmarks: list[dict[str, Any]]
 ) -> None:
     image = Image.new("RGB", (900, 560), (247, 249, 252))
     draw = ImageDraw.Draw(image)
     draw.rectangle((18, 18, 882, 542), outline=(175, 184, 196), width=2)
     draw.text((34, 32), "Nav2 static map bundle preview", fill=(28, 35, 48))
     draw.text((34, 52), "Raw/source-map aligned; display_frame absent", fill=(86, 95, 112))
-    bounds = _coordinate_bounds(metric_map, static_fixture_projection)
+    bounds = _coordinate_bounds(metric_map, static_landmarks)
     for room in metric_map.get("rooms") or []:
         polygon = room.get("polygon") or []
         if len(polygon) >= 3:
@@ -666,7 +680,7 @@ def _write_preview(
                 str(room.get("room_label", ""))[:22],
                 fill=(45, 55, 70),
             )
-    for fixture in fixtures_from_static_projection(static_fixture_projection):
+    for fixture in static_landmarks:
         pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
         x, y = _project(pose.get("x", 0.0), pose.get("y", 0.0), bounds)
         draw.rectangle((x - 18, y - 12, x + 18, y + 12), fill=(120, 132, 150), outline=(54, 63, 78))
@@ -687,7 +701,7 @@ def _write_preview(
 
 
 def _coordinate_bounds(
-    metric_map: dict[str, Any], static_fixture_projection: dict[str, Any]
+    metric_map: dict[str, Any], static_landmarks: list[dict[str, Any]]
 ) -> tuple[float, float, float, float]:
     xs: list[float] = []
     ys: list[float] = []
@@ -698,7 +712,7 @@ def _coordinate_bounds(
     for waypoint in metric_map.get("inspection_waypoints") or []:
         xs.append(float(waypoint.get("x", 0.0)))
         ys.append(float(waypoint.get("y", 0.0)))
-    for fixture in fixtures_from_static_projection(static_fixture_projection):
+    for fixture in static_landmarks:
         pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
         xs.append(float(pose.get("x", 0.0)))
         ys.append(float(pose.get("y", 0.0)))

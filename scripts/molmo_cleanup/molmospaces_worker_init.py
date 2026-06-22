@@ -45,15 +45,15 @@ def prepare_molmospaces_scene(
 def source_room_labels(scene_xml: Path) -> dict[str, dict[str, str]]:
     scene_json = _source_scene_json_path(scene_xml)
     if scene_json is not None:
-        payload = json.loads(scene_json.read_text(encoding="utf-8"))
+        rooms = _source_scene_json_rooms(scene_json)
         labels = {
             room_id: label
-            for room in payload.get("rooms") or []
-            if isinstance(room, dict)
+            for room in rooms
             for room_id, label in [_source_room_label(room, scene_json)]
         }
         if labels:
             return labels
+        raise RuntimeError(f"source scene JSON has no room labels: {scene_json}")
     ithor_label = _ithor_room_label(scene_xml)
     if ithor_label:
         return {
@@ -122,6 +122,25 @@ def _source_scene_json_path(scene_xml: Path) -> Path | None:
             stem = stem[: -len(suffix)]
     candidates = [scene_xml.with_name(f"{stem}.json"), scene_xml.with_suffix(".json")]
     return next((path for path in candidates if path.is_file()), None)
+
+
+def _source_scene_json_rooms(scene_json: Path) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(scene_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"malformed source scene JSON: {scene_json}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"source scene JSON must be a JSON object: {scene_json}")
+    rooms = payload.get("rooms")
+    if not isinstance(rooms, list):
+        raise RuntimeError(f"source scene JSON rooms must be a JSON array: {scene_json}")
+    invalid_room = next((room for room in rooms if not isinstance(room, dict)), None)
+    if invalid_room is not None:
+        raise RuntimeError(
+            "source scene JSON rooms must contain JSON objects: "
+            f"{scene_json} entry_type={type(invalid_room).__name__}"
+        )
+    return rooms
 
 
 def _source_room_label(room: dict[str, Any], scene_json: Path) -> tuple[str, dict[str, str]]:

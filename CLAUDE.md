@@ -191,8 +191,9 @@ sole working route for the requested demo.
 
 ## Planning workflow
 
-Use `hybrid-phase-pipeline` when available. It routes Matt-style shaping,
-gstack review, and GSD execution without making every task run every framework.
+Use the current staged workflow directly: shape plans in `docs/plans/`, run the
+relevant review/autoplan/preflight step when needed, then move committed phases
+through GSD. Do not depend on a separate hybrid-router skill being installed.
 
 One source of truth per stage, with `STATUS.md` as the short human-facing
 dashboard:

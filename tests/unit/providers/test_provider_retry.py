@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from roboclaws.core.provider_retry import (
     is_transient_provider_error,
     retry_delay_seconds,
@@ -28,44 +30,53 @@ class RateLimitError(Exception):
     pass
 
 
-def test_transient_status_code_prefers_exception_status_code():
-    assert transient_status_code(_StatusError(429)) == 429
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (_StatusError(429), 429),
+        (_ResponseStatusError(503), 503),
+        (Exception("no status"), None),
+    ],
+)
+def test_transient_status_code_reads_sdk_status_shapes(
+    exc: BaseException,
+    expected: int | None,
+) -> None:
+    assert transient_status_code(exc) == expected
 
 
-def test_transient_status_code_reads_response_status_code():
-    assert transient_status_code(_ResponseStatusError(503)) == 503
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (ConnectionError("connection reset"), True),
+        (RateLimitError("busy"), True),
+        (_StatusError(429), True),
+        (_ResponseStatusError(503), True),
+        (Exception("The engine is currently overloaded"), True),
+        (ValueError("bad request"), False),
+    ],
+)
+def test_is_transient_provider_error_classifies_retryable_failures(
+    exc: BaseException,
+    expected: bool,
+) -> None:
+    assert is_transient_provider_error(exc) is expected
 
 
-def test_transient_status_code_returns_none_when_missing():
-    assert transient_status_code(Exception("no status")) is None
-
-
-def test_is_transient_provider_error_for_connection_error():
-    assert is_transient_provider_error(ConnectionError("connection reset")) is True
-
-
-def test_is_transient_provider_error_for_named_rate_limit_error():
-    assert is_transient_provider_error(RateLimitError("busy")) is True
-
-
-def test_is_transient_provider_error_for_status_code():
-    assert is_transient_provider_error(_StatusError(429)) is True
-    assert is_transient_provider_error(_ResponseStatusError(503)) is True
-
-
-def test_is_transient_provider_error_for_overload_text():
-    assert is_transient_provider_error(Exception("The engine is currently overloaded")) is True
-
-
-def test_is_transient_provider_error_rejects_non_transient_error():
-    assert is_transient_provider_error(ValueError("bad request")) is False
-
-
-def test_retry_delay_seconds_is_capped_exponential_backoff():
-    assert retry_delay_seconds(0) == 2.0
-    assert retry_delay_seconds(1) == 4.0
-    assert retry_delay_seconds(2) == 8.0
-    assert retry_delay_seconds(5) == 8.0
+@pytest.mark.parametrize(
+    ("attempt_index", "expected_delay"),
+    [
+        (0, 2.0),
+        (1, 4.0),
+        (2, 8.0),
+        (5, 8.0),
+    ],
+)
+def test_retry_delay_seconds_is_capped_exponential_backoff(
+    attempt_index: int,
+    expected_delay: float,
+) -> None:
+    assert retry_delay_seconds(attempt_index) == expected_delay
 
 
 def test_retry_delay_seconds_rejects_negative_attempt_index():

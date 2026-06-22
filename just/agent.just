@@ -141,10 +141,6 @@ run dispatch_target agent_engine mode="" *overrides:
       value="${override#*=}"
       key="${key#--}"
       key="${key//-/_}"
-      if [[ "$key" == "map_mode" ]]; then
-        echo "error: map_mode is no longer a public agent::run override; Base Navigation Map is the start-of-run map contract" >&2
-        exit 1
-      fi
       case "$key" in
         agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
         generated_mess_count|\
@@ -409,7 +405,6 @@ run dispatch_target agent_engine mode="" *overrides:
         if [[ "$dispatch_intent" == "map-build" ]]; then
           map_build="on"
         fi
-        map_mode="$(get map_mode minimal)"
         runtime_map_prior="$(get runtime_map_prior "")"
         operator_messages_path="$(get operator_messages_path "")"
         backend="$(get backend auto)"
@@ -756,7 +751,7 @@ run dispatch_target agent_engine mode="" *overrides:
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port"
           "$map_bundle" "$cleanup_routine" "$robot_views" "$camera_labeler"
           "$visual_grounding_timeout_s" "$map_build" "$runtime_map_prior" "$backend"
-          "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path"
+          "$scene_source" "$scene_index" "$isaac_scene_usd_path"
           "$min_generated_mess_count" "$generated_mess_object_ids" "$dispatch_surface"
           "$resolved_task_intent" "$operator_messages_path" "$b1_alignment_review"
           "$b1_alignment_artifact" "$b1_navigation_artifact" "$b1_semantic_projection_artifact"

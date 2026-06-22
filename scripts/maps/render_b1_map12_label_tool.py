@@ -21,6 +21,12 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    navigation_memory_point_source,
+    read_navigation_memory,
+)
 from roboclaws.maps.room_semantics import build_scene_room_semantic_overlay
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
@@ -32,9 +38,9 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
+B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
-DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
@@ -69,14 +75,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    artifacts = write_label_tool_artifacts(
-        map_bundle=args.map_bundle,
-        semantics_path=args.semantics,
-        scene_root=args.scene_root,
-        include_gaussian_scene=args.include_gaussian_scene,
-        review_manifest_path=args.output_review_manifest,
-        output_dir=args.output_dir,
-    )
+    try:
+        artifacts = write_label_tool_artifacts(
+            map_bundle=args.map_bundle,
+            semantics_path=args.semantics,
+            scene_root=args.scene_root,
+            include_gaussian_scene=args.include_gaussian_scene,
+            review_manifest_path=args.output_review_manifest,
+            output_dir=args.output_dir,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     payload = {
         "schema": LABEL_TOOL_PACKET_SCHEMA,
         "shape_count": artifacts["shape_count"],
@@ -144,10 +154,12 @@ def build_label_tool_packet(
         origin_y=float(_origin(map_yaml)[1]),
         origin_yaw_rad=float(_origin(map_yaml)[2]),
     )
+    explicit_semantics_path = semantics_path is not None
     semantics_path = semantics_path or map_bundle / "semantics.json"
     semantics = load_semantics_or_empty(
         semantics_path,
         source_json_path=map_bundle / "source.json",
+        allow_missing=not explicit_semantics_path,
     )
     frame_id = source_map_frame_id(semantics)
     review_manifest = load_review_manifest(review_manifest_path)
@@ -164,7 +176,7 @@ def build_label_tool_packet(
         frame_id=frame_id,
     )
     navigation_memory_layer = navigation_memory_layer_from_path(
-        DEFAULT_NAVIGATION_MEMORY,
+        map_bundle.parent / "navigation_memory.json",
         transform=transform,
         frame_id=frame_id,
     )
@@ -235,17 +247,47 @@ def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | 
         return None
     path = Path(review_manifest_path)
     if not path.is_file():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+        raise ValueError(f"review manifest missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"review manifest must contain valid JSON object: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"review manifest must contain a JSON object: {path}")
+    if payload.get("schema") != B1_MAP12_ALIGNMENT_REVIEW_SCHEMA:
+        raise ValueError(
+            f"review manifest schema must be {B1_MAP12_ALIGNMENT_REVIEW_SCHEMA}: {path}"
+        )
+    return payload
 
 
-def load_semantics_or_empty(semantics_path: Path, *, source_json_path: Path) -> dict[str, Any]:
+def load_semantics_or_empty(
+    semantics_path: Path,
+    *,
+    source_json_path: Path,
+    allow_missing: bool = True,
+) -> dict[str, Any]:
     path = Path(semantics_path)
     if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    source = {}
-    if source_json_path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"semantics must contain valid JSON object: {path}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"semantics must contain a JSON object: {path}")
+        return payload
+    if not allow_missing:
+        raise ValueError(f"semantics missing: {path}")
+    if not source_json_path.is_file():
+        raise ValueError(f"map source metadata missing: {source_json_path}")
+    try:
         source = json.loads(source_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"map source metadata must contain valid JSON object: {source_json_path}"
+        ) from exc
+    if not isinstance(source, dict):
+        raise ValueError(f"map source metadata must contain a JSON object: {source_json_path}")
     return {
         "schema": "robot_map12_empty_label_tool_semantics_v1",
         "environment_id": str(source.get("alias") or "robot_map_12"),
@@ -270,7 +312,7 @@ def seed_shapes_from_review_or_semantics(
     transform: SourceMapTransform,
     frame_id: str,
 ) -> list[dict[str, Any]]:
-    if review_manifest and review_manifest.get("schema") == "b1_map12_alignment_review_v1":
+    if review_manifest is not None:
         return seed_shapes_from_review_manifest(
             review_manifest,
             transform=transform,
@@ -653,23 +695,22 @@ def navigation_memory_layer_from_path(
     frame_id: str,
 ) -> dict[str, Any]:
     path = Path(navigation_memory_path)
-    if not path.is_file():
-        return {
-            "schema": "robot_map12_navigation_memory_layer_v1",
-            "source": str(path),
-            "coordinate_policy": "navigation_memory_pose_and_nav_goal_are_map_frame_priors",
-            "items": [],
-        }
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_navigation_memory(path)
     items = [
         item
         for item in (
-            navigation_memory_layer_item(raw_item, transform=transform, frame_id=frame_id)
-            for raw_item in navigation_memory_items(payload)
-            if isinstance(raw_item, dict)
+            navigation_memory_layer_item(
+                navigation_memory_item(raw_item, index=index),
+                index=index,
+                transform=transform,
+                frame_id=frame_id,
+            )
+            for index, raw_item in enumerate(navigation_memory_items(payload), start=1)
         )
         if item is not None
     ]
+    if not items:
+        raise ValueError(f"navigation_memory.json did not yield any label-layer items: {path}")
     return {
         "schema": "robot_map12_navigation_memory_layer_v1",
         "source": str(path),
@@ -681,18 +722,25 @@ def navigation_memory_layer_from_path(
 def navigation_memory_layer_item(
     item: dict[str, Any],
     *,
+    index: int,
     transform: SourceMapTransform,
     frame_id: str,
 ) -> dict[str, Any] | None:
-    item_id = str(item.get("id") or "")
-    pose = _navigation_memory_point(item.get("pose"), transform=transform, frame_id=frame_id)
+    item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
+    pose = _navigation_memory_point(
+        item.get("pose"),
+        transform=transform,
+        frame_id=frame_id,
+        label=f"navigation_memory.json item {item_id} pose",
+    )
     nav_goal = _navigation_memory_point(
         item.get("nav_goal"),
         transform=transform,
         frame_id=frame_id,
+        label=f"navigation_memory.json item {item_id} nav_goal",
     )
-    if not item_id or (pose is None and nav_goal is None):
-        return None
+    if pose is None and nav_goal is None:
+        raise ValueError(f"navigation_memory.json item {item_id} must include pose or nav_goal")
     return {
         "id": item_id,
         "label": str(item.get("label") or item_id),
@@ -706,32 +754,23 @@ def navigation_memory_layer_item(
     }
 
 
-def navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
-
-
 def _navigation_memory_point(
     payload: Any,
     *,
     transform: SourceMapTransform,
     frame_id: str,
+    label: str,
 ) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or "x" not in payload or "y" not in payload:
+    source = navigation_memory_point_source(payload, label=label, required=False)
+    if not source:
         return None
-    try:
-        x = float(payload["x"])
-        y = float(payload["y"])
-    except (TypeError, ValueError):
-        return None
+    x = source["x"]
+    y = source["y"]
     return {
         "frame_id": frame_id,
         "x": x,
         "y": y,
-        "yaw": _optional_float(payload.get("yaw")),
+        "yaw": source.get("yaw"),
         "pixel_center": world_to_pixel(x, y, transform),
     }
 
@@ -881,7 +920,7 @@ def draft_manifest_from_shapes(
     source_packet: dict[str, Any],
 ) -> dict[str, Any]:
     labels = [draft_label_from_shape(shape) for shape in shapes]
-    return {
+    manifest = {
         "schema": LABEL_DRAFT_MANIFEST_SCHEMA,
         "source_map_frame_id": str(source_packet.get("source_map_frame_id") or "map"),
         "map_bundle": str(source_packet.get("map_bundle") or ""),
@@ -893,6 +932,10 @@ def draft_manifest_from_shapes(
         "verified_status_allowed": False,
         "labels": labels,
     }
+    errors = validate_label_draft_manifest(manifest)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return manifest
 
 
 def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
@@ -908,11 +951,7 @@ def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
         "source_map_frame_id": str(shape.get("source_map_frame_id") or "map"),
         "geometry": geometry,
         "map_center": center,
-        "polygon_role": _valid_or_default(
-            str(shape.get("polygon_role") or ""),
-            POLYGON_ROLES,
-            POLYGON_ROLE_NAVIGATION_AREA,
-        ),
+        "polygon_role": str(shape.get("polygon_role") or ""),
         "geometry_source": GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
         "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
         "review_status": "draft",
@@ -950,6 +989,9 @@ def _draft_manifest_label_errors(raw_label: Any, *, index: int) -> list[str]:
         errors.append(f"label {label_id} alignment_status must remain candidate")
     if label.get("review_status") != "draft":
         errors.append(f"label {label_id} review_status must remain draft")
+    polygon_role = str(label.get("polygon_role") or "")
+    if polygon_role not in POLYGON_ROLES:
+        errors.append(f"label {label_id} polygon_role must be one of {sorted(POLYGON_ROLES)}")
     geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
     errors.extend(_draft_manifest_geometry_errors(label_id, geometry))
     return errors
@@ -1106,10 +1148,6 @@ def _draft_geometry(value: Any) -> dict[str, Any]:
         return {"kind": "point", "center": _geometry_center(geometry)}
     polygon = _polygon_points(geometry.get("polygon"))
     return {"kind": "polygon", "polygon": polygon}
-
-
-def _valid_or_default(value: str, valid_values: frozenset[str], default: str) -> str:
-    return value if value in valid_values else default
 
 
 def _repo_artifact_path(source: str, *, repo_root: Path) -> Path | None:

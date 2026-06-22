@@ -69,7 +69,6 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
 def raw_fpv_visual_candidate_recovery(
     *,
     source_observation_id: str | None = None,
-    map_mode: str = "minimal",
 ) -> dict[str, Any]:
     example: dict[str, Any] = {
         "source_observation_id": source_observation_id or "<raw_fpv_observation_id>",
@@ -77,17 +76,12 @@ def raw_fpv_visual_candidate_recovery(
         "evidence_note": "small object visible on the bed",
         "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
     }
-    minimal_map = map_mode == "minimal"
-    if not minimal_map:
-        example["target_fixture_id"] = "<public_anchor_or_resolved_fixture_id>"
     return {
         "schema": "raw_fpv_visual_candidate_recovery_v1",
         "required_tool": "navigate_to_visual_candidate",
         "required_next_action": "retry_navigate_to_visual_candidate",
         "declaration_strategy": RAW_FPV_DECLARATION_STRATEGY,
-        "minimal_map_target_fixture_rule": "omit_target_fixture_id"
-        if minimal_map
-        else "target_fixture_id_may_come_from_public_runtime_map_anchor",
+        "base_navigation_map_target_fixture_rule": "omit_target_fixture_id",
         "accepted_image_region_forms": [dict(item) for item in RAW_FPV_ACCEPTED_IMAGE_REGION_FORMS],
         "invalid_fields_to_avoid": list(RAW_FPV_INVALID_FIELDS_TO_AVOID),
         "valid_example": example,
@@ -98,18 +92,13 @@ def raw_fpv_visual_candidate_recovery(
 def raw_fpv_visual_candidate_recovery_hint(
     *,
     source_observation_id: str | None = None,
-    map_mode: str = "minimal",
 ) -> str:
-    target_rule = (
-        "omit target_fixture_id with Base Navigation Map context"
-        if map_mode == "minimal"
-        else "use target_fixture_id only from public runtime-map anchors"
-    )
     observation = source_observation_id or "<raw_fpv_observation_id>"
     return (
         "Retry with a valid navigate_to_visual_candidate example: "
         f"source_observation_id={observation}, category=toy, evidence_note='small object "
         "visible on the bed', image_region={type:bbox,value:[0.1,0.2,0.3,0.4]}; "
-        f"{target_rule}. Avoid bbox_normalized, bare x/y/width/height fields, "
+        "omit target_fixture_id with Base Navigation Map context. Avoid bbox_normalized, "
+        "bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", and target_fixture_id=null.'
     )

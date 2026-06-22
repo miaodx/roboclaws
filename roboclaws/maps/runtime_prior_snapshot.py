@@ -3,10 +3,17 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
 from roboclaws.maps.bundle import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    read_navigation_memory,
+    required_xy_yaw_pose_source,
+)
 from roboclaws.maps.rasterize import OccupancyGrid, load_pgm, world_to_grid
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
@@ -95,22 +102,34 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     _require_file(occupancy_path)
     _require_file(source_path)
 
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory = read_navigation_memory(
+        navigation_memory_path,
+        source_name="Agibot navigation memory",
+        json_object_label="Agibot navigation memory",
+    )
     map_yaml = parse_map_yaml(nav2_yaml_path.read_text(encoding="utf-8"))
+    resolution, origin = _source_map_geometry(map_yaml, label="Agibot nav2.yaml")
     grid = load_pgm(
         occupancy_path,
-        resolution_m=float(map_yaml.get("resolution") or 0.05),
-        origin_x=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[0]),
-        origin_y=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[1]),
+        resolution_m=resolution,
+        origin_x=origin[0],
+        origin_y=origin[1],
     )
-    source = json.loads(source_path.read_text(encoding="utf-8"))
+    source = _read_json_object(source_path, label="Agibot map source")
 
     anchors: list[dict[str, Any]] = []
     waypoints: list[dict[str, Any]] = []
     fixture_candidates: list[dict[str, Any]] = []
     observed_objects: list[dict[str, Any]] = []
-    for index, raw_item in enumerate(_navigation_memory_items(navigation_memory), start=1):
-        item = raw_item if isinstance(raw_item, dict) else {}
+    for index, raw_item in enumerate(
+        navigation_memory_items(navigation_memory, source_name="Agibot navigation memory"),
+        start=1,
+    ):
+        item = navigation_memory_item(
+            raw_item,
+            index=index,
+            source_name="Agibot navigation memory",
+        )
         anchor = _anchor_from_navigation_memory_item(item, index=index, grid=grid)
         anchors.append(anchor)
         waypoint = _waypoint_from_anchor(anchor)
@@ -126,8 +145,6 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
         "schema": RUNTIME_METRIC_MAP_SCHEMA,
         "contract": "realworld_cleanup_contract_v1",
         "freshness": "offline_converted_prior",
-        "map_mode": "minimal",
-        "minimal_map_mode": True,
         "source_map_mutated": False,
         "private_truth_included": False,
         "static_map": {
@@ -139,7 +156,7 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
             "artifact_paths": _artifact_paths(map_dir),
             "costmap": {
                 "resolution_m": grid.resolution_m,
-                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": _yaw(map_yaml)},
+                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": round(origin[2], 6)},
                 "width": grid.width,
                 "height": grid.height,
                 "occupancy_grid_artifact": "agibot/occupancy.pgm",
@@ -234,24 +251,21 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
     _require_file(semantics_path)
 
     map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
-    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
-    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    resolution, origin = _source_map_geometry(map_yaml, label="Nav2 cleanup map.yaml")
     grid = load_pgm(
         occupancy_path,
-        resolution_m=float(map_yaml.get("resolution") or 0.05),
+        resolution_m=resolution,
         origin_x=float(origin[0]),
         origin_y=float(origin[1]),
     )
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = _read_json_object(semantics_path, label="Nav2 cleanup semantics")
     if semantics.get("schema") != "nav2_cleanup_semantics_v1":
         raise ValueError(
             "compiled cleanup bundle semantics must use schema nav2_cleanup_semantics_v1"
         )
     rooms = copy.deepcopy(semantics.get("rooms") or [])
     inspection_waypoints = [
-        _bundle_waypoint(waypoint)
-        for waypoint in semantics.get("inspection_waypoints") or []
-        if isinstance(waypoint, dict)
+        _bundle_waypoint(waypoint) for waypoint in _nav2_cleanup_waypoint_sources(semantics)
     ]
     anchors = [
         _anchor_from_bundle_waypoint(waypoint, index=index)
@@ -261,8 +275,6 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         "schema": RUNTIME_METRIC_MAP_SCHEMA,
         "contract": "realworld_cleanup_contract_v1",
         "freshness": "offline_compiled_prior",
-        "map_mode": "minimal",
-        "minimal_map_mode": True,
         "source_map_mutated": False,
         "private_truth_included": False,
         "static_map": {
@@ -282,7 +294,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
             },
             "costmap": {
                 "resolution_m": grid.resolution_m,
-                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": _yaw(map_yaml)},
+                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": round(origin[2], 6)},
                 "width": grid.width,
                 "height": grid.height,
                 "occupancy_grid_artifact": "map.pgm",
@@ -480,8 +492,16 @@ def _anchor_from_navigation_memory_item(
 ) -> dict[str, Any]:
     item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
     anchor_type = _anchor_type(item)
-    nav_goal = _pose_dict(item.get("nav_goal") or item.get("pose") or {})
-    object_pose = _pose_dict(item.get("pose") or item.get("nav_goal") or {})
+    nav_goal_raw = item["nav_goal"] if "nav_goal" in item else item.get("pose")
+    object_pose_raw = item["pose"] if "pose" in item else item.get("nav_goal")
+    nav_goal = required_xy_yaw_pose_source(
+        nav_goal_raw,
+        label=f"Agibot navigation memory item {item_id} nav_goal",
+    )
+    object_pose = required_xy_yaw_pose_source(
+        object_pose_raw,
+        label=f"Agibot navigation memory item {item_id} pose",
+    )
     reachability = _reachability_status(nav_goal, grid=grid)
     classification_status = _classification_status(item, anchor_type=anchor_type)
     actionability = _actionability(anchor_type, reachability["status"], classification_status)
@@ -551,12 +571,14 @@ def _anchor_from_navigation_memory_item(
 
 def _bundle_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
     waypoint_id = str(waypoint.get("waypoint_id") or waypoint.get("id") or "")
+    pose = required_xy_yaw_pose_source(
+        waypoint,
+        label=f"Nav2 cleanup waypoint {waypoint_id}",
+    )
     return {
         "waypoint_id": waypoint_id,
         "frame_id": str(waypoint.get("frame_id") or "map"),
-        "x": _float(waypoint.get("x")),
-        "y": _float(waypoint.get("y")),
-        "yaw": _float(waypoint.get("yaw")),
+        **pose,
         "room_id": str(waypoint.get("room_id") or ""),
         "label": str(waypoint.get("label") or waypoint_id),
         "waypoint_source": str(waypoint.get("waypoint_source") or "nav2_cleanup_bundle"),
@@ -578,9 +600,9 @@ def _anchor_from_bundle_waypoint(waypoint: dict[str, Any], *, index: int) -> dic
         "room_label": str(waypoint.get("label") or waypoint.get("room_id") or ""),
         "waypoint_id": waypoint_id,
         "pose": {
-            "x": _float(waypoint.get("x")),
-            "y": _float(waypoint.get("y")),
-            "yaw": _float(waypoint.get("yaw")),
+            "x": waypoint["x"],
+            "y": waypoint["y"],
+            "yaw": waypoint["yaw"],
         },
         "affordances": ["navigate", "observe"],
         "aliases": [waypoint_id],
@@ -777,12 +799,16 @@ def _snapshot_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
+def _nav2_cleanup_waypoint_sources(semantics: dict[str, Any]) -> list[dict[str, Any]]:
+    waypoints = semantics.get("inspection_waypoints")
+    if not isinstance(waypoints, list) or not waypoints:
+        raise ValueError("Nav2 cleanup semantics inspection_waypoints must be a non-empty list")
+    result: list[dict[str, Any]] = []
+    for index, waypoint in enumerate(waypoints, start=1):
+        if not isinstance(waypoint, dict):
+            raise ValueError(f"Nav2 cleanup waypoint {index} must be a JSON object")
+        result.append(waypoint)
+    return result
 
 
 def _anchor_type(item: dict[str, Any]) -> str:
@@ -1084,12 +1110,23 @@ def _map_id(map_dir: Path, source: dict[str, Any]) -> str:
     return str(source.get("alias") or source.get("requested_map_id") or map_dir.name)
 
 
-def _yaw(map_yaml: dict[str, Any]) -> float:
-    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
+def _source_map_geometry(map_yaml: dict[str, Any], *, label: str) -> tuple[float, list[float]]:
     try:
-        return round(float(origin[2]), 6)
-    except (IndexError, TypeError, ValueError):
-        return 0.0
+        resolution = float(map_yaml.get("resolution"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} resolution must be a positive finite number") from exc
+    if not math.isfinite(resolution) or resolution <= 0.0:
+        raise ValueError(f"{label} resolution must be a positive finite number")
+    origin = map_yaml.get("origin")
+    if not isinstance(origin, list) or len(origin) != 3:
+        raise ValueError(f"{label} origin must be a 3-item numeric list")
+    try:
+        parsed_origin = [float(item) for item in origin]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} origin must be a 3-item numeric list") from exc
+    if any(not math.isfinite(item) for item in parsed_origin):
+        raise ValueError(f"{label} origin must be a 3-item numeric list")
+    return resolution, parsed_origin
 
 
 def _safe_id(value: str) -> str:
@@ -1106,6 +1143,16 @@ def _stable_id(prefix: str, value: str) -> str:
 def _require_file(path: Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object at {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object at {path}")
+    return payload
 
 
 def _assert_no_private_truth(value: Any) -> None:

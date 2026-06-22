@@ -193,6 +193,46 @@ def test_explicit_nurec_crop_writes_reproducible_review_usd(tmp_path: Path) -> N
     assert f"@{nurec_path.resolve().as_posix()}@" in text
 
 
+def test_explicit_nurec_crop_supports_direct_default_gauss_scene(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    nurec_path = source_dir / "point_cloud.nurec"
+    nurec_path.write_bytes(b"nurec")
+    scene = source_dir / "default.usda"
+    scene.write_text(
+        "#usda 1.0\n\n"
+        'def Xform "World"\n'
+        "{\n"
+        '    over "gauss" (prepend references = @gauss.usda@) {}\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    (source_dir / "gauss.usda").write_text(
+        "#usda 1.0\n\n"
+        'def Volume "gauss"\n'
+        "{\n"
+        "    custom float3 omni:nurec:crop:maxBounds = (9.273054, 13.345431, 4.230127)\n"
+        "    custom float3 omni:nurec:crop:minBounds = (-50.785973, -21.400328, -10.319169)\n"
+        "    custom asset filePath = @./point_cloud.nurec@\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    cropped_scene, policy = prepare_nurec_crop_max_z_scene_usd(
+        scene,
+        crop_max_z=1.8,
+        output_dir=tmp_path / "out",
+    )
+
+    assert cropped_scene == Path(policy["cropped_default_usd"])
+    assert policy["source_scene_usd"] == str(scene)
+    assert Path(policy["cropped_default_usd"]).read_text(encoding="utf-8").count("@") == 2
+    cropped_gauss = Path(policy["cropped_gauss_usd"])
+    text = cropped_gauss.read_text(encoding="utf-8")
+    assert "custom float3 omni:nurec:crop:maxBounds = (9.273054, 13.345431, 1.8)" in text
+    assert f"@{nurec_path.resolve().as_posix()}@" in text
+
+
 def test_topdown_cli_requires_explicit_scene_bounds(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
@@ -287,3 +327,42 @@ def test_topdown_cli_can_write_request_without_capture(tmp_path: Path) -> None:
     assert summary["geometry_status"] == "render_required"
     assert (tmp_path / "camera_request.json").is_file()
     assert (tmp_path / "scene_gaussian_topdown.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "camera request must contain valid JSON object"),
+        ("[]\n", "camera request must contain a JSON object"),
+    ),
+)
+def test_capture_one_scene_rejects_malformed_camera_request_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    request_path = tmp_path / "camera_request.json"
+    request_path.write_text(source, encoding="utf-8")
+    result_path = tmp_path / "capture_result.json"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--capture-one-scene",
+            "--scene-usd",
+            str(tmp_path / "scene_gs.usda"),
+            "--camera-request",
+            str(request_path),
+            "--views-dir",
+            str(tmp_path / "views"),
+            "--result",
+            str(result_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert message in completed.stderr
+    assert not result_path.exists()

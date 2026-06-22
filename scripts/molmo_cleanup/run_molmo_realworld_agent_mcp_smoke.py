@@ -23,10 +23,8 @@ from roboclaws.household.profiles import (  # noqa: E402
 )
 from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
-    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
-    REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.household.realworld_mcp_server import (  # noqa: E402
@@ -77,6 +75,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--require-map-bundle", action="store_true")
     parser.add_argument(
+        "--allow-synthetic-map-projection",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--perception-mode",
         choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -111,6 +114,7 @@ def run_smoke(
     generated_mess_object_ids: tuple[str, ...] = (),
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
+    allow_synthetic_map_projection: bool = False,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
@@ -129,8 +133,6 @@ def run_smoke(
         include_robot=include_robot,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
-        map_mode=DEFAULT_MAP_MODE,
-        allowed_map_modes=REALWORLD_MAP_MODES,
     )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
@@ -164,6 +166,7 @@ def run_smoke(
         static_fixture_projection_mode="room_only",
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
+        allow_synthetic_map_projection=allow_synthetic_map_projection,
         record_robot_views=record_robot_views,
         evidence_lane=evidence_lane,
         runtime_map_prior=runtime_map_prior,
@@ -407,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
+        allow_synthetic_map_projection=args.allow_synthetic_map_projection,
         perception_mode=args.perception_mode,
         include_robot=args.include_robot,
         robot_name=args.robot_name,

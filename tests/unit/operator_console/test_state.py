@@ -85,6 +85,107 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
     assert any(item["label"] == "Report" for item in state["artifact_paths"])
 
 
+def test_state_surfaces_malformed_operator_state_source_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "broken-wrapper"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text("{not-json", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["run_id"] == "broken-wrapper"
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Operator State"
+    assert state["checker_status"]["message"] == (
+        "Launch failed: operator state source error: Operator State"
+    )
+    assert state["source_errors"] == [
+        {
+            "label": "Operator State",
+            "path": str((run_dir / "operator_state.json").resolve()),
+            "href": (
+                f"/artifacts/{(run_dir / 'operator_state.json').relative_to(tmp_path)}"
+                f"?v={(run_dir / 'operator_state.json').stat().st_mtime_ns}"
+            ),
+            "reason": "invalid JSON at line 1 column 2",
+        }
+    ]
+
+
+def test_state_surfaces_malformed_nested_live_status_and_run_result(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0619_1200" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text("{bad-live-status", encoding="utf-8")
+    (attempt_dir / "run_result.json").write_text('["not", "object"]', encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["display_run_id"] == "0619_1200/seed-7"
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Live Status, Run Result"
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Live Status", "invalid JSON at line 1 column 2"),
+        ("Run Result", "expected JSON object"),
+    ]
+    assert state["checker_status"]["message"] == (
+        "Launch failed: operator state source error: Live Status, Run Result"
+    )
+
+
+def test_state_surfaces_malformed_trace_source_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0619_1800" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "response", "tool": "observe", "ok": True}) + "\n{not-json}\n[]\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Trace"
+    assert state["latest_action"] == "observe"
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Trace", "invalid JSON at line 2 column 2"),
+        ("Trace", "expected JSON object at line 3"),
+    ]
+    assert state["checker_status"]["message"] == (
+        "Launch failed: operator state source error: Trace"
+    )
+
+
 def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_1807" / "seed-7"
@@ -294,6 +395,57 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
         state["checker_status"]["message"]
         == "Checker will run when the live agent hands off to result checking."
     )
+
+
+def test_state_surfaces_malformed_agent_event_source_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0608_2110" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "response", "tool": "observe", "ok": True}) + "\n",
+        encoding="utf-8",
+    )
+    (attempt_dir / "codex-events.jsonl").write_text(
+        "{not-json}\n"
+        + json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "agent_message",
+                    "text": "I found a cup and will inspect it.",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Agent Events"
+    assert state["latest_public_decision_evidence"]["decision"] == (
+        "I found a cup and will inspect it."
+    )
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Agent Events", "invalid JSON at line 1 column 2")
+    ]
 
 
 def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> None:

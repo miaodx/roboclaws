@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = build_reviewed_correspondence_manifest(
-            json.loads(args.review_packet.read_text(encoding="utf-8")),
+            read_review_packet(args.review_packet),
             source_packet=args.review_packet,
         )
     except PromotionError as exc:
@@ -103,6 +103,8 @@ def build_reviewed_correspondence_manifest(
     *,
     source_packet: Path | None = None,
 ) -> dict[str, Any]:
+    if not isinstance(packet, dict):
+        raise PromotionError("review packet must contain a JSON object")
     if packet.get("schema") != REVIEW_PACKET_SCHEMA:
         raise PromotionError(
             "review packet schema must be b1_map12_manual_anchor_semantic_review_packet_v1"
@@ -196,6 +198,20 @@ def promoted_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
     promoted = {field: anchor[field] for field in PROMOTED_ANCHOR_FIELDS if field in anchor}
     promoted["anchor_role"] = anchor_role(anchor)
     return promoted
+
+
+def read_review_packet(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise PromotionError(f"review packet missing: {path}")
+    try:
+        packet = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise PromotionError(
+            f"review packet must contain valid JSON object: {path}: {exc.msg}"
+        ) from exc
+    if not isinstance(packet, dict):
+        raise PromotionError(f"review packet must contain a JSON object: {path}")
+    return packet
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1431 @@
+{
+  "display_frame": null,
+  "driveable_ways": [
+    {
+      "from_room_id": "room_10",
+      "to_room_id": "room_11"
+    },
+    {
+      "from_room_id": "room_11",
+      "to_room_id": "room_2"
+    },
+    {
+      "from_room_id": "room_2",
+      "to_room_id": "room_3"
+    },
+    {
+      "from_room_id": "room_3",
+      "to_room_id": "room_4"
+    },
+    {
+      "from_room_id": "room_4",
+      "to_room_id": "room_5"
+    },
+    {
+      "from_room_id": "room_5",
+      "to_room_id": "room_6"
+    },
+    {
+      "from_room_id": "room_6",
+      "to_room_id": "room_7"
+    },
+    {
+      "from_room_id": "room_7",
+      "to_room_id": "room_8"
+    },
+    {
+      "from_room_id": "room_8",
+      "to_room_id": "room_9"
+    }
+  ],
+  "environment_id": "molmospaces-procthor-10k-val-15",
+  "frame_ids": {
+    "base": "base_link",
+    "camera": "head_camera_rgb_optical_frame",
+    "map": "map"
+  },
+  "inspection_waypoints": [
+    {
+      "candidate_provenance": {
+        "candidate_index": 1,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 1",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_10",
+      "room_label": "room 10",
+      "visited": false,
+      "waypoint_id": "generated_exploration_001",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 1.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 2,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 2",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_10",
+      "room_label": "room 10",
+      "visited": false,
+      "waypoint_id": "generated_exploration_002",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 1.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 3,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 3",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_11",
+      "room_label": "room 11",
+      "visited": false,
+      "waypoint_id": "generated_exploration_003",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 4.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 4,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 4",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_11",
+      "room_label": "room 11",
+      "visited": false,
+      "waypoint_id": "generated_exploration_004",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 4.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 5,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 5",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_2",
+      "room_label": "room 2",
+      "visited": false,
+      "waypoint_id": "generated_exploration_005",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 7.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 6,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 6",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_2",
+      "room_label": "room 2",
+      "visited": false,
+      "waypoint_id": "generated_exploration_006",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 7.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 7,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 7",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_3",
+      "room_label": "room 3",
+      "visited": false,
+      "waypoint_id": "generated_exploration_007",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 10.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 8,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 8",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_3",
+      "room_label": "room 3",
+      "visited": false,
+      "waypoint_id": "generated_exploration_008",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 10.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 9,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 9",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_4",
+      "room_label": "room 4",
+      "visited": false,
+      "waypoint_id": "generated_exploration_009",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 13.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 10,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 10",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_4",
+      "room_label": "room 4",
+      "visited": false,
+      "waypoint_id": "generated_exploration_010",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 13.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 11,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 11",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_5",
+      "room_label": "room 5",
+      "visited": false,
+      "waypoint_id": "generated_exploration_011",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 16.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 12,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 12",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_5",
+      "room_label": "room 5",
+      "visited": false,
+      "waypoint_id": "generated_exploration_012",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 16.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 13,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 13",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_6",
+      "room_label": "room 6",
+      "visited": false,
+      "waypoint_id": "generated_exploration_013",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 19.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 14,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 14",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_6",
+      "room_label": "room 6",
+      "visited": false,
+      "waypoint_id": "generated_exploration_014",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 19.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 15,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 15",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_7",
+      "room_label": "room 7",
+      "visited": false,
+      "waypoint_id": "generated_exploration_015",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 22.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 16,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 16",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_7",
+      "room_label": "room 7",
+      "visited": false,
+      "waypoint_id": "generated_exploration_016",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 22.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 17,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 17",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_8",
+      "room_label": "room 8",
+      "visited": false,
+      "waypoint_id": "generated_exploration_017",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 25.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 18,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 18",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_8",
+      "room_label": "room 8",
+      "visited": false,
+      "waypoint_id": "generated_exploration_018",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 25.0,
+      "y": 1.7,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 19,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 19",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_9",
+      "room_label": "room 9",
+      "visited": false,
+      "waypoint_id": "generated_exploration_019",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 28.0,
+      "y": 0.3,
+      "yaw": 0.0
+    },
+    {
+      "candidate_provenance": {
+        "candidate_index": 20,
+        "source": "public_occupancy_free_space",
+        "source_fixtures_hidden": true,
+        "source_pose": "free_space_sample",
+        "source_room_hidden": false,
+        "source_room_label_available": true,
+        "source_waypoint_hidden": true
+      },
+      "coverage_estimate": 0.05,
+      "frame_id": "map",
+      "label": "Generated exploration candidate 20",
+      "purpose": "base_navigation_map_exploration",
+      "room_id": "room_9",
+      "room_label": "room 9",
+      "visited": false,
+      "waypoint_id": "generated_exploration_020",
+      "waypoint_source": "generated_exploration_candidate",
+      "x": 28.0,
+      "y": 1.7,
+      "yaw": 0.0
+    }
+  ],
+  "map_id": "molmospaces-procthor-10k-val-15_base_navigation_map",
+  "map_version": "base-navigation-map-v1",
+  "provenance": {
+    "contains_private_scoring_truth": false,
+    "contains_runtime_observations": false,
+    "source": "molmospaces_base_navigation_map"
+  },
+  "rooms": [
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 1.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "x": 2.0,
+          "y": 0.0
+        },
+        {
+          "x": 2.0,
+          "y": 2.0
+        },
+        {
+          "x": 0.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_10",
+      "room_label": "room 10",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 4.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 3.0,
+          "y": 0.0
+        },
+        {
+          "x": 5.0,
+          "y": 0.0
+        },
+        {
+          "x": 5.0,
+          "y": 2.0
+        },
+        {
+          "x": 3.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_11",
+      "room_label": "room 11",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 7.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 6.0,
+          "y": 0.0
+        },
+        {
+          "x": 8.0,
+          "y": 0.0
+        },
+        {
+          "x": 8.0,
+          "y": 2.0
+        },
+        {
+          "x": 6.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_2",
+      "room_label": "room 2",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 10.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 9.0,
+          "y": 0.0
+        },
+        {
+          "x": 11.0,
+          "y": 0.0
+        },
+        {
+          "x": 11.0,
+          "y": 2.0
+        },
+        {
+          "x": 9.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_3",
+      "room_label": "room 3",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 13.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 12.0,
+          "y": 0.0
+        },
+        {
+          "x": 14.0,
+          "y": 0.0
+        },
+        {
+          "x": 14.0,
+          "y": 2.0
+        },
+        {
+          "x": 12.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_4",
+      "room_label": "room 4",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 16.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 15.0,
+          "y": 0.0
+        },
+        {
+          "x": 17.0,
+          "y": 0.0
+        },
+        {
+          "x": 17.0,
+          "y": 2.0
+        },
+        {
+          "x": 15.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_5",
+      "room_label": "room 5",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 19.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 18.0,
+          "y": 0.0
+        },
+        {
+          "x": 20.0,
+          "y": 0.0
+        },
+        {
+          "x": 20.0,
+          "y": 2.0
+        },
+        {
+          "x": 18.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_6",
+      "room_label": "room 6",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 22.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 21.0,
+          "y": 0.0
+        },
+        {
+          "x": 23.0,
+          "y": 0.0
+        },
+        {
+          "x": 23.0,
+          "y": 2.0
+        },
+        {
+          "x": 21.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_7",
+      "room_label": "room 7",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 25.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 24.0,
+          "y": 0.0
+        },
+        {
+          "x": 26.0,
+          "y": 0.0
+        },
+        {
+          "x": 26.0,
+          "y": 2.0
+        },
+        {
+          "x": 24.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_8",
+      "room_label": "room 8",
+      "source_map_frame_id": "map"
+    },
+    {
+      "alignment_status": "native",
+      "category": "room_area",
+      "geometry_source": "operator_authored_navigation_zone",
+      "map_center": {
+        "x": 28.0,
+        "y": 1.0
+      },
+      "polygon": [
+        {
+          "x": 27.0,
+          "y": 0.0
+        },
+        {
+          "x": 29.0,
+          "y": 0.0
+        },
+        {
+          "x": 29.0,
+          "y": 2.0
+        },
+        {
+          "x": 27.0,
+          "y": 2.0
+        }
+      ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
+      "public_room_source": "base_navigation_map",
+      "room_id": "room_9",
+      "room_label": "room 9",
+      "source_map_frame_id": "map"
+    }
+  ],
+  "schema": "nav2_cleanup_semantics_v1",
+  "spatial_contract": {
+    "alignment_status": "native",
+    "display_frame_status": "absent_first_slice_raw_source_map_frame_only",
+    "public_contract_note": "Semantic geometry is authored in the source map frame. This first slice intentionally has no rectified display frame.",
+    "schema": "map_spatial_contract_v1",
+    "semantic_geometry_frame": "source_map_frame",
+    "source_map_frame": {
+      "frame_id": "map",
+      "spatial_truth": true,
+      "units": "meters"
+    }
+  },
+  "static_landmarks": [
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_490374f1ec5af758d3bc0f75be2cce25_1_0_10",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "bed_490374f1ec5af758d3bc0f75be2cce25_1_0_10",
+      "manipulation_frame": "bed_490374f1ec5af758d3bc0f75be2cce25_1_0_10_manipulation",
+      "name": "Bed (Bed|10|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 0.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_001",
+      "preferred_manipulation_waypoint_id": "generated_exploration_001",
+      "room_id": "room_10"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_6_0_10",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_6_0_10",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_6_0_10_manipulation",
+      "name": "DiningTable (DiningTable|10|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 1.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_001",
+      "preferred_manipulation_waypoint_id": "generated_exploration_001",
+      "room_id": "room_10"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_3_0_11",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_3_0_11",
+      "manipulation_frame": "sink_07e796f32d0d3efce9acf4be00f3bc53_3_0_11_manipulation",
+      "name": "Sink (Sink|11|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 3.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_003",
+      "preferred_manipulation_waypoint_id": "generated_exploration_003",
+      "room_id": "room_11"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "CounterTop",
+      "fixture_id": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_2",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "landmark_id": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_2",
+      "manipulation_frame": "countertop_9609aa6850542b3b89aedcae903246f5_1_0_2_manipulation",
+      "name": "CounterTop (CounterTop|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 6.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_005",
+      "preferred_manipulation_waypoint_id": "generated_exploration_005",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2_manipulation",
+      "name": "DiningTable (DiningTable|2|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 7.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_005",
+      "preferred_manipulation_waypoint_id": "generated_exploration_005",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place",
+        "open",
+        "place_inside",
+        "close"
+      ],
+      "category": "Fridge",
+      "fixture_id": "refrigerator_bc2c116461bf791128e9b2e837a8e7da_1_0_2",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "landmark_id": "refrigerator_bc2c116461bf791128e9b2e837a8e7da_1_0_2",
+      "manipulation_frame": "refrigerator_bc2c116461bf791128e9b2e837a8e7da_1_0_2_manipulation",
+      "name": "Fridge (Fridge|2|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 6.35,
+        "y": 1.65,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_005",
+      "preferred_manipulation_waypoint_id": "generated_exploration_005",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3_manipulation",
+      "name": "DiningTable (DiningTable|3|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 9.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_007",
+      "preferred_manipulation_waypoint_id": "generated_exploration_007",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sofa",
+      "fixture_id": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_1_0_3",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "landmark_id": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_1_0_3",
+      "manipulation_frame": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_1_0_3_manipulation",
+      "name": "Sofa (Sofa|3|0|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 10.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_007",
+      "preferred_manipulation_waypoint_id": "generated_exploration_007",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "landmark_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+      "manipulation_frame": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3_manipulation",
+      "name": "TVStand (TVStand|3|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 9.35,
+        "y": 1.65,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_007",
+      "preferred_manipulation_waypoint_id": "generated_exploration_007",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_68f67248e9981789296000625ae95fba_1_0_4",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "diningtable_68f67248e9981789296000625ae95fba_1_0_4",
+      "manipulation_frame": "diningtable_68f67248e9981789296000625ae95fba_1_0_4_manipulation",
+      "name": "DiningTable (DiningTable|4|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 12.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sofa",
+      "fixture_id": "sofa_7d8b10528827e8618d32e396ccd47002_1_0_4",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "sofa_7d8b10528827e8618d32e396ccd47002_1_0_4",
+      "manipulation_frame": "sofa_7d8b10528827e8618d32e396ccd47002_1_0_4_manipulation",
+      "name": "Sofa (Sofa|4|0|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 13.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_2_0_4",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "stand_6bc09b7e2670723819cfaf03855284c1_2_0_4",
+      "manipulation_frame": "stand_6bc09b7e2670723819cfaf03855284c1_2_0_4_manipulation",
+      "name": "TVStand (TVStand|4|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 12.35,
+        "y": 1.65,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_3_0_5",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_3_0_5",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_3_0_5_manipulation",
+      "name": "DiningTable (DiningTable|5|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 15.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_011",
+      "preferred_manipulation_waypoint_id": "generated_exploration_011",
+      "room_id": "room_5"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sofa",
+      "fixture_id": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_2_0_5",
+      "footprint": {
+        "depth_m": 0.35,
+        "shape": "rectangle",
+        "width_m": 0.45
+      },
+      "landmark_id": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_2_0_5",
+      "manipulation_frame": "sofa_d4e00c71cf8019dee39ffaa8e7181a92_2_0_5_manipulation",
+      "name": "Sofa (Sofa|5|0|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 16.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_011",
+      "preferred_manipulation_waypoint_id": "generated_exploration_011",
+      "room_id": "room_5"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_5",
+      "footprint": {
+        "depth_m": 0.35,
+        "shape": "rectangle",
+        "width_m": 0.45
+      },
+      "landmark_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_5",
+      "manipulation_frame": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_5_manipulation",
+      "name": "TVStand (TVStand|5|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 15.35,
+        "y": 1.65,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_011",
+      "preferred_manipulation_waypoint_id": "generated_exploration_011",
+      "room_id": "room_5"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_6",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "landmark_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_6",
+      "manipulation_frame": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_6_manipulation",
+      "name": "Bed (Bed|6|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 18.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_013",
+      "preferred_manipulation_waypoint_id": "generated_exploration_013",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_4_0_6",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_4_0_6",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_4_0_6_manipulation",
+      "name": "DiningTable (DiningTable|6|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 19.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_013",
+      "preferred_manipulation_waypoint_id": "generated_exploration_013",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_7",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "landmark_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_7",
+      "manipulation_frame": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_7_manipulation",
+      "name": "Sink (Sink|7|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 21.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_015",
+      "preferred_manipulation_waypoint_id": "generated_exploration_015",
+      "room_id": "room_7"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_c0bdf1e11f3f8ff8388081cdaef9cf2f_1_0_8",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "landmark_id": "bed_c0bdf1e11f3f8ff8388081cdaef9cf2f_1_0_8",
+      "manipulation_frame": "bed_c0bdf1e11f3f8ff8388081cdaef9cf2f_1_0_8_manipulation",
+      "name": "Bed (Bed|8|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 24.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_017",
+      "preferred_manipulation_waypoint_id": "generated_exploration_017",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_5_0_8",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "landmark_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_5_0_8",
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_5_0_8_manipulation",
+      "name": "DiningTable (DiningTable|8|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 25.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_017",
+      "preferred_manipulation_waypoint_id": "generated_exploration_017",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_2_0_9",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_2_0_9",
+      "manipulation_frame": "sink_07e796f32d0d3efce9acf4be00f3bc53_2_0_9_manipulation",
+      "name": "Sink (Sink|9|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 27.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_019",
+      "preferred_manipulation_waypoint_id": "generated_exploration_019",
+      "room_id": "room_9"
+    }
+  ]
+}

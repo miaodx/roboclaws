@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_arg
 from roboclaws.launch.scene_sampler import (
     READINESS_READY,
     legacy_molmospaces_world_ids,
@@ -163,7 +164,10 @@ def _source_aware_molmospaces_candidate_world_spec(world_id: str) -> WorldSpec:
         default_overrides=(
             f"scene_source={scene_ref.scene_source}",
             f"scene_index={scene_ref.scene_index}",
-            "map_bundle=none",
+            molmospaces_nav2_map_bundle_arg(
+                scene_source=scene_ref.scene_source,
+                scene_index=scene_ref.scene_index,
+            ),
         ),
         sampler_metadata={
             "schema": "molmospaces_scene_sampler_world_metadata_v1",

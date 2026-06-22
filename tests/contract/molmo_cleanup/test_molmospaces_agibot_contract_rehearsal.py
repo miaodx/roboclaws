@@ -268,7 +268,7 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     assert "agibot_gdk_normal_navi" not in report_text
 
 
-def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
+def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_map(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()
@@ -298,22 +298,22 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     assert run_result["task_name"] == "household-world.map-build"
     assert run_result["cleanup_actions_disabled"] is True
     assert run_result["map_build_mode"] is True
-    assert run_result["map_mode"] == "minimal"
+    assert "map_mode" not in run_result
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
     assert run_result["simulated"] is True
     assert run_result["physical_robot"] is False
-    assert runtime_metric_map["minimal_map_mode"] is True
+    assert "minimal_map_mode" not in runtime_metric_map
     assert runtime_metric_map["source_map_mutated"] is False
     assert runtime_metric_map["generated_exploration_candidates"]
     assert runtime_metric_map["public_semantic_anchors"]
     assert agent_view["metric_map"]["rooms"] == []
     assert agent_view["metric_map"]["inspection_waypoints"]
     assert agent_view["forbidden_private_fields_absent"] is True
-    assert runtime_export["minimal_map_start"] is True
+    assert runtime_export["base_navigation_map_start"] is True
     assert runtime_export["online_map_build"] is True
     assert runtime_export["cleanup_actions_included"] is False
-    assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
+    assert runtime_export["runtime_metric_map_summary"]["base_navigation_map_enabled"] is True
     assert runtime_export["runtime_metric_map_summary"]["source_map_mutated"] is False
     reference = run_result["agibot_map_reference"]
     assert reference["used_as_scene_source"] is False
@@ -321,7 +321,7 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     assert (run_dir / "report.html").is_file()
 
 
-def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
+def test_agibot_molmospaces_prehardware_cleanup_uses_same_base_navigation_map(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "prehardware-cleanup"
@@ -345,10 +345,10 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
     assert result["task_name"] == "household-world.cleanup"
     assert result["cleanup_actions_disabled"] is False
     assert result["map_build_mode"] is False
-    assert result["map_mode"] == "minimal"
+    assert "map_mode" not in result
     assert result["perception_mode"] == "raw_fpv_only"
-    assert runtime_metric_map["minimal_map_mode"] is True
+    assert "minimal_map_mode" not in runtime_metric_map
     assert runtime_metric_map["source_map_mutated"] is False
     assert runtime_export["cleanup_actions_included"] is True
-    assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
+    assert runtime_export["runtime_metric_map_summary"]["base_navigation_map_enabled"] is True
     assert result["semantic_substeps"]

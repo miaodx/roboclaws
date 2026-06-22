@@ -42,12 +42,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    packet = render_overlay(
-        map_bundle=args.map_bundle,
-        scene_topdown_render=args.scene_topdown_render,
-        alignment_artifact=args.alignment_artifact,
-        output_dir=args.output_dir,
-    )
+    try:
+        packet = render_overlay(
+            map_bundle=args.map_bundle,
+            scene_topdown_render=args.scene_topdown_render,
+            alignment_artifact=args.alignment_artifact,
+            output_dir=args.output_dir,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print(
         json.dumps(
             {
@@ -127,12 +131,19 @@ def render_overlay(
         "map_bundle": str(map_bundle),
         "alignment_artifact": str(alignment_artifact),
         "transform": transform,
+        "projection_policy": {
+            "source": "recorded_perspective_camera_projector",
+            "projector": "scene_projector_from_topdown_packet",
+            "z_plane": 0.0,
+            "forbidden_shortcut": "Do not map scene_xy_bounds linearly to image pixels.",
+        },
         "drawn_free_point_count": len(free_points),
         "drawn_occupied_point_count": len(occupied_points),
         "note": (
-            "Map12 occupancy is transformed with the manual draft rigid alignment and "
-            "projected into the cropped Gaussian top-down camera. The photo-like source "
-            "image is the Gaussian top-down. Blue=Map12 free, red=Map12 occupied."
+            "Map12 occupancy is transformed with the reviewed manual-anchor rigid alignment "
+            "and projected through the recorded Gaussian top-down perspective camera. The "
+            "photo-like source image is the Gaussian top-down. Blue=Map12 free, red=Map12 "
+            "occupied."
         ),
     }
     metadata_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -142,7 +153,10 @@ def render_overlay(
 def load_json(path: Path, label: str) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"{label} missing: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object: {path}")
     return payload
@@ -157,6 +171,10 @@ def verified_transform(alignment: dict[str, Any]) -> dict[str, Any]:
     if transform.get("type") != "rigid_2d":
         raise ValueError(
             f"manual overlay expects rigid_2d transform, got {transform.get('type')!r}"
+        )
+    if str(transform.get("source") or "") != "reviewed_correspondence_fit":
+        raise ValueError(
+            "manual overlay requires selected_transform.source=reviewed_correspondence_fit"
         )
     return transform
 

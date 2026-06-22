@@ -23,14 +23,16 @@ else:
 from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.household.camera_control import canonical_scene_camera_control_request  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     RealWorldCleanupContract,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
-from roboclaws.maps.bundle import write_nav2_map_bundle_snapshot  # noqa: E402
+from roboclaws.maps.bundle import (  # noqa: E402
+    static_landmarks_from_fixture_projection,
+    write_nav2_map_bundle_snapshot,
+)
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -190,7 +192,6 @@ def render_molmospaces_preview(
         contract = RealWorldCleanupContract(
             CleanupBackendSession(backend.scenario, backend=backend),
             perception_mode=RAW_FPV_ONLY_MODE,
-            map_mode=MINIMAL_MAP_MODE,
         )
         metric_map = contract.metric_map()
         waypoint = _first_public_waypoint(metric_map)
@@ -825,15 +826,26 @@ def _b1_camera_preview_provenance_errors(
     payload: dict[str, Any],
     candidate: dict[str, Any],
 ) -> list[str]:
-    errors: list[str] = []
-    waypoint_id = str(candidate.get("waypoint_id") or "").strip()
-    if not waypoint_id:
-        errors.append("missing_waypoint_id")
-    fpv_label = _b1_camera_label_from_view_path(candidate.get("fpv"))
-    chase_label = _b1_camera_label_from_view_path(candidate.get("chase"))
-    if fpv_label and chase_label and fpv_label != chase_label:
-        errors.append("mixed_fpv_chase_view_pair")
     source_kind = str(candidate.get("source_kind") or "")
+    errors = [
+        *_b1_camera_preview_candidate_shape_errors(candidate, source_kind=source_kind),
+        *_b1_camera_preview_alignment_errors(payload, candidate),
+    ]
+    if source_kind == "run_result_robot_view_step":
+        errors.extend(_b1_camera_preview_contract_errors(candidate.get("camera_control_contract")))
+    return errors
+
+
+def _b1_camera_preview_candidate_shape_errors(
+    candidate: dict[str, Any],
+    *,
+    source_kind: str,
+) -> list[str]:
+    errors = []
+    if not str(candidate.get("waypoint_id") or "").strip():
+        errors.append("missing_waypoint_id")
+    if _b1_camera_preview_view_pair_mixed(candidate):
+        errors.append("mixed_fpv_chase_view_pair")
     if source_kind not in {
         "run_result_robot_view_step",
         "navigation_smoke_waypoint_evidence",
@@ -841,39 +853,66 @@ def _b1_camera_preview_provenance_errors(
         errors.append("unsupported_camera_artifact_source")
     if candidate.get("robot_pose_applied") is not True:
         errors.append("robot_pose_not_applied")
-    alignment_artifact = candidate.get("alignment_artifact") or payload.get("alignment_artifact")
-    if not alignment_artifact:
-        errors.append("missing_alignment_artifact")
-    transform_source = candidate.get("alignment_transform_source") or payload.get(
-        "alignment_transform_source"
-    )
-    if str(transform_source or "") != "reviewed_correspondence_fit":
-        errors.append("missing_reviewed_correspondence_transform_source")
-    if source_kind == "run_result_robot_view_step":
-        camera_control_contract = candidate.get("camera_control_contract")
-        if not isinstance(camera_control_contract, dict):
-            errors.append("missing_camera_control_contract")
-        else:
-            agent_facing_fpv = camera_control_contract.get("agent_facing_fpv")
-            if not isinstance(agent_facing_fpv, dict):
-                errors.append("missing_agent_facing_fpv_contract")
-            else:
-                if not (
-                    agent_facing_fpv.get("robot_mounted") is True
-                    or agent_facing_fpv.get("head_camera_equivalent") is True
-                ):
-                    errors.append("fpv_not_robot_mounted_or_head_camera_equivalent")
-                fpv_source = str(agent_facing_fpv.get("source") or "")
-                if "scene_probe" in fpv_source or "bbox" in fpv_source:
-                    errors.append("fpv_source_not_robot_runtime")
-            report_chase = camera_control_contract.get("report_chase_view")
-            if not isinstance(report_chase, dict):
-                errors.append("missing_report_chase_contract")
-            else:
-                chase_source = str(report_chase.get("source") or "")
-                if "scene_probe" in chase_source or "bbox" in chase_source:
-                    errors.append("chase_source_not_robot_runtime")
     return errors
+
+
+def _b1_camera_preview_view_pair_mixed(candidate: dict[str, Any]) -> bool:
+    fpv_label = _b1_camera_label_from_view_path(candidate.get("fpv"))
+    chase_label = _b1_camera_label_from_view_path(candidate.get("chase"))
+    return bool(fpv_label and chase_label and fpv_label != chase_label)
+
+
+def _b1_camera_preview_alignment_errors(
+    payload: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[str]:
+    errors = []
+    if not (candidate.get("alignment_artifact") or payload.get("alignment_artifact")):
+        errors.append("missing_alignment_artifact")
+    transform_source = str(
+        candidate.get("alignment_transform_source")
+        or payload.get("alignment_transform_source")
+        or ""
+    )
+    if transform_source != "reviewed_correspondence_fit":
+        errors.append("missing_reviewed_correspondence_transform_source")
+    return errors
+
+
+def _b1_camera_preview_contract_errors(raw_contract: Any) -> list[str]:
+    if not isinstance(raw_contract, dict):
+        return ["missing_camera_control_contract"]
+    return [
+        *_b1_camera_preview_fpv_contract_errors(raw_contract.get("agent_facing_fpv")),
+        *_b1_camera_preview_chase_contract_errors(raw_contract.get("report_chase_view")),
+    ]
+
+
+def _b1_camera_preview_fpv_contract_errors(raw_fpv_contract: Any) -> list[str]:
+    if not isinstance(raw_fpv_contract, dict):
+        return ["missing_agent_facing_fpv_contract"]
+    errors = []
+    if not (
+        raw_fpv_contract.get("robot_mounted") is True
+        or raw_fpv_contract.get("head_camera_equivalent") is True
+    ):
+        errors.append("fpv_not_robot_mounted_or_head_camera_equivalent")
+    if _b1_camera_preview_forbidden_runtime_source(raw_fpv_contract.get("source")):
+        errors.append("fpv_source_not_robot_runtime")
+    return errors
+
+
+def _b1_camera_preview_chase_contract_errors(raw_chase_contract: Any) -> list[str]:
+    if not isinstance(raw_chase_contract, dict):
+        return ["missing_report_chase_contract"]
+    if _b1_camera_preview_forbidden_runtime_source(raw_chase_contract.get("source")):
+        return ["chase_source_not_robot_runtime"]
+    return []
+
+
+def _b1_camera_preview_forbidden_runtime_source(raw_source: Any) -> bool:
+    source = str(raw_source or "")
+    return "scene_probe" in source or "bbox" in source
 
 
 def _b1_camera_label_from_view_path(raw_path: Any) -> str:
@@ -896,7 +935,9 @@ def _static_navigation_preview(
     bundle = write_nav2_map_bundle_snapshot(
         run_dir=run_dir,
         metric_map=contract.metric_map(),
-        static_fixture_projection=contract.static_fixture_projection(),
+        static_landmarks=static_landmarks_from_fixture_projection(
+            contract.static_fixture_projection()
+        ),
     )
     preview_path = run_dir / str(
         (bundle.get("artifact_paths") or {}).get("preview_png") or "map_bundle/preview.png"
@@ -911,11 +952,14 @@ def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path |
         return None
     path = Path(str(raw_path))
     if path.is_absolute():
-        return path
-    candidate = artifact_path.parent / path
-    if candidate.exists():
-        return candidate
-    return path
+        return None
+    base_dir = artifact_path.parent.resolve()
+    resolved = (base_dir / path).resolve()
+    try:
+        resolved.relative_to(base_dir)
+    except ValueError:
+        return None
+    return resolved
 
 
 def _file_sha256(path: Path) -> str:

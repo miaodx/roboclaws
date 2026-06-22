@@ -584,7 +584,7 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
         "output/household/household-world/open-ended/codex-world-public-labels",
     ]
     assert "我渴了，帮我找些解渴的东西" in route
-    assert route[24:26] == ["household-world", "open-ended"]
+    assert route[23:25] == ["household-world", "open-ended"]
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" not in plan_trace
     assert not any(item.startswith("b1_alignment_artifact=") for item in plan_trace)
     assert not any(item.startswith("b1_navigation_artifact=") for item in plan_trace)
@@ -985,6 +985,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
         "output_dir=output/custom",
         "scene_source=procthor-10k-val",
         "scene_index=0",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
         "backend=molmospaces_subprocess",
         "generated_mess_count=5",
     )
@@ -1142,6 +1143,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert (
         "target=just agent::run household-world.cleanup codex-cli camera-grounded-labels "
         "camera_labeler=grounding-dino scene_source=procthor-10k-val scene_index=0 "
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0 "
         "backend=molmospaces_subprocess generated_mess_count=5"
     ) in plan_trace
 
@@ -1171,6 +1173,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         "world-public-labels",
         "scene_source=procthor-10k-val",
         "scene_index=0",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
         "backend=molmospaces_subprocess",
         "generated_mess_count=5",
     )
@@ -1311,7 +1314,7 @@ def test_agent_run_rejects_public_map_mode_override() -> None:
         "map_mode=minimal",
     )
 
-    assert "map_mode is no longer a public agent::run override" in stderr
+    assert "unsupported override key 'map_mode'" in stderr
 
 
 @pytest.mark.parametrize("dispatch_target", ("household-cleanup", "semantic-map-build"))
@@ -1401,7 +1404,7 @@ def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
     ]
     assert route[15] == "on"
     assert route[17] == "molmospaces_subprocess"
-    assert route[18] == "minimal"
+    assert route[18] == "procthor-10k-val"
     assert route[-1] == "map-build"
 
 
@@ -1437,12 +1440,12 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert route[10] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
-    assert route[21] == (
+    assert route[20] == (
         "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
-    assert route[24:26] == ["household-world", "open-ended"]
-    assert route[26] == ""
-    assert route[27] == "assets/maps/b1-map12-alignment-review.json"
+    assert route[23:25] == ["household-world", "open-ended"]
+    assert route[25] == ""
+    assert route[26] == "assets/maps/b1-map12-alignment-review.json"
     assert "world=b1-map12" in plan_trace
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
@@ -1474,9 +1477,9 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
     )
 
-    assert route[28] == "output/b1-map12/alignment/alignment_residuals.json"
-    assert route[29] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
-    assert route[30] == "output/b1-map12/semantic-projection/semantic_projection.json"
+    assert route[27] == "output/b1-map12/alignment/alignment_residuals.json"
+    assert route[28] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
+    assert route[29] == "output/b1-map12/semantic-projection/semantic_projection.json"
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
         target_trace
@@ -1650,7 +1653,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "1" in route
 
 
-def test_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
+def test_map_build_routes_agibot_molmospaces_sim_to_base_navigation_map_prehardware() -> None:
     route = trace_agent_run(
         "household-world.map-build",
         "direct-runner",
@@ -1776,9 +1779,11 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert 'map_bundle="auto"' in text
-    assert 'map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"' in text
+    assert 'python_bin" -m roboclaws.launch.map_bundles' in text
     assert "--map-bundle-dir" in text
     assert "--require-map-bundle" in text
+    assert "using backend-derived public metric map" not in text
+    assert "map_bundle=${map_bundle_dir} is not allowed" in text
 
 
 def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
@@ -1826,7 +1831,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "5",
         "127.0.0.1",
         "18788",
-        "auto",
+        "assets/maps/molmospaces/procthor-10k-val/0",
         "skill",
     ]
     assert route[12] == "off"

@@ -18,6 +18,7 @@ from roboclaws.household import (
     scene_camera_lighting_diagnostics,
     scene_camera_render_domain,
     scene_camera_report,
+    scene_camera_source_artifacts,
     scene_camera_usda_contract,
 )
 from roboclaws.household.artifact_paths import dimensions_from_shape, output_relpath
@@ -691,17 +692,19 @@ def _isaac_view_specs(
     scene_usd_path: Path,
     scene_index: int,
 ) -> list[dict[str, Any]]:
-    metadata = _load_scene_metadata(scene_usd_path)
-    local_scene_index = _load_local_isaac_scene_index(scene_usd_path)
+    metadata = scene_camera_source_artifacts.load_scene_metadata(scene_usd_path)
+    local_scene_index = scene_camera_source_artifacts.load_local_isaac_scene_index(scene_usd_path)
     specs = []
     for index, anchor in enumerate(anchors, start=1):
         raw = metadata.get(anchor["anchor_id"]) or {}
-        index_entry = _isaac_scene_index_entry(anchor["anchor_id"], local_scene_index)
+        index_entry = scene_camera_source_artifacts.isaac_scene_index_entry(
+            anchor["anchor_id"], local_scene_index
+        )
         usd_prim_path = (
             str(index_entry.get("usd_prim_path") or "") if isinstance(index_entry, dict) else ""
         )
         support_pose = index_entry.get("support_pose") if isinstance(index_entry, dict) else None
-        isaac_support_position = _support_pose_position(support_pose)
+        isaac_support_position = scene_camera_source_artifacts.support_pose_position(support_pose)
         if not usd_prim_path and raw:
             usd_prim_path = f"/val_{scene_index}/Geometry/{anchor['anchor_id']}"
         specs.append(
@@ -1795,19 +1798,6 @@ _isaac_view_render_contract = scene_camera_render_domain.isaac_view_render_contr
 _view_render_contract_delta = scene_camera_render_domain.view_render_contract_delta
 
 
-def _support_pose_position(value: Any) -> list[float] | None:
-    if not isinstance(value, dict):
-        return None
-    try:
-        return [
-            float(value["x"]),
-            float(value["y"]),
-            float(value.get("z", 0.0)),
-        ]
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
 def _eye_from_mujoco_orbit(
     *,
     target: list[float],
@@ -1858,51 +1848,6 @@ def _canonical_eye_from_room_context(
         ),
         "anchor_orbit_fallback",
     )
-
-
-def _load_scene_metadata(scene_usd_path: Path) -> dict[str, dict[str, Any]]:
-    metadata_path = scene_usd_path.parent / "scene_metadata.json"
-    if not metadata_path.is_file():
-        return {}
-    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    objects = payload.get("objects") if isinstance(payload, dict) else None
-    if not isinstance(objects, dict):
-        return {}
-    return {str(key): dict(value) for key, value in objects.items() if isinstance(value, dict)}
-
-
-def _load_local_isaac_scene_index(scene_usd_path: Path) -> dict[str, Any]:
-    """Load the newest nearby Isaac scene index for USD prim path hints.
-
-    Any support poses in this artifact are deliberately ignored by the camera
-    comparison; Isaac targets are resolved from USD prim world bounds instead.
-    """
-
-    root = scene_usd_path.parents[2] if len(scene_usd_path.parents) > 2 else Path("output/isaaclab")
-    candidates = sorted(
-        root.glob("cleanup-smoke/*/isaac_scene_index.json"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    for candidate in candidates:
-        try:
-            payload = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        if str(payload.get("scene_usd") or "") != str(scene_usd_path):
-            continue
-        return payload
-    return {}
-
-
-def _isaac_scene_index_entry(anchor_id: str, scene_index: dict[str, Any]) -> dict[str, Any]:
-    receptacles = scene_index.get("receptacle_index") if isinstance(scene_index, dict) else None
-    if not isinstance(receptacles, dict):
-        return {}
-    raw = receptacles.get(anchor_id)
-    return dict(raw) if isinstance(raw, dict) else {}
 
 
 def _image_entries(*, output_dir: Path, result: dict[str, Any]) -> dict[str, dict[str, Any]]:

@@ -311,14 +311,25 @@ def prepare_nurec_crop_max_z_scene_usd(
         raise ValueError("--nurec-crop-max-z must be finite")
     prepared_scene_usd = Path(prepared_scene_usd)
     prepared_text = prepared_scene_usd.read_text(encoding="utf-8")
-    default_ref = _required_usd_reference(prepared_text, "default.usda")
-    default_path = _resolve_usd_reference(default_ref, base_dir=prepared_scene_usd.parent)
-    gauss_path = default_path.with_name("gauss.usda")
-    nurec_path = default_path.with_name("xm_large_scene.nurec")
+    default_ref = _optional_usd_reference(prepared_text, "default.usda")
+    if default_ref:
+        default_path = _resolve_usd_reference(default_ref, base_dir=prepared_scene_usd.parent)
+        return_scene_as_default = False
+    else:
+        _required_usd_reference(prepared_text, "gauss.usda")
+        default_path = prepared_scene_usd
+        return_scene_as_default = True
     if not default_path.is_file():
         raise FileNotFoundError(f"NuRec default USD missing for explicit crop: {default_path}")
+
+    default_text = default_path.read_text(encoding="utf-8")
+    gauss_ref = _required_usd_reference(default_text, "gauss.usda")
+    gauss_path = _resolve_usd_reference(gauss_ref, base_dir=default_path.parent)
     if not gauss_path.is_file():
         raise FileNotFoundError(f"NuRec gauss USD missing for explicit crop: {gauss_path}")
+    gauss_text = gauss_path.read_text(encoding="utf-8")
+    nurec_ref = _required_nurec_reference(gauss_text)
+    nurec_path = _resolve_usd_reference(nurec_ref, base_dir=gauss_path.parent)
     if not nurec_path.is_file():
         raise FileNotFoundError(f"NuRec field asset missing for explicit crop: {nurec_path}")
 
@@ -328,31 +339,38 @@ def prepare_nurec_crop_max_z_scene_usd(
     cropped_scene = crop_dir / "scene_gs.cropped_nurec.usda"
     crop_dir.mkdir(parents=True, exist_ok=True)
 
-    default_text = default_path.read_text(encoding="utf-8")
-    gauss_text = gauss_path.read_text(encoding="utf-8")
     cropped_gauss_text, original_max_bounds = _replace_nurec_crop_max_z(
         gauss_text,
         crop_max_z=float(crop_max_z),
     )
     cropped_gauss_text = cropped_gauss_text.replace(
-        "@./xm_large_scene.nurec@",
+        f"@{nurec_ref}@",
         f"@{nurec_path.resolve().as_posix()}@",
     )
-    cropped_scene_text = prepared_text.replace(
-        f"@{default_ref}@",
-        f"@{cropped_default.resolve().as_posix()}@",
+    cropped_default_text = default_text.replace(
+        f"@{gauss_ref}@",
+        f"@{cropped_gauss.resolve().as_posix()}@",
     )
-    _write_if_changed(cropped_default, default_text)
+    if return_scene_as_default:
+        returned_scene = cropped_default
+    else:
+        returned_scene = cropped_scene
+        cropped_scene_text = prepared_text.replace(
+            f"@{default_ref}@",
+            f"@{cropped_default.resolve().as_posix()}@",
+        )
+        _write_if_changed(cropped_scene, cropped_scene_text)
+    _write_if_changed(cropped_default, cropped_default_text)
     _write_if_changed(cropped_gauss, cropped_gauss_text)
-    _write_if_changed(cropped_scene, cropped_scene_text)
-    return cropped_scene, {
+    return returned_scene, {
         "status": "applied",
         "source": "explicit_nurec_crop_max_z",
         "crop_max_z": round(float(crop_max_z), 9),
         "original_crop_max_bounds": original_max_bounds,
-        "cropped_scene_usd": str(cropped_scene),
+        "cropped_scene_usd": str(returned_scene),
         "cropped_default_usd": str(cropped_default),
         "cropped_gauss_usd": str(cropped_gauss),
+        "source_scene_usd": str(prepared_scene_usd),
         "source_default_usd": str(default_path),
         "source_gauss_usd": str(gauss_path),
         "source_nurec_asset": str(nurec_path),
@@ -360,10 +378,17 @@ def prepare_nurec_crop_max_z_scene_usd(
 
 
 def _required_usd_reference(text: str, filename: str) -> str:
+    ref = _optional_usd_reference(text, filename)
+    if not ref:
+        raise ValueError(f"required USD reference missing: {filename}")
+    return ref
+
+
+def _optional_usd_reference(text: str, filename: str) -> str:
     pattern = re.compile(rf"@([^@\n]*{re.escape(filename)})@")
     match = pattern.search(text)
     if not match:
-        raise ValueError(f"required USD reference missing: {filename}")
+        return ""
     return str(match.group(1))
 
 
@@ -372,6 +397,14 @@ def _resolve_usd_reference(reference: str, *, base_dir: Path) -> Path:
     if path.is_absolute():
         return path
     return base_dir / path
+
+
+def _required_nurec_reference(text: str) -> str:
+    pattern = re.compile(r"@([^@\n]*\.nurec)@")
+    match = pattern.search(text)
+    if not match:
+        raise ValueError("NuRec field asset reference missing; cannot apply explicit roof crop")
+    return str(match.group(1))
 
 
 def _replace_nurec_crop_max_z(
@@ -444,7 +477,7 @@ def _capture_scene(
 def _capture_one_scene_cli(args: argparse.Namespace) -> int:
     if args.camera_request is None or args.views_dir is None or args.result is None:
         raise ValueError("--capture-one-scene requires --camera-request, --views-dir, and --result")
-    request = json.loads(args.camera_request.read_text(encoding="utf-8"))
+    request = _read_json_object(args.camera_request, label="camera request")
     from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
 
     args.result.parent.mkdir(parents=True, exist_ok=True)
@@ -470,6 +503,18 @@ def _capture_one_scene_cli(args: argparse.Namespace) -> int:
         raise
     args.result.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return 0
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def pixel_to_scene_xyz_transform(

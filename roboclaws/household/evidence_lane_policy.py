@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from roboclaws.agents.provider_registry import (
     MODEL_CAP_IMAGE_INPUT,
     ROUTE_CAP_SUPPORTED,
-    maybe_resolve_model,
     provider_route_spec,
+    resolve_route_model,
 )
 
 CAMERA_RAW_FPV_LANE = "camera-raw-fpv"
@@ -76,8 +76,8 @@ def evidence_lane_compatibility(
 
     route = provider_route_spec(provider_profile)
     resolved_model_id = model_id or route.default_model_id
-    model = maybe_resolve_model(resolved_model_id)
-    if model is not None and MODEL_CAP_IMAGE_INPUT not in model.model_capabilities:
+    model = resolve_route_model(route.public_profile, resolved_model_id)
+    if MODEL_CAP_IMAGE_INPUT not in model.model_capabilities:
         return EvidenceLaneCompatibility(
             allowed=False,
             requirement=requirement,

@@ -11,7 +11,10 @@ from roboclaws.operator_console.interactions import (
     append_steer_message,
     attach_run_to_session,
     check_operator_messages_for_mcp,
+    get_operator_session,
     list_operator_messages,
+    operator_message_state,
+    pending_operator_message_hint,
 )
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
@@ -85,6 +88,91 @@ def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Pat
     assert not (run_dir / "continue_queue.jsonl").exists()
 
 
+def test_steer_rejects_malformed_operator_state_source_without_writing_message(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator state source contains invalid JSON"):
+        append_steer_message(tmp_path, "run-a", "Observe the desk again")
+
+    assert state_path.read_text(encoding="utf-8") == "{not-json"
+    assert not (run_dir / "operator_messages.jsonl").exists()
+
+
+def test_next_goal_rejects_non_object_operator_state_source_without_writing_queue(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator state source must be a JSON object"):
+        append_next_goal_request(tmp_path, "run-a", "Run the next sweep")
+
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert not (run_dir / "operator_messages.jsonl").exists()
+    assert not (run_dir / "next_goal_queue.jsonl").exists()
+
+
+def test_list_messages_preserves_passive_malformed_operator_state_summary(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    messages = list_operator_messages(tmp_path, "run-a")
+    state = operator_message_state(tmp_path, run_dir)
+
+    assert messages["operator_session_id"] == ""
+    assert messages["messages"] == []
+    assert messages["source_error"] is False
+    assert state["operator_session_id"] == ""
+    assert state["source_error"] is False
+
+
+def test_get_operator_session_rejects_malformed_session_source(tmp_path: Path) -> None:
+    session = attach_run_to_session(tmp_path, "run-a")
+    session_id = session["operator_session_id"]
+    session_path = console_output_root(tmp_path) / "sessions" / f"{session_id}.json"
+    session_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator session source contains invalid JSON"):
+        get_operator_session(tmp_path, session_id)
+
+    assert session_path.read_text(encoding="utf-8") == "{not-json"
+
+
+def test_steer_rejects_non_object_session_source_without_writing_message(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    state = json.loads((run_dir / "operator_state.json").read_text(encoding="utf-8"))
+    session_id = state["operator_session_id"]
+    session_path = console_output_root(tmp_path) / "sessions" / f"{session_id}.json"
+    session_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator session source must be a JSON object"):
+        append_steer_message(tmp_path, "run-a", "Observe the desk again")
+
+    assert session_path.read_text(encoding="utf-8") == "[]\n"
+    assert not (run_dir / "operator_messages.jsonl").exists()
+
+
+def test_get_operator_session_rejects_session_id_mismatch(tmp_path: Path) -> None:
+    session = attach_run_to_session(tmp_path, "run-a")
+    session_id = session["operator_session_id"]
+    session_path = console_output_root(tmp_path) / "sessions" / f"{session_id}.json"
+    session["operator_session_id"] = "session-other"
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator session source id mismatch"):
+        get_operator_session(tmp_path, session_id)
+
+
 def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 
@@ -135,3 +223,41 @@ def test_active_steer_is_seen_only_by_check_operator_messages(tmp_path: Path) ->
     assert seen["messages"][0]["body"] == "Observe the desk again"
     assert after["operator_message_pending"] is False
     assert after["messages"][0]["status"] == "seen"
+
+
+def test_operator_message_state_surfaces_malformed_source_errors(tmp_path: Path) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    (run_dir / "operator_messages.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
+
+    messages = list_operator_messages(tmp_path, "run-a")
+    state = operator_message_state(tmp_path, run_dir)
+    seen = check_operator_messages_for_mcp(run_dir)
+    hint = pending_operator_message_hint(run_dir)
+
+    assert messages["source_error"] is True
+    assert messages["source_errors"][0]["line"] == 2
+    assert "invalid JSON" in messages["source_errors"][0]["message"]
+    assert messages["operator_message_pending"] is False
+    assert state["source_error"] is True
+    assert state["pending_steer_count"] == 0
+    assert seen["ok"] is False
+    assert seen["status"] == "source_error"
+    assert seen["error_reason"] == "operator_message_source_error"
+    assert "operator_messages.jsonl" in seen["source_errors"][0]["path"]
+    assert hint["operator_message_source_error"] is True
+    assert (run_dir / "operator_messages.jsonl").read_text(encoding="utf-8") == "\n{not-json}\n"
+
+
+def test_operator_message_state_surfaces_non_object_source_errors(tmp_path: Path) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    (run_dir / "operator_messages.jsonl").write_text("[]\n", encoding="utf-8")
+
+    messages = list_operator_messages(tmp_path, "run-a")
+    seen = check_operator_messages_for_mcp(run_dir)
+
+    assert messages["source_error"] is True
+    assert messages["source_errors"][0]["line"] == 1
+    assert messages["source_errors"][0]["message"] == "row must be a JSON object"
+    assert messages["messages"] == []
+    assert seen["ok"] is False
+    assert seen["message_count"] == 0

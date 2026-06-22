@@ -351,6 +351,70 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     ]
 
 
+def test_agent_sdk_perf_matrix_blocks_malformed_candidate_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70)
+    (candidate / "trace.jsonl").write_text(
+        json.dumps(_trace_response("observe")) + "\n{not-json}\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path, baseline=baseline, candidate=candidate)
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "run source error" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "blocked"
+    assert row["quality_comparison"] == {}
+    assert row["speed_comparison"] == {}
+    assert row["reducible_bucket_report"] == {"available": False, "recommendations": []}
+    assert any("trace.jsonl" in reason and "line 2" in reason for reason in row["reasons"])
+
+
+def test_agent_sdk_perf_matrix_blocks_non_object_candidate_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70)
+    (candidate / "trace.jsonl").write_text('["not", "an", "object"]\n', encoding="utf-8")
+    manifest = _write_manifest(tmp_path, baseline=baseline, candidate=candidate)
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "run source error" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "blocked"
+    assert any("trace.jsonl" in reason and "expected object" in reason for reason in row["reasons"])
+
+
 def test_agent_sdk_perf_matrix_uses_row_calibration_for_normalized_deltas(
     tmp_path: Path,
 ) -> None:
