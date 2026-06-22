@@ -13,9 +13,7 @@ from roboclaws.maps.bundle import (
     RUNTIME_COSTMAP_GAPS,
     copy_nav2_map_bundle_snapshot,
     metric_map_bundle_metadata,
-    static_landmarks_from_fixture_projection,
-    validate_nav2_map_bundle,
-    write_nav2_map_bundle_snapshot,
+    validate_base_navigation_map_v1_bundle,
 )
 
 DEFAULT_MAP_ASSET_ROOT = Path("assets") / "maps"
@@ -42,9 +40,12 @@ def selected_nav2_map_bundle_dir(
     if not raw.is_absolute() and len(raw.parts) == 1:
         candidates.append(asset_root / raw)
     bundle_dir = next((candidate for candidate in candidates if candidate.exists()), candidates[-1])
-    validation = validate_nav2_map_bundle(bundle_dir)
+    validation = validate_base_navigation_map_v1_bundle(bundle_dir)
     if not validation.ok:
-        raise ValueError(f"invalid Nav2 map bundle {bundle_dir}: {'; '.join(validation.errors)}")
+        raise ValueError(
+            f"invalid Base Navigation Map v1 bundle {bundle_dir}: "
+            f"{'; '.join(validation.errors)}"
+        )
     return bundle_dir
 
 
@@ -55,28 +56,15 @@ def attach_nav2_map_bundle_snapshot(
     source_bundle_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Write a run-local Nav2-shaped map bundle and attach evidence to ``run_result``."""
-    if source_bundle_dir is not None:
-        snapshot = copy_nav2_map_bundle_snapshot(
-            source_bundle_dir=Path(source_bundle_dir),
-            run_dir=run_dir,
+    if source_bundle_dir is None:
+        raise ValueError(
+            "source_bundle_dir is required to attach a product Nav2 map bundle snapshot; "
+            "select or generate a canonical Base Navigation Map bundle before launch"
         )
-    else:
-        agent_view = (
-            run_result.get("agent_view") if isinstance(run_result.get("agent_view"), dict) else {}
-        )
-        metric_map = (
-            agent_view.get("metric_map") if isinstance(agent_view.get("metric_map"), dict) else {}
-        )
-        static_fixture_projection = (
-            agent_view.get("static_fixture_projection")
-            if isinstance(agent_view.get("static_fixture_projection"), dict)
-            else {}
-        )
-        snapshot = write_nav2_map_bundle_snapshot(
-            run_dir=run_dir,
-            metric_map=metric_map,
-            static_landmarks=static_landmarks_from_fixture_projection(static_fixture_projection),
-        )
+    snapshot = copy_nav2_map_bundle_snapshot(
+        source_bundle_dir=Path(source_bundle_dir),
+        run_dir=run_dir,
+    )
     run_result["nav2_map_bundle"] = snapshot
     artifacts = run_result.setdefault("artifacts", {})
     artifacts["map_bundle"] = str(run_dir / "map_bundle")
@@ -107,5 +95,4 @@ __all__ = [
     "attach_nav2_map_bundle_snapshot",
     "metric_map_bundle_metadata",
     "selected_nav2_map_bundle_dir",
-    "write_nav2_map_bundle_snapshot",
 ]

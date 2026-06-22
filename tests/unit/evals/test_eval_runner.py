@@ -54,6 +54,80 @@ def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
     assert "Scene Sampler Projection" not in report_html
 
 
+def test_cleanup_outcome_accepts_semantic_success_when_exact_private_goal_is_partial(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="partial_success")
+        result = _run_result(run_dir, completion_status="partial_success")
+        result["score"]["mess_restoration_rate"] = 0.4
+        result["score"]["semantic_acceptability"] = {
+            "status": "success",
+            "accepted_count": 5,
+            "total_targets": 5,
+            "accepted_levels": ["acceptable", "preferred"],
+            "counts": {
+                "acceptable": 1,
+                "preferred": 4,
+                "questionable": 0,
+                "unknown": 0,
+                "wrong": 0,
+            },
+            "wrong_object_ids": [],
+            "unknown_object_ids": [],
+            "questionable_object_ids": [],
+        }
+        return result
+
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="semantic-partial-success",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    assert result["status"] == "passed"
+    assert result["failure_class"] == "not_applicable"
+    outcome = result["grader_outputs"]["outcome"]
+    assert outcome["completion_status"] == "partial_success"
+    assert outcome["semantic_completion_status"] == "success"
+    assert outcome["semantic_acceptability"]["accepted_count"] == 5
+
+
+def test_cleanup_outcome_rejects_partial_exact_goal_without_semantic_success(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="partial_success")
+        result = _run_result(run_dir, completion_status="partial_success")
+        result["score"]["mess_restoration_rate"] = 0.4
+        result["score"]["semantic_acceptability"] = {
+            "status": "partial_success",
+            "accepted_count": 2,
+            "total_targets": 5,
+        }
+        return result
+
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="semantic-partial-failure",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "private_goal_not_satisfied"
+    outcome = result["grader_outputs"]["outcome"]
+    assert outcome["completion_status"] == "partial_success"
+    assert outcome["semantic_completion_status"] == "partial_success"
+
+
 def test_eval_runner_classifies_missing_product_artifacts(tmp_path: Path) -> None:
     run = run_eval_suite(
         "smoke_regression",
@@ -90,10 +164,9 @@ def test_focused_eval_passes_real_molmospaces_map_bundle_to_product_runner(
     assert captured_kwargs["backend"] == "molmospaces_subprocess"
     assert captured_kwargs["evidence_lane"] == "world-public-labels"
     assert captured_kwargs["map_bundle_dir"] == "assets/maps/molmospaces/procthor-10k-val/0"
-    assert captured_kwargs["require_map_bundle"] is True
 
 
-def test_smoke_eval_keeps_synthetic_backend_without_map_bundle(
+def test_smoke_eval_uses_canonical_map_bundle(
     tmp_path: Path,
 ) -> None:
     captured_kwargs: dict[str, Any] = {}
@@ -111,8 +184,7 @@ def test_smoke_eval_keeps_synthetic_backend_without_map_bundle(
 
     assert captured_kwargs["backend"] == "api_semantic_synthetic"
     assert captured_kwargs["evidence_lane"] == "smoke"
-    assert "map_bundle_dir" not in captured_kwargs
-    assert "require_map_bundle" not in captured_kwargs
+    assert captured_kwargs["map_bundle_dir"] == "assets/maps/molmospaces/procthor-10k-val/0"
 
 
 @pytest.mark.parametrize(
@@ -1068,9 +1140,9 @@ def test_open_ended_positive_predicates_pass_with_public_runtime_evidence(
         "success_predicate"
     ]
     assert room_predicate["passed"] is True
-    assert room_predicate["evidence"]["anchor_id"] == "anchor_waypoint_generated_exploration_005"
+    assert room_predicate["evidence"]["anchor_id"] == "anchor_waypoint_room_6_inspection"
     assert living_predicate["passed"] is True
-    assert "generated_exploration_005" in living_predicate["evidence"]["visited_waypoint_ids"]
+    assert "room_6_inspection" in living_predicate["evidence"]["visited_waypoint_ids"]
 
 
 def test_open_ended_authoritative_predicate_failure_is_behavior_failure(
@@ -1221,7 +1293,7 @@ def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_ancho
                         '{"event": "response", "tool": "resolve_target_query"}',
                         (
                             '{"event": "request", "tool": "navigate_to_waypoint", '
-                            '"request": {"waypoint_id": "generated_exploration_005"}}'
+                            '"request": {"waypoint_id": "room_6_inspection"}}'
                         ),
                         '{"event": "response", "tool": "navigate_to_waypoint"}',
                         '{"event": "request", "tool": "observe"}',
@@ -1240,7 +1312,7 @@ def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_ancho
                         '{"event": "response", "tool": "metric_map"}',
                         (
                             '{"event": "request", "tool": "navigate_to_waypoint", '
-                            '"request": {"waypoint_id": "generated_exploration_005"}}'
+                            '"request": {"waypoint_id": "room_6_inspection"}}'
                         ),
                         '{"event": "response", "tool": "navigate_to_waypoint"}',
                         '{"event": "request", "tool": "done"}',
@@ -2540,14 +2612,14 @@ def _write_product_artifacts(
                     "anchor_id": "anchor_room_living_area",
                     "anchor_type": "room_area",
                     "room_id": "living_area",
-                    "waypoint_id": "generated_exploration_005",
+                    "waypoint_id": "room_6_inspection",
                     "evidence": {"visited": True},
                 },
                 {
-                    "anchor_id": "anchor_waypoint_generated_exploration_005",
+                    "anchor_id": "anchor_waypoint_room_6_inspection",
                     "anchor_type": "observation_waypoint",
                     "room_id": "room_4",
-                    "waypoint_id": "generated_exploration_005",
+                    "waypoint_id": "room_6_inspection",
                     "evidence": {"visited": True},
                 },
             ]
@@ -2560,7 +2632,7 @@ def _write_product_artifacts(
                     "visited": True,
                 },
                 {
-                    "waypoint_id": "generated_exploration_005",
+                    "waypoint_id": "room_6_inspection",
                     "room_id": "room_4",
                     "visited": True,
                 },
@@ -2570,12 +2642,12 @@ def _write_product_artifacts(
             "viewpoint_budget": {
                 "observed_waypoint_ids": [
                     "generated_exploration_003",
-                    "generated_exploration_005",
+                    "room_6_inspection",
                 ],
             },
             "inspection_observations": [
                 {"room_id": "kitchen", "waypoint_id": "generated_exploration_003"},
-                {"room_id": "room_4", "waypoint_id": "generated_exploration_005"},
+                {"room_id": "room_4", "waypoint_id": "room_6_inspection"},
             ],
         }
     (run_dir / "runtime_metric_map.json").write_text(
@@ -2602,7 +2674,7 @@ def _write_product_artifacts(
                 '{"event": "response", "tool": "metric_map"}',
                 (
                     '{"event": "request", "tool": "navigate_to_waypoint", '
-                    '"request": {"waypoint_id": "generated_exploration_005"}}'
+                    '"request": {"waypoint_id": "room_6_inspection"}}'
                 ),
                 '{"event": "response", "tool": "done"}',
             ]

@@ -378,6 +378,7 @@ def simulated_declaration_inputs_for_waypoint(
             contract,
             detection,
             contract.static_fixture_projection(),
+            include_runtime_backend_fixtures=True,
         )
         target_fixture_id = str((target or {}).get("fixture_id") or location_id)
         inputs.append(
@@ -539,6 +540,7 @@ def _resolved_destination_fixture_id(
         contract,
         pseudo_detection,
         contract.static_fixture_projection(),
+        include_runtime_backend_fixtures=True,
     )
     return str((target or {}).get("fixture_id") or "")
 

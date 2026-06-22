@@ -81,7 +81,12 @@ def validate_nav2_map_bundle_payload(
         errors,
     )
     rooms, landmarks, waypoints, driveable = _validate_semantics_contract(semantics, errors)
-    waypoint_by_id = _validate_inspection_waypoints(waypoints, grid, errors)
+    waypoint_by_id = _validate_inspection_waypoints(
+        waypoints,
+        grid,
+        map_frame_id=_semantics_map_frame_id(semantics),
+        errors=errors,
+    )
     _validate_landmark_waypoint_references(landmarks, waypoint_by_id, errors)
     errors.extend(
         _validate_declared_routes(semantics, grid=grid, default_resolution_m=default_resolution_m)
@@ -267,13 +272,34 @@ def _validate_semantics_contract(
     if not isinstance(semantics.get("frame_ids"), dict) or not semantics["frame_ids"].get("map"):
         errors.append("semantics.json must contain frame_ids.map")
     require_source_frame_spatial_contract(semantics, errors)
+    map_frame_id = _semantics_map_frame_id(semantics)
     for index, room in enumerate(rooms):
         if isinstance(room, dict):
             validate_spatial_room_contract(room, index=index, errors=errors)
+            _validate_room_source_frame(room, index=index, map_frame_id=map_frame_id, errors=errors)
         else:
             errors.append(f"semantics.json rooms[{index}] must be an object")
     _validate_semantics_provenance(semantics, errors)
     return rooms, landmarks, waypoints, driveable
+
+
+def _semantics_map_frame_id(semantics: dict[str, Any]) -> str:
+    frame_ids = semantics.get("frame_ids") if isinstance(semantics.get("frame_ids"), dict) else {}
+    return str(frame_ids.get("map") or "")
+
+
+def _validate_room_source_frame(
+    room: dict[str, Any],
+    *,
+    index: int,
+    map_frame_id: str,
+    errors: list[str],
+) -> None:
+    source_map_frame_id = str(room.get("source_map_frame_id") or "")
+    if not source_map_frame_id or not map_frame_id or source_map_frame_id == map_frame_id:
+        return
+    room_id = str(room.get("room_id") or f"rooms[{index}]")
+    errors.append(f"room source_map_frame_id must match semantics.json frame_ids.map: {room_id}")
 
 
 def _validate_generated_waypoints(waypoints: list[Any], errors: list[str]) -> None:
@@ -579,6 +605,8 @@ def _validate_semantics_provenance(semantics: dict[str, Any], errors: list[str])
 def _validate_inspection_waypoints(
     waypoints: list[Any],
     grid: Any | None,
+    *,
+    map_frame_id: str,
     errors: list[str],
 ) -> dict[str, Any]:
     waypoint_by_id = {str(item.get("waypoint_id") or ""): item for item in waypoints}
@@ -589,6 +617,12 @@ def _validate_inspection_waypoints(
         if not waypoint_id:
             errors.append("inspection waypoint missing waypoint_id")
             continue
+        waypoint_frame_id = str(waypoint.get("frame_id") or "")
+        if waypoint_frame_id and map_frame_id and waypoint_frame_id != map_frame_id:
+            errors.append(
+                "inspection waypoint frame_id must match semantics.json frame_ids.map: "
+                f"{waypoint_id}"
+            )
         if not grid.is_free_world(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))):
             errors.append(f"inspection waypoint is not on free costmap cell: {waypoint_id}")
     return waypoint_by_id

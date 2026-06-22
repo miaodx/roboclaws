@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import (
@@ -21,21 +20,19 @@ from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
-PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _repo_python() -> str:
-    python_path = Path(os.environ.get("ROBOCLAWS_PYTHON") or REPO_ROOT / ".venv" / "bin" / "python")
+    python_path = REPO_ROOT / ".venv" / "bin" / "python"
     assert python_path.is_file(), f"repo Python missing: {python_path}; run uv sync --extra dev"
     return str(python_path)
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
     agent_view = _agent_view()
-    bundle_dir = tmp_path / "molmo-cleanup-default-7"
+    bundle_dir = tmp_path / "base-navigation-map-bundle"
 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
@@ -107,24 +104,14 @@ def test_base_navigation_map_v1_validation_accepts_b1_bundle(tmp_path: Path) -> 
     assert validation.metadata["waypoint_count"] == 5
 
 
-def test_base_navigation_map_v1_validation_reports_current_molmospaces_gaps() -> None:
+def test_base_navigation_map_v1_validation_accepts_canonical_molmospaces_bundle() -> None:
     validation = validate_base_navigation_map_v1_bundle(CANONICAL_SCENE_BUNDLE)
 
-    assert validation.ok is False
-    errors = "\n".join(validation.errors)
-    assert (
-        "semantics.json must contain base_navigation_map_contract.schema=base_navigation_map_v1"
-        in errors
-    )
-    assert "Base Navigation Map v1 must not contain static_landmarks" in errors
-    assert "semantic category 'room_area'" in errors
-    assert "Base Navigation Map waypoint generated_exploration_001 missing navigation_area_id" in (
-        errors
-    )
-    assert "Base Navigation Map waypoint generated_exploration_001 missing generation_policy" in (
-        errors
-    )
-    assert validation.metadata["base_navigation_map_v1_ready"] is False
+    assert validation.ok, validation.as_dict()
+    assert validation.metadata["base_navigation_map_schema"] == "base_navigation_map_v1"
+    assert validation.metadata["base_navigation_map_v1_ready"] is True
+    assert validation.metadata["static_landmark_count"] == 0
+    assert validation.metadata["waypoint_count"] > 0
 
 
 @pytest.mark.parametrize(
@@ -256,172 +243,84 @@ def test_nav2_projection_rejects_malformed_semantics(tmp_path: Path) -> None:
         static_landmarks_from_bundle(bundle_dir)
 
 
-def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
-    exporter = _load_module(EXPORTER_PATH, "export_bundle")
-    checker = _load_module(CHECKER_PATH, "check_bundle")
-    agent_view_path = tmp_path / "agent_view.json"
-    bundle_dir = tmp_path / "exported"
-    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
-
-    exporter.main(["--agent-view", str(agent_view_path), "--output-dir", str(bundle_dir)])
-    checker.main([str(bundle_dir)])
-
-    assert (bundle_dir / "map.yaml").is_file()
-    assert (bundle_dir / "semantics.json").is_file()
-
-
-def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> None:
-    exporter = _load_module(EXPORTER_PATH, "export_bundle")
-    checker = _load_module(CHECKER_PATH, "check_bundle")
-    agent_view_path = tmp_path / "agent_view.json"
-    asset_root = tmp_path / "assets" / "maps"
-    bundle_dir = asset_root / "molmospaces" / "procthor-objaverse-val" / "10"
-    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
-
-    exporter.main(
-        [
-            "--agent-view",
-            str(agent_view_path),
-            "--molmospaces-scene-source",
-            "procthor-objaverse-val",
-            "--molmospaces-scene-index",
-            "10",
-            "--map-asset-root",
-            str(asset_root),
-        ]
+def test_nav2_projection_preserves_declared_map_frame(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
     )
-    checker.main([str(bundle_dir)])
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    for room in semantics["rooms"]:
+        room["source_map_frame_id"] = "operator_map"
+    for waypoint in semantics["inspection_waypoints"]:
+        waypoint.pop("frame_id", None)
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
-    assert (bundle_dir / "map.yaml").is_file()
-    assert (bundle_dir / "semantics.json").is_file()
+    projected_map = metric_map_from_bundle(bundle_dir)
+
+    assert projected_map["frame_id"] == "operator_map"
+    assert projected_map["robot_pose"]["frame_id"] == "operator_map"
+    assert {room["source_map_frame_id"] for room in projected_map["rooms"]} == {"operator_map"}
+    assert {waypoint["frame_id"] for waypoint in projected_map["inspection_waypoints"]} == {
+        "operator_map"
+    }
 
 
-def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: Path) -> None:
-    agent_view_path = tmp_path / "agent_view.json"
-    agent_view_path.write_text("{", encoding="utf-8")
+def test_nav2_validation_rejects_room_source_frame_drift(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    room_id = semantics["rooms"][0]["room_id"]
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert any(
+        f"room source_map_frame_id must match semantics.json frame_ids.map: {room_id}" in error
+        for error in validation.errors
     )
 
-    assert result.returncode == 1
-    assert "agent view source must contain valid JSON object" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
 
-
-def test_exporter_cli_reports_non_object_agent_view_source_without_traceback(
-    tmp_path: Path,
-) -> None:
-    agent_view_path = tmp_path / "agent_view.json"
-    agent_view_path.write_text('["not", "an", "agent_view"]', encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
+def test_nav2_validation_rejects_waypoint_frame_drift(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
     )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["frame_ids"]["map"] = "operator_map"
+    semantics["spatial_contract"]["source_map_frame"]["frame_id"] = "operator_map"
+    for room in semantics["rooms"]:
+        room["source_map_frame_id"] = "operator_map"
+    semantics["inspection_waypoints"][0]["frame_id"] = "map"
+    waypoint_id = semantics["inspection_waypoints"][0]["waypoint_id"]
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
-    assert result.returncode == 1
-    assert "agent view source must contain a JSON object" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
+    validation = validate_nav2_map_bundle(bundle_dir)
 
-
-def test_exporter_cli_reports_missing_agent_view_without_traceback(tmp_path: Path) -> None:
-    agent_view_path = tmp_path / "missing_agent_view.json"
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--agent-view",
-            str(agent_view_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
+    assert validation.ok is False
+    assert any(
+        f"inspection waypoint frame_id must match semantics.json frame_ids.map: {waypoint_id}"
+        in error
+        for error in validation.errors
     )
-
-    assert result.returncode == 1
-    assert "agent view source is missing" in result.stderr
-    assert str(agent_view_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
-
-
-def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: Path) -> None:
-    run_result_path = tmp_path / "run_result.json"
-    run_result_path.write_text('["not", "a", "run_result"]', encoding="utf-8")
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--run-result",
-            str(run_result_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "run result source must contain a JSON object" in result.stderr
-    assert str(run_result_path) in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_exporter_cli_reports_missing_run_result_without_traceback(tmp_path: Path) -> None:
-    run_result_path = tmp_path / "missing_run_result.json"
-
-    result = subprocess.run(
-        [
-            _repo_python(),
-            str(EXPORTER_PATH),
-            "--run-result",
-            str(run_result_path),
-            "--output-dir",
-            str(tmp_path / "exported"),
-        ],
-        cwd=REPO_ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "run result source is missing" in result.stderr
-    assert str(run_result_path) in result.stderr
-    assert "Traceback" not in result.stderr
-    assert not (tmp_path / "exported").exists()
 
 
 def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) -> None:
@@ -437,7 +336,7 @@ def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) ->
     )
 
     assert result.returncode == 1
-    assert "nav2-map-bundle invalid" in result.stderr
+    assert "base-navigation-map-v1-bundle invalid" in result.stderr
     assert "missing required artifact: map.yaml" in result.stderr
     assert "Traceback" not in result.stderr
 
@@ -532,6 +431,16 @@ def test_nav2_bundle_writer_rejects_missing_metric_map_height(tmp_path: Path) ->
         )
 
 
+def test_attach_nav2_bundle_snapshot_refuses_agent_view_authoring(tmp_path: Path) -> None:
+    run_result = {"agent_view": _agent_view(), "artifacts": {}}
+
+    with pytest.raises(ValueError, match="source_bundle_dir is required"):
+        attach_nav2_map_bundle_snapshot(run_result=run_result, run_dir=tmp_path)
+
+    assert "nav2_map_bundle" not in run_result
+    assert not (tmp_path / "map_bundle").exists()
+
+
 def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -564,17 +473,17 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
-def test_realworld_contract_observes_objects_from_selected_prebuilt_bundle() -> None:
+def test_realworld_contract_observes_objects_from_selected_base_navigation_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_bundle_dir=PREBUILT_BUNDLE,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     observation = _first_non_empty_observation(contract)
     metric_map = contract.metric_map()
-    semantics = json.loads((PREBUILT_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+    semantics = json.loads((CANONICAL_SCENE_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
 
-    assert semantics["static_landmarks"]
+    assert semantics["static_landmarks"] == []
     assert observation["visible_object_detections"]
     assert metric_map["runtime_metric_map"]["observed_objects"]
 
@@ -582,7 +491,7 @@ def test_realworld_contract_observes_objects_from_selected_prebuilt_bundle() -> 
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     return {
         "metric_map": contract.metric_map(),
@@ -619,15 +528,6 @@ def _b1_base_navigation_bundle(tmp_path: Path) -> Path:
         output_dir=output_dir,
     )
     return output_dir
-
-
-def _load_module(path: Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
 
 
 def _wide_room_only_agent_view() -> dict:

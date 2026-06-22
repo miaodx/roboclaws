@@ -41,7 +41,7 @@ def metric_map_from_bundle(
     )
     map_id = str(semantics.get("map_id") or bundle_dir.name)
     map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
-    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
+    frame_id = _source_map_frame_id(semantics)
     rooms = normalize_spatial_rooms(
         semantics.get("rooms") or [],
         frame_id=frame_id,
@@ -52,17 +52,17 @@ def metric_map_from_bundle(
     waypoints = []
     for item in semantics.get("inspection_waypoints") or []:
         waypoint = dict(item)
-        waypoint.setdefault("frame_id", (semantics.get("frame_ids") or {}).get("map", "map"))
+        waypoint.setdefault("frame_id", frame_id)
         waypoint["visited"] = False
         waypoints.append(waypoint)
     robot_pose = (
         {
-            "frame_id": "map",
+            "frame_id": frame_id,
             **_waypoint_pose(waypoints[0]),
             "waypoint_id": waypoints[0]["waypoint_id"],
         }
         if waypoints
-        else {"frame_id": "map", "x": 0.0, "y": 0.0, "yaw": 0.0, "waypoint_id": ""}
+        else {"frame_id": frame_id, "x": 0.0, "y": 0.0, "yaw": 0.0, "waypoint_id": ""}
     )
     return {
         "ok": True,
@@ -115,6 +115,11 @@ def _waypoint_pose(waypoint: dict[str, Any]) -> dict[str, float]:
         "y": float(waypoint.get("y", 0.0)),
         "yaw": float(waypoint.get("yaw", 0.0)),
     }
+
+
+def _source_map_frame_id(semantics: dict[str, Any]) -> str:
+    frame_ids = semantics.get("frame_ids") if isinstance(semantics.get("frame_ids"), dict) else {}
+    return str(frame_ids.get("map") or "map")
 
 
 def _validate_projection_source_bundle(bundle_dir: Path) -> None:

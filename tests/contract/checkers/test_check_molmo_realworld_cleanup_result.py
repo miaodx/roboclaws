@@ -36,6 +36,7 @@ B1_MAP12_BUNDLE = (
 )
 B1_ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 B1_BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -53,7 +54,7 @@ def _load_module(path: Path, name: str):
         run_realworld_cleanup = module.run_realworld_cleanup
 
         def run_synthetic_realworld_cleanup(**kwargs):
-            kwargs.setdefault("allow_synthetic_map_projection", True)
+            kwargs.setdefault("map_bundle_dir", PREBUILT_BUNDLE)
             return run_realworld_cleanup(**kwargs)
 
         module.run_realworld_cleanup = run_synthetic_realworld_cleanup
@@ -61,7 +62,7 @@ def _load_module(path: Path, name: str):
         run_smoke = module.run_smoke
 
         def run_synthetic_smoke(**kwargs):
-            kwargs.setdefault("allow_synthetic_map_projection", True)
+            kwargs.setdefault("map_bundle_dir", PREBUILT_BUNDLE)
             return run_smoke(**kwargs)
 
         module.run_smoke = run_synthetic_smoke
@@ -2858,6 +2859,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
     report = (cleanup_dir / "report.html").read_text(encoding="utf-8")
     assert "Attached Planner-Backed Proofs" in report
     assert "proof_001 Planner Initial" in report
+    bound_probe = _first_seed7_binding_requiring_tool(anchor_probe, "place_inside")
     checker._assert_result(
         result,
         cleanup_dir,
@@ -2867,7 +2869,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         require_planner_proof_attachment=True,
         require_planner_backed_cleanup_primitives=True,
         require_bound_planner_cleanup_objects=[
-            f"observed_006:{_candidate_fixture_id_for_object(anchor_probe, 'observed_006')}"
+            f"{bound_probe['object_id']}:{bound_probe['target_receptacle_id']}"
         ],
         require_planner_cleanup_bridge_ready=True,
     )
@@ -3512,6 +3514,34 @@ def test_checker_allows_weak_fpv_when_verify_view_is_grounded(tmp_path: Path) ->
         require_agent_driven=True,
         require_openclaw_minimum=True,
         require_robot_views=True,
+    )
+
+
+def test_checker_allows_weak_place_view_when_surface_evidence_is_grounded(
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    checker._assert_focused_robot_step(
+        {
+            "action": "place observed_001",
+            "semantic_phase": "place",
+            "focus": {
+                "has_focus": True,
+                "object_id": "observed_001",
+                "object_location_relation": "on",
+                "receptacle_id": "table_01",
+                "fpv_visibility": {
+                    "status": "weak_object_visibility",
+                    "object_pixels": 0,
+                    "receptacle_pixels": 100,
+                },
+                "visibility": {
+                    "status": "weak_object_visibility",
+                    "object_pixels": 0,
+                    "receptacle_pixels": 100,
+                },
+            },
+        }
     )
 
 
@@ -4816,38 +4846,59 @@ def _isaac_semantic_pose_report_text(state: dict[str, object]) -> str:
 
 
 def _seed7_cleanup_bindings(anchor_probe: dict[str, object]) -> list[dict[str, object]]:
-    return [
-        _cleanup_binding(
-            "observed_001",
-            "coffee_table_01",
-            _candidate_fixture_id_for_object(anchor_probe, "observed_001"),
-            ["place"],
-        ),
-        _cleanup_binding(
-            "observed_002",
-            "sofa_01",
-            _candidate_fixture_id_for_object(anchor_probe, "observed_002"),
-            ["place"],
-        ),
-        _cleanup_binding(
-            "observed_003",
-            "armchair_01",
-            _candidate_fixture_id_for_object(anchor_probe, "observed_003"),
-            ["place"],
-        ),
-        _cleanup_binding(
-            "observed_005",
-            "floor_01",
-            _candidate_fixture_id_for_object(anchor_probe, "observed_005"),
-            ["place_inside"],
-        ),
-        _cleanup_binding(
-            "observed_006",
-            "desk_01",
-            _candidate_fixture_id_for_object(anchor_probe, "observed_006"),
-            ["open_receptacle", "place_inside", "close_receptacle"],
-        ),
-    ]
+    bindings = []
+    anchor_by_id = _runtime_anchor_by_id(anchor_probe)
+    for row in anchor_probe.get("semantic_substeps", []):
+        if not isinstance(row, dict):
+            continue
+        object_id = str(row.get("object_id") or "")
+        source_fixture_id = str(row.get("source_receptacle_id") or "")
+        candidate_fixture_id = str(row.get("target_receptacle_id") or "")
+        if not object_id or not candidate_fixture_id:
+            continue
+        tools = _planner_tools_for_target_anchor(anchor_by_id.get(candidate_fixture_id, {}))
+        bindings.append(
+            _cleanup_binding(
+                object_id,
+                source_fixture_id,
+                candidate_fixture_id,
+                tools,
+            )
+        )
+    if len(bindings) < 5:
+        raise AssertionError(f"expected at least five seed=7 cleanup bindings, got {bindings}")
+    return bindings[:5]
+
+
+def _runtime_anchor_by_id(result: dict[str, object]) -> dict[str, dict[str, object]]:
+    agent_view = result.get("agent_view")
+    agent_view = agent_view if isinstance(agent_view, dict) else {}
+    runtime_map = agent_view.get("runtime_metric_map")
+    runtime_map = runtime_map if isinstance(runtime_map, dict) else {}
+    return {
+        str(item.get("anchor_id") or ""): item
+        for item in runtime_map.get("public_semantic_anchors", [])
+        if isinstance(item, dict) and item.get("anchor_id")
+    }
+
+
+def _planner_tools_for_target_anchor(anchor: dict[str, object]) -> list[str]:
+    affordances = {str(item) for item in anchor.get("affordances", [])}
+    if "open" in affordances:
+        return ["open_receptacle", "place_inside", "close_receptacle"]
+    if "place_inside" in affordances:
+        return ["place_inside"]
+    return ["place"]
+
+
+def _first_seed7_binding_requiring_tool(
+    anchor_probe: dict[str, object],
+    required_tool: str,
+) -> dict[str, object]:
+    for binding in _seed7_cleanup_bindings(anchor_probe):
+        if required_tool in binding["tools"]:
+            return binding
+    raise AssertionError(f"expected seed=7 binding requiring {required_tool}")
 
 
 def _candidate_fixture_id_for_object(result: dict[str, object], object_id: str) -> str:

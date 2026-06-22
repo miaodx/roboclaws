@@ -22,9 +22,11 @@ from roboclaws.maps.runtime_prior_snapshot import (
     runtime_prior_snapshot_from_nav2_cleanup_bundle,
     runtime_prior_snapshot_from_runtime_metric_map,
 )
+from roboclaws.maps.spatial_contract import source_frame_spatial_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
+CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_agibot_navigation_memory.py"
 NAV2_BUNDLE_CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_nav2_cleanup_bundle.py"
 FORBIDDEN_PRIVATE_KEYS = {
@@ -82,7 +84,7 @@ def test_agibot_navigation_memory_converts_to_runtime_prior_snapshot_shape() -> 
     assert rooms["kitchen_center"]["room_label"] == "厨房/吧台区域"
     assert rooms["kitchen_center"]["category"] == "kitchen"
     assert snapshot["runtime_metric_map"]["room_category_hints"][0]["label"] == "厨房/吧台区域"
-    assert snapshot["source_navigation_map"]["room_category_hints"][0]["label"] == ("厨房/吧台区域")
+    assert snapshot["source_navigation_map"]["room_category_hints"][0]["label"] == "厨房/吧台区域"
     assert anchors["stone_book_decor_1"]["anchor_type"] == "landmark"
     assert anchors["stone_book_decor_1"]["actionability"] == "needs_review"
 
@@ -138,7 +140,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
@@ -154,7 +156,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_7_inspection"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -180,7 +182,7 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
         runtime_map_prior=snapshot["runtime_metric_map"],
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     public_receptacles = contract.public_receptacles_by_id()
 
@@ -198,7 +200,7 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "generated_exploration_007"
+        if item["waypoint_id"] == "room_7_inspection"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -546,12 +548,10 @@ def test_nav2_cleanup_bundle_converts_to_runtime_prior_snapshot_shape(tmp_path: 
     assert snapshot["producer"]["type"] == "offline_nav2_cleanup_bundle_conversion"
     assert snapshot["source_navigation_map"]["source_type"] == "nav2_cleanup_bundle"
     assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
-    assert (
-        snapshot["runtime_metric_map"]["digital_twin_capabilities"]["robot_consumption_proof"][
-            "robot_navigation_supported"
-        ]
-        is True
-    )
+    robot_proof = snapshot["runtime_metric_map"]["digital_twin_capabilities"][
+        "robot_consumption_proof"
+    ]
+    assert robot_proof["robot_navigation_supported"] is True
     assert snapshot["contract"]["online_offline_equivalent_shape"] is True
     assert snapshot["contract"]["private_truth_included"] is False
     assert targets["actionable_waypoint_ids"] == ["room_a_center"]
@@ -610,7 +610,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
         output_dir=tmp_path / "cleanup",
         seed=7,
         runtime_map_prior_path=prior_path,
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     prior_rows = [
@@ -632,7 +632,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
 def _online_minimal_snapshot() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     return runtime_prior_snapshot_from_runtime_metric_map(
@@ -672,6 +672,8 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
         "environment_id": "test-b1-map12",
         "map_id": "test-b1-map12_base_navigation_map",
         "frame_ids": {"map": "map", "base": "base_link", "camera": "camera"},
+        "spatial_contract": source_frame_spatial_contract(frame_id="map"),
+        "display_frame": None,
         "rooms": [
             {
                 "room_id": "room_a",
@@ -748,7 +750,16 @@ def _observe_until_anchor(
 ) -> None:
     for waypoint in contract.metric_map()["inspection_waypoints"]:
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-        contract.observe()
+        observation = contract.observe()
+        if contract.perception_mode == RAW_FPV_ONLY_MODE and anchor_category == "fridge":
+            contract.navigate_to_visual_candidate(
+                observation["raw_fpv_observation"]["observation_id"],
+                category="tomato",
+                evidence_note="round produce item on the desk",
+                image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
+                producer_type="test_agent",
+                producer_id="test_agent",
+            )
         anchors = contract.agent_view_payload()["runtime_metric_map"]["public_semantic_anchors"]
         if any(
             item.get("category") == anchor_category and item.get("anchor_type") == anchor_type

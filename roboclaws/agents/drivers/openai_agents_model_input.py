@@ -294,12 +294,13 @@ def _compaction_candidate(
 def _raw_fpv_image_memory_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
     enabled = _bool_setting(config.get("enabled"), "raw_fpv_image_memory.enabled", default=False)
-    retained = _positive_int(
-        config.get("retained_full_frame_limit"),
-        default=1,
-        setting_name="raw_fpv_image_memory.retained_full_frame_limit",
-    )
-    if not enabled:
+    if enabled:
+        retained = _positive_int(
+            config.get("retained_full_frame_limit"),
+            default=1,
+            setting_name="raw_fpv_image_memory.retained_full_frame_limit",
+        )
+    else:
         retained = 0
     return {
         "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
@@ -436,12 +437,13 @@ def _raw_fpv_image_memory_candidate(
 def _camera_grounded_history_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
     enabled = _bool_setting(config.get("enabled"), "camera_grounded_history.enabled", default=False)
-    retained = _positive_int(
-        config.get("retained_recent_outputs"),
-        default=4,
-        setting_name="camera_grounded_history.retained_recent_outputs",
-    )
-    if not enabled:
+    if enabled:
+        retained = _positive_int(
+            config.get("retained_recent_outputs"),
+            default=4,
+            setting_name="camera_grounded_history.retained_recent_outputs",
+        )
+    else:
         retained = 0
     return {
         "schema": "agent_sdk_camera_grounded_history_policy_v1",

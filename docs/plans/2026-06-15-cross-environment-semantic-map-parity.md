@@ -583,8 +583,9 @@ Shipped contract:
 - Static bundles for Agibot Map 12, B1 / Map 12 room semantics, and
   MolmoSpaces Procthor val 0 seed 7 declare `display_frame: null`, source-frame
   spatial contract metadata, and `navigation_area` polygons instead of
-  room-boundary claims. `assets/maps/molmo-cleanup-default-7` was normalized
-  because existing contract tests use it as a fixture.
+  room-boundary claims. A legacy Molmo cleanup fixture was normalized at the
+  time because existing contract tests used it as source evidence; current
+  product runs use the strict scene-indexed Base Navigation Map bundles.
   The B1 room-semantics bundle is historical evidence for this implemented
   parity slice and is superseded as a current product source by the thin
   review/runtime contract.

@@ -8,11 +8,13 @@ from roboclaws.household.planner_observed_binding import (
 from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 
+PREBUILT_BUNDLE = "assets/maps/molmospaces/procthor-10k-val/0"
+
 
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = contract.target_fixture_for_detection(
@@ -48,7 +50,7 @@ def test_realworld_observed_handle_planner_binding_stays_private() -> None:
 def test_observed_handle_planner_binding_requires_registered_handle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        allow_synthetic_map_projection=True,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
 
     binding = contract.planner_observed_handle_binding("observed_999", "sink_01")

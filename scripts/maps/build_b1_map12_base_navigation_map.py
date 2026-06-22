@@ -5,13 +5,10 @@ import argparse
 import datetime as dt
 import hashlib
 import json
-import math
 import shutil
 import sys
 from pathlib import Path
 from typing import Any
-
-from PIL import Image, ImageDraw
 
 if __package__ in {None, ""}:
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +18,11 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.maps.base_waypoints import (
+    BASE_WAYPOINT_GENERATION_POLICY,
+    BaseWaypointBuilder,
+    BaseWaypointBuilderConfig,
+)
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     DEFAULT_ROBOT_PROFILE,
@@ -29,7 +31,7 @@ from roboclaws.maps.bundle import (
     write_source_frame_bundle_preview,
 )
 from roboclaws.maps.bundle_validation import parse_map_yaml
-from roboclaws.maps.rasterize import OccupancyGrid, load_pgm, world_to_grid
+from roboclaws.maps.rasterize import OccupancyGrid, load_pgm
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_VERIFIED,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
@@ -44,7 +46,7 @@ DEFAULT_MAP_BUNDLE = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot
 DEFAULT_LABELS = Path("assets/maps/b1-map12-base-navigation-labels.json")
 DEFAULT_ROOM_SEMANTICS = Path("assets/maps/b1-map12-room-semantics.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/base-navigation-map")
-WAYPOINT_GENERATION_POLICY = "base_navigation_area_centroid_clearance_v1"
+WAYPOINT_GENERATION_POLICY = BASE_WAYPOINT_GENERATION_POLICY
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -108,6 +110,7 @@ def build_base_navigation_map_bundle(
     )
     if errors:
         raise ValueError("invalid B1 / Map 12 base navigation labels: " + "; ".join(errors))
+    frame_id = _labels_source_map_frame_id(labels)
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -117,7 +120,7 @@ def build_base_navigation_map_bundle(
         labels,
         room_semantics=room_semantics,
         grid=grid,
-        frame_id=str(labels.get("source_map_frame_id") or "map"),
+        frame_id=frame_id,
     )
     semantics = _semantics_payload(
         map_bundle=map_bundle,
@@ -184,6 +187,7 @@ def validate_base_navigation_labels(
             labels,
             room_reference_by_partition=room_reference_by_partition,
             grid=grid,
+            expected_frame_id=str(payload.get("source_map_frame_id") or ""),
         )
     )
     return errors
@@ -204,6 +208,8 @@ def _base_navigation_source_errors(
         errors.append("source_map_mutated must be false")
     if _resolve_repo_path(str(payload.get("map_bundle") or "")) != Path(map_bundle).resolve():
         errors.append("map_bundle must match --map-bundle")
+    if not str(payload.get("source_map_frame_id") or ""):
+        errors.append("source_map_frame_id must be set")
     if not Path(labels_path).is_file():
         errors.append(f"labels missing: {labels_path}")
     return errors
@@ -214,6 +220,7 @@ def _navigation_label_rows_errors(
     *,
     room_reference_by_partition: dict[str, dict[str, Any]],
     grid: OccupancyGrid,
+    expected_frame_id: str,
 ) -> list[str]:
     errors: list[str] = []
     seen_area_ids: set[str] = set()
@@ -225,6 +232,13 @@ def _navigation_label_rows_errors(
             _navigation_area_id_errors(label, label_id=label_id, seen_area_ids=seen_area_ids)
         )
         errors.extend(_label_contract_errors(label, label_id=label_id))
+        errors.extend(
+            _label_source_frame_errors(
+                label,
+                label_id=label_id,
+                expected_frame_id=expected_frame_id,
+            )
+        )
         errors.extend(
             _dt_reference_binding_errors(
                 label,
@@ -242,6 +256,25 @@ def _navigation_label_rows_errors(
     if navigation_area_count == 0:
         errors.append("at least one label must have polygon_usage.navigation=true")
     return errors
+
+
+def _label_source_frame_errors(
+    label: dict[str, Any],
+    *,
+    label_id: str,
+    expected_frame_id: str,
+) -> list[str]:
+    frame_id = str(label.get("source_map_frame_id") or "")
+    if not frame_id:
+        return [f"label {label_id} missing source_map_frame_id"]
+    if not expected_frame_id:
+        return []
+    if frame_id != expected_frame_id:
+        return [
+            f"label {label_id} source_map_frame_id must match top-level "
+            f"source_map_frame_id: {expected_frame_id}"
+        ]
+    return []
 
 
 def _navigation_area_id_errors(
@@ -357,7 +390,7 @@ def _rooms_and_waypoints(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     room_reference_by_partition = _accepted_room_reference_by_partition(room_semantics, [])
     rooms: list[dict[str, Any]] = []
-    waypoints: list[dict[str, Any]] = []
+    navigation_rooms: list[dict[str, Any]] = []
     for index, label in enumerate(labels.get("labels") or [], start=1):
         room = _room_from_label(
             label,
@@ -367,31 +400,15 @@ def _rooms_and_waypoints(
         rooms.append(room)
         if not room["polygon_usage"]["navigation"]:
             continue
-        waypoint = _inspection_waypoint_for_label(label, grid=grid)
-        if waypoint is None:
-            raise ValueError(
-                f"label {label.get('label_id')} navigation=true but no clearance-safe "
-                "waypoint exists"
-            )
-        waypoints.append(
-            {
-                "waypoint_id": f"{room['room_id']}_inspection",
-                "frame_id": frame_id,
-                "x": waypoint["x"],
-                "y": waypoint["y"],
-                "yaw": 0.0,
-                "room_id": room["room_id"],
-                "navigation_area_id": room["navigation_area_id"],
-                "label": room["room_label"],
-                "purpose": "base_navigation_area_inspection",
-                "waypoint_source": "generated_exploration_candidate",
-                "generation_policy": WAYPOINT_GENERATION_POLICY,
-                "sweep_index": len(waypoints) + 1,
-                "source_label_id": str(label.get("label_id") or ""),
-                "clearance_radius_m": DEFAULT_ROBOT_PROFILE["footprint"]["radius_m"],
-                "source_polygon_index": index,
-            }
-        )
+        room["source_polygon_index"] = index
+        navigation_rooms.append(room)
+    waypoints = BaseWaypointBuilder(
+        grid=grid,
+        config=BaseWaypointBuilderConfig(
+            frame_id=frame_id,
+            clearance_radius_m=float(DEFAULT_ROBOT_PROFILE["footprint"]["radius_m"]),
+        ),
+    ).build(navigation_rooms)
     if not waypoints:
         raise ValueError("base navigation map must contain at least one inspection waypoint")
     return rooms, waypoints
@@ -442,61 +459,17 @@ def _inspection_waypoint_for_label(
     *,
     grid: OccupancyGrid,
 ) -> dict[str, float] | None:
-    polygon = [
-        {"x": float(point["x"]), "y": float(point["y"])}
-        for point in ((label.get("geometry") or {}).get("polygon") or [])
-    ]
-    if len(polygon) < 3:
-        return None
-    mask = Image.new("1", (grid.width, grid.height), 0)
-    ImageDraw.Draw(mask).polygon(
-        [world_to_grid(point["x"], point["y"], grid) for point in polygon],
-        fill=1,
-    )
-    bbox = mask.getbbox()
-    if bbox is None:
-        return None
-    centroid = _polygon_centroid(polygon)
-    clearance_radius_cells = max(
-        1,
-        int(math.ceil(float(DEFAULT_ROBOT_PROFILE["footprint"]["radius_m"]) / grid.resolution_m)),
-    )
-    candidates: list[tuple[float, int, int, float, float]] = []
-    for row in range(bbox[1], bbox[3]):
-        for col in range(bbox[0], bbox[2]):
-            if not mask.getpixel((col, row)):
-                continue
-            if not _is_clearance_safe_cell(
-                grid,
-                col=col,
-                row=row,
-                radius_cells=clearance_radius_cells,
-            ):
-                continue
-            x = grid.origin_x + col * grid.resolution_m
-            y = grid.origin_y + (grid.height - 1 - row) * grid.resolution_m
-            distance_to_centroid = (x - centroid["x"]) ** 2 + (y - centroid["y"]) ** 2
-            candidates.append((distance_to_centroid, row, col, x, y))
-    if not candidates:
-        return None
-    _, _, _, x, y = min(candidates)
-    return {"x": round(x, 3), "y": round(y, 3)}
-
-
-def _is_clearance_safe_cell(
-    grid: OccupancyGrid,
-    *,
-    col: int,
-    row: int,
-    radius_cells: int,
-) -> bool:
-    for next_row in range(row - radius_cells, row + radius_cells + 1):
-        for next_col in range(col - radius_cells, col + radius_cells + 1):
-            if (next_col - col) ** 2 + (next_row - row) ** 2 > radius_cells**2:
-                continue
-            if not grid.is_free_cell(next_col, next_row):
-                return False
-    return True
+    area = {
+        "navigation_area_id": str(label.get("navigation_area_id") or ""),
+        "geometry": dict(label.get("geometry") or {}),
+    }
+    return BaseWaypointBuilder(
+        grid=grid,
+        config=BaseWaypointBuilderConfig(
+            frame_id=str(label.get("source_map_frame_id") or "map"),
+            clearance_radius_m=float(DEFAULT_ROBOT_PROFILE["footprint"]["radius_m"]),
+        ),
+    ).inspection_pose(area)
 
 
 def _semantics_payload(
@@ -509,7 +482,7 @@ def _semantics_payload(
     rooms: list[dict[str, Any]],
     waypoints: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    frame_id = str(labels.get("source_map_frame_id") or "map")
+    frame_id = _labels_source_map_frame_id(labels)
     navigation_rooms = [room for room in rooms if room["polygon_usage"]["navigation"]]
     return {
         "schema": "nav2_cleanup_semantics_v1",
@@ -568,6 +541,13 @@ def _semantics_payload(
             "uses_navigation_memory_as_waypoint_source": False,
         },
     }
+
+
+def _labels_source_map_frame_id(labels: dict[str, Any]) -> str:
+    frame_id = str(labels.get("source_map_frame_id") or "")
+    if not frame_id:
+        raise ValueError("source_map_frame_id must be set")
+    return frame_id
 
 
 def _manifest_payload(
@@ -697,13 +677,6 @@ def _origin_payload(map_yaml: dict[str, Any]) -> dict[str, float]:
     origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
     origin = (origin + [0.0, 0.0, 0.0])[:3]
     return {"x": float(origin[0]), "y": float(origin[1]), "yaw": float(origin[2])}
-
-
-def _polygon_centroid(polygon: list[dict[str, float]]) -> dict[str, float]:
-    return {
-        "x": sum(point["x"] for point in polygon) / len(polygon),
-        "y": sum(point["y"] for point in polygon) / len(polygon),
-    }
 
 
 def _simple_yaml(value: Any, *, indent: int = 0) -> str:

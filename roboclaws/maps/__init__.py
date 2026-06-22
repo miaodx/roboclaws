@@ -1,5 +1,13 @@
 """Reusable map artifact utilities for robot cleanup contracts."""
 
+from roboclaws.maps.base_waypoints import (
+    BASE_WAYPOINT_GENERATION_POLICY,
+    BASE_WAYPOINT_PURPOSE,
+    BaseWaypointBuilder,
+    BaseWaypointBuilderConfig,
+    BaseWaypointBuildError,
+    validate_base_waypoints,
+)
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     DEFAULT_COSTMAP_PROFILE_ID,
@@ -34,6 +42,11 @@ __all__ = [
     "NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA",
     "RUNTIME_COSTMAP_GAPS",
     "SIM_COSTMAP_PLANNER",
+    "BASE_WAYPOINT_GENERATION_POLICY",
+    "BASE_WAYPOINT_PURPOSE",
+    "BaseWaypointBuilder",
+    "BaseWaypointBuilderConfig",
+    "BaseWaypointBuildError",
     "MapBundleValidation",
     "runtime_prior_snapshot_from_agibot_navigation_memory",
     "runtime_prior_snapshot_from_runtime_metric_map",
@@ -41,6 +54,7 @@ __all__ = [
     "metric_map_bundle_metadata",
     "runtime_metric_map_from_prior_artifact",
     "validate_base_navigation_map_v1_bundle",
+    "validate_base_waypoints",
     "validate_metric_map_route",
     "validate_nav2_map_bundle",
     "write_nav2_map_bundle",

@@ -92,9 +92,9 @@ class MapBundleValidation:
             "metadata": self.metadata,
         }
 
-    def raise_for_errors(self) -> None:
+    def raise_for_errors(self, *, label: str = "Nav2 map bundle") -> None:
         if self.errors:
-            raise AssertionError(f"invalid Nav2 map bundle {self.root}: {self.errors}")
+            raise AssertionError(f"invalid {label} {self.root}: {self.errors}")
 
 
 def metric_map_bundle_metadata(
@@ -157,10 +157,10 @@ def copy_nav2_map_bundle_snapshot(
     source_bundle_dir: Path,
     run_dir: Path,
 ) -> dict[str, Any]:
-    """Copy a validated prebuilt Nav2 map bundle into a run-local snapshot."""
+    """Copy a validated Base Navigation Map bundle into a run-local snapshot."""
     source_bundle_dir = Path(source_bundle_dir)
-    validation = validate_nav2_map_bundle(source_bundle_dir)
-    validation.raise_for_errors()
+    validation = validate_base_navigation_map_v1_bundle(source_bundle_dir)
+    validation.raise_for_errors(label="Base Navigation Map v1 bundle")
 
     bundle_dir = Path(run_dir) / "map_bundle"
     for key, relative in _bundle_local_paths().items():
@@ -558,7 +558,7 @@ def _semantics_payload(
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
     )
     frame_id = str(metric_map.get("frame_id") or "map")
-    return {
+    payload = {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": metadata.get("environment_id") or metric_map.get("map_id"),
         "frame_ids": {
@@ -589,6 +589,14 @@ def _semantics_payload(
             "contains_private_scoring_truth": False,
         },
     }
+    if isinstance(metric_map.get("base_navigation_map_contract"), dict):
+        payload["base_navigation_map_contract"] = dict(metric_map["base_navigation_map_contract"])
+    if isinstance(metric_map.get("provenance"), dict):
+        payload["provenance"] = {
+            **payload["provenance"],
+            **dict(metric_map["provenance"]),
+        }
+    return payload
 
 
 def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | None = None) -> Path:

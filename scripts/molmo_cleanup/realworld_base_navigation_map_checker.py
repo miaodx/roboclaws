@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from roboclaws.household.realworld_contract import forbidden_agent_view_keys
+from roboclaws.maps.base_waypoints import (
+    BASE_WAYPOINT_GENERATION_POLICY,
+    BASE_WAYPOINT_PURPOSE,
+    BASE_WAYPOINT_SOURCE,
+)
 
 
 def assert_base_navigation_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
@@ -92,9 +97,12 @@ def _assert_public_anchors(runtime_map: dict[str, Any]) -> None:
 
 
 def _assert_exploration_waypoint(waypoint: dict[str, Any]) -> None:
-    assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
-    assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
+    assert waypoint.get("waypoint_source") == BASE_WAYPOINT_SOURCE, waypoint
+    if waypoint.get("purpose") == BASE_WAYPOINT_PURPOSE:
+        _assert_base_area_inspection_waypoint(waypoint)
+        return
     assert waypoint.get("purpose") == "base_navigation_map_exploration", waypoint
+    assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
     provenance = waypoint.get("candidate_provenance") or {}
     assert provenance.get("source") == "public_occupancy_free_space", waypoint
     assert provenance.get("source_room_hidden") is False, waypoint
@@ -104,6 +112,32 @@ def _assert_exploration_waypoint(waypoint: dict[str, Any]) -> None:
     assert provenance.get("source_fixtures_hidden") is True, waypoint
     assert provenance.get("source_waypoint_hidden") is True, waypoint
     assert "source_waypoint_id" not in provenance, waypoint
+
+
+def _assert_base_area_inspection_waypoint(waypoint: dict[str, Any]) -> None:
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
+    area_id = str(waypoint.get("navigation_area_id") or waypoint.get("area_id") or "")
+    assert waypoint_id, waypoint
+    assert area_id, waypoint
+    assert waypoint_id == f"{area_id}_inspection", waypoint
+    assert waypoint.get("generation_policy") == BASE_WAYPOINT_GENERATION_POLICY, waypoint
+    assert int(waypoint.get("sweep_index") or 0) > 0, waypoint
+    assert str(waypoint.get("frame_id") or ""), waypoint
+    assert str(waypoint.get("room_id") or ""), waypoint
+    assert str(waypoint.get("room_label") or waypoint.get("label") or ""), waypoint
+    for key in ("x", "y", "yaw"):
+        float(waypoint[key])
+    for forbidden_key in (
+        "fixture_id",
+        "fixture_ids",
+        "landmark_id",
+        "object_id",
+        "receptacle_id",
+        "target_fixture_id",
+        "target_receptacle_id",
+        "valid_receptacle_ids",
+    ):
+        assert forbidden_key not in waypoint, waypoint
 
 
 def _assert_target_inspection_waypoint(waypoint: dict[str, Any]) -> None:

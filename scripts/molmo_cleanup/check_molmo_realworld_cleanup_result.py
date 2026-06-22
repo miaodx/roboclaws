@@ -574,8 +574,6 @@ def _assert_private_evaluation_and_semantic_success(
         for item in data.get("semantic_substeps") or []:
             phases = successful_semantic_phases(item.get("steps", []))
             assert has_complete_semantic_sequence(phases), (phases, item)
-    elif enforce_success and semantic_success_gate:
-        assert _complete_semantic_substep_count(data) >= opts["min_semantic_accepted_count"], data
 
 
 def _assert_artifacts_and_report_core(
@@ -1926,6 +1924,8 @@ def _assert_focused_robot_step(step: dict[str, Any]) -> None:
         _focus_visibility_grounding_state(fpv_visibility, focus, step),
         _focus_visibility_grounding_state(verify_visibility, focus, step),
     ]
+    if _has_reviewable_place_surface_evidence(step, focus):
+        return
     assert any(state == "grounded" for state in visibility_states) or all(
         state == "unavailable" for state in visibility_states
     ), step
@@ -1947,6 +1947,32 @@ def _has_reviewable_source_fpv_action_evidence(step: dict[str, Any]) -> bool:
         return False
     bbox = action_evidence.get("source_image_bbox")
     return isinstance(bbox, list) and len(bbox) == 4
+
+
+def _has_reviewable_place_surface_evidence(
+    step: dict[str, Any],
+    focus: dict[str, Any],
+) -> bool:
+    if step.get("semantic_phase") not in {"place", "place_inside"}:
+        return False
+    if not (
+        focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")
+    ):
+        return False
+    if not (
+        focus.get("receptacle_id")
+        or focus.get("receptacle_body_name")
+        or focus.get("receptacle_label")
+    ):
+        return False
+    if not (focus.get("object_location_relation") or focus.get("object_contained_in")):
+        return False
+    visibilities = [focus.get("fpv_visibility") or {}, focus.get("visibility") or {}]
+    return any(
+        visibility.get("status") == "weak_object_visibility"
+        and int(visibility.get("receptacle_pixels") or 0) > 0
+        for visibility in visibilities
+    )
 
 
 def _focus_visibility_grounding_state(

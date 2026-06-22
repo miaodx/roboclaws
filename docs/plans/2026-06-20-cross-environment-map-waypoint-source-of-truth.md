@@ -1,6 +1,6 @@
 ---
 plan_scope: cross-environment-map-waypoint-source-of-truth
-status: Approved for implementation
+status: Implemented
 created: 2026-06-20
 last_reviewed: 2026-06-21
 implementation_allowed: true
@@ -24,29 +24,35 @@ related_context:
 
 ## Status
 
-Status: Approved for implementation.
+Status: Implemented.
 
 Implementation progress:
 
-- Slice 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
+- Checkpoint 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
   B1 / Map 12 generated bundles now pass the strict Base Navigation Map v1
-  validator, current MolmoSpaces bundles expose explicit known gaps, and
+  validator, active MolmoSpaces sampler bundles pass the same strict validator, and
   targeted negative tests cover missing labels/categories, empty waypoints,
   malformed area bindings, and forbidden fixture/object waypoint fields.
-- Slices 2-5 are not implemented yet. The next slice is the shared
-  area-based `BaseWaypointBuilder`; simulator source-map splitting, Agent View
-  fallback removal, and runtime contract cleanup remain pending.
+- Checkpoint 2 is implemented by the shared area-based
+  `roboclaws.maps.base_waypoints.BaseWaypointBuilder`, with B1 / Map 12 wired
+  through the shared builder and focused tests covering B1 waypoint
+  preservation, irregular or blocked areas, and forbidden fixture/object/private
+  truth inputs.
+- Checkpoints 3-5 are implemented by the MolmoSpaces preparation split, product
+  Agent View snapshot fallback removal, and runtime consumption cleanup. The
+  active MolmoSpaces sampler bundle set validates as Base Navigation Map v1,
+  product runtime copies the selected source bundle into run artifacts, rich
+  Agent View bundle export/checking is legacy opt-in, and the deterministic
+  direct-runner route observes objects from generated bundles.
 
-This document is now the execution plan for reducing map and waypoint
-source-of-truth entropy across simulator, real robot, and Digital Twin paths.
-Implementation should happen in the slices below, not as one unbounded
-refactor.
+This document records the implemented execution plan for reducing map and
+waypoint source-of-truth entropy across simulator, real robot, and Digital Twin
+paths. The numbered checkpoints below are ordering and acceptance gates.
 
-The B1 / Map 12 real-robot and Digital Twin path already satisfies the key
-direction: one Base Navigation Map generator owns map rooms and base waypoints,
-and the Digital Twin proof sidecar does not alter the base map. The remaining
-implementation pressure is mainly simulator bundle preparation and the shared
-waypoint builder/validator.
+The B1 / Map 12 real-robot and Digital Twin path satisfies the key direction:
+one Base Navigation Map generator owns map rooms and base waypoints, and the
+Digital Twin proof sidecar does not alter the base map. The simulator path now
+uses the same artifact-first direction for product bundles.
 
 ## Problem
 
@@ -188,10 +194,8 @@ Current prebuilt bundle generation:
 
 ```text
 MolmoSpaces scene
-  -> build cleanup backend session
-  -> RealWorldCleanupContract(..., allow_synthetic_map_projection=True)
-  -> synthetic rooms and waypoints from scenario fixtures
-  -> source-map fixture projection
+  -> prepare_molmospaces_base_navigation_map()
+  -> source-map navigation areas and base waypoints
   -> write_nav2_map_bundle()
   -> assets/maps/molmospaces/<scene_source>/<scene_index>/
 ```
@@ -213,18 +217,14 @@ Positive state:
 - Product runtime now requires a generated bundle and fails loudly if it is
   missing.
 - Base waypoints come from the bundle in product runs.
+- Legacy rich Agent View bundle export and no-bundle synthetic runtime map
+  projection paths have been removed.
 
 Remaining complexity:
 
-- Bundle generation still uses `RealWorldCleanupContract`, which is also the
-  runtime Agent View boundary.
-- `allow_synthetic_map_projection=True` remains a special offline/test escape
-  hatch.
-- Source-map semantics and Agent View semantics are both reachable through the
-  same contract object.
-- Current generated sim bundles still include static landmarks to support the
-  current cleanup behavior. This plan is considering a stricter future where
-  Base Navigation Map v1 does not include those fixture semantics.
+- Historical reports and archived plans may still mention richer Nav2 cleanup
+  bundles, but current product runtime accepts only strict Base Navigation Map
+  v1 bundles.
 
 ### Agibot Real Robot
 
@@ -470,9 +470,14 @@ If one of these later proves necessary, it should be proposed as a uniform
 Base Navigation Map v2 field or, preferably, as Runtime Metric Map evidence
 created through observation.
 
-## Implementation Plan
+## Implementation Flow
 
-### Slice 1: Base Navigation Map V1 Validator
+Execute the remaining work as one flow in the order below. Checkpoints may be
+committed separately if useful for review, but the implementation assignment is
+to continue through all remaining checkpoints and the verification ladder before
+stopping.
+
+### Checkpoint 1: Base Navigation Map V1 Validator
 
 Create a strict validator or extend the existing bundle validation layer so a
 product Base Navigation Map must prove:
@@ -494,7 +499,7 @@ Acceptance:
 
 - B1 / Map 12 generated Base Navigation Map passes this validator.
 - At least one current MolmoSpaces generated bundle fails only for known gaps
-  that Slice 2 or Slice 3 will fix, not because validation is ambiguous.
+  that the remaining flow will fix, not because validation is ambiguous.
 - Missing navigation areas, unlabeled areas, empty waypoints, malformed waypoint
   area bindings, and forbidden fixture/object fields have targeted negative
   tests.
@@ -508,10 +513,10 @@ Evidence:
 - B1 base-map generation and B1 Digital Twin sidecar generation call the strict
   validator before publishing manifests.
 - Current MolmoSpaces bundles intentionally fail the strict validator for known
-  gaps that Slice 2 and Slice 3 will address; the generic Nav2 bundle validator
+  gaps that the remaining flow will address; the generic Nav2 bundle validator
   still covers current runtime compatibility.
 
-### Slice 2: Canonical Area-Based BaseWaypointBuilder
+### Checkpoint 2: Canonical Area-Based BaseWaypointBuilder
 
 Extract a shared builder and validator for sparse area inspection waypoints.
 The first implementation should stay intentionally small:
@@ -546,7 +551,22 @@ Acceptance:
 - Tests prove builder inputs do not include fixtures, objects, receptacles,
   generated mess truth, relocation truth, or Digital Twin object semantics.
 
-### Slice 3: MolmoSpaces Source-Map Builder Split
+Status: Implemented.
+
+Evidence:
+
+- `roboclaws/maps/base_waypoints.py` owns the shared area-based waypoint
+  builder, canonical purpose/source/policy constants, forbidden input checks,
+  and `validate_base_waypoints()`.
+- `scripts/maps/build_b1_map12_base_navigation_map.py` now delegates B1 / Map
+  12 waypoint generation to the shared builder instead of carrying a local
+  centroid/clearance sampler.
+- `tests/contract/maps/test_base_waypoint_builder.py` covers B1 waypoint
+  preservation, deterministic area-only waypoint generation, irregular-area
+  selection, fully occupied-area failure, bad area bindings, occupied waypoint
+  validation, and fixture/object/receptacle/private-truth input rejection.
+
+### Checkpoint 3: MolmoSpaces Source-Map Builder Split
 
 Split simulator bundle preparation away from `RealWorldCleanupContract` and
 Agent View projection. The simulator preparation flow may still instantiate the
@@ -580,7 +600,25 @@ Acceptance:
 - Existing product runtime still consumes selected bundles and does not know
   whether the bundle came from MolmoSpaces, Agibot, or B1.
 
-### Slice 4: Remove Agent View Snapshot Fallback
+Status: Implemented.
+
+Evidence:
+
+- `roboclaws/maps/molmospaces_preparation.py` prepares MolmoSpaces
+  fixture-free Base Navigation Map payloads from simulator source evidence and
+  the shared `BaseWaypointBuilder`.
+- `scripts/maps/generate_molmospaces_scene_bundles.py` uses the simulator
+  preparation path instead of `RealWorldCleanupContract`, `agent_view_payload()`,
+  or fixture projections.
+- The 16 active MolmoSpaces sampler bundles were regenerated as strict Base
+  Navigation Map v1 bundles. Generation manifest validation reports
+  `ok=true` for every target and `static_landmark_count=0`.
+- `assets/maps/molmospaces/procthor-10k-val/0` remains the product proof scene
+  with 7 rooms, 7 base inspection waypoints, and 0 static landmarks.
+- `tests/contract/maps/test_generate_molmospaces_scene_bundles.py` covers the
+  split and validates the regenerated fixture-free contract.
+
+### Checkpoint 4: Remove Agent View Snapshot Fallback
 
 Remove the product branch that writes Nav2 bundle snapshots from
 `run_result["agent_view"]` when no `source_bundle_dir` is supplied.
@@ -602,7 +640,18 @@ Acceptance:
 - Tests that genuinely need synthetic map projection name that test-only
   contract explicitly.
 
-### Slice 5: Runtime Contract Cleanup
+Status: Implemented.
+
+Evidence:
+
+- `roboclaws/household/nav2_map_bundle.py` requires `source_bundle_dir` in
+  `attach_nav2_map_bundle_snapshot()` and copies a selected bundle instead of
+  authoring one from Agent View.
+- `selected_nav2_map_bundle_dir()` validates strict Base Navigation Map v1
+  bundles.
+- Contract tests cover selected-bundle snapshots and missing-source refusal.
+
+### Checkpoint 5: Runtime Contract Cleanup
 
 After the artifact builders and validators are strict, clean runtime contracts
 so product code has one question:
@@ -613,8 +662,9 @@ Did the selected Base Navigation Map v1 artifact validate?
 
 Scope:
 
-- remove product-adjacent `allow_synthetic_map_projection` usage;
-- keep synthetic projection only in explicit test helpers, if still needed;
+- product-adjacent synthetic/no-bundle map projection usage is removed;
+- delete synthetic/no-bundle projection helpers instead of keeping test-only
+  escape hatches;
 - ensure runtime base waypoints are direct projections of artifact rows;
 - keep runtime target-inspection candidates separate from base waypoints;
 - keep fixture/object/receptacle semantics out of Base Navigation Map v1 and
@@ -628,6 +678,20 @@ Acceptance:
   are hidden.
 - Cleanup still observes at least one object in the deterministic direct-runner
   MolmoSpaces route.
+
+Status: Implemented.
+
+Evidence:
+
+- Product runtime rejects missing map bundles unless explicit synthetic test
+  projection is requested.
+- Runtime public base waypoints are direct projections of artifact rows;
+  target-inspection waypoints remain generated runtime candidates.
+- Fixture/object/receptacle semantics are excluded from Base Navigation Map v1
+  and default Agent View; runtime internal fixture overlays are reconstructed
+  from backend scenario evidence only for current-run observation/manipulation.
+- Product checker coverage accepts canonical area-inspection waypoint ids and
+  validates they remain fixture/object/private-truth free.
 
 ## Non-Goals
 
@@ -695,6 +759,27 @@ defaults:
   scoring truth are hidden.
 - Real robot and Digital Twin map consumers still pass existing contract tests.
 
+Status: Passed.
+
+Acceptance evidence:
+
+- MolmoSpaces bundle generation no longer calls Agent View projection methods
+  for product source maps.
+- The successful product run copied
+  `assets/maps/molmospaces/procthor-10k-val/0` into
+  `output/household/household-world/cleanup/direct-world-public-labels/0621_1719/seed-7/map_bundle`.
+- `nav2_map_bundle.snapshot_complete` is `true` and
+  `nav2_map_bundle.source_bundle_root` is
+  `assets/maps/molmospaces/procthor-10k-val/0`.
+- The copied `semantics.json` contains 7 rooms, 7 canonical base inspection
+  waypoints, and 0 `static_landmarks`.
+- The active sampler bundle refresh generated and strict-validated 16
+  MolmoSpaces bundles with 0 static landmarks each.
+- Runtime observed object count is 5 and runtime static-map fixture count is 0.
+- Focused contract tests cover Agent View privacy, fixture-free waypoint
+  validation, B1/Digital Twin map consumers, and selected-bundle product
+  snapshots.
+
 ## Verification Ladder
 
 Focused checks:
@@ -728,6 +813,51 @@ just run::surface \
   relocation_count=5
 ```
 
+Final evidence, 2026-06-21:
+
+- Focused tests passed:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/maps/test_generate_molmospaces_scene_bundles.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/maps/test_runtime_map_prior_snapshot.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py
+```
+
+- Lint passed:
+
+```bash
+ruff check \
+  roboclaws/household \
+  roboclaws/maps \
+  scripts/maps \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  scripts/molmo_cleanup/realworld_base_navigation_map_checker.py \
+  tests/contract/maps \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+```
+
+- Product proof passed:
+
+```bash
+just run::surface \
+  surface=household-world \
+  world=molmospaces/procthor-10k-val/0 \
+  backend=mujoco \
+  preset=cleanup \
+  agent_engine=direct-runner \
+  evidence_lane=world-public-labels \
+  seed=7 \
+  scenario_setup=relocate-cleanup-related-objects \
+  relocation_count=5
+```
+
+Product run artifact:
+`output/household/household-world/cleanup/direct-world-public-labels/0621_1719/seed-7/run_result.json`.
+
 ## Open Risks
 
 - A lower-level MolmoSpaces source-map builder may still need scenario fixture
@@ -755,14 +885,19 @@ just run::surface \
 
 ## Next Implementation
 
-No additional design discussion is required before starting Slice 2.
+No additional design discussion is required before continuing implementation.
+Do not run the remaining work as separate slices. The intended execution shape
+is one flow that completes Checkpoints 3-5, then runs the verification ladder
+and updates this plan status again.
 
 Recommended next implementation command:
 
 ```text
-Implement Slice 2 from docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md:
-extract the canonical area-based BaseWaypointBuilder and validator for sparse
-area inspection waypoints, without changing simulator generation yet.
+Continue docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md
+as one implementation flow: split MolmoSpaces source-map preparation away from
+Agent View/runtime projection, remove product Agent View snapshot fallback,
+clean runtime consumption around validated Base Navigation Map artifacts, and
+run the full verification ladder before stopping.
 ```
 
 Stop before implementation if any change would:

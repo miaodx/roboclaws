@@ -34,6 +34,63 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: B1 Base Navigation Map generation now requires accepted label
+  sources to declare a top-level `source_map_frame_id` and rejects any label row
+  whose `source_map_frame_id` is missing or drifts from that source frame before
+  writing shared real-robot / Digital Twin map artifacts. Generated
+  `semantics.json` frame ids, spatial contract, rooms, and generated
+  inspection waypoints now carry the declared label frame instead of defaulting
+  absent metadata to `map`. Owner layer: Artifacts, reports, and eval suites /
+  Base Navigation Map artifact contract. Behavior-change class: fail-aloud
+  source-frame validation for accepted B1 label sources. Metric: ratchet
+  remains at 0 Ruff complexity rows and 80 oversized modules in the current
+  shared checkout. Proof: focused B1 base-navigation map contract tests, Nav2
+  map-bundle contract tests, cross-environment semantic-map parity tests, B1
+  base-navigation sidecar tests, touched-file ruff/format checks, dependency
+  sync, changed-code cleanup review, `git diff --check`, and ratchet. Reopen
+  only if `build_b1_map12_base_navigation_map.py` again derives bundle frame
+  metadata from missing or mixed label-source frame fields, or writes
+  room/waypoint/spatial-contract evidence before accepted label frame
+  validation runs.
+
+- 2026-06-21: Runtime Map Prior Snapshot conversion now preserves declared
+  runtime-map and Nav2 bundle map frames instead of defaulting source-derived
+  waypoint, room, and source-navigation metadata to `map`. Online runtime-map
+  snapshots reject top-level/static-map frame drift plus anchor or generated
+  waypoint frame drift, and direct Nav2 bundle conversion now requires the
+  source-frame spatial contract, rejects non-object room rows, rejects room or
+  waypoint frame drift, and publishes the declared map frame in the source
+  navigation map. Owner layer: Artifacts, reports, and eval suites / Runtime
+  Map Prior Snapshot artifact contract. Behavior-change class: source-truth
+  correction plus fail-aloud source-frame validation. Metric: ratchet remains
+  at 0 Ruff complexity rows and 80 oversized modules after splitting the new
+  focused frame regressions out of the existing near-ceiling snapshot test
+  file. Proof: focused runtime-prior frame/source tests, runtime-prior
+  snapshot tests, B1 base-navigation sidecar tests, cross-environment semantic
+  map parity tests, touched-file ruff/format checks, changed-code cleanup
+  review, `git diff --check`, and ratchet. Reopen only if
+  `runtime_prior_snapshot.py` again substitutes `map` for declared
+  source-frame metadata or accepts mismatched declared runtime-map/Nav2 frame
+  evidence before materializing cleanup targets.
+
+- 2026-06-21: Nav2 map-bundle projection now preserves the declared source
+  map frame from `semantics.json frame_ids.map` instead of hard-coding `map`
+  for projected robot pose or defaulted inspection-waypoint frames. Bundle
+  validation also rejects present room `source_map_frame_id` or waypoint
+  `frame_id` values that drift from the bundle map frame before route,
+  report, or cleanup consumers can derive mixed-frame confidence. Owner
+  layer: Artifacts, reports, and eval suites / map artifact contract.
+  Behavior-change class: source-truth correction plus fail-aloud map-frame
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; touched map modules
+  remain below the hard ceiling. Proof: focused Nav2 map-bundle contract
+  tests, cross-environment semantic-map parity tests, touched-file
+  ruff/format checks, dependency sync, changed-code cleanup review,
+  `git diff --check`, and ratchet. Reopen only if `metric_map_from_bundle`
+  or Nav2 bundle validation again allows `frame_ids.map`, room
+  `source_map_frame_id`, waypoint `frame_id`, and projected robot pose to
+  disagree without explicit validation evidence.
+
 - 2026-06-21: Agent SDK speedup-matrix explicit calibration artifacts now
   fail as row-level blocked decision-packet evidence when malformed or
   non-object. The matrix uses the existing report-performance source boundary

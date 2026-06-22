@@ -22,6 +22,27 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the B1 Base Navigation Map label-frame
+  source slice: the shared real-robot / Digital Twin map builder now requires
+  a top-level `source_map_frame_id` in the accepted label source and rejects
+  any label row whose declared `source_map_frame_id` is missing or drifts from
+  that top-level frame before writing bundle artifacts. Generated semantics,
+  rooms, waypoints, and the spatial contract now carry the declared label
+  frame without falling back to `map`.
+- Current shared-checkout note after the Runtime Map Prior Snapshot
+  source-frame slice: runtime-prior conversion now preserves declared
+  runtime-map and Nav2 bundle map frames, defaults only missing
+  waypoint/room frame metadata to that source frame, and rejects declared
+  static-map, anchor, generated-waypoint, room, waypoint, or spatial-contract
+  frame drift before downstream cleanup consumers can derive mixed-frame
+  confidence.
+- Current shared-checkout note after the Nav2 map-bundle source-frame slice:
+  projection now preserves validated `semantics.json frame_ids.map` across
+  metric-map `frame_id`, defaulted inspection-waypoint frames, room
+  source-frame metadata, and initial robot pose. Bundle validation now rejects
+  present room `source_map_frame_id` or waypoint `frame_id` values that drift
+  from `frame_ids.map`, so mixed-frame map artifacts fail before report,
+  route, or cleanup consumers derive confidence from them.
 - Current shared-checkout note after the Agent SDK perf-matrix calibration
   source slice: explicit `calibration_path` artifacts now fail as row-level
   blocked decision-packet evidence when malformed or non-object, matching
