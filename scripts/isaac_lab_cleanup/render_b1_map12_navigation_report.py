@@ -496,7 +496,7 @@ def _waypoint_card(run_dir: Path, waypoint: dict[str, Any], index: int) -> str:
         waypoint.get("map12_nav_goal") if isinstance(waypoint.get("map12_nav_goal"), dict) else {}
     )
     views = waypoint.get("views") if isinstance(waypoint.get("views"), dict) else {}
-    view_order = ("fpv", "chase", "map", "verify")
+    view_order = ("fpv", "chase", "topdown", "verify")
     figures = []
     for view_name in view_order:
         raw = views.get(view_name)

@@ -126,7 +126,7 @@ def write_robot_views(
     views = {
         "fpv": args.output_dir / f"{safe_label}.fpv.png",
         "chase": args.output_dir / f"{safe_label}.chase.png",
-        "map": args.output_dir / f"{safe_label}.map.png",
+        "topdown": args.output_dir / f"{safe_label}.topdown.png",
         "verify": args.output_dir / f"{safe_label}.verify.png",
     }
     real_views = hooks.real_semantic_pose_robot_view_images(

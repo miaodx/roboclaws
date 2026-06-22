@@ -1057,7 +1057,7 @@ def _assert_robot_views(
     *,
     require_complete_actions: bool = True,
 ) -> None:
-    expected_variants = {"molmospaces-rby1m-fpv-map-chase-verify"}
+    expected_variants = {"molmospaces-rby1m-fpv-topdown-chase-verify"}
     if data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND:
         expected_variants.add(ISAACLAB_ROBOT_VIEW_VARIANT)
     assert data.get("view_variant") in expected_variants, data
@@ -1078,7 +1078,7 @@ def _assert_robot_views(
     for step in steps:
         views = step.get("views") or {}
         assert int(step.get("room_outline_count") or 0) > 0, step
-        for key in ("fpv", "chase", "map", "verify"):
+        for key in ("fpv", "chase", "topdown", "verify"):
             path = _resolve_path(report_path.parent, views.get(key, ""))
             assert path.is_file(), path
             assert path.stat().st_size > 0, path

@@ -35,7 +35,7 @@ def robot_timeline_section(
             "<h2>Robot View Timeline</h2>"
             + empty_state_block(
                 "No robot-view timeline captured",
-                "This run did not record FPV/map/chase timeline frames. Review the "
+                "This run did not record FPV/topdown/chase timeline frames. Review the "
                 "Robot & Map tab for static map artifacts, SDK subphase reports, and "
                 "navigation rehearsal evidence.",
             )
@@ -127,7 +127,7 @@ def _robot_step_card(
         f"{robot_view_camera_contract_summary(step.get('camera_control_contract'))}"
         '<div class="views robot-primary-views">'
         f"{view_figure(views.get('fpv'), 'FPV')}"
-        f"{view_figure(views.get('map'), 'Top-down Scene View')}"
+        f"{view_figure(views.get('topdown'), 'Top-down Scene View')}"
         f"{fpv_bbox_figure}"
         "</div>"
         f"{sim_only_views}"
@@ -176,7 +176,7 @@ def _isaac_static_robot_view_notice(enabled: bool) -> str:
         return ""
     return (
         '<p class="note robot-view-caveat"><strong>Isaac report-only view caveat:</strong> '
-        "these FPV/map/chase/verify frames are static captures from the loaded USD "
+        "these FPV/topdown/chase/verify frames are static captures from the loaded USD "
         "scene, reused across semantic cleanup steps. The cleanup state changes are "
         "recorded in backend JSON as isaac_semantic_pose; they are not rendered back "
         "into the Isaac USD stage yet.</p>"

@@ -279,7 +279,7 @@ def capture_one(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     view_paths = {
         key: output_dir / f"{waypoint['waypoint_id']}.{key}.png"
-        for key in ("fpv", "chase", "map", "verify")
+        for key in ("fpv", "chase", "topdown", "verify")
     }
     capture = worker.capture_semantic_pose_robot_views(
         state=state,

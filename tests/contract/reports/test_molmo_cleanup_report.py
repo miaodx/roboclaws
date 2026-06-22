@@ -326,7 +326,7 @@ def _robot_visual_timeline_report_context(tmp_path: Path) -> SimpleNamespace:
         tmp_path / "after.png",
         title="After",
     )
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
     return SimpleNamespace(
@@ -367,7 +367,7 @@ def _robot_visual_timeline_run_result(score: object) -> dict[str, object]:
 def _robot_visual_timeline_steps() -> list[dict[str, object]]:
     static_view_provenance = {
         "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
-        "map": "isaac_lab_camera_rgb_static_robot_views:map",
+        "topdown": "isaac_lab_camera_rgb_static_robot_views:topdown",
         "semantic_pose_state_refreshed": False,
         "evidence_note": "Robot-view images are static captures from the loaded USD scene.",
     }
@@ -379,7 +379,7 @@ def _robot_visual_timeline_steps() -> list[dict[str, object]]:
             "views": {
                 "fpv": "robot_views/step.fpv.png",
                 "chase": "robot_views/step.chase.png",
-                "map": "robot_views/step.map.png",
+                "topdown": "robot_views/step.topdown.png",
                 "verify": "robot_views/bootstrap.verify.png",
             },
             "focus": {
@@ -406,7 +406,7 @@ def _robot_visual_timeline_steps() -> list[dict[str, object]]:
             "views": {
                 "fpv": "robot_views/step.fpv.png",
                 "chase": "robot_views/step.chase.png",
-                "map": "robot_views/step.map.png",
+                "topdown": "robot_views/step.topdown.png",
                 "verify": "robot_views/step.verify.png",
             },
             "focus": {
@@ -507,7 +507,7 @@ def _assert_robot_visual_timeline_yaw_rendering(
                 "robot_pose": {"x": 0.0, "y": 0.39, "yaw_deg": 257.0},
                 "views": {
                     "fpv": "robot_views/isaac.fpv.png",
-                    "map": "robot_views/isaac.map.png",
+                    "topdown": "robot_views/isaac.topdown.png",
                 },
             }
         ],
@@ -541,7 +541,7 @@ def test_cleanup_report_marks_refreshed_isaac_semantic_pose_views(tmp_path: Path
         tmp_path / "after.png",
         title="After",
     )
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
     run_result = {
@@ -577,7 +577,7 @@ def test_cleanup_report_marks_refreshed_isaac_semantic_pose_views(tmp_path: Path
                 "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
                 "view_provenance": {
                     "fpv": "isaac_lab_camera_rgb_semantic_pose_robot_views:fpv",
-                    "map": "isaac_lab_camera_rgb_semantic_pose_robot_views:map",
+                    "topdown": "isaac_lab_camera_rgb_semantic_pose_robot_views:topdown",
                     "semantic_pose_state_refreshed": True,
                     "evidence_note": (
                         "Robot-view images were recaptured from the loaded USD scene "
@@ -587,7 +587,7 @@ def test_cleanup_report_marks_refreshed_isaac_semantic_pose_views(tmp_path: Path
                 "views": {
                     "fpv": "robot_views/step.fpv.png",
                     "chase": "robot_views/step.chase.png",
-                    "map": "robot_views/step.map.png",
+                    "topdown": "robot_views/step.topdown.png",
                     "verify": "robot_views/step.verify.png",
                 },
                 "focus": {"has_focus": True},

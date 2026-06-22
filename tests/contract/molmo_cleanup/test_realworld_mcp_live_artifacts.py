@@ -27,11 +27,13 @@ def test_realworld_mcp_writes_live_public_map_artifacts_before_done(tmp_path: Pa
 
     agent_view_path = tmp_path / "agent_view.json"
     runtime_map_path = tmp_path / "runtime_metric_map.json"
+    map_preview_path = tmp_path / "map_bundle" / "preview.png"
     semantic_map_path = tmp_path / "semantic_map.png"
     overlay_path = tmp_path / "map_overlay.json"
 
     assert agent_view_path.is_file()
     assert runtime_map_path.is_file()
+    assert map_preview_path.is_file()
     assert not semantic_map_path.exists()
     assert not overlay_path.exists()
     assert not (tmp_path / "run_result.json").exists()

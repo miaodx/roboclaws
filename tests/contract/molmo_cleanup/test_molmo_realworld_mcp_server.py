@@ -617,7 +617,7 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
         )
         output_dir.mkdir(parents=True, exist_ok=True)
         views = {}
-        for key in ("fpv", "chase", "map", "verify"):
+        for key in ("fpv", "chase", "topdown", "verify"):
             path = output_dir / f"{label}_{key}.png"
             path.write_bytes(b"fake png")
             views[key] = str(path)
@@ -634,7 +634,7 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
                 "same_room_as_target": True,
             },
             "robot_trajectory": [{"x": 1.0, "y": 2.0}],
-            "view_variant": "molmospaces-rby1m-fpv-map-chase-verify",
+            "view_variant": "molmospaces-rby1m-fpv-topdown-chase-verify",
             "view_provenance": "test_fake_visual_backend",
             "camera_control_contract": {
                 "schema": "robot_view_camera_control_contract_v1",
@@ -966,7 +966,7 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
 
     assert done["cleanup_status"] == "failed"
     assert run_result["cleanup_status_role"] == "advisory"
-    assert run_result["view_variant"] == "molmospaces-rby1m-fpv-map-chase-verify"
+    assert run_result["view_variant"] == "molmospaces-rby1m-fpv-topdown-chase-verify"
     assert run_result["robot_view_camera_control"]["schema"] == (
         "robot_view_camera_control_summary_v1"
     )

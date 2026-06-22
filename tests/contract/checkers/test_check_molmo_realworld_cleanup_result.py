@@ -552,10 +552,10 @@ def test_checker_allows_map_build_robot_timeline_without_cleanup_actions(
     )
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("scene.fpv.png", "scene.chase.png", "scene.map.png", "scene.verify.png"):
+    for name in ("scene.fpv.png", "scene.chase.png", "scene.topdown.png", "scene.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         _scene_context_robot_step("before"),
@@ -1658,7 +1658,7 @@ def test_checker_requires_robot_head_camera_fpv(
         semantic_pose_state_refreshed=True,
         head_camera_equivalent=True,
     )
-    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    data["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
 
     checker._assert_result(
         data,
@@ -1685,7 +1685,7 @@ def test_checker_rejects_backend_local_robot_view_when_head_camera_required(
         semantic_pose_state_refreshed=True,
         canonical_camera_control=False,
     )
-    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    data["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -1713,7 +1713,7 @@ def test_checker_rejects_canonical_free_camera_when_head_camera_required(
         semantic_pose_state_refreshed=True,
         canonical_camera_control=True,
     )
-    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    data["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -1746,7 +1746,7 @@ def test_checker_rejects_head_camera_contract_without_head_camera_source(
             "source": "isaac_lab_scene_bounds_fpv",
             "canonical_camera_control": False,
         }
-    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    data["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -2344,7 +2344,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("raw.fpv.png", "raw.chase.png", "raw.map.png", "raw.verify.png"):
+    for name in ("raw.fpv.png", "raw.chase.png", "raw.topdown.png", "raw.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     result["artifacts"]["robot_views"] = str(robot_views)
     _insert_robot_timeline_before_score(tmp_path / "report.html")
@@ -2352,7 +2352,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
     for item in result["agent_view"]["raw_fpv_observations"]:
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["robot_view_steps"] = [
         {
             "action": "before",
@@ -2360,7 +2360,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
             "views": {
                 "fpv": "robot_views/raw.fpv.png",
                 "chase": "robot_views/raw.chase.png",
-                "map": "robot_views/raw.map.png",
+                "topdown": "robot_views/raw.topdown.png",
                 "verify": "robot_views/raw.verify.png",
             },
             "focus": {"has_focus": False},
@@ -2371,7 +2371,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
             "views": {
                 "fpv": "robot_views/raw.fpv.png",
                 "chase": "robot_views/raw.chase.png",
-                "map": "robot_views/raw.map.png",
+                "topdown": "robot_views/raw.topdown.png",
                 "verify": "robot_views/raw.verify.png",
             },
             "focus": {"has_focus": False},
@@ -3196,10 +3196,10 @@ def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None
     result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         _robot_step("navigate_to_object observed_001"),
@@ -3229,10 +3229,10 @@ def test_checker_counts_visual_candidate_robot_view_as_object_navigation(
     result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3269,10 +3269,10 @@ def test_checker_openclaw_minimum_robot_views_allows_partial_visual_actions(
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         _robot_step("pick observed_001"),
@@ -3300,10 +3300,10 @@ def test_checker_rejects_zero_pixel_focused_surface_action(tmp_path: Path) -> No
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3351,10 +3351,10 @@ def test_checker_accepts_authorized_source_fpv_evidence_for_weak_nav_view(
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3414,10 +3414,10 @@ def test_checker_rejects_weak_nav_view_without_authorized_source_fpv_evidence(
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3476,10 +3476,10 @@ def test_checker_allows_weak_fpv_when_verify_view_is_grounded(tmp_path: Path) ->
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3551,10 +3551,10 @@ def test_checker_allows_segmentation_unavailable_focused_surface_action(tmp_path
     result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
     robot_views = tmp_path / "robot_views"
     robot_views.mkdir()
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.topdown.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     _insert_robot_timeline_before_score(tmp_path / "report.html")
-    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["view_variant"] = "molmospaces-rby1m-fpv-topdown-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
         {
@@ -3831,7 +3831,7 @@ def _robot_step(action: str) -> dict[str, object]:
         "views": {
             "fpv": "robot_views/step.fpv.png",
             "chase": "robot_views/step.chase.png",
-            "map": "robot_views/step.map.png",
+            "topdown": "robot_views/step.topdown.png",
             "verify": "robot_views/step.verify.png",
         },
         "focus": {
@@ -3849,7 +3849,7 @@ def _scene_context_robot_step(action: str) -> dict[str, object]:
         "views": {
             "fpv": "robot_views/scene.fpv.png",
             "chase": "robot_views/scene.chase.png",
-            "map": "robot_views/scene.map.png",
+            "topdown": "robot_views/scene.topdown.png",
             "verify": "robot_views/scene.verify.png",
         },
         "focus": {
@@ -4243,7 +4243,7 @@ def _write_isaac_robot_view_images(
     view_dir = base / "isaac_robot_views"
     view_dir.mkdir(parents=True, exist_ok=True)
     views: dict[str, str] = {}
-    for key in ("fpv", "chase", "map", "verify"):
+    for key in ("fpv", "chase", "topdown", "verify"):
         path = view_dir / f"step.{key}.png"
         if key == blank_key:
             _write_blank_png(path)
@@ -4519,7 +4519,7 @@ def _add_isaac_robot_view_step(
     assert isinstance(artifacts, dict)
     artifacts["robot_views"] = str(view_dir.relative_to(base))
     artifacts["report"] = str(report.relative_to(base))
-    data["view_variant"] = "isaaclab-fpv-map-chase-verify"
+    data["view_variant"] = "isaaclab-fpv-topdown-chase-verify"
     steps = _base_isaac_robot_view_steps(views)
     for step in steps:
         _apply_isaac_robot_view_step_metadata(

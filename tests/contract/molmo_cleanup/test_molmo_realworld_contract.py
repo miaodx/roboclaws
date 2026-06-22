@@ -98,7 +98,7 @@ class _PoseRecordingBackend:
         output_dir.mkdir(parents=True, exist_ok=True)
         current = self.current_receptacle_id or "unknown"
         views = {}
-        for key in ("fpv", "chase", "map", "verify"):
+        for key in ("fpv", "chase", "topdown", "verify"):
             path = output_dir / f"{label}.{current}.{key}.png"
             path.write_bytes(b"fake png")
             views[key] = str(path)
@@ -108,7 +108,7 @@ class _PoseRecordingBackend:
             "ok": True,
             "robot_pose": pose,
             "robot_trajectory": [pose],
-            "view_variant": "test-fpv-map-chase-verify",
+            "view_variant": "test-fpv-topdown-chase-verify",
             "views": views,
         }
 
@@ -2031,7 +2031,7 @@ def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
     assert second_artifact is not None
     assert first_artifact["image_artifacts"]["fpv"] != second_artifact["image_artifacts"]["fpv"]
     assert first_views["verify"] != second_views["verify"]
-    assert first_views["map"] != second_views["map"]
+    assert first_views["topdown"] != second_views["topdown"]
     assert str(first_raw["observation_id"]) in first_artifact["image_artifacts"]["fpv"]
     assert str(second_raw["observation_id"]) in second_artifact["image_artifacts"]["fpv"]
 

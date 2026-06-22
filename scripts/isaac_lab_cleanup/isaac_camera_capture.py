@@ -619,7 +619,7 @@ def _apply_view_color_profile(
     render_state: _RenderState,
     rgb_image: Any,
 ) -> tuple[Any, dict[str, Any] | None]:
-    if view_name == "map":
+    if view_name == "topdown":
         return rgb_image, None
     return apply_camera_color_profile(
         rgb_image,
