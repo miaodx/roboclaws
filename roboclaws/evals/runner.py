@@ -513,10 +513,20 @@ def _outcome_grader(
         or run_result.get("cleanup_status")
         or ""
     )
-    passed = completion_status in {"passed", "success", "complete", "completed"}
+    semantic_acceptability = (
+        score.get("semantic_acceptability")
+        if isinstance(score.get("semantic_acceptability"), dict)
+        else {}
+    )
+    semantic_completion_status = str(semantic_acceptability.get("status") or "")
+    passed = completion_status in {"passed", "success", "complete", "completed"} or (
+        sample.intent == "cleanup" and semantic_completion_status == "success"
+    )
     return {
         "status": "passed" if passed else "failed",
         "completion_status": completion_status,
+        "semantic_completion_status": semantic_completion_status or MISSING_UNAVAILABLE,
+        "semantic_acceptability": semantic_acceptability or MISSING_UNAVAILABLE,
         "mess_restoration_rate": score.get("mess_restoration_rate", MISSING_UNAVAILABLE),
         "disturbance_count": score.get("disturbance_count", MISSING_UNAVAILABLE),
     }

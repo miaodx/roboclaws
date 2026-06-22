@@ -132,6 +132,60 @@ def test_perf_profile_rejects_invalid_compaction_min_chars(
         )
 
 
+def test_input_compaction_accepts_disabled_nested_zero_retention_from_perf_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    profile = resolve_agent_sdk_perf_profile(
+        _perf_profile_args(provider_profile="minimax-responses", model="")
+    )
+    request = LiveAgentRequest(
+        run_id="household-world.open-ended",
+        skill_name="household-open-task",
+        kickoff_prompt="inspect the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"agent_sdk_perf_profile": profile},
+    )
+
+    config = _input_compaction_config(request)
+
+    assert config["enabled"] is False
+    assert config["raw_fpv_image_memory"]["enabled"] is False
+    assert config["raw_fpv_image_memory"]["retained_full_frame_limit"] == 0
+    assert config["camera_grounded_history"]["enabled"] is False
+    assert config["camera_grounded_history"]["retained_recent_outputs"] == 0
+
+
+def test_input_compaction_rejects_enabled_nested_zero_retention(tmp_path: Path) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.open-ended",
+        skill_name="household-open-task",
+        kickoff_prompt="inspect the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "model_input_compaction": {
+                "enabled": True,
+                "raw_fpv_image_memory": {
+                    "enabled": True,
+                    "retained_full_frame_limit": 0,
+                },
+            }
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents SDK setting raw_fpv_image_memory.retained_full_frame_limit "
+            "must be a positive integer"
+        ),
+    ):
+        _input_compaction_config(request)
+
+
 def test_model_input_camera_history_fails_aloud_on_malformed_mcp_text_content() -> None:
     items = [
         {
