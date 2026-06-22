@@ -15,7 +15,10 @@ from roboclaws.household.manipulation_provenance import (
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, MINIMAL_MAP_MODE
-from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
+from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+    NAVIGATION_PROVENANCE,
+)
 from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -4913,6 +4916,13 @@ def _b1_navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict[str
     return {
         "schema": "b1_map12_navigation_smoke_v1",
         "status": "passed",
+        "b1_scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+        "visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": True,
+            "status": "same_pose_render_verified",
+        },
         "robot_navigation_supported": True,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE,
         "navigation_provenance": "kinematic_pose_driven",
@@ -4957,6 +4967,7 @@ def _b1_waypoint_evidence(
 ) -> dict[str, object]:
     return {
         "waypoint_id": waypoint_id,
+        "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
         "robot_pose": {
             "frame": "b1_rebuilt_scene_usd_world_candidate",
             "x": x,

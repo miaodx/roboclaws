@@ -724,14 +724,14 @@ def _real_robot_readiness_note(readiness: dict[str, Any]) -> str:
             f"physical_cleanup_ready={str(readiness.get('physical_cleanup_ready')).lower()}."
         )
         return (
-            "This section is a physical Navigation + Perception Pilot. Nav2 waypoint "
+            "This section is a physical Navigation + Perception Pilot. Backend waypoint "
             "navigation may execute, reached waypoints are observed, and physical "
             f"cleanup manipulation remains blocked_capability. {physical_flags}"
         )
     return (
         "This section checks contract shape, not live ROS/Nav2. Current simulator "
         "navigation is validated against a static Nav2-shaped costmap and still is "
-        "not a physical nav2_action; chase imagery is labelled "
+        "not physical robot navigation; chase imagery is labelled "
         "report_only_simulation_view and is not a policy input."
     )
 

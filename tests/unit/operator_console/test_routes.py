@@ -23,6 +23,7 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 MUJOCO_CODEX_CLEANUP = (
     "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
 )
@@ -67,24 +68,15 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "href": "/previews/molmospaces-procthor-objaverse-val-10-topdown.png",
         },
     }
-    assert worlds["agibot-g2/map-12"]["preview_assets"] == {
-        "map": {
-            "path": "/previews/b1-map12-map.png",
-            "href": "/previews/b1-map12-map.png",
-        },
-        "topdown": {
-            "path": "/previews/b1-map12-topdown.png",
-            "href": "/previews/b1-map12-topdown.png",
-        },
-    }
+    assert worlds["agibot-g2/map-12"]["preview_assets"] == {}
     assert worlds["b1-map12"]["preview_assets"] == {
-        "map": {
-            "path": "/previews/b1-map12-map.png",
-            "href": "/previews/b1-map12-map.png",
+        "fpv": {
+            "path": "/previews/b1-map12-fpv.png",
+            "href": "/previews/b1-map12-fpv.png",
         },
-        "topdown": {
-            "path": "/previews/b1-map12-topdown.png",
-            "href": "/previews/b1-map12-topdown.png",
+        "chase": {
+            "path": "/previews/b1-map12-chase.png",
+            "href": "/previews/b1-map12-chase.png",
         },
     }
     assert "ai2thor/FloorPlan201" not in worlds
@@ -156,7 +148,7 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
         assert "scene_alignment" not in metadata["views"]["map"]
 
 
-def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
+def test_b1_map12_scene_preview_has_v1_runtime_camera_provenance() -> None:
     preview_root = (
         Path(__file__).resolve().parents[3] / "roboclaws/operator_console/static/previews"
     )
@@ -166,21 +158,25 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert "fpv" not in metadata["views"]
-    assert "chase" not in metadata["views"]
-    assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
-    assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
-    assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
-    assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["map"]["provenance"] == "compiled_vendor_map12_runtime_preview_png"
-    assert metadata["views"]["topdown"]["view"] == "review_label_topdown"
-    assert metadata["views"]["topdown"]["provenance"] == (
-        "compiled_b1_map12_review_labels_topdown_png"
+    assert metadata["renderer"] == "b1_map12_isaac_runtime_camera_previews"
+    assert metadata["scene_usd_path"] == (
+        "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
-    assert metadata["views"]["topdown"]["review_label_count"] >= 1
-    assert metadata["views"]["topdown"]["room_count"] >= 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
+    assert metadata["camera_preview_artifact"]["schema"] == "b1_map12_navigation_smoke_v1"
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "navigation_smoke.json"
+    assert "path" not in metadata["camera_preview_artifact"]
+    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["fpv"]["robot_mounted"] is True
+    assert not str(metadata["views"]["fpv"].get("source_artifact_view", "")).startswith("/")
+    assert "source_path" not in metadata["views"]["fpv"]
+    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+    assert not str(metadata["views"]["chase"].get("source_artifact_view", "")).startswith("/")
+    assert "source_path" not in metadata["views"]["chase"]
+    assert "map" not in metadata["views"]
+    assert "topdown" not in metadata["views"]
+    assert "diagnostic_views" not in metadata
+    assert "map_bundle" not in metadata
+    assert "runtime_map_bundle" not in metadata
 
 
 def test_console_combinations_are_catalog_backed_axes() -> None:
@@ -376,6 +372,8 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
         "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
         "world-public-labels" in enabled_ids
     )
+    assert B1_CODEX_OPEN_TASK in enabled_ids
+    assert B1_OPENAI_AGENTS_OPEN_TASK in enabled_ids
 
     enabled_mujoco_cleanup_worlds = {
         route.world_id
@@ -397,14 +395,13 @@ def test_console_keeps_b1_unsupported_isaac_lane_visible_but_disabled() -> None:
         if not route.enabled
     }
 
-    reason = disabled["b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"]
-    assert "not wired yet" in reason
-    assert "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels" not in {
-        route.id for route in list_console_combinations(include_disabled=False)
-    }
-    assert "b1-map12::isaaclab::open-task::codex-cli::camera-raw-fpv" in {
-        route.id for route in list_console_combinations(include_disabled=False)
-    }
+    enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
+    for engine in ("codex-cli", "openai-agents-sdk"):
+        route_id = f"b1-map12::isaaclab::open-task::{engine}::camera-grounded-labels"
+        reason = disabled[route_id]
+        assert "not wired yet" in reason
+        assert route_id not in enabled_ids
+        assert f"b1-map12::isaaclab::open-task::{engine}::camera-raw-fpv" in enabled_ids
 
 
 def test_disabled_combinations_have_concrete_reasons() -> None:
@@ -423,14 +420,16 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
             "world-public-labels"
         ]
     )
-    b1_camera_grounded = "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"
-    assert "not wired yet" in reasons[b1_camera_grounded]
+    for engine in ("codex-cli", "openai-agents-sdk"):
+        b1_camera_grounded = f"b1-map12::isaaclab::open-task::{engine}::camera-grounded-labels"
+        assert "not wired yet" in reasons[b1_camera_grounded]
 
 
 def test_payload_exposes_orthogonal_ui_metadata() -> None:
     mujoco = get_selection(MUJOCO_CODEX_OPEN_TASK).to_payload()
     agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
     b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
+    b1_openai_agents = get_selection(B1_OPENAI_AGENTS_OPEN_TASK).to_payload()
 
     assert mujoco["world_id"] == "molmospaces/procthor-objaverse-val/0"
     assert mujoco["backend_id"] == "mujoco"
@@ -453,6 +452,16 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1["argv_preview"]
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
+    assert b1_openai_agents["world_id"] == "b1-map12"
+    assert b1_openai_agents["backend_id"] == "isaaclab"
+    assert b1_openai_agents["agent_engine_id"] == "openai-agents-sdk"
+    assert b1_openai_agents["provider_profile"] == "codex-router-responses"
+    assert b1_openai_agents["required_overrides"] == [
+        "b1_alignment_artifact",
+        "b1_navigation_artifact",
+    ]
+    assert b1_openai_agents["supports_relative_navigation_control"] is True
+    assert "agent_engine=openai-agents-sdk" in b1_openai_agents["argv_preview"]
 
 
 def test_legacy_route_api_stays_removed() -> None:
@@ -509,33 +518,38 @@ def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -
 
 
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
-    selection = get_selection(B1_CODEX_OPEN_TASK)
     alignment_artifact = tmp_path / "alignment_residuals.json"
     navigation_artifact = tmp_path / "navigation_smoke.json"
-    argv = build_launch_argv(
-        selection,
-        root=tmp_path,
-        run_id="run-1",
-        overrides={
-            "b1_alignment_artifact": str(alignment_artifact),
-            "b1_navigation_artifact": str(navigation_artifact),
-        },
-    )
+    for route_id, expected_engine in (
+        (B1_CODEX_OPEN_TASK, "codex-cli"),
+        (B1_OPENAI_AGENTS_OPEN_TASK, "openai-agents-sdk"),
+    ):
+        selection = get_selection(route_id)
+        argv = build_launch_argv(
+            selection,
+            root=tmp_path,
+            run_id="run-1",
+            overrides={
+                "b1_alignment_artifact": str(alignment_artifact),
+                "b1_navigation_artifact": str(navigation_artifact),
+            },
+        )
 
-    assert not any(item.startswith("intent=") for item in argv)
-    assert not any(item.startswith("preset=") for item in argv)
-    assert "backend=isaaclab" in argv
-    assert "scenario_setup=baseline" in argv
-    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in argv
-    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in argv
-    assert "robot_views=on" in argv
-    assert (
-        "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/scene_gs.usda"
-    ) in argv
-    assert f"b1_alignment_artifact={alignment_artifact}" in argv
-    assert f"b1_navigation_artifact={navigation_artifact}" in argv
-    assert not any(item.startswith("relocation_count=") for item in argv)
+        assert not any(item.startswith("intent=") for item in argv)
+        assert not any(item.startswith("preset=") for item in argv)
+        assert f"agent_engine={expected_engine}" in argv
+        assert "backend=isaaclab" in argv
+        assert "scenario_setup=baseline" in argv
+        assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in argv
+        assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in argv
+        assert "robot_views=on" in argv
+        assert (
+            "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
+            "B1_floor2_slow/usda/F2_all/default.usda"
+        ) in argv
+        assert f"b1_alignment_artifact={alignment_artifact}" in argv
+        assert f"b1_navigation_artifact={navigation_artifact}" in argv
+        assert not any(item.startswith("relocation_count=") for item in argv)
 
 
 def test_b1_map12_launch_requires_explicit_robot_proof_artifacts(tmp_path) -> None:

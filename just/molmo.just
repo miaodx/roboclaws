@@ -576,6 +576,17 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           run_dir="$run_dir_override"
         fi
         mkdir -p "$run_dir"
+        if [[ "$backend" == "isaaclab_subprocess" && "$launch_world_id" == "b1-map12" ]]; then
+          for b1_run_artifact in \
+            b1_robot_consumption_manifest.json \
+            runtime_map_prior_snapshot.json \
+            runtime_map_prior_targets.json
+          do
+            if [[ -f "${output_dir}/${b1_run_artifact}" ]]; then
+              cp "${output_dir}/${b1_run_artifact}" "${run_dir}/${b1_run_artifact}"
+            fi
+          done
+        fi
         policy="${driver%-live}_agent"
         if [[ "$driver" == "openai-agents-live" ]]; then
           policy="openai_agents_agent"

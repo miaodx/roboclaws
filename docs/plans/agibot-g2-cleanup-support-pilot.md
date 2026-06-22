@@ -4,8 +4,7 @@
 execution still unrun
 **Created:** 2026-05-19
 **Source:** grill-with-docs session on Agibot G2 GDK docs, local
-`vendors/agibot_sdk/` docs/examples, and
-`docs/plans/real-robot-nav2-cleanup-pilot.md`
+`vendors/agibot_sdk/` docs/examples, and the historical Nav2 cleanup pilot plan
 **Workflow:** Pre-GSD plan. Ingest into `.planning/` before implementation.
 
 ## Problem
@@ -28,8 +27,8 @@ physical manipulation remains blocked.
 
 ## Goal
 
-Extend `real_robot_cleanup_v1` so Agibot G2 can be a backend variant beside
-Nav2-backed robots:
+Extend the shared household-world capability profiles so Agibot G2 can be the
+current physical backend variant:
 
 - Keep the agent-facing public tool shape stable: `metric_map`,
   `fixture_hints`, `observe`, `navigate_to_waypoint`, `navigate_to_room`,
@@ -56,11 +55,12 @@ Nav2-backed robots:
 
 ## Decisions Locked
 
-- Agibot G2 remains a Backend Variant under `real_robot_cleanup_v1`; do not add
-  `agibot_g2_cleanup_v1` unless the public tool shape or safety policy diverges.
-- `real_robot_cleanup_v1` should describe a shared physical robot cleanup pilot
-  boundary, with metadata equivalent to `backend=physical_robot` and a backend
-  variant set such as `nav2_ros2` and `agibot_gdk`.
+- Agibot G2 remains a Backend Variant under the shared household-world
+  capability profiles; do not add `agibot_g2_cleanup_v1` unless the public tool
+  shape or safety policy diverges.
+- `real_robot_cleanup_v1` is historical report metadata. Active physical
+  capability metadata should use the household world, manipulation, and episode
+  profiles with `agibot_gdk` as the current physical backend variant.
 - Agibot G2 is selected as a backend variant such as `backend=agibot_gdk` under
   the existing `just task::run <task> <driver> ...` command grammar. It is not
   a separate public task name.
@@ -240,10 +240,9 @@ Tool behavior:
    report. Debug cameras should stay report artifacts, not policy inputs.
 
 9. **Profile And Checker Alignment**
-   Update `real_robot_cleanup_v1` metadata and contract tests so physical robot
-   profile metadata no longer hard-codes `backend=ros2_nav2` or
-   `nav2_action`-only provenance. The profile should allow both `nav2_ros2` and
-   `agibot_gdk` backend variants while preserving the same public tool list.
+   Update physical robot profile metadata and contract tests so public profiles
+   do not hard-code obsolete Nav2 execution provenance. The active variant is
+   `agibot_gdk` while preserving the same public tool list.
 
 10. **Codex-Driven Physical Pilot Runbook**
     Document the Agibot operator workflow: relocalize on G02 Pad, capture a
@@ -260,12 +259,12 @@ Tool behavior:
   SDK runner for three semantic stages: `agent-view`, `observe`, and
   `navigate-waypoint`.
 - Added `roboclaws/molmo_cleanup/agibot_sdk_runner.py`, a subprocess adapter and
-  physical Agibot pilot runner that keeps Roboclaws on `real_robot_cleanup_v1`
-  while the SDK runner owns Agibot-specific evidence.
+  physical Agibot pilot runner while the SDK runner owns Agibot-specific
+  evidence.
 - Added `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py` for a
   deterministic dry-run review artifact.
-- Updated `real_robot_cleanup_v1` profile metadata from a Nav2-only backend to
-  `physical_robot` with backend variants `nav2_ros2` and `agibot_gdk`.
+- Updated physical profile metadata away from Nav2-only provenance toward the
+  current `agibot_gdk` backend variant.
 - Generated the current human-review artifact at
   `output/agibot/adr0131-sdk-runner-dry-run/report.html`.
 

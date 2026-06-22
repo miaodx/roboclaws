@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -17,16 +18,15 @@ from scripts.operator_console.render_scene_previews import (
     _scene_alignment,
     _scene_center_and_span,
     _topdown_camera_request,
+    parse_args,
     render_b1_map12_preview,
 )
 
 
 def test_render_scene_previews_rejects_non_positive_dimensions() -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
     for flag in ("--width", "--height"):
         try:
-            render_scene_previews.parse_args([flag, "0"])
+            parse_args([flag, "0"])
         except SystemExit as exc:
             assert exc.code == 2
         else:  # pragma: no cover - argparse should exit for invalid input
@@ -34,9 +34,7 @@ def test_render_scene_previews_rejects_non_positive_dimensions() -> None:
 
 
 def test_render_scene_previews_accepts_positive_dimensions() -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    args = render_scene_previews.parse_args(["--width", "1", "--height", "1"])
+    args = parse_args(["--width", "1", "--height", "1"])
 
     assert args.width == 1
     assert args.height == 1
@@ -197,42 +195,28 @@ def test_molmospaces_preview_scene_ref_rejects_unknown_source_or_index() -> None
         _molmospaces_scene_ref("molmospaces/ithor/-1")
 
 
-def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypatch) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_preview_does_not_generate_unverified_map_assets(tmp_path: Path) -> None:
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
+    Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
 
     result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
 
     assert result["world_id"] == B1_MAP12_WORLD_ID
     assert result["status"] == "rendered"
-    for view_name in ("map", "topdown"):
-        path = tmp_path / f"b1-map12-{view_name}.png"
-        assert path.is_file()
-        assert Image.open(path).size == (320, 200)
+    assert not (tmp_path / "b1-map12-map.png").exists()
+    assert not (tmp_path / "b1-map12-topdown.png").exists()
     assert not (tmp_path / "b1-map12-fpv.png").exists()
     assert not (tmp_path / "b1-map12-chase.png").exists()
     metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert "fpv" not in metadata["views"]
-    assert "chase" not in metadata["views"]
-    assert metadata["review_manifest"] == str(review)
-    assert metadata["runtime_map_bundle"] == str(tmp_path / "runtime-map-bundle")
-    assert metadata["views"]["topdown"]["review_label_count"] == 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 2
+    assert metadata["renderer"] == "b1_map12_runtime_camera_previews_only"
+    assert metadata["views"] == {}
+    assert "diagnostic_views" not in metadata
+    assert "runtime_map_bundle" not in metadata
 
 
-def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_preview_promotes_real_isaac_camera_artifact(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     views_dir = run_dir / "robot_views"
     views_dir.mkdir(parents=True)
@@ -285,11 +269,15 @@ def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
     )
 
     assert result["status"] == "rendered"
-    for view_name in ("fpv", "chase", "map", "topdown"):
+    for view_name in ("fpv", "chase"):
         assert (tmp_path / f"b1-map12-{view_name}.png").is_file()
+    assert not (tmp_path / "b1-map12-map.png").exists()
+    assert not (tmp_path / "b1-map12-topdown.png").exists()
     metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
-    assert metadata["camera_preview_artifact"]["path"] == str(artifact)
+    assert metadata["renderer"] == "b1_map12_isaac_runtime_camera_previews"
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "run_result.json"
+    assert metadata["camera_preview_artifact"]["source_artifact_sha256"] == _file_sha256(artifact)
+    assert "path" not in metadata["camera_preview_artifact"]
     assert metadata["camera_preview_artifact"]["alignment_artifact"] == str(
         run_dir / "alignment_residuals.json"
     )
@@ -650,14 +638,7 @@ def test_b1_camera_promotion_rejects_missing_residual_alignment_provenance(
     ]
 
 
-def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(tmp_path: Path) -> None:
     Image.new("RGB", (16, 16), (1, 2, 3)).save(tmp_path / "b1-map12-fpv.png")
     Image.new("RGB", (16, 16), (4, 5, 6)).save(tmp_path / "b1-map12-chase.png")
     metadata_path = tmp_path / "b1-map12-preview.json"
@@ -694,14 +675,7 @@ def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_rewrites_prepared_nurec_scene_probe_camera_previews(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_rewrites_prepared_nurec_scene_probe_camera_previews(tmp_path: Path) -> None:
     Image.new("RGB", (16, 16), (80, 90, 100)).save(tmp_path / "b1-map12-fpv.png")
     Image.new("RGB", (16, 16), (100, 90, 80)).save(tmp_path / "b1-map12-chase.png")
     metadata_path = tmp_path / "b1-map12-preview.json"
@@ -736,19 +710,12 @@ def test_b1_map12_rewrites_prepared_nurec_scene_probe_camera_previews(
     assert not (tmp_path / "b1-map12-fpv.png").exists()
     assert not (tmp_path / "b1-map12-chase.png").exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert metadata["renderer"] == "b1_map12_runtime_camera_previews_only"
     assert "fpv" not in metadata["views"]
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(tmp_path: Path) -> None:
     Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
     Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
     metadata_path = tmp_path / "b1-map12-preview.json"
@@ -785,19 +752,14 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
 
     assert result["status"] == "rendered"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert metadata["renderer"] == "b1_map12_runtime_camera_previews_only"
     assert "fpv" not in metadata["views"]
     assert "chase" not in metadata["views"]
 
 
 def test_b1_map12_skip_existing_rewrites_real_camera_metadata_without_alignment(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
     old_artifact = tmp_path / "old-run" / "run_result.json"
     metadata_path = _write_stale_b1_real_camera_preview_metadata(
         tmp_path,
@@ -820,14 +782,7 @@ def test_b1_map12_skip_existing_rewrites_real_camera_metadata_without_alignment(
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_skip_existing_keeps_complete_matching_camera_metadata(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_skip_existing_keeps_complete_matching_camera_metadata(tmp_path: Path) -> None:
     artifact = tmp_path / "run" / "run_result.json"
     alignment_artifact = tmp_path / "run" / "alignment_residuals.json"
     metadata_path = _write_stale_b1_real_camera_preview_metadata(
@@ -854,12 +809,7 @@ def test_b1_map12_skip_existing_keeps_complete_matching_camera_metadata(
 
 def test_b1_map12_static_preview_does_not_carry_forward_real_camera_previews(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
     metadata_path = _write_stale_b1_real_camera_preview_metadata(
         tmp_path,
         artifact_path=tmp_path / "old-run" / "run_result.json",
@@ -871,24 +821,19 @@ def test_b1_map12_static_preview_does_not_carry_forward_real_camera_previews(
     assert set(result["removed_stale"]) == {
         str(tmp_path / "b1-map12-fpv.png"),
         str(tmp_path / "b1-map12-chase.png"),
+        str(tmp_path / "b1-map12-map.png"),
+        str(tmp_path / "b1-map12-topdown.png"),
     }
     assert not (tmp_path / "b1-map12-fpv.png").exists()
     assert not (tmp_path / "b1-map12-chase.png").exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert metadata["renderer"] == "b1_map12_runtime_camera_previews_only"
     assert "camera_preview_artifact" not in metadata
     assert "fpv" not in metadata["views"]
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_skip_existing_requires_matching_camera_artifact(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    import scripts.operator_console.render_scene_previews as render_scene_previews
-
-    bundle, review = _write_b1_preview_inputs(tmp_path)
-    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+def test_b1_map12_skip_existing_requires_matching_camera_artifact(tmp_path: Path) -> None:
     old_artifact = tmp_path / "old-run" / "run_result.json"
     new_artifact = _write_b1_camera_artifact(tmp_path / "new-run", label="fresh_observe")
     metadata_path = _write_stale_b1_real_camera_preview_metadata(
@@ -906,137 +851,14 @@ def test_b1_map12_skip_existing_requires_matching_camera_artifact(
 
     assert result["status"] == "rendered"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["camera_preview_artifact"]["path"] == str(new_artifact)
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "run_result.json"
+    assert metadata["camera_preview_artifact"]["source_artifact_sha256"] == _file_sha256(
+        new_artifact
+    )
+    assert "path" not in metadata["camera_preview_artifact"]
     assert metadata["camera_preview_artifact"]["selected_label"] == "fresh_observe"
     assert metadata["views"]["fpv"]["label"] == "fresh_observe"
     assert metadata["views"]["chase"]["label"] == "fresh_observe"
-
-
-def _patch_b1_preview_inputs(
-    render_scene_previews,
-    monkeypatch,
-    tmp_path: Path,
-    bundle: Path,
-    review: Path,
-) -> None:
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
-    monkeypatch.setattr(
-        render_scene_previews,
-        "B1_NAVIGATION_MEMORY",
-        bundle.parent / "navigation_memory.json",
-    )
-    monkeypatch.setattr(render_scene_previews, "B1_SCENE_ROOT", tmp_path)
-    monkeypatch.setattr(render_scene_previews, "B1_ALIGNMENT_REVIEW_MANIFEST", review)
-    monkeypatch.setattr(
-        render_scene_previews,
-        "B1_RUNTIME_PREVIEW_BUNDLE_DIR",
-        tmp_path / "runtime-map-bundle",
-    )
-
-
-def _write_b1_preview_inputs(tmp_path: Path) -> tuple[Path, Path]:
-    bundle = _write_b1_map_bundle(tmp_path)
-    review = _write_b1_review_manifest(tmp_path, bundle)
-    return bundle, review
-
-
-def _write_b1_map_bundle(tmp_path: Path) -> Path:
-    bundle = tmp_path / "robot_map_12" / "agibot"
-    bundle.mkdir(parents=True)
-    (bundle / "nav2.yaml").write_text(
-        "\n".join(
-            [
-                "image: occupancy.pgm",
-                "resolution: 0.050000",
-                "origin: [-1.000000, -1.000000, 0.000000]",
-                "negate: 0",
-                "occupied_thresh: 0.650000",
-                "free_thresh: 0.250000",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    image = Image.new("L", (120, 90), 255)
-    for x in range(120):
-        image.putpixel((x, 0), 0)
-        image.putpixel((x, 89), 0)
-    for y in range(90):
-        image.putpixel((0, y), 0)
-        image.putpixel((119, y), 0)
-    image.save(bundle / "occupancy.pgm")
-    (bundle / "source.json").write_text(
-        json.dumps({"schema": "agibot.map_fetch.source.v1"}, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    (bundle / "raw_map.json.gz").write_bytes(b"test raw map")
-    (tmp_path / "robot_map_12" / "navigation_memory.json").write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "items": [
-                    {
-                        "id": "table_anchor",
-                        "label": "Table anchor",
-                        "kind": "surface",
-                        "pose": {"x": 1.0, "y": 1.0, "yaw": 0.0},
-                        "nav_goal": {"x": 1.0, "y": 1.0, "yaw": 0.0},
-                    }
-                ],
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    return bundle
-
-
-def _write_b1_review_manifest(tmp_path: Path, bundle: Path) -> Path:
-    review = tmp_path / "b1-map12-alignment-review.json"
-    review.write_text(
-        json.dumps(
-            {
-                "schema": "b1_map12_alignment_review_v1",
-                "source_assets": {
-                    "map_bundle": str(bundle),
-                    "scene_root": str(tmp_path),
-                    "scene_usd_path": "scene_base.usd",
-                },
-                "display_adjustment": {
-                    "global_tilt_deg": 0.0,
-                    "status": "review_display_only",
-                },
-                "labels": [
-                    {
-                        "label_id": "meeting_room_a",
-                        "scene_partition_id": "meeting_room_a",
-                        "room_label": "Meeting room A",
-                        "category": "meeting_room",
-                        "map_area_id": "meeting_room_a",
-                        "review_status": "accepted",
-                        "geometry": {
-                            "type": "map_polygon",
-                            "source": "manual_review",
-                            "frame_id": "map",
-                            "points": [
-                                {"x": 0.0, "y": 0.0},
-                                {"x": 4.0, "y": 0.0},
-                                {"x": 4.0, "y": 3.0},
-                                {"x": 0.0, "y": 3.0},
-                            ],
-                        },
-                    }
-                ],
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    return review
 
 
 def _write_stale_b1_real_camera_preview_metadata(
@@ -1090,6 +912,10 @@ def _write_stale_b1_real_camera_preview_metadata(
         encoding="utf-8",
     )
     return metadata_path
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _write_b1_camera_artifact(run_dir: Path, *, label: str) -> Path:

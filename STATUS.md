@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -45,11 +45,10 @@ preview from Runtime Metric Map evidence, keep Runtime Map Prior Snapshot
 as a prior wrapper, and no longer publish generated `semantic_map.png` /
 `map_overlay.json` previews as current map proof.
 
-The active visual-grounding sidecar contract is now detector-only: hosted VLM
-refiner/direct-producer camera labelers are retired from active code, command
-examples, tests, and benchmark promotion. OpenClaw remains available only as a
-guarded validation-required maintainer route until an off-work-network Gateway
-proof runs.
+The active camera-labeling sidecar contract is detector-only. Hosted refiner or
+direct-producer camera labelers are retired from active code, command examples,
+tests, and benchmark promotion. Validation-required maintainer routes stay
+guarded until their separate off-work-network proof runs.
 
 The first-slice cross-environment semantic map parity contract is implemented.
 Real-robot, B1 digital-twin, and simulator static map bundles now declare
@@ -58,17 +57,21 @@ geometry source, and alignment status. B1 scene partition labels bind through
 `scene_map_correspondence_v1` instead of list order, and reports label
 raw/source-map aligned previews.
 
-The B1 / Map 12 digital-twin map input contract now uses vendor raw Map12 plus a
-seed/review placeholder manifest instead of the deleted authored merged map bundle.
-Product and operator-preview routes compile a generated runtime bundle from
+The B1 / Map 12 digital-twin map input contract now has accepted geometry
+alignment, preview-grade residual-backed robot pose/render proof, and
+agent-visible runtime-prior capability exposure. Product and operator-preview
+routes compile a generated runtime bundle from
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
-`assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
-passing map context to lower-level consumers. No final operator-authored room
-semantic manifest exists yet; manual room labels and residual-backed
-scene-map correspondences still need review before they can be treated as
-accepted semantics. The active blocking plan for making the B1 digital twin
-usable is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+`assets/maps/b1-map12-alignment-review.json`, explicit alignment/navigation
+proof artifacts, and the raw scene root before passing map context to
+lower-level consumers. The implemented P0 consumer-chain plan is
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: explicit B1
+runtime priors now expose `digital_twin_capabilities`, `capability_summary`,
+render/observation readiness, and blocked `B1_floor2_slow` default visual-route
+status through agent-visible MCP/runtime map context. Room/object semantic
+projection and public navigation extensions are follow-ups in
+`docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -80,21 +83,23 @@ implemented sim map surface simplification is
 `docs/plans/2026-06-17-sim-map-surface-simplification.md`. The
 implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
-ADR-0136. The implemented visual-grounding cleanup is
-`docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
-backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
-`docs/plans/refactor-retire-ai2thor-vlm-direct.md`. The implemented B1 / Map 12
+ADR-0136. The implemented visual-grounding cleanup is backed by ADR-0138.
+Retirement records remain searchable under `docs/plans/`. The implemented B1 / Map 12
 thin review/runtime contract is
 `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`.
 
 ## Next Action
 
-Pick the next repo maintenance or product slice. The eval-driven architecture,
-non-cleanup eval support, and sim map surface simplification plans are
-implemented; remaining broader live-provider and OpenClaw proofs are
-environment-dependent validation items, not active implementation blockers.
+Use `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md` for
+the next B1 / Map 12 work: accepted room-semantic anchors, strict room/object
+semantic projection, and any public navigation extension after a separate
+proof gate.
 
 ## Current Blocker
+
+No current human blocker for the implemented B1 P0 digital-twin
+navigation/render consumer-chain slice. Room semantic review remains required
+before semantic projection follow-up work can be promoted.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
@@ -108,8 +113,9 @@ Default non-direct eval requests remain blocked identity/preflight packets
 unless live execution is explicitly requested. Remaining validation blockers are
 external or product-route-specific: broader live-agent `pass^k` proof needs
 healthy provider/runtime capacity and agent behavior that reaches `done`,
-RAW-FPV live cleanup needs live-session capacity, and OpenClaw Gateway proof
-must run separately off the work network before OpenClaw can be called healthy.
+RAW-FPV live cleanup needs live-session capacity, and validation-required
+maintainer routes need separate off-work-network proof before they can be
+called healthy.
 
 ## Human Review Surface
 
@@ -138,10 +144,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`
 - Active B1 / Map 12 two-map alignment blocker:
   `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
-- Implemented VLM-sidecar/OpenClaw status cleanup:
-  `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
-- Implemented AI2-THOR/direct-VLM retirement record:
-  `docs/plans/refactor-retire-ai2thor-vlm-direct.md`
+- B1 / Map 12 semantic and public-navigation follow-ups:
+  `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`
 - Open-ended proof-status contract:
   `docs/plans/2026-06-11-open-ended-proof-status.md`
 - Current status: `STATUS.md`

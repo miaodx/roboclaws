@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import math
 import shutil
@@ -30,7 +31,6 @@ from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend 
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
 from roboclaws.maps.bundle import write_nav2_map_bundle_snapshot  # noqa: E402
-from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle  # noqa: E402
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -38,15 +38,8 @@ DEFAULT_WORK_DIR = Path("output/operator-console-scene-previews")
 DEFAULT_WIDTH = 900
 DEFAULT_HEIGHT = 560
 B1_MAP12_WORLD_ID = "b1-map12"
-B1_MAP_BUNDLE_DIR = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
-B1_NAVIGATION_MEMORY = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json")
-B1_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
-B1_ALIGNMENT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
-B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
-    "output/operator-console-scene-previews/b1-map12-runtime-map-bundle"
-)
 B1_SCENE_USD_PATH = Path(
-    "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
+    "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
 )
 
 
@@ -345,22 +338,21 @@ def render_b1_map12_preview(
 ) -> dict[str, Any]:
     slug = _world_slug(B1_MAP12_WORLD_ID)
     fpv_path = output_dir / f"{slug}-fpv.png"
-    map_path = output_dir / f"{slug}-map.png"
     chase_path = output_dir / f"{slug}-chase.png"
-    topdown_path = output_dir / f"{slug}-topdown.png"
     metadata_path = output_dir / f"{slug}-preview.json"
+    stale_map_path = output_dir / f"{slug}-map.png"
+    stale_topdown_path = output_dir / f"{slug}-topdown.png"
     removed_stale = _remove_stale_b1_camera_previews(
         camera_artifact=camera_artifact,
         fpv_path=fpv_path,
         chase_path=chase_path,
     )
+    removed_stale.extend(_unlink_existing_paths(stale_map_path, stale_topdown_path))
     skip_result = (
         _b1_preview_skip_result(
             camera_artifact=camera_artifact,
             fpv_path=fpv_path,
-            map_path=map_path,
             chase_path=chase_path,
-            topdown_path=topdown_path,
             metadata_path=metadata_path,
             removed_stale=removed_stale,
         )
@@ -370,72 +362,7 @@ def render_b1_map12_preview(
     if skip_result is not None:
         return skip_result
 
-    raw_map_bundle = B1_MAP_BUNDLE_DIR
-    if not raw_map_bundle.is_dir():
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "map_bundle_missing",
-            "map_bundle": str(raw_map_bundle),
-        }
-    if not B1_ALIGNMENT_REVIEW_MANIFEST.is_file():
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "review_manifest_missing",
-            "review_manifest": str(B1_ALIGNMENT_REVIEW_MANIFEST),
-        }
-    try:
-        compile_runtime_bundle(
-            map_bundle=raw_map_bundle,
-            scene_root=B1_SCENE_ROOT,
-            review_manifest_path=B1_ALIGNMENT_REVIEW_MANIFEST,
-            navigation_memory_path=B1_NAVIGATION_MEMORY,
-            output_dir=B1_RUNTIME_PREVIEW_BUNDLE_DIR,
-        )
-    except Exception as exc:
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "runtime_bundle_compile_failed",
-            "error": str(exc),
-        }
-    map_bundle = B1_RUNTIME_PREVIEW_BUNDLE_DIR
-    required_assets = (
-        map_bundle / "preview.png",
-        map_bundle / "review_labels_topdown.png",
-        map_bundle / "semantics.json",
-        map_bundle / "b1_runtime_provenance.json",
-    )
-    missing = [str(path) for path in required_assets if not path.is_file()]
-    if missing:
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "map_bundle_incomplete",
-            "missing": missing,
-        }
-
-    semantics = json.loads((map_bundle / "semantics.json").read_text(encoding="utf-8"))
-    provenance = json.loads((map_bundle / "b1_runtime_provenance.json").read_text(encoding="utf-8"))
-    map_image = _fit_preview_image(
-        Image.open(map_bundle / "preview.png"), width=width, height=height
-    )
-    topdown_image = _fit_preview_image(
-        Image.open(map_bundle / "review_labels_topdown.png"),
-        width=width,
-        height=height,
-    )
-    map_image.save(map_path)
-    topdown_image.save(topdown_path)
-    metadata = _b1_map12_preview_metadata(
-        width=width,
-        height=height,
-        map_path=map_path,
-        topdown_path=topdown_path,
-        semantics=semantics,
-        provenance=provenance,
-    )
+    metadata = _b1_map12_preview_metadata(width=width, height=height)
     camera_result: dict[str, Any] | None = None
     if camera_artifact is not None:
         camera_result = _promote_b1_camera_previews(
@@ -455,14 +382,12 @@ def render_b1_map12_preview(
                 "world_id": B1_MAP12_WORLD_ID,
                 "scene_source": "b1-gaussian-digital-twin",
                 "status": "camera_preview_unavailable",
-                "map": str(map_path),
-                "topdown": str(topdown_path),
                 "metadata": str(metadata_path),
                 "camera_artifact": str(camera_artifact),
                 "camera_result": camera_result,
                 "removed_stale": removed_stale,
             }
-        metadata["renderer"] = "static_b1_map12_with_isaac_runtime_camera_previews"
+        metadata["renderer"] = "b1_map12_isaac_runtime_camera_previews"
         metadata["views"]["fpv"] = camera_result["views"]["fpv"]
         metadata["views"]["chase"] = camera_result["views"]["chase"]
         metadata["camera_preview_artifact"] = camera_result["artifact"]
@@ -474,8 +399,6 @@ def render_b1_map12_preview(
         "world_id": B1_MAP12_WORLD_ID,
         "scene_source": "b1-gaussian-digital-twin",
         "status": "rendered",
-        "map": str(map_path),
-        "topdown": str(topdown_path),
         "metadata": str(metadata_path),
         "removed_stale": removed_stale,
     }
@@ -515,13 +438,11 @@ def _b1_preview_skip_result(
     *,
     camera_artifact: Path | None,
     fpv_path: Path,
-    map_path: Path,
     chase_path: Path,
-    topdown_path: Path,
     metadata_path: Path,
     removed_stale: list[str],
 ) -> dict[str, Any] | None:
-    if not (map_path.exists() and topdown_path.exists() and metadata_path.exists()):
+    if not metadata_path.exists():
         return None
     if camera_artifact is None:
         can_skip = _b1_metadata_has_no_camera_previews(metadata_path)
@@ -541,8 +462,6 @@ def _b1_preview_skip_result(
         "scene_source": "b1-gaussian-digital-twin",
         "status": "skipped",
         **({"fpv": str(fpv_path), "chase": str(chase_path)} if camera_artifact is not None else {}),
-        "map": str(map_path),
-        "topdown": str(topdown_path),
         "metadata": str(metadata_path),
         "removed_stale": removed_stale,
     }
@@ -586,8 +505,18 @@ def _b1_metadata_camera_artifact_matches(
         return False
     raw_path = str(artifact.get("path") or "").strip()
     if not raw_path:
-        return False
+        artifact_hash = str(artifact.get("source_artifact_sha256") or "").strip()
+        if artifact_hash:
+            return camera_artifact.is_file() and artifact_hash == _file_sha256(camera_artifact)
+        return str(artifact.get("source_artifact_name") or "").strip() == camera_artifact.name
     return Path(raw_path).resolve() == camera_artifact.resolve()
+
+
+def _portable_b1_artifact_view_ref(*, artifact_path: Path, view_path: Path) -> str:
+    try:
+        return view_path.relative_to(artifact_path.parent).as_posix()
+    except ValueError:
+        return view_path.name
 
 
 def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bool:
@@ -684,7 +613,9 @@ def _promote_b1_camera_previews(
         "status": "promoted",
         "selection_status": "selected_highest_scoring_real_isaac_camera_pair",
         "artifact": {
-            "path": str(camera_artifact),
+            "source_artifact_name": camera_artifact.name,
+            "source_artifact_sha256": _file_sha256(camera_artifact),
+            "source_artifact_status": "external_local_verification_artifact",
             "schema": payload.get("schema") or payload.get("contract") or "",
             "source_kind": selected.get("source_kind"),
             "selected_label": selected_label,
@@ -715,7 +646,10 @@ def _promote_b1_camera_previews(
                 "label": selected_label,
                 "camera": agent_facing_fpv.get("camera_prim_path") or "/World/robot_0/head_camera",
                 "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
-                "source_path": str(fpv_source),
+                "source_artifact_view": _portable_b1_artifact_view_ref(
+                    artifact_path=camera_artifact,
+                    view_path=fpv_source,
+                ),
                 "source": agent_facing_fpv.get("source")
                 or "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
                 "robot_mounted": agent_facing_fpv.get("robot_mounted", True),
@@ -736,7 +670,10 @@ def _promote_b1_camera_previews(
                 "label": selected_label,
                 "camera": report_chase.get("camera_prim_path") or "robot_relative_chase_camera",
                 "provenance": "isaac_runtime_report_chase_camera",
-                "source_path": str(chase_source),
+                "source_artifact_view": _portable_b1_artifact_view_ref(
+                    artifact_path=camera_artifact,
+                    view_path=chase_source,
+                ),
                 "source": report_chase.get("source") or "backend_local_report_chase_camera",
                 "policy_note": "Chase is report evidence, not agent-facing policy input.",
                 "image_diagnostics": _image_diagnostics(chase_path),
@@ -981,6 +918,14 @@ def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path |
     return path
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _b1_camera_preview_quality_errors(diagnostics: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if diagnostics.get("visual_status") != "reviewable":
@@ -1169,57 +1114,17 @@ def _b1_map12_preview_metadata(
     *,
     width: int,
     height: int,
-    map_path: Path,
-    topdown_path: Path,
-    semantics: dict[str, Any],
-    provenance: dict[str, Any],
 ) -> dict[str, Any]:
-    rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
-    review_labels = (
-        semantics.get("review_labels") if isinstance(semantics.get("review_labels"), list) else []
-    )
-    waypoints = (
-        semantics.get("inspection_waypoints")
-        if isinstance(semantics.get("inspection_waypoints"), list)
-        else []
-    )
     return {
         "schema": PREVIEW_METADATA_SCHEMA,
         "generated_at": _utc_timestamp(),
         "world_id": B1_MAP12_WORLD_ID,
         "backend": "isaaclab",
-        "renderer": "static_b1_map12_digital_twin_overview",
+        "renderer": "b1_map12_runtime_camera_previews_only",
         "scene_source": "b1-gaussian-digital-twin",
         "scene_usd_path": str(B1_SCENE_USD_PATH),
-        "map_bundle": str(B1_MAP_BUNDLE_DIR),
-        "runtime_map_bundle": str(B1_RUNTIME_PREVIEW_BUNDLE_DIR),
-        "review_manifest": str(B1_ALIGNMENT_REVIEW_MANIFEST),
         "render_resolution": {"width": width, "height": height},
-        "runtime_provenance": provenance,
-        "views": {
-            "map": {
-                "path": map_path.name,
-                "view": "source_map_preview",
-                "provenance": "compiled_vendor_map12_runtime_preview_png",
-                "alignment_status": str(
-                    (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
-                ),
-                "display_frame": semantics.get("display_frame"),
-                "image_diagnostics": _image_diagnostics(map_path),
-            },
-            "topdown": {
-                "path": topdown_path.name,
-                "view": "review_label_topdown",
-                "provenance": "compiled_b1_map12_review_labels_topdown_png",
-                "alignment_status": str(
-                    (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
-                ),
-                "room_count": len(rooms),
-                "review_label_count": len(review_labels),
-                "inspection_waypoint_count": len(waypoints),
-                "image_diagnostics": _image_diagnostics(topdown_path),
-            },
-        },
+        "views": {},
     }
 
 

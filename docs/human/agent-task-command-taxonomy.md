@@ -2,7 +2,7 @@
 
 The implemented public command model is the surface open-task catalog in
 `just run::surface`, with optional presets for repeated household jobs. Older
-`task::run` and AI2-THOR task ids are retired.
+task ids are retired.
 
 ## Public Surface
 
@@ -31,6 +31,9 @@ Current household backend ids are world-scoped, not a cross product:
 - `agibot-gdk` for `world=agibot-g2/map-12`
 
 MolmoSpaces + Isaac is retired from active command support.
+The default household world remains `molmospaces/val_0`; additional
+source-aware MolmoSpaces world ids can be catalog/admission rows rather than
+new public surfaces.
 
 Current agent engines:
 
@@ -39,8 +42,8 @@ Current agent engines:
 - `claude-code`
 - `openai-agents-sdk`
 
-Validation-required maintainer engines such as `openclaw-gateway` are not part
-of the normal public engine list.
+Validation-required maintainer engines are not part of the normal public engine
+list.
 
 `prompt=...` without a household preset runs the default open-task contract.
 `preset=cleanup prompt=...` keeps cleanup semantics while narrowing the
@@ -60,7 +63,7 @@ just agent::gateway up|down|pull-image
 ```
 
 Lower modules such as `molmo::*`, `harness::*`, `verify::*`, `mcp::*`,
-`code::*`, `chat::*`, and `openclaw::*` are private implementation details.
+`code::*`, and `chat::*` are private implementation details.
 They remain runnable for debugging, but they are hidden from `just --summary`
 and should not be the first response to natural-language run requests.
 
@@ -83,7 +86,6 @@ recipes answer "how do we execute this low-level proof?"
 Household cleanup/map-build routes use `evidence_lane` to describe what the
 agent sees:
 
-- `world-public-labels`
 - `world-public-labels`
 - `camera-raw-fpv`
 - `camera-grounded-labels` with `camera_labeler=<labeler>`

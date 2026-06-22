@@ -316,7 +316,21 @@ def test_nav2_cleanup_bundle_converts_to_runtime_prior_snapshot_shape(tmp_path: 
         ]
         is True
     )
+    assert (
+        targets["digital_twin_capabilities"]["render_observation_proof"][
+            "render_observation_supported"
+        ]
+        is True
+    )
     assert targets["capability_summary"]["robot_navigation_supported"] is True
+    assert targets["capability_summary"]["render_observation_supported"] is True
+    assert targets["capability_summary"]["same_pose_fpv_supported"] is True
+    assert targets["capability_summary"]["same_pose_chase_supported"] is True
+    assert targets["capability_summary"]["same_pose_topdown_supported"] is True
+    assert targets["capability_summary"]["default_visual_route_status"] == (
+        "blocked_missing_verified_b1_floor2_slow_render_proof"
+    )
+    assert targets["capability_summary"]["default_visual_route_selected"] is False
     assert targets["capability_summary"]["room_semantics_supported"] is False
     assert runtime_metric_map_from_prior_artifact(snapshot) == snapshot["runtime_metric_map"]
     _assert_no_forbidden_keys(snapshot)
@@ -448,6 +462,19 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
                 "room_semantics_supported": False,
                 "object_semantics_supported": False,
                 "object_projection_status": "blocked_until_object_semantic_anchors",
+            },
+            "render_observation_proof": {
+                "status": "same_pose_render_observation_verified",
+                "render_observation_supported": True,
+                "same_pose_fpv_supported": True,
+                "same_pose_chase_supported": True,
+                "same_pose_topdown_supported": True,
+                "default_visual_route": {
+                    "scene_id": "B1_floor2_slow",
+                    "scene_root": "data/robot-data-lab/scene-engine/data/B1_floor2_slow",
+                    "selected": False,
+                    "status": "blocked_missing_verified_b1_floor2_slow_render_proof",
+                },
             },
         },
         "provenance": {

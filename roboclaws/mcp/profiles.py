@@ -51,7 +51,6 @@ PROVENANCE_SYNTHETIC_CONTRACT = "synthetic_contract"
 PROVENANCE_CAMERA_ARTIFACT = "camera_artifact"
 PROVENANCE_SIMULATED_CAMERA_MODEL = "simulated_camera_model"
 PROVENANCE_PLANNER_BACKED = "planner_backed"
-PROVENANCE_NAV2_ACTION = "nav2_action"
 PROVENANCE_AGIBOT_GDK_NORMAL_NAVI = "agibot_gdk_normal_navi"
 PROVENANCE_AGIBOT_GDK_MAP_CONTEXT = "agibot_gdk_map_context"
 PROVENANCE_BLOCKED_CAPABILITY = "blocked_capability"
@@ -260,7 +259,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         CLASSIFICATION_CANONICAL,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
         ),
         (
@@ -275,7 +273,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         CLASSIFICATION_CANONICAL,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -288,7 +285,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         CLASSIFICATION_CANONICAL,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -301,7 +297,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         CLASSIFICATION_CANONICAL,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -343,7 +338,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         (
             PROVENANCE_CAMERA_ARTIFACT,
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -364,7 +358,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         CLASSIFICATION_COMPOSED,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -381,7 +374,6 @@ _HOUSEHOLD_MANIPULATION_TOOLS = (
         (
             PROVENANCE_API_SEMANTIC,
             PROVENANCE_CAMERA_ARTIFACT,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -402,7 +394,6 @@ _HOUSEHOLD_MANIPULATION_TOOLS = (
         CLASSIFICATION_CANONICAL,
         (
             PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
             PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
             PROVENANCE_BLOCKED_CAPABILITY,
         ),
@@ -449,7 +440,6 @@ _HOUSEHOLD_DONE_TOOL = _tool(
     CLASSIFICATION_CANONICAL,
     (
         PROVENANCE_API_SEMANTIC,
-        PROVENANCE_NAV2_ACTION,
         PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
         PROVENANCE_BLOCKED_CAPABILITY,
     ),
@@ -473,7 +463,6 @@ _HOUSEHOLD_WORLD_PROFILE = ContractProfile(
     backend_variants=(
         "api_semantic_synthetic",
         "molmospaces_subprocess",
-        "nav2_ros2",
         "agibot_gdk",
     ),
     capability_families=(
@@ -500,7 +489,6 @@ _HOUSEHOLD_MANIPULATION_PROFILE = ContractProfile(
     backend_variants=(
         "api_semantic_synthetic",
         "molmospaces_subprocess",
-        "nav2_ros2",
         "agibot_gdk",
     ),
     capability_families=(
@@ -524,7 +512,6 @@ _HOUSEHOLD_EPISODE_PROFILE = ContractProfile(
     backend_variants=(
         "api_semantic_synthetic",
         "molmospaces_subprocess",
-        "nav2_ros2",
         "agibot_gdk",
     ),
     capability_families=(FAMILY_EPISODE,),

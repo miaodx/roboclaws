@@ -11,12 +11,12 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw
-
 if __package__ in {None, ""}:
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+else:
+    REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
@@ -35,6 +35,7 @@ from roboclaws.maps.spatial_contract import (
     source_frame_spatial_contract,
 )
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
     validate_alignment_residual_artifact,
     validate_navigation_smoke_artifact,
@@ -56,6 +57,13 @@ DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/digital-twin-runtime")
+
+
+def _repo_relative_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -179,7 +187,6 @@ def compile_runtime_bundle(
         encoding="utf-8",
     )
     write_source_frame_bundle_preview(output_dir)
-    write_review_topdown(output_dir, runtime_labels=runtime_labels)
     provenance = runtime_provenance(
         map_bundle=map_bundle,
         scene_root=scene_root,
@@ -652,24 +659,104 @@ def verified_robot_consumption_proof(
         raise ValueError("navigation artifact alignment_artifact must match --alignment-artifact")
     if navigation.get("robot_navigation_supported") is not True:
         raise ValueError("navigation artifact must claim robot_navigation_supported=true")
+    waypoint_evidence = [
+        item for item in navigation.get("waypoint_evidence") or [] if isinstance(item, dict)
+    ]
+    same_pose_views = _same_pose_view_support(waypoint_evidence)
     proof.update(
         {
             "status": "robot_navigation_verified",
             "navigation_status": "verified",
             "navigation_artifact": str(navigation_artifact_path),
+            "render_scene_usd": str(navigation.get("b1_scene_usd") or ""),
+            "visual_route": navigation.get("visual_route")
+            if isinstance(navigation.get("visual_route"), dict)
+            else {},
             "robot_navigation_supported": True,
             "robot_navigation_provenance": NAVIGATION_PROVENANCE,
             "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
             "robot_view_evidence_status": str(navigation.get("robot_view_evidence_status") or ""),
             "navigation_provenance": str(navigation.get("navigation_provenance") or ""),
-            "waypoint_ids": [
-                str(item.get("waypoint_id") or "")
-                for item in navigation.get("waypoint_evidence") or []
-                if isinstance(item, dict)
-            ],
+            "same_pose_views": same_pose_views,
+            "waypoint_ids": [str(item.get("waypoint_id") or "") for item in waypoint_evidence],
         }
     )
     return proof
+
+
+def _same_pose_view_support(waypoint_evidence: list[dict[str, Any]]) -> dict[str, bool]:
+    if not waypoint_evidence:
+        return {"fpv": False, "chase": False, "topdown": False}
+
+    def has_view(item: dict[str, Any], *view_names: str) -> bool:
+        views = item.get("views") if isinstance(item.get("views"), dict) else {}
+        return any(bool(views.get(view_name)) for view_name in view_names)
+
+    return {
+        "fpv": all(has_view(item, "fpv") for item in waypoint_evidence),
+        "chase": all(has_view(item, "chase") for item in waypoint_evidence),
+        "topdown": all(has_view(item, "topdown", "map") for item in waypoint_evidence),
+    }
+
+
+def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[str, Any]:
+    navigation_ready = bool(robot_consumption_proof.get("robot_navigation_supported"))
+    robot_view_ready = (
+        str(robot_consumption_proof.get("robot_view_evidence_status") or "") == "available"
+    )
+    same_pose_views = (
+        robot_consumption_proof.get("same_pose_views")
+        if isinstance(robot_consumption_proof.get("same_pose_views"), dict)
+        else {}
+    )
+    render_ready = navigation_ready and robot_view_ready
+    render_scene_usd = str(robot_consumption_proof.get("render_scene_usd") or "")
+    selected_v1_route = render_ready and render_scene_usd == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD)
+    return {
+        "schema": "b1_map12_render_observation_proof_v1",
+        "status": "same_pose_render_observation_verified"
+        if render_ready
+        else "blocked_missing_verified_same_pose_render_evidence",
+        "render_observation_supported": render_ready,
+        "render_provenance": str(robot_consumption_proof.get("robot_navigation_provenance") or ""),
+        "navigation_artifact": str(robot_consumption_proof.get("navigation_artifact") or ""),
+        "alignment_artifact": str(robot_consumption_proof.get("alignment_artifact") or ""),
+        "same_pose_fpv_supported": render_ready and bool(same_pose_views.get("fpv")),
+        "same_pose_chase_supported": render_ready and bool(same_pose_views.get("chase")),
+        "same_pose_topdown_supported": render_ready and bool(same_pose_views.get("topdown")),
+        "view_evidence_status": str(
+            robot_consumption_proof.get("robot_view_evidence_status") or ""
+        ),
+        "default_visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_root": "data/robot-data-lab/scene-engine/data/B1_floor2_slow",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": selected_v1_route,
+            "status": "selected_verified_same_pose_render_route"
+            if selected_v1_route
+            else "blocked_missing_verified_b1_floor2_slow_render_proof",
+            "reason": (
+                "B1_floor2_slow has verified same-pose FPV/Chase/topdown render evidence "
+                "for the accepted Map12 frame."
+                if selected_v1_route
+                else (
+                    "B1_floor2_slow has not been verified against the accepted Map12 "
+                    "frame with same-pose FPV/Chase/topdown render evidence."
+                )
+            ),
+        },
+        "fallback_visual_route": {
+            "scene_id": "2rd_floor_seperated",
+            "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",
+            "selected_as_default": False,
+            "status": "registration_source_only_for_p0",
+        },
+        "policy": {
+            "requires_explicit_same_pose_render_artifact": True,
+            "does_not_select_unverified_b1_floor2_slow": True,
+            "no_output_directory_autodiscovery": True,
+        },
+    }
 
 
 def verified_room_semantic_projection(
@@ -872,7 +959,7 @@ def runtime_provenance(
         "schema": B1_MAP12_RUNTIME_PROVENANCE_SCHEMA,
         "generated_from_review_manifest": True,
         "generated_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
-        "compiler": Path(__file__).as_posix(),
+        "compiler": _repo_relative_path(Path(__file__)),
         "source_assets": {
             "map_bundle": str(map_bundle),
             "scene_root": str(scene_root),
@@ -907,54 +994,6 @@ def runtime_provenance(
             "or rebuild driveable ways."
         ),
     }
-
-
-def write_review_topdown(output_dir: Path, *, runtime_labels: list[dict[str, Any]]) -> Path:
-    preview_path = output_dir / "preview.png"
-    output_path = output_dir / "review_labels_topdown.png"
-    source = Image.open(preview_path).convert("RGB")
-    image = source.copy()
-    draw = ImageDraw.Draw(image, "RGBA")
-    if runtime_labels:
-        width, height = image.size
-        all_points = [point for label in runtime_labels for point in label.get("polygon") or []]
-        min_x = min(float(point["x"]) for point in all_points)
-        max_x = max(float(point["x"]) for point in all_points)
-        min_y = min(float(point["y"]) for point in all_points)
-        max_y = max(float(point["y"]) for point in all_points)
-        span_x = max(max_x - min_x, 1.0)
-        span_y = max(max_y - min_y, 1.0)
-        scale = min((width * 0.78) / span_x, (height * 0.78) / span_y)
-        offset_x = (width - span_x * scale) / 2.0
-        offset_y = (height - span_y * scale) / 2.0
-
-        def project(point: dict[str, float]) -> tuple[float, float]:
-            return (
-                offset_x + (float(point["x"]) - min_x) * scale,
-                height - (offset_y + (float(point["y"]) - min_y) * scale),
-            )
-
-        palette = [
-            (51, 102, 204, 90),
-            (220, 57, 18, 90),
-            (16, 150, 24, 90),
-            (153, 0, 153, 90),
-            (255, 153, 0, 90),
-        ]
-        for index, label in enumerate(runtime_labels):
-            polygon = [project(point) for point in label.get("polygon") or []]
-            if len(polygon) < 3:
-                continue
-            color = palette[index % len(palette)]
-            draw.polygon(polygon, fill=color, outline=color[:3] + (210,))
-            center = project(label["map_center"])
-            draw.text(
-                center,
-                str(label.get("room_label") or label.get("label_id") or ""),
-                fill=(20, 24, 28, 255),
-            )
-    image.save(output_path)
-    return output_path
 
 
 def _copy_vendor_map12_source(source: Path, output_dir: Path) -> None:
@@ -1037,6 +1076,7 @@ def _runtime_semantics_payload(
         "navigation_memory_anchors": navigation_memory_anchors,
         "digital_twin_capabilities": {
             "robot_consumption_proof": robot_consumption_proof,
+            "render_observation_proof": render_observation_proof(robot_consumption_proof),
             "room_semantic_projection_proof": room_semantic_projection["proof"],
         },
         "review_labels": runtime_labels,
@@ -1048,7 +1088,7 @@ def _runtime_semantics_payload(
             "generated_from_review_manifest": True,
             "b1_alignment_review_schema": B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
             "b1_alignment_review_source": str(review_manifest_path),
-            "b1_runtime_compiler": Path(__file__).as_posix(),
+            "b1_runtime_compiler": _repo_relative_path(Path(__file__)),
             "contains_private_scoring_truth": False,
             "contains_runtime_observations": False,
             "contains_verified_robot_consumption_proof": bool(

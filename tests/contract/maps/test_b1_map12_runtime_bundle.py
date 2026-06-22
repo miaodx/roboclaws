@@ -13,7 +13,10 @@ from roboclaws.maps.runtime_prior_snapshot import (
     runtime_metric_map_from_prior_artifact,
     runtime_prior_snapshot_from_nav2_cleanup_bundle,
 )
-from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
+from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+    NAVIGATION_PROVENANCE,
+)
 from scripts.maps.compile_b1_map12_runtime_bundle import (
     B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
     B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
@@ -87,14 +90,23 @@ def test_runtime_compiler_uses_vendor_map12_and_review_labels(tmp_path: Path) ->
     }
     assert (output_dir / "b1_runtime_provenance.json").is_file()
     assert (output_dir / "b1_robot_consumption_manifest.json").is_file()
-    assert (output_dir / "review_labels_topdown.png").is_file()
+    assert not (output_dir / "review_labels_topdown.png").exists()
     proof = runtime_semantics["digital_twin_capabilities"]["robot_consumption_proof"]
+    render_proof = runtime_semantics["digital_twin_capabilities"]["render_observation_proof"]
     room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
     manifest = json.loads(
         (output_dir / "b1_robot_consumption_manifest.json").read_text(encoding="utf-8")
     )
     assert proof["status"] == "blocked_missing_verified_alignment"
     assert proof["robot_navigation_supported"] is False
+    assert render_proof["status"] == "blocked_missing_verified_same_pose_render_evidence"
+    assert render_proof["render_observation_supported"] is False
+    assert render_proof["default_visual_route"]["scene_id"] == "B1_floor2_slow"
+    assert render_proof["default_visual_route"]["selected"] is False
+    assert (
+        render_proof["default_visual_route"]["status"]
+        == "blocked_missing_verified_b1_floor2_slow_render_proof"
+    )
     assert room_proof["status"] == "blocked_missing_accepted_semantic_anchors"
     assert room_proof["room_semantics_supported"] is False
     assert room_proof["object_projection_status"] == "blocked_until_object_semantic_anchors"
@@ -253,6 +265,18 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
         ]
         is True
     )
+    assert (
+        runtime_map["digital_twin_capabilities"]["render_observation_proof"][
+            "render_observation_supported"
+        ]
+        is True
+    )
+    assert (
+        runtime_map["digital_twin_capabilities"]["render_observation_proof"][
+            "default_visual_route"
+        ]["selected"]
+        is True
+    )
     assert snapshot["inspection_waypoints"]
     assert snapshot["public_semantic_anchors"]
     assert materialized["actionable_waypoint_ids"]
@@ -262,6 +286,14 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
         == "robot_navigation_verified"
     )
     assert materialized["capability_summary"]["robot_navigation_supported"] is True
+    assert materialized["capability_summary"]["render_observation_supported"] is True
+    assert materialized["capability_summary"]["same_pose_fpv_supported"] is True
+    assert materialized["capability_summary"]["same_pose_chase_supported"] is True
+    assert materialized["capability_summary"]["same_pose_topdown_supported"] is True
+    assert materialized["capability_summary"]["default_visual_route_status"] == (
+        "selected_verified_same_pose_render_route"
+    )
+    assert materialized["capability_summary"]["default_visual_route_selected"] is True
     assert materialized["capability_summary"]["room_semantics_supported"] is False
     assert materialized["capability_summary"]["object_projection_status"] == (
         "blocked_until_object_semantic_anchors"
@@ -413,11 +445,26 @@ def _verified_alignment_artifact() -> dict:
 def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
     first = tmp_path / "first.fpv.png"
     second = tmp_path / "second.fpv.png"
+    first_chase = tmp_path / "first.chase.png"
+    second_chase = tmp_path / "second.chase.png"
+    first_topdown = tmp_path / "first.map.png"
+    second_topdown = tmp_path / "second.map.png"
     _write_reviewable_image(first, offset=0)
     _write_reviewable_image(second, offset=40)
+    _write_reviewable_image(first_chase, offset=80)
+    _write_reviewable_image(second_chase, offset=120)
+    _write_reviewable_image(first_topdown, offset=160)
+    _write_reviewable_image(second_topdown, offset=200)
     return {
         "schema": "b1_map12_navigation_smoke_v1",
         "status": "passed",
+        "b1_scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+        "visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": True,
+            "status": "same_pose_render_verified",
+        },
         "robot_navigation_supported": True,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE,
         "navigation_provenance": "kinematic_pose_driven",
@@ -436,6 +483,7 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
         "waypoint_evidence": [
             {
                 "waypoint_id": "wp_1",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": {
                     "frame": "b1_rebuilt_scene_usd_world_candidate",
                     "x": -4.0,
@@ -446,10 +494,11 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
                 "robot_pose_applied": True,
                 "alignment_artifact": str(alignment_path),
                 "alignment_transform_source": "reviewed_correspondence_fit",
-                "views": {"fpv": str(first)},
+                "views": {"fpv": str(first), "chase": str(first_chase), "map": str(first_topdown)},
             },
             {
                 "waypoint_id": "wp_2",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": {
                     "frame": "b1_rebuilt_scene_usd_world_candidate",
                     "x": -2.0,
@@ -460,7 +509,11 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
                 "robot_pose_applied": True,
                 "alignment_artifact": str(alignment_path),
                 "alignment_transform_source": "reviewed_correspondence_fit",
-                "views": {"fpv": str(second)},
+                "views": {
+                    "fpv": str(second),
+                    "chase": str(second_chase),
+                    "map": str(second_topdown),
+                },
             },
         ],
     }

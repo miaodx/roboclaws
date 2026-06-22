@@ -15,7 +15,7 @@ from roboclaws.household.agibot_map_build_mcp_tools import (
     register_agibot_map_build_tools,
 )
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS, AgibotSDKRunnerAdapter
-from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
+from roboclaws.household.manipulation_provenance import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import (
     AGIBOT_GDK_BACKEND_VARIANT,
     AGIBOT_SDK_RUNNER_BACKEND,

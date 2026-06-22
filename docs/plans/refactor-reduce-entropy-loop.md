@@ -190,7 +190,7 @@ returns no P0/P1 or materially useful P2 candidates in this class.
   `household_world_v1`, `household_manipulation_v1`, and
   `household_episode_v1`; old cleanup-shaped ids remain outside the active
   registry only as artifact metadata. Evidence:
-  `./scripts/dev/run_pytest_standalone.sh tests/contract/mcp/test_semantic_profiles.py tests/contract/skills/test_skill_manifests.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_registered_tools_match_profile_public_surface tests/contract/molmo_cleanup/test_physical_nav2_pilot.py -q`
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/mcp/test_semantic_profiles.py tests/contract/skills/test_skill_manifests.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_registered_tools_match_profile_public_surface -q`
   passed.
 - 2026-06-14: Removed operator-console legacy route wrappers from normal code
   paths with no historical compatibility mapping. Deleted `ConsoleRoute`,

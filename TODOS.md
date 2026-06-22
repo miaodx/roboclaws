@@ -89,26 +89,6 @@ Each entry should answer:
   - Try now: No for implementation. Start with planning or a bounded harness
     spike.
 
-- **Real Nav2 hardware adapter execution**
-  - Created: 2026-05-11.
-  - Updated: 2026-06-11.
-  - Status: Parked local hardware proof.
-  - Why: The map-bundle contract, `DirectNav2Adapter`, and physical navigation
-    pilot exist with mock tests, but Roboclaws still lacks a real ROS 2/Nav2
-    operator-run proof.
-  - Next action: Run the physical Nav2 cleanup pilot against a real Nav2 stack,
-    capture report evidence, and keep ROS topics/actions hidden behind MCP.
-  - Evidence:
-    `docs/status/active/real-robot-nav2-cleanup-pilot.md`;
-    `docs/adr/0127-use-direct-nav2-adapter-before-rosclaw.md`;
-    `roboclaws/household/nav2_adapter.py`;
-    `roboclaws/household/physical_nav2_pilot.py`;
-    `scripts/molmo_cleanup/run_physical_nav2_cleanup_pilot.py`;
-    `tests/contract/molmo_cleanup/test_nav2_adapter.py`;
-    `tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`.
-  - Try now: No for closure. It needs ROS 2/Nav2 hardware or a configured local
-    Nav2 graph; documentation or checklist work is safe.
-
 - **Async route perception during cleanup navigation**
   - Created: 2026-05-11.
   - Updated: 2026-05-31.

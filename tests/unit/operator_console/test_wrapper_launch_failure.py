@@ -17,6 +17,17 @@ CODEX_ENV = {
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
 
 
+def _b1_required_overrides(tmp_path: Path) -> dict[str, str]:
+    alignment_artifact = tmp_path / "alignment_residuals.json"
+    navigation_artifact = tmp_path / "navigation_smoke.json"
+    alignment_artifact.write_text("{}\n", encoding="utf-8")
+    navigation_artifact.write_text("{}\n", encoding="utf-8")
+    return {
+        "b1_alignment_artifact": str(alignment_artifact),
+        "b1_navigation_artifact": str(navigation_artifact),
+    }
+
+
 def test_state_marks_dead_wrapper_launch_without_live_artifacts_failed(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -64,7 +75,12 @@ def test_readiness_does_not_block_on_zombie_wrapper_lock(tmp_path: Path, monkeyp
     ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=12345)
     monkeypatch.setattr("roboclaws.operator_console.locks.pid_is_active", lambda pid: False)
 
-    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        overrides={"port": _free_port(), **_b1_required_overrides(tmp_path)},
+        env=CODEX_ENV,
+    )
 
     assert readiness["can_start"] is True
     assert readiness["blocker_kind"] == ""

@@ -10,7 +10,7 @@ from typing import Any
 from roboclaws.household import profiles as evidence_profiles
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import DEFAULT_AGIBOT_CONFIDENCE_LAYER
-from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
+from roboclaws.household.manipulation_provenance import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
