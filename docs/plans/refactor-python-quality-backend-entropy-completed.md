@@ -34,6 +34,87 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Scene-camera comparison MolmoSpaces source provenance now
+  separates missing packages from installed packages with absent, malformed,
+  or non-object `direct_url.json` metadata. Valid installed metadata still
+  reports git URL/commit fields, package absence stays `not_installed`, and
+  installed-package metadata problems now surface as `metadata_unavailable` or
+  `metadata_unreadable` instead of false `not_installed` provenance. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class: report
+  provenance status correction with stable render/report flow. Metric: ratchet
+  remains at 0 Ruff complexity rows and reports 80 oversized modules in the
+  current shared checkout; the new focused source test file avoids growing the
+  oversized scene-camera contract test. Proof: focused scene-camera source
+  tests, one nearby manifest serialization contract test, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if scene-camera comparison again catches corrupt
+  installed-package provenance as package absence or accepts wrong-shaped
+  `direct_url.json` metadata as installed source evidence.
+
+- 2026-06-21: Environment setup private/report metadata env parsing now routes
+  present `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` payloads through the shared
+  JSON-object text helper. Missing or blank env stays the documented
+  no-metadata default, while malformed or non-object present env values fail
+  aloud before run-result private setup provenance can silently disappear.
+  Owner layer: Runnable Surfaces And Presets plus Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud env-source validation with stable
+  valid metadata merge semantics. Metric: ratchet remains at 0 Ruff complexity
+  rows and reports 80 oversized modules in the current shared checkout. Proof:
+  focused core JSON-source and environment setup boundary tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code cleanup review, and
+  ratchet. Reopen only if environment setup metadata env parsing regains a
+  local permissive `json.loads` branch that treats present malformed or
+  non-object private setup metadata as absent.
+
+- 2026-06-20: Base Navigation Map v1 area semantic validation now splits
+  geometry, label, category, source, and review checks into focused helpers in
+  `roboclaws/maps/bundle_validation.py`. The strict validator keeps the same
+  error wording and contract behavior while clearing the new C901 row from
+  `_validate_base_navigation_area_semantics`. Owner layer: Backend Runtime /
+  Environment Primitive map artifact validation. Behavior-change class:
+  internal validator refactor with stable public validation diagnostics.
+  Metric: global ratchet returns to 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused Base
+  Navigation Map/Nav2 bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if Base Navigation Map v1 area
+  validation regains a C901 row or starts changing existing validation error
+  wording without a contract update.
+
+- 2026-06-20: Shared JSON source helpers now own parseable source type-name
+  reporting through `roboclaws.core.json_sources.json_source_type_name`.
+  Live-agent artifact loading and report-performance JSON loading no longer
+  keep duplicate local reparsing helpers just to preserve non-object
+  diagnostics; existing `non-object JSON: list` and `expected object, got
+  list` wording remains covered by focused tests. Owner layer: shared core
+  source-reader utility for Agent Engines And Provider Profiles plus
+  Artifacts, reports, and eval suites. Behavior-change class: internal
+  source-reader consolidation with stable error wording. Metric: touched
+  helper/caller files remain clear; the global ratchet command currently
+  reports 1 unrelated C901 row in no-touch
+  `roboclaws/maps/bundle_validation.py` and 80 oversized modules after
+  concurrent map-validation work appeared in the shared checkout. Proof:
+  focused core JSON-source, live-runtime source, and report-performance source
+  tests, touched-file ruff/format checks, `git diff --check`, and global
+  ratchet run with unrelated no-touch regression noted. Reopen only if callers
+  reintroduce local file reparsing helpers solely to name parseable non-object
+  JSON source types.
+
+- 2026-06-20: Scene-sampler scanner optional preview and product-smoke sidecar
+  loading now routes through `roboclaws.core.json_sources.read_json_object`
+  while preserving the permissive optional metadata contract: missing,
+  unreadable, malformed, and non-object sources return empty metadata. Owner
+  layer: Runnable Surfaces And Presets / launch scene sampler. Behavior-change
+  class: permissive optional source-reader consolidation with stable
+  empty-metadata semantics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 79 oversized modules in the current shared checkout; the new
+  focused scanner-source test file is 45 lines instead of growing the
+  oversized scene sampler test module. Proof: focused scene-sampler scanner
+  optional JSON tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only if `scene_sampler_scanner.py` regains direct
+  `json.loads(read_text(...))` parsing for optional preview/product-smoke
+  sidecars or stops preserving empty metadata for missing/corrupt optional
+  sources.
+
 - 2026-06-20: OpenAI Agents SDK live timing now routes present
   `run_result.json` reads through
   `roboclaws.core.json_sources.read_json_value` while preserving the existing

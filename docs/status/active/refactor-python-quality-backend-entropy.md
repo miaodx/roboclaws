@@ -17,23 +17,34 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: OpenAI Agents SDK live timing now routes present
-`run_result.json` reads through the shared JSON-value helper while preserving
-existing `OpenAI Agents live source ...` timing-source error wording for
-malformed and non-object run results. Focused OpenAI Agents live timing
-source-error tests, touched-file ruff, touched-file format checks, diff check,
-and the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
-79 oversized modules in the shared checkout.
+2026-06-21: Scene-camera comparison MolmoSpaces source provenance now reports
+installed-package `direct_url.json` metadata problems as `metadata_unavailable`
+or `metadata_unreadable` instead of false `not_installed` provenance. Focused
+scene-camera source tests, a nearby manifest serialization contract test,
+touched-file ruff, touched-file format checks, diff check, changed-code cleanup
+review, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
+violations, 80 oversized modules in the shared checkout.
 
-Previous slice: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
-route through the shared JSON-source helper, preserving valid state accessor
-behavior while failing missing, malformed, or non-object backend state with
-path-labelled source errors.
+Previous slice: Environment setup private/report metadata env parsing now fails
+present malformed or non-object `ROBOCLAWS_ENVIRONMENT_SETUP_JSON` values aloud
+through the shared JSON-object text helper while preserving missing/blank env as
+the no-metadata default. Focused core JSON-source and environment setup boundary
+tests, touched-file ruff, touched-file format checks, diff check, changed-code
+cleanup review, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous committed slice before that: Base Navigation Map v1 area semantic validation now splits
+geometry, label, category, source, and review checks into focused helpers while
+preserving strict validator diagnostics. Focused map bundle contract tests,
+touched-file ruff, touched-file format checks, diff check, and the ratchet
+summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the OpenAI Agents live timing source-reader slice.
+committing the scene-camera MolmoSpaces source provenance slice. Avoid
+reopening closed JSON-source helper splits without fresh source-truth evidence.
 
 ## Touched Areas
 
@@ -85,6 +96,7 @@ committing the OpenAI Agents live timing source-reader slice.
 - `scripts/operator_console/run_scene_sampler_source_prep.py`
 - `scripts/operator_console/run_scene_sampler_scanner_plan.py`
 - `roboclaws/launch/scene_sampler_prefilter.py`
+- `roboclaws/launch/scene_sampler_scanner.py`
 - `scripts/reports/write_pages_index.py`
 - `scripts/reports/compare_live_report_metrics.py`
 - `scripts/reports/serve_reports.py`
@@ -197,6 +209,7 @@ committing the OpenAI Agents live timing source-reader slice.
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
+- `tests/unit/launch/test_scene_sampler_scanner_sources.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `tests/unit/reports/test_write_pages_index_sources.py`
 - `tests/unit/reports/test_compare_live_report_metrics_sources.py`

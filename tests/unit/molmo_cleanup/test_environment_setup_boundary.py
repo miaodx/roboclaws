@@ -136,6 +136,26 @@ def test_setup_provenance_env_builds_private_report_metadata() -> None:
     }
 
 
+def test_setup_provenance_env_missing_stays_empty() -> None:
+    assert environment_setup_run_metadata_from_env({}) == {}
+    assert environment_setup_run_metadata_from_env({ENVIRONMENT_SETUP_METADATA_ENV: "  "}) == {}
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ("{not-json\n", r"ROBOCLAWS_ENVIRONMENT_SETUP_JSON source must contain valid JSON object"),
+        ("[]\n", r"ROBOCLAWS_ENVIRONMENT_SETUP_JSON source must contain a JSON object"),
+    ],
+)
+def test_setup_provenance_env_rejects_bad_present_metadata(
+    source: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        environment_setup_run_metadata_from_env({ENVIRONMENT_SETUP_METADATA_ENV: source})
+
+
 def test_zero_target_advisory_scoring_accepts_empty_object_reviews(tmp_path: Path) -> None:
     checker = _load_checker_module()
     advisory = {
