@@ -32,7 +32,13 @@ DEFAULT_RESPONSES_MAX_OUTPUT_TOKENS = 256
 DEFAULT_CHAT_MAX_TOKENS = 512
 DEFAULT_TIMEOUT_S = 30.0
 
-ProbeMode = Literal["agents-sdk", "direct"]
+ProbeMode = Literal["agents-sdk", "provider"]
+
+PUBLIC_AGENT_SDK_ROUTE_IDS = (
+    "minimax-responses",
+    "mimo-tp-openai-chat",
+    "kimi-openai-chat",
+)
 
 
 @dataclass(frozen=True)
@@ -108,7 +114,7 @@ def build_agent_sdk_probes(
     return probes
 
 
-def build_direct_probes(
+def build_provider_probes(
     *,
     responses_max_tokens: int = DEFAULT_RESPONSES_MAX_OUTPUT_TOKENS,
     chat_max_tokens: int = DEFAULT_CHAT_MAX_TOKENS,
@@ -120,12 +126,14 @@ def build_direct_probes(
     mimo_inside = provider_route_spec("mimo-inside-openai-chat")
 
     return [
-        _direct_from_route("codex-router-responses", codex, max_tokens=responses_max_tokens),
-        _direct_from_route("mimo-mify-responses", mify_route, max_tokens=responses_max_tokens),
-        _direct_from_route("minimax-responses-m3", minimax_route, max_tokens=responses_max_tokens),
+        _provider_from_route("codex-router-responses", codex, max_tokens=responses_max_tokens),
+        _provider_from_route("mimo-mify-responses", mify_route, max_tokens=responses_max_tokens),
+        _provider_from_route(
+            "minimax-responses-m3", minimax_route, max_tokens=responses_max_tokens
+        ),
         ProbeSpec(
-            probe_id="direct:minimax-responses-m27",
-            mode="direct",
+            probe_id="provider:minimax-responses-m27",
+            mode="provider",
             route_id="minimax-responses",
             wire_api=WIRE_RESPONSES,
             model="MiniMax-M2.7-highspeed",
@@ -134,11 +142,11 @@ def build_direct_probes(
             max_tokens=responses_max_tokens,
             provider_note="MiniMax highspeed can spend early tokens on reasoning.",
         ),
-        _direct_from_route("mimo-tp-openai-chat", mimo, max_tokens=chat_max_tokens),
-        _direct_from_route("mimo-inside-openai-chat", mimo_inside, max_tokens=chat_max_tokens),
+        _provider_from_route("mimo-tp-openai-chat", mimo, max_tokens=chat_max_tokens),
+        _provider_from_route("mimo-inside-openai-chat", mimo_inside, max_tokens=chat_max_tokens),
         ProbeSpec(
-            probe_id="direct:kimi-coding-chat",
-            mode="direct",
+            probe_id="provider:kimi-coding-chat",
+            mode="provider",
             route_id="kimi-openai-chat",
             wire_api=WIRE_CHAT_COMPLETIONS,
             model="kimi-k2.7-code",
@@ -154,8 +162,8 @@ def build_direct_probes(
             ),
         ),
         ProbeSpec(
-            probe_id="direct:nvidia-chat",
-            mode="direct",
+            probe_id="provider:nvidia-chat",
+            mode="provider",
             wire_api=WIRE_CHAT_COMPLETIONS,
             model="nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
             api_key_env="NV_API_KEY",
@@ -166,10 +174,10 @@ def build_direct_probes(
     ]
 
 
-def _direct_from_route(name: str, route: Any, *, max_tokens: int) -> ProbeSpec:
+def _provider_from_route(name: str, route: Any, *, max_tokens: int) -> ProbeSpec:
     return ProbeSpec(
-        probe_id=f"direct:{name}",
-        mode="direct",
+        probe_id=f"provider:{name}",
+        mode="provider",
         route_id=route.route_id,
         wire_api=route.wire_api,
         model=route.default_model_id,
@@ -213,7 +221,7 @@ def run_probe(
             output = _run_agents_sdk_probe(
                 spec, prompt=prompt, timeout_s=timeout_s, api_key=api_key
             )
-        elif spec.probe_id == "direct:kimi-coding-chat":
+        elif spec.probe_id == "provider:kimi-coding-chat":
             output = _run_kimi_coding_probe(
                 spec, prompt=prompt, timeout_s=timeout_s, api_key=api_key
             )
@@ -432,20 +440,23 @@ def kimi_coding_payload(*, prompt: str, model: str, max_tokens: int) -> dict[str
 
 def select_probes(args: argparse.Namespace) -> list[ProbeSpec]:
     probes: list[ProbeSpec] = []
-    if args.mode in {"agents-sdk", "all"}:
+    agent_sdk_probes = build_agent_sdk_probes(
+        responses_max_tokens=args.responses_max_output_tokens,
+        chat_max_tokens=args.chat_max_tokens,
+    )
+    provider_probes = build_provider_probes(
+        responses_max_tokens=args.responses_max_output_tokens,
+        chat_max_tokens=args.chat_max_tokens,
+    )
+    if args.profile == "agents-sdk-public":
         probes.extend(
-            build_agent_sdk_probes(
-                responses_max_tokens=args.responses_max_output_tokens,
-                chat_max_tokens=args.chat_max_tokens,
-            )
+            probe for probe in agent_sdk_probes if probe.route_id in PUBLIC_AGENT_SDK_ROUTE_IDS
         )
-    if args.mode in {"direct", "all"}:
-        probes.extend(
-            build_direct_probes(
-                responses_max_tokens=args.responses_max_output_tokens,
-                chat_max_tokens=args.chat_max_tokens,
-            )
-        )
+    else:
+        if args.mode in {"agents-sdk", "all"}:
+            probes.extend(agent_sdk_probes)
+        if args.mode in {"provider", "all"}:
+            probes.extend(provider_probes)
     if args.probe:
         wanted = set(args.probe)
         probes = [probe for probe in probes if probe.probe_id in wanted or probe.route_id in wanted]
@@ -494,9 +505,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("all", "agents-sdk", "direct"),
+        choices=("all", "agents-sdk", "provider"),
         default="all",
         help="Which probe family to run.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("all", "agents-sdk-public"),
+        default="all",
+        help=(
+            "Probe profile to run. agents-sdk-public includes only public-network "
+            "OpenAI Agents SDK routes suitable for public CI."
+        ),
     )
     parser.add_argument(
         "--probe",

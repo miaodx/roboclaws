@@ -179,18 +179,13 @@ jobs:
 
       - name: Check configured provider routes
         env:
-          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
-          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
-          XM_LLM_API_KEY: ${{ secrets.XM_LLM_API_KEY }}
-          XM_LLM_BASE_URL: ${{ secrets.XM_LLM_BASE_URL }}
           MM_BASE_URL: ${{ secrets.MM_BASE_URL }}
           MM_API_KEY: ${{ secrets.MM_API_KEY }}
           MIMO_TP_KEY: ${{ secrets.MIMO_TP_KEY }}
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          NV_API_KEY: ${{ secrets.NV_API_KEY }}
         run: |
           .venv/bin/python scripts/dev/check_model_providers.py \
-            --mode all \
+            --profile agents-sdk-public \
             --dotenv "" \
             --require-all
 
