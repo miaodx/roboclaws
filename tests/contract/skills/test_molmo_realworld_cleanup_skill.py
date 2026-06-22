@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from roboclaws.household.cleanup_routine import routine_plan
 from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
@@ -88,6 +90,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
+        allow_synthetic_map_projection=True,
     )
     try:
         detection = _first_detection_by_category(server, "food")
@@ -144,6 +147,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_static_fixt
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
+        allow_synthetic_map_projection=True,
     )
     try:
         detection = _first_detection_by_category(server, "food")
@@ -178,6 +182,32 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_static_fixt
         placement_tool="auto",
         static_fixture_projection=static_fixture_projection,
     ) == ["navigate_to_object", "pick", "navigate_to_receptacle", "place"]
+
+
+def test_trace_preserving_skill_cli_rejects_malformed_static_projection_json() -> None:
+    routine = _load_routine_module()
+
+    with pytest.raises(
+        SystemExit,
+        match=(
+            r"static fixture projection JSON source must contain valid JSON object: "
+            r"--static-fixture-projection-json: line 1 column 2"
+        ),
+    ):
+        routine.main(["--static-fixture-projection-json", "{bad json"])
+
+
+def test_trace_preserving_skill_cli_rejects_non_object_static_projection_json() -> None:
+    routine = _load_routine_module()
+
+    with pytest.raises(
+        SystemExit,
+        match=(
+            r"static fixture projection JSON source must contain a JSON object: "
+            r"--static-fixture-projection-json"
+        ),
+    ):
+        routine.main(["--static-fixture-projection-json", "[]"])
 
 
 def test_trace_preserving_skill_routine_records_recovery_substeps() -> None:

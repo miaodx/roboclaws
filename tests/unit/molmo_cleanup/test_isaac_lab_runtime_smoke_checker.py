@@ -35,6 +35,8 @@ def run_checker(
     *args: str,
     robot_views: dict[str, object] | None = None,
     prefix_logs: bool = False,
+    state_text: str | None = None,
+    robot_views_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     result_path = tmp_path / "init_result.json"
     text = json.dumps(result)
@@ -44,14 +46,23 @@ def run_checker(
     robot_views_args: list[str] = []
     if robot_views is not None:
         robot_views_path = tmp_path / "robot_views_result.json"
-        robot_views_path.write_text(json.dumps(robot_views), encoding="utf-8")
+        robot_views_path.write_text(
+            robot_views_text if robot_views_text is not None else json.dumps(robot_views),
+            encoding="utf-8",
+        )
         robot_views_args = ["--robot-views-result", str(robot_views_path)]
+    state_args: list[str] = []
+    if state_text is not None:
+        state_path = tmp_path / "state.json"
+        state_path.write_text(state_text, encoding="utf-8")
+        state_args = ["--state-path", str(state_path)]
     return subprocess.run(
         [
             sys.executable,
             str(CHECKER),
             "--init-result",
             str(result_path),
+            *state_args,
             *robot_views_args,
             *args,
         ],
@@ -252,6 +263,68 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     assert summary["scene_index_status"] == "indexed"
     assert summary["scene_binding_status"] == "selected_bound"
     assert summary["robot_view_status"] == "present"
+
+
+def test_isaac_runtime_smoke_checker_keeps_init_result_stdout_json_tolerance(
+    tmp_path: Path,
+) -> None:
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {"runtime_mode": "real"},
+    }
+
+    completed = run_checker(tmp_path, result, prefix_logs=True)
+
+    assert completed.returncode == 0
+    summary = json.loads(completed.stdout)
+    assert summary["status"] == "passed"
+
+
+def test_isaac_runtime_smoke_checker_rejects_prefixed_state_sidecar_json(
+    tmp_path: Path,
+) -> None:
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {"runtime_mode": "real"},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        state_text='Isaac startup log line\n{"backend": "isaaclab_subprocess"}\n',
+    )
+
+    assert completed.returncode == 1
+    assert completed.stdout == ""
+    assert "Isaac runtime smoke state source must contain valid JSON object" in completed.stderr
+
+
+def test_isaac_runtime_smoke_checker_rejects_prefixed_robot_views_sidecar_json(
+    tmp_path: Path,
+) -> None:
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {"runtime_mode": "real"},
+    }
+    robot_views = write_robot_views_result(tmp_path)
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-robot-view-images",
+        robot_views=robot_views,
+        robot_views_text='Isaac startup log line\n{"ok": true}\n',
+    )
+
+    assert completed.returncode == 1
+    assert completed.stdout == ""
+    assert (
+        "Isaac runtime smoke robot views result source must contain valid JSON object"
+        in completed.stderr
+    )
 
 
 def test_isaac_runtime_smoke_checker_rejects_generated_usd_for_local_scene_gate(

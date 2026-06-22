@@ -18,7 +18,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
-from roboclaws.core.json_sources import read_json_object  # noqa: E402
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects  # noqa: E402
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 
 MANIFEST_SCHEMA = "raw_fpv_private_label_manifest_v1"
@@ -724,18 +724,7 @@ def _raw_fpv_observation_from_response(response: dict[str, Any]) -> dict[str, An
 
 
 def _iter_trace_rows(trace_path: Path) -> list[dict[str, Any]]:
-    rows = []
-    with trace_path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if not line.strip():
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                rows.append(row)
-    return rows
+    return read_jsonl_objects(trace_path, label="RAW-FPV private-label trace")
 
 
 def _load_json(path: Path) -> dict[str, Any]:

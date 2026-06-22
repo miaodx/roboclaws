@@ -13,6 +13,7 @@ from roboclaws.core.provider_runtime import (
     _record_call_failure,
     _record_call_success,
     action_decision_from_fields,
+    fallback_action_decision,
     parse_action_decision,
 )
 
@@ -22,7 +23,13 @@ _IMPORT_ERROR = "openai and instructor packages required: pip install openai ins
 def _parse_mimo_message(message: Any) -> dict[str, str]:
     tool_calls = getattr(message, "tool_calls", None) or []
     if tool_calls:
-        args = json.loads(tool_calls[0].function.arguments)
+        raw_arguments = getattr(getattr(tool_calls[0], "function", None), "arguments", None)
+        try:
+            args = json.loads(raw_arguments)
+        except (json.JSONDecodeError, TypeError):
+            return fallback_action_decision(raw_arguments).to_dict()
+        if not isinstance(args, dict):
+            return fallback_action_decision(raw_arguments).to_dict()
         reasoning = args.get("reasoning", getattr(message, "reasoning_content", "") or "")
         action = args.get("action", "MoveAhead")
         return action_decision_from_fields(reasoning, action).to_dict()

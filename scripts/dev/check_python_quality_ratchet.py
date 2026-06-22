@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import parse_json_object_text
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = REPO_ROOT / "scripts" / "dev" / "python_quality_baseline.json"
 RUFF_COMPLEXITY_RULES = ("C901", "PLR0912", "PLR0915")
@@ -52,7 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     baseline_path = args.baseline if args.baseline.is_absolute() else REPO_ROOT / args.baseline
-    current = collect_quality_state()
+    try:
+        current = collect_quality_state()
+    except ValueError as exc:
+        print(f"python-quality-ratchet: {exc}", file=sys.stderr)
+        return 1
 
     if args.summary:
         print(format_quality_debt_summary(quality_debt_summary(current, top_n=args.top)))
@@ -77,7 +83,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    try:
+        baseline = read_quality_baseline(baseline_path)
+    except ValueError as exc:
+        print(f"python-quality-ratchet: {exc}", file=sys.stderr)
+        return 1
     failures = compare_to_baseline(current, baseline)
     if failures:
         print("python-quality-ratchet: failed", file=sys.stderr)
@@ -117,6 +127,14 @@ def collect_quality_state() -> dict[str, Any]:
     }
 
 
+def read_quality_baseline(path: Path) -> dict[str, Any]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"python quality baseline source cannot be read: {path}: {exc}") from exc
+    return parse_json_object_text(text, label="python quality baseline", source=str(path))
+
+
 def tracked_python_files() -> list[Path]:
     result = subprocess.run(
         ["git", "ls-files", "--", "*.py"],
@@ -153,7 +171,7 @@ def collect_ruff_complexity(files: list[Path]) -> list[dict[str, Any]]:
         print(result.stderr, file=sys.stderr)
         raise SystemExit(result.returncode)
 
-    diagnostics = json.loads(result.stdout or "[]")
+    diagnostics = _parse_ruff_diagnostics(result.stdout or "[]")
     symbols = SymbolIndex()
     rows: dict[str, dict[str, Any]] = {}
     for diagnostic in diagnostics:
@@ -181,6 +199,25 @@ def collect_ruff_complexity(files: list[Path]) -> list[dict[str, Any]]:
         if current is None or int(item["value"]) > int(current["value"]):
             rows[key] = item
     return [rows[key] for key in sorted(rows)]
+
+
+def _parse_ruff_diagnostics(text: str) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Ruff complexity diagnostics source must contain valid JSON array"
+        ) from exc
+    if not isinstance(payload, list):
+        raise ValueError("Ruff complexity diagnostics source must contain a JSON array")
+    diagnostics: list[dict[str, Any]] = []
+    for index, item in enumerate(payload, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"Ruff complexity diagnostics source row must contain a JSON object: row {index}"
+            )
+        diagnostics.append(item)
+    return diagnostics
 
 
 def collect_oversized_modules(files: list[Path]) -> list[dict[str, Any]]:
@@ -284,8 +321,7 @@ def quality_debt_summary(state: dict[str, Any], *, top_n: int = 10) -> dict[str,
             "max_value": int(bucket["max_value"]),
             "max_limit": int(bucket["max_limit"]),
             "codes": [
-                {"code": code, "count": count}
-                for code, count in sorted(bucket["codes"].items())
+                {"code": code, "count": count} for code, count in sorted(bucket["codes"].items())
             ],
         }
         for bucket in by_file.values()
@@ -338,9 +374,7 @@ def format_quality_debt_summary(summary: dict[str, Any]) -> str:
     complexity_by_file = list(summary.get("complexity_by_file") or [])
     if complexity_by_file:
         for item in complexity_by_file:
-            codes = ", ".join(
-                f"{code['code']}:{code['count']}" for code in item.get("codes") or []
-            )
+            codes = ", ".join(f"{code['code']}:{code['count']}" for code in item.get("codes") or [])
             suffix = f"; {codes}" if codes else ""
             lines.append(
                 "- "

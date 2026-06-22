@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import parse_json_object_text
+
 
 def run_json_worker_once(
     *,
@@ -71,14 +73,45 @@ def worker_command_args(
 
 
 def parse_last_json_object(stdout: str, *, worker_name: str = "subprocess") -> dict[str, Any]:
-    for line in reversed(stdout.splitlines()):
+    for line_number, line in _candidate_json_object_lines(stdout):
         line = line.strip()
-        if not line.startswith("{"):
-            continue
-        payload = json.loads(line)
-        if isinstance(payload, dict):
-            return payload
+        try:
+            return parse_worker_json_object_line(
+                line,
+                worker_name=worker_name,
+                source=f"stdout:{line_number}",
+            )
+        except ValueError as exc:
+            if line.startswith("[") and isinstance(exc.__cause__, json.JSONDecodeError):
+                continue
+            raise RuntimeError(str(exc)) from exc
     raise RuntimeError(f"{worker_name} worker returned no JSON object: {stdout!r}")
+
+
+def parse_worker_json_object_line(
+    line: str,
+    *,
+    worker_name: str = "subprocess",
+    source: str,
+) -> dict[str, Any]:
+    return parse_json_object_text(
+        line.strip(),
+        label=f"{worker_name} worker stdout row",
+        source=source,
+    )
+
+
+def _candidate_json_object_lines(stdout: str) -> list[tuple[int, str]]:
+    return [
+        (line_number, line)
+        for line_number, line in reversed(list(enumerate(stdout.splitlines(), start=1)))
+        if _line_starts_like_json_value(line)
+    ]
+
+
+def _line_starts_like_json_value(line: str) -> bool:
+    stripped = line.lstrip()
+    return stripped.startswith(("{", "["))
 
 
 def read_process_stderr(process: subprocess.Popen[str]) -> str:

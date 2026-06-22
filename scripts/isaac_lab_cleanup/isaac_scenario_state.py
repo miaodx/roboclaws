@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from roboclaws.household.generated_mess import (
+    valid_generated_mess_placement_index,
+    valid_generated_mess_relation,
+)
 from scripts.isaac_lab_cleanup.isaac_placement_resolution import (
     ISAAC_PLACEMENT_RESOLVER_SOURCE,
 )
@@ -133,19 +137,16 @@ def target_relation(
     hooks: IsaacScenarioStateHooks,
 ) -> str:
     if manifest_target:
-        relation = str(manifest_target.get("relation") or "")
-        if relation in {"on", "inside"}:
-            return relation
+        object_id = str(manifest_target.get("object_id") or "")
+        return valid_generated_mess_relation(manifest_target, object_id=object_id)
     return "inside" if hooks.receptacle_prefers_inside(receptacle) else "on"
 
 
 def target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
     if not manifest_target:
         return index
-    try:
-        return int(manifest_target.get("placement_index"))
-    except (TypeError, ValueError):
-        return index
+    object_id = str(manifest_target.get("object_id") or "")
+    return valid_generated_mess_placement_index(manifest_target, object_id=object_id)
 
 
 def mess_wrong_receptacle_pool(

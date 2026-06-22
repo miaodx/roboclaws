@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.operator_console.jsonl_sources import JsonlSourceIssue, collect_jsonl_objects
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection, get_selection
 from roboclaws.operator_console.state import (
@@ -538,40 +539,19 @@ def _append_message(run_dir: Path, message: dict[str, Any]) -> None:
 def _read_message_rows_with_source_errors(
     run_dir: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    rows: list[dict[str, Any]] = []
     path = _message_log_path(run_dir)
-    if not path.exists():
-        return rows, []
-    source_errors: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        return rows, [_message_source_error(path, f"cannot read operator message source: {exc}")]
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            source_errors.append(
-                _message_source_error(
-                    path,
-                    f"invalid JSON: {exc.msg}",
-                    line_number=line_number,
-                )
-            )
-            continue
-        if not isinstance(payload, dict):
-            source_errors.append(
-                _message_source_error(
-                    path,
-                    "row must be a JSON object",
-                    line_number=line_number,
-                )
-            )
-            continue
-        rows.append(payload)
-    return rows, source_errors
+    rows, issues = collect_jsonl_objects(path, label="operator message source")
+    return rows, [_message_issue_source_error(issue) for issue in issues]
+
+
+def _message_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
+    if issue.kind == "read_error":
+        message = f"cannot read operator message source: {issue.message}"
+    elif issue.kind == "invalid_json":
+        message = f"invalid JSON: {issue.message}"
+    else:
+        message = issue.message
+    return _message_source_error(issue.path, message, line_number=issue.line_number)
 
 
 def _message_source_error(

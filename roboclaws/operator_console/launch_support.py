@@ -14,6 +14,10 @@ ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_PROVIDER_PROFILE"}
 RunCommand = Callable[..., Any]
 
 
+class DockerMountSourceError(RuntimeError):
+    """Raised when Docker mount metadata exists but is not readable evidence."""
+
+
 def validate_env_overrides(
     route: ConsoleLaunchSelection,
     env_overrides: dict[str, str],
@@ -192,9 +196,21 @@ def _docker_container_mounts(container_id: str, *, run_command: RunCommand) -> l
         return []
     try:
         mounts = json.loads(inspect.stdout)
-    except json.JSONDecodeError:
-        return []
-    return mounts if isinstance(mounts, list) else []
+    except json.JSONDecodeError as exc:
+        raise DockerMountSourceError(
+            f"docker inspect mounts for {container_id} contain invalid JSON: {exc.msg}"
+        ) from exc
+    if not isinstance(mounts, list):
+        raise DockerMountSourceError(
+            f"docker inspect mounts for {container_id} must be a JSON array"
+        )
+    invalid_mount = next((mount for mount in mounts if not isinstance(mount, dict)), None)
+    if invalid_mount is not None:
+        raise DockerMountSourceError(
+            "docker inspect mounts for "
+            f"{container_id} must contain JSON objects; got {type(invalid_mount).__name__}"
+        )
+    return mounts
 
 
 def _mount_source_matches(mount: Any, source: Path) -> bool:

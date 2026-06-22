@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.target_query import resolve_target_query
 
 
@@ -36,7 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-results", type=int, default=8)
     args = parser.parse_args(argv)
 
-    runtime_map = json.loads(args.runtime_metric_map.read_text(encoding="utf-8"))
+    try:
+        runtime_map = read_json_object(args.runtime_metric_map, label="runtime_metric_map")
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     resolution = resolve_from_runtime_map(
         runtime_map,
         args.query,

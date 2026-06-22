@@ -32,18 +32,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    readiness = _read_json(args.readiness_artifact)
-    navigation = _read_json(args.navigation_artifact) if args.navigation_artifact else None
-    summary = (
-        _read_json(args.evidence_summary)
-        if args.evidence_summary
-        else summarize_alignment_evidence(
-            readiness,
-            navigation,
-            readiness_artifact=str(args.readiness_artifact),
-            navigation_artifact=str(args.navigation_artifact) if args.navigation_artifact else "",
+    try:
+        readiness = _read_json(args.readiness_artifact, label="readiness artifact")
+        navigation = (
+            _read_json(args.navigation_artifact, label="navigation artifact")
+            if args.navigation_artifact
+            else None
         )
-    )
+        summary = (
+            _read_json(args.evidence_summary, label="alignment evidence summary")
+            if args.evidence_summary
+            else summarize_alignment_evidence(
+                readiness,
+                navigation,
+                readiness_artifact=str(args.readiness_artifact),
+                navigation_artifact=str(args.navigation_artifact)
+                if args.navigation_artifact
+                else "",
+            )
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     if args.command == "manifest":
         payload = build_alignment_manifest(
             readiness,
@@ -226,10 +235,16 @@ def build_alignment_manifest(
     return manifest
 
 
-def _read_json(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+def _read_json(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} source is missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} source must contain valid JSON object: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} source must contain a JSON object: {path}")
+    return payload
 
 
 def _alignment_tier(readiness: dict[str, Any], navigation: dict[str, Any]) -> tuple[str, str]:

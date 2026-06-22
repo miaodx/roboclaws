@@ -5,12 +5,33 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.launch.goals import goal_contract_from_file
+from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
 
 
 def test_goal_contract_from_file_returns_none_for_empty_source() -> None:
     assert goal_contract_from_file(None) is None
     assert goal_contract_from_file("") is None
+
+
+def test_goal_contract_from_json_returns_none_for_empty_source() -> None:
+    assert goal_contract_from_json(None) is None
+    assert goal_contract_from_json("") is None
+
+
+def test_goal_contract_from_json_rejects_malformed_inline_source() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"goal contract source must contain valid JSON object: inline JSON",
+    ):
+        goal_contract_from_json("{")
+
+
+def test_goal_contract_from_json_rejects_non_object_inline_source() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"goal contract source must contain a JSON object: inline JSON",
+    ):
+        goal_contract_from_json("[]")
 
 
 def test_goal_contract_from_file_rejects_missing_source(tmp_path: Path) -> None:

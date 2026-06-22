@@ -9,6 +9,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.subprocess_backend import _parse_last_json_object
 
 SCHEMA = "roboclaws_isaac_lab_runtime_smoke_check_v1"
@@ -37,9 +38,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    result = _read_json(args.init_result)
-    state = _read_json(args.state_path) if args.state_path else {}
-    robot_views_result = _read_json(args.robot_views_result) if args.robot_views_result else {}
+    result = _read_init_result(args.init_result)
+    state = _read_sidecar_json(args.state_path, label="Isaac runtime smoke state")
+    robot_views_result = _read_sidecar_json(
+        args.robot_views_result,
+        label="Isaac runtime smoke robot views result",
+    )
     errors = validate(
         result=result,
         state=state,
@@ -659,14 +663,23 @@ def _image_errors(path: Path) -> list[str]:
     return errors
 
 
-def _read_json(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
+def _read_init_result(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
     try:
-        return json.loads(text)
+        payload = json.loads(text)
     except json.JSONDecodeError:
-        return _parse_last_json_object(text)
+        payload = _parse_last_json_object(text)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Isaac runtime smoke init result source must contain a JSON object: {path}"
+        )
+    return payload
+
+
+def _read_sidecar_json(path: Path | None, *, label: str) -> dict[str, Any]:
+    if path is None:
+        return {}
+    return read_json_object(path, label=label)
 
 
 def _dict(value: Any) -> dict[str, Any]:

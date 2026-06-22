@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from roboclaws.core.json_sources import read_jsonl_objects
 from roboclaws.household.agibot_map_build_mcp_tools import (
     AGIBOT_MAP_BUILD_TOOLS,
     dispatch_agibot_map_build_tool,
@@ -462,16 +463,9 @@ class AgibotMapBuildMCPServer:
             self._trace_fp.flush()
         except Exception:
             pass
-        events = []
         if not self.trace_path.is_file():
-            return events
-        for line in self.trace_path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            if isinstance(item, dict):
-                events.append(item)
-        return events
+            return []
+        return read_jsonl_objects(self.trace_path, label="Agibot map-build MCP trace")
 
 
 def _policy_events_from_trace(

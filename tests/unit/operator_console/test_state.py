@@ -186,6 +186,51 @@ def test_state_surfaces_malformed_trace_source_error(tmp_path: Path) -> None:
     )
 
 
+def test_state_camera_summary_uses_validated_trace_rows(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0619_1900" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "adjust_camera",
+                "response": {
+                    "ok": True,
+                    "status": "ok",
+                    "camera_offset": {"yaw_delta_deg": 15.0, "pitch_delta_deg": -5.0},
+                },
+            }
+        )
+        + "\n{not-json}\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Trace"
+    assert state["camera_state"]["summary"] == "yaw 15 deg, pitch -5 deg (active)"
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Trace", "invalid JSON at line 2 column 2")
+    ]
+
+
 def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_1807" / "seed-7"

@@ -14,8 +14,10 @@ from typing import Any
 
 from roboclaws.agents.provider_registry import (
     default_provider_profile,
+    openai_agents_runtime_settings,
     provider_readiness,
 )
+from roboclaws.core.dotenv import load_dotenv_file
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
@@ -27,6 +29,7 @@ from roboclaws.launch.environment_setup import (
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.launch_support import (
+    DockerMountSourceError,
     apply_env_overrides,
     docker_container_ids_with_mount,
     provider_env_overrides_for_route,
@@ -114,20 +117,7 @@ class LaunchRequest:
 def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
     """Return an environment with repo-local ``.env`` values loaded when present."""
 
-    env_map = dict(os.environ if env is None else env)
-    dotenv_path = root / ".env"
-    if not dotenv_path.exists():
-        return env_map
-    for raw_line in dotenv_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in env_map:
-            continue
-        env_map[key] = _clean_dotenv_value(value)
-    return env_map
+    return load_dotenv_file(root / ".env", env)
 
 
 def provider_key_present(route: ConsoleLaunchSelection, env: dict[str, str] | None = None) -> bool:
@@ -681,11 +671,30 @@ def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile(
         "openai-agents-sdk"
     )
-    model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
+    try:
+        settings = openai_agents_runtime_settings(
+            provider_profile=provider,
+            request_provider_profile=None,
+            model=None,
+            request_model=None,
+            base_url=None,
+            api_key=None,
+            env=env_map,
+        )
+    except ValueError as exc:
+        readiness = provider_readiness(
+            agent_engine="openai-agents-sdk",
+            provider_profile=provider,
+            env=env_map,
+        )
+        blocked = dict(readiness)
+        blocked["ok"] = False
+        blocked["message"] = str(exc)
+        return blocked
     return provider_readiness(
         agent_engine="openai-agents-sdk",
-        provider_profile=provider,
-        model=model,
+        provider_profile=settings["provider_profile"],
+        model=settings["model"],
         env=env_map,
     )
 
@@ -931,7 +940,11 @@ def _stop_docker_containers_for_run(display_run_dir: Path) -> None:
     workspace = (display_run_dir / "agent-docker-workspace").resolve()
     if not workspace.exists():
         return
-    for container_id in _docker_container_ids_with_mount(workspace):
+    try:
+        container_ids = _docker_container_ids_with_mount(workspace)
+    except DockerMountSourceError as exc:
+        raise ConsoleLaunchError(f"operator stop source error: {exc}") from exc
+    for container_id in container_ids:
         subprocess.run(
             ["docker", "stop", "--time", "5", container_id],
             check=False,
@@ -1007,15 +1020,6 @@ def _kill_tmux_session(display_run_dir: Path) -> None:
 
 def _override_key(value: str) -> str:
     return value.split("=", 1)[0]
-
-
-def _clean_dotenv_value(value: str) -> str:
-    clean = value.strip()
-    if clean.startswith("export "):
-        clean = clean.removeprefix("export ").strip()
-    if len(clean) >= 2 and clean[0] == clean[-1] and clean[0] in {"'", '"'}:
-        clean = clean[1:-1]
-    return clean
 
 
 def _parse_port(value: str) -> int:

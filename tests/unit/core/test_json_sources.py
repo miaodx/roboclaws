@@ -6,11 +6,13 @@ from pathlib import Path
 import pytest
 
 from roboclaws.core.json_sources import (
+    collect_jsonl_object_rows,
     json_source_type_name,
     parse_json_object_text,
     read_gzip_json_object,
     read_json_object,
     read_json_value,
+    read_jsonl_object_rows,
     read_jsonl_objects,
 )
 
@@ -148,6 +150,30 @@ def test_read_jsonl_objects_returns_object_rows_and_skips_blank_lines(tmp_path: 
         {"event": "start"},
         {"event": "done"},
     ]
+
+
+def test_read_jsonl_object_rows_returns_source_line_numbers(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text('{"event": "start"}\n\n{"event": "done"}\n', encoding="utf-8")
+
+    assert read_jsonl_object_rows(path, label="sample events") == [
+        (1, {"event": "start"}),
+        (3, {"event": "done"}),
+    ]
+
+
+def test_collect_jsonl_object_rows_returns_partial_rows_and_issues(tmp_path: Path) -> None:
+    path = tmp_path / "events.jsonl"
+    path.write_text('{"event": "start"}\n{bad-json}\n[]\n', encoding="utf-8")
+
+    rows, issues = collect_jsonl_object_rows(path, label="sample events")
+
+    assert rows == [(1, {"event": "start"})]
+    assert [(issue.line_number, issue.kind) for issue in issues] == [
+        (2, "invalid_json"),
+        (3, "non_object"),
+    ]
+    assert issues[0].message == "Expecting property name enclosed in double quotes"
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
+
 SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
@@ -347,7 +350,7 @@ def _load_live_status_source(path: Path) -> tuple[dict[str, Any], str]:
         return {}, ""
     try:
         return _load_required_json_object(path, label="live_status"), ""
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         return {}, str(exc)
 
 
@@ -447,26 +450,11 @@ def _classify_eval_result_row(row: dict[str, Any]) -> None:
         row["blocker_category"] = _first_failure_class(aggregate) or "environment_blocked"
 
 
-def _load_json(path: Path) -> dict[str, Any]:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
 def _load_required_json_object(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(f"{label} source error at {_display_path(path)}: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} JSON parse error at {_display_path(path)}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(
-            f"{label} source error at {_display_path(path)}: expected object, got "
-            f"{type(payload).__name__}"
-        )
-    return payload
+        return read_json_object(path, label=label)
+    except FileNotFoundError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _first_failure_class(aggregate: dict[str, Any]) -> str:

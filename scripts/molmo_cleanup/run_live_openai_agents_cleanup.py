@@ -1907,15 +1907,20 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "repeated_failure_count",
         "repeated_failure_limit_hit_count",
         "observe_waypoint_count",
+        "detail_source_error",
+        "detail_source_error_kind",
     )
     compact = {key: metrics.get(key) for key in keys if key in metrics}
     detail = metrics.get("detail")
     if isinstance(detail, str) and detail:
-        try:
-            parsed = json.loads(detail)
-        except json.JSONDecodeError:
-            parsed = {}
-        if isinstance(parsed, dict):
+        parsed, detail_error = _parse_compact_metric_detail(detail)
+        if detail_error:
+            compact.setdefault("detail_source_error", detail_error["detail_source_error"])
+            compact.setdefault(
+                "detail_source_error_kind",
+                detail_error["detail_source_error_kind"],
+            )
+        elif parsed is not None:
             compact.setdefault("detail_schema", parsed.get("schema"))
             for key in (
                 "raw_fpv_candidate_budget",
@@ -1935,6 +1940,29 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
             if isinstance(observe_counts, dict):
                 compact.setdefault("observe_waypoint_count", len(observe_counts))
     return compact
+
+
+def _parse_compact_metric_detail(
+    detail: str,
+) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    stripped = detail.strip()
+    if not stripped or stripped[0] not in "[{":
+        return None, None
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        return None, {
+            "detail_source_error": f"detail must contain a valid JSON object: {exc.msg}",
+            "detail_source_error_kind": "invalid_json",
+        }
+    if not isinstance(parsed, dict):
+        return None, {
+            "detail_source_error": (
+                f"detail must contain a JSON object, got {type(parsed).__name__}"
+            ),
+            "detail_source_error_kind": "non_object",
+        }
+    return parsed, None
 
 
 def _estimated_tokens_from_chars(char_count: int) -> int:

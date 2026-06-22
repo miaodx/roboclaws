@@ -103,6 +103,11 @@ def test_render_line_invalid_json_is_flagged() -> None:
     assert lines == ["?? invalid json: {not json"]
 
 
+def test_render_line_non_object_json_is_flagged() -> None:
+    lines = _render_line("[]")
+    assert lines == ["?? invalid json object: list"]
+
+
 # ---------------------------------------------------------------------------
 # Default log path + symlink maintenance
 # ---------------------------------------------------------------------------

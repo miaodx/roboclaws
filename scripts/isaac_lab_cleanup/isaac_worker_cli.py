@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+from roboclaws.core.json_sources import parse_json_object_text
 
 
 def build_arg_parser(
@@ -261,9 +262,6 @@ def _non_negative_int_arg(value: str) -> int:
 
 def _parse_json_object(value: str) -> dict[str, object]:
     try:
-        payload = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise argparse.ArgumentTypeError("value must be a JSON object") from exc
-    if not isinstance(payload, dict):
-        raise argparse.ArgumentTypeError("value must be a JSON object")
-    return payload
+        return parse_json_object_text(value, label="Isaac worker inline JSON")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc

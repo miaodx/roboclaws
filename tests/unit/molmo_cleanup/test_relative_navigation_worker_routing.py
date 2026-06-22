@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
+from pathlib import Path
+
 import pytest
 
 from scripts.molmo_cleanup import (
@@ -7,6 +11,55 @@ from scripts.molmo_cleanup import (
     molmospaces_worker_cli,
     molmospaces_worker_protocol,
 )
+
+
+def _served_worker_packets(stdin_text: str) -> list[dict[str, object]]:
+    stdout = io.StringIO()
+
+    def never_run_state_command(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("malformed worker requests must not reach command dispatch")
+
+    molmospaces_worker_protocol.serve_worker(
+        Path("state.json"),
+        run_state_command=never_run_state_command,
+        ok=lambda tool: {"ok": True, "tool": tool},
+        stdin=io.StringIO(stdin_text),
+        stdout=stdout,
+    )
+    return [json.loads(line) for line in stdout.getvalue().splitlines()]
+
+
+def test_molmospaces_worker_protocol_rejects_malformed_stdin_request() -> None:
+    packets = _served_worker_packets("{not-json}\n")
+
+    assert packets[0] == {"event": "ready", "ok": True, "tool": "serve"}
+    assert packets[1]["ok"] is False
+    assert packets[1]["id"] is None
+    assert packets[1]["error_type"] == "ValueError"
+    assert (
+        packets[1]["error"]
+        == "MolmoSpaces worker request source must contain valid JSON object: stdin"
+    )
+
+
+def test_molmospaces_worker_protocol_rejects_non_object_stdin_request() -> None:
+    packets = _served_worker_packets("[]\n")
+
+    assert packets[0] == {"event": "ready", "ok": True, "tool": "serve"}
+    assert packets[1]["ok"] is False
+    assert packets[1]["id"] is None
+    assert packets[1]["error_type"] == "ValueError"
+    assert (
+        packets[1]["error"] == "MolmoSpaces worker request source must contain a JSON object: stdin"
+    )
+
+
+def test_molmospaces_worker_protocol_rejects_non_object_inline_waypoint_json() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"MolmoSpaces worker inline JSON source must contain a JSON object",
+    ):
+        molmospaces_worker_protocol.json_object_from_text("[]")
 
 
 def test_molmospaces_worker_cli_routes_relative_pose_kwargs() -> None:
@@ -227,6 +280,35 @@ def test_isaac_worker_cli_exposes_relative_pose_command() -> None:
     assert args.lateral_m == pytest.approx(-0.125)
     assert args.yaw_delta_deg == pytest.approx(15.0)
     assert "navigate_to_relative_pose" in isaac_lab_backend_worker._STATE_COMMANDS
+
+
+@pytest.mark.parametrize(
+    ("waypoint_json", "expected_message"),
+    [
+        ("{not-json}", "Isaac worker inline JSON source must contain valid JSON object"),
+        ("[]", "Isaac worker inline JSON source must contain a JSON object"),
+    ],
+)
+def test_isaac_worker_cli_rejects_bad_inline_waypoint_json(
+    waypoint_json: str,
+    expected_message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+    with pytest.raises(SystemExit) as exc_info:
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                "state.json",
+                "navigate_to_waypoint",
+                "--waypoint-json",
+                waypoint_json,
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert expected_message in capsys.readouterr().err
 
 
 def test_isaac_worker_cli_rejects_non_positive_render_dimensions() -> None:

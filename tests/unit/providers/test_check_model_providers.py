@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -75,6 +76,21 @@ def test_require_all_fails_on_skipped_probe(monkeypatch) -> None:
     monkeypatch.setattr(script, "build_direct_probes", lambda **_kwargs: [])
 
     assert script.main(["--mode", "agents-sdk", "--dotenv", "", "--require-all"]) == 1
+
+
+def test_load_dotenv_uses_explicit_file_and_preserves_existing_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    script = _load_script_module()
+    dotenv = tmp_path / "providers.env"
+    dotenv.write_text('MM_API_KEY="from file"\nKEEP=from-file\n', encoding="utf-8")
+    monkeypatch.delenv("MM_API_KEY", raising=False)
+    monkeypatch.setenv("KEEP", "host")
+
+    script.load_dotenv(dotenv)
+
+    assert script.os.environ["MM_API_KEY"] == "from file"
+    assert script.os.environ["KEEP"] == "host"
 
 
 def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
@@ -191,6 +207,86 @@ def test_kimi_agents_sdk_probe_uses_coding_agent_user_agent_header(
     assert captured["model_settings"]["extra_body"] == {
         "thinking": {"type": "enabled", "keep": "all"}
     }
+
+
+def _install_fake_httpx(monkeypatch, *, response_text: str, status_error: Exception | None = None):
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        text = response_text
+
+        @staticmethod
+        def raise_for_status() -> None:
+            if status_error is not None:
+                raise status_error
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            captured["client"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        @staticmethod
+        def post(*_args, **kwargs):
+            captured["post"] = kwargs
+            return FakeResponse()
+
+    monkeypatch.setitem(sys.modules, "httpx", type("FakeHttpxModule", (), {"Client": FakeClient}))
+    return captured
+
+
+def test_kimi_direct_probe_validates_provider_response_source(monkeypatch) -> None:
+    script = _load_script_module()
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
+        "direct:kimi-coding-chat"
+    ]
+    _install_fake_httpx(monkeypatch, response_text='["not-an-object"]')
+
+    result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
+
+    assert result.status == "FAIL"
+    assert result.error_type == "ValueError"
+    assert "Kimi coding provider response source must contain a JSON object" in result.error
+    assert "direct:kimi-coding-chat" in result.error
+
+
+def test_kimi_direct_probe_validates_response_message_shape(monkeypatch) -> None:
+    script = _load_script_module()
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
+        "direct:kimi-coding-chat"
+    ]
+    _install_fake_httpx(monkeypatch, response_text=json.dumps({"choices": [{"message": []}]}))
+
+    result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
+
+    assert result.status == "FAIL"
+    assert result.error_type == "RuntimeError"
+    assert "choices[0].message must be a JSON object" in result.error
+    assert "direct:kimi-coding-chat" in result.error
+
+
+def test_kimi_direct_probe_reads_reasoning_content_from_valid_response(monkeypatch) -> None:
+    script = _load_script_module()
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}[
+        "direct:kimi-coding-chat"
+    ]
+    captured = _install_fake_httpx(
+        monkeypatch,
+        response_text=json.dumps({"choices": [{"message": {"reasoning_content": "ok"}}]}),
+    )
+
+    result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
+
+    assert result.status == "PASS"
+    assert result.output == "ok"
+    assert captured["post"]["headers"]["User-Agent"] == "claude-code/1.0.0"
 
 
 def test_select_probe_can_limit_by_route_or_probe_id() -> None:

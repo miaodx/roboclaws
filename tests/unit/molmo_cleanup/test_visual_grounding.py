@@ -83,6 +83,26 @@ def test_http_visual_grounding_client_accepts_http_error_failure_response() -> N
     assert response["error"]["reason"] == "adapter_unavailable"
 
 
+def test_http_visual_grounding_client_rejects_non_object_http_response() -> None:
+    server = _start_server(_raw_response_handler(b"[]"))
+    try:
+        client = HttpVisualGroundingClient(
+            VisualGroundingClientConfig(
+                pipeline_id="grounding-dino",
+                base_url=f"http://127.0.0.1:{server.server_port}",
+                timeout_s=2,
+            )
+        )
+        with pytest.raises(
+            VisualGroundingContractError,
+            match="visual grounding HTTP response source must contain a JSON object",
+        ):
+            client.request_candidates(_request())
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_http_visual_grounding_client_retries_connection_setup_errors() -> None:
     client = HttpVisualGroundingClient(
         VisualGroundingClientConfig(
@@ -288,6 +308,21 @@ def _success_handler(seen: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+    return Handler
+
+
+def _raw_response_handler(body: bytes, *, status_code: int = 200) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args: Any) -> None:
+            return
 
     return Handler
 

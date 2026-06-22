@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.household.visual_grounding_contract import (
     VISUAL_GROUNDING_PIPELINE_SCHEMA,
     VISUAL_GROUNDING_REQUEST_SCHEMA,
@@ -158,20 +159,26 @@ def _post_visual_grounding_json(
         with urllib.request.urlopen(http_request, timeout=timeout_s) as resp:
             return _validated_response_json(
                 resp.read(),
-                invalid_json_message="visual grounding response was not valid JSON",
+                source="visual grounding HTTP response",
             )
     except urllib.error.HTTPError as exc:
         return _validated_response_json(
             exc.read(),
-            invalid_json_message=f"visual grounding HTTP {exc.code} response was not valid JSON",
+            source=f"visual grounding HTTP {exc.code} response",
         )
 
 
-def _validated_response_json(body: bytes, *, invalid_json_message: str) -> dict[str, Any]:
+def _validated_response_json(body: bytes, *, source: str) -> dict[str, Any]:
     try:
-        payload = json.loads(body.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise VisualGroundingContractError(invalid_json_message) from exc
+        text = body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise VisualGroundingContractError(
+            f"{source} source must contain UTF-8 JSON object"
+        ) from exc
+    try:
+        payload = parse_json_object_text(text, label=source)
+    except ValueError as exc:
+        raise VisualGroundingContractError(str(exc)) from exc
     return validate_visual_grounding_response(payload)
 
 

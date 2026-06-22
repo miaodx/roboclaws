@@ -17,17 +17,15 @@ roboclaws_load_dotenv() {
 
 roboclaws_python() {
   if [[ -n "${ROBOCLAWS_PYTHON:-}" ]]; then
+    if [[ ! -x "$ROBOCLAWS_PYTHON" ]]; then
+      echo "error: ROBOCLAWS_PYTHON is not executable: $ROBOCLAWS_PYTHON" >&2
+      return 2
+    fi
     printf '%s\n' "$ROBOCLAWS_PYTHON"
   elif [[ -x ".venv/bin/python" ]]; then
     printf '%s\n' ".venv/bin/python"
-  elif command -v python3 >/dev/null 2>&1; then
-    command -v python3
-  elif command -v python >/dev/null 2>&1; then
-    command -v python
-  elif command -v uv >/dev/null 2>&1; then
-    printf '%s\n' "uv run python"
   else
-    echo "error: no Python interpreter found for Roboclaws provider registry" >&2
+    echo "error: missing repo Python at .venv/bin/python; run 'uv sync --extra dev'" >&2
     return 2
   fi
 }
@@ -95,29 +93,6 @@ roboclaws_code_agent_profile_default_model() {
     return 0
   fi
   roboclaws_provider_registry default-model "$provider"
-}
-
-roboclaws_mify_anthropic_base_url() {
-  local base="${XM_LLM_ANTHROPIC_BASE_URL:-}"
-  if [[ -z "$base" ]]; then
-    base="${XM_LLM_BASE_URL:-}"
-    if [[ -n "$base" ]]; then
-      base="${base%/}"
-      case "$base" in
-        */anthropic)
-          ;;
-        */v1)
-          base="${base%/v1}/anthropic"
-          ;;
-        *)
-          base="${base}/anthropic"
-          ;;
-      esac
-    else
-      base="https://api.llm.mioffice.cn/anthropic"
-    fi
-  fi
-  printf '%s\n' "$base"
 }
 
 roboclaws_code_agent_profile_base_url() {

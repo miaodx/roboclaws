@@ -1479,8 +1479,8 @@ def _camera_request_provenance(camera_request: dict[str, Any]) -> str:
     return molmospaces_worker_outputs.camera_request_provenance(camera_request)
 
 
-def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    return molmospaces_focus_camera.camera_vec3(value, default=default)
+def _camera_vec3(value: Any, *, field_name: str = "camera vector") -> list[float]:
+    return molmospaces_focus_camera.camera_vec3(value, field_name=field_name)
 
 
 def _eye_from_mujoco_free_camera(

@@ -483,7 +483,7 @@ def test_agent_sdk_perf_matrix_blocks_malformed_candidate_source(
     assert row["quality_comparison"] == {}
     assert row["speed_comparison"] == {}
     assert row["reducible_bucket_report"] == {"available": False, "recommendations": []}
-    assert any("trace.jsonl" in reason and "line 2" in reason for reason in row["reasons"])
+    assert any("trace.jsonl:2" in reason for reason in row["reasons"])
 
 
 def test_agent_sdk_perf_matrix_blocks_non_object_candidate_source(
@@ -512,7 +512,7 @@ def test_agent_sdk_perf_matrix_blocks_non_object_candidate_source(
     packet = json.loads(decision_packet.read_text(encoding="utf-8"))
     row = packet["rows"][0]
     assert row["status"] == "blocked"
-    assert any("trace.jsonl" in reason and "expected object" in reason for reason in row["reasons"])
+    assert any("trace.jsonl:1" in reason and "JSON object" in reason for reason in row["reasons"])
 
 
 def test_agent_sdk_perf_matrix_uses_row_calibration_for_normalized_deltas(
@@ -586,6 +586,85 @@ def test_agent_sdk_perf_matrix_uses_row_calibration_for_normalized_deltas(
         "not_repo_default_calibration"
     ]
     assert "_calibration" not in row
+
+
+def test_agent_sdk_perf_matrix_blocks_malformed_calibration_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=80)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70, gap_s=50)
+    calibration = tmp_path / "calibration.json"
+    calibration.write_text("{not-json\n", encoding="utf-8")
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        calibration_path=calibration,
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "calibration source error" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "blocked"
+    assert row["quality_comparison"] == {}
+    assert row["speed_comparison"] == {}
+    assert row["reducible_bucket_report"] == {"available": False, "recommendations": []}
+    assert any(
+        "calibration source error" in reason and "calibration.json" in reason
+        for reason in row["reasons"]
+    )
+
+
+def test_agent_sdk_perf_matrix_blocks_non_object_calibration_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=80)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70, gap_s=50)
+    calibration = tmp_path / "calibration.json"
+    calibration.write_text("[]\n", encoding="utf-8")
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        calibration_path=calibration,
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "calibration source error" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "blocked"
+    assert any(
+        "calibration source error" in reason and "expected object" in reason
+        for reason in row["reasons"]
+    )
 
 
 def test_agent_sdk_perf_matrix_does_not_recommend_o_for_composite_internal_declare(

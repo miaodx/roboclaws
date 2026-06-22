@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import parse_json_object_text, read_json_object
 
 type WorkerCommandHandler = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
 
@@ -29,14 +29,16 @@ def serve_worker(
             continue
         request: Any = {}
         try:
-            request = json.loads(line)
-            if not isinstance(request, dict):
-                raise ValueError("request must be a JSON object")
+            request = parse_json_object_text(
+                line,
+                label="MolmoSpaces worker request",
+                source="stdin",
+            )
             request_id = request.get("id")
             command = str(request.get("command") or "")
             kwargs = request.get("kwargs") or {}
             if not isinstance(kwargs, dict):
-                raise ValueError("request kwargs must be a JSON object")
+                raise ValueError("MolmoSpaces worker request kwargs must be a JSON object")
             if command == "shutdown":
                 response = {
                     "id": request_id,
@@ -178,10 +180,7 @@ def float_or_zero(value: Any, *, setting_name: str = "value") -> float:
 
 
 def json_object_from_text(text: str) -> dict[str, Any]:
-    payload = json.loads(text)
-    if not isinstance(payload, dict):
-        raise ValueError("expected JSON object")
-    return payload
+    return parse_json_object_text(text, label="MolmoSpaces worker inline JSON")
 
 
 def read_state(path: Path) -> dict[str, Any]:

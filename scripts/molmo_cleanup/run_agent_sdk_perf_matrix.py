@@ -334,7 +334,11 @@ def _row_calibration(row: dict[str, Any]) -> dict[str, Any] | None:
     if not calibration_path.exists():
         _block(row, f"calibration_path missing: {calibration_path}")
         return None
-    return read_model_latency_calibration(calibration_path)
+    try:
+        return read_model_latency_calibration(calibration_path)
+    except ReportPerformanceSourceError as exc:
+        _block(row, f"calibration source error: {exc}")
+        return None
 
 
 def _run_summary(run_dir: Path, *, calibration: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -88,10 +88,33 @@ def test_fast_dev_tests_clear_provider_env_for_deterministic_mock_gate() -> None
 
     assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV" in script_text
     assert "PYTEST_BIN_DIR" in script_text
-    assert 'ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON-}"' in script_text
+    assert 'ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON:-$REPO_ROOT/.venv/bin/python}"' in (script_text)
+    assert "command -v pytest" not in script_text
+    assert "run 'uv sync --extra dev' in this checkout" in script_text
     assert 'KIMI_API_KEY=""' in script_text
     assert 'MIMO_TP_KEY=""' in script_text
     assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1" in dev_text
+
+
+def test_worktree_preflight_fails_loudly_for_missing_env_and_assets() -> None:
+    script_text = (REPO_ROOT / "scripts" / "dev" / "check_worktree_readiness.py").read_text(
+        encoding="utf-8"
+    )
+    bootstrap_text = (REPO_ROOT / "scripts" / "dev" / "bootstrap_worktree_env.sh").read_text(
+        encoding="utf-8"
+    )
+    dev_text = (JUST_DIR / "dev.just").read_text(encoding="utf-8")
+
+    assert "roboclaws_worktree_readiness_v1" in script_text
+    assert "uv sync --extra dev" in script_text
+    assert "git submodule update --init --recursive" in script_text
+    assert "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/nav2.yaml" in script_text
+    assert "ROBOCLAWS_BASELINE_REPO" in bootstrap_text
+    assert 'rm -rf -- "$target_venv"' in bootstrap_text
+    assert 'ln -s "$baseline_venv" "$target_venv"' in bootstrap_text
+    assert 'git -C "$repo_root" submodule update --init --recursive' in bootstrap_text
+    assert "worktree-preflight" in dev_text
+    assert "worktree-bootstrap" in dev_text
 
 
 def test_pre_commit_runs_scoped_tests_by_default_with_full_fast_opt_in() -> None:

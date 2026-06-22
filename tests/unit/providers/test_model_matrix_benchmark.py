@@ -60,6 +60,21 @@ def test_mimo_inside_cases_read_registry_env(monkeypatch) -> None:
     assert "Default-enabled" in case.note
 
 
+def test_load_dotenv_uses_explicit_file_and_preserves_existing_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    script = _load_script_module()
+    dotenv = tmp_path / "matrix.env"
+    dotenv.write_text('CODEX_API_KEY="from file"\nKEEP=from-file\n', encoding="utf-8")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    monkeypatch.setenv("KEEP", "host")
+
+    script.load_dotenv(dotenv)
+
+    assert script.os.environ["CODEX_API_KEY"] == "from file"
+    assert script.os.environ["KEEP"] == "host"
+
+
 def test_endpoint_urls_normalize_wire_api_suffixes() -> None:
     script = _load_script_module()
 
@@ -431,6 +446,172 @@ def test_stream_throughput_payload_requests_usage_tail(monkeypatch) -> None:
     assert payload["stream_options"] == {"include_usage": True}
     assert result.status == "PASS"
     assert result.first_content_s is not None
+
+
+def test_stream_trial_rejects_malformed_provider_event_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "text/event-stream"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __iter__(self):
+            return iter(
+                [
+                    b"event: message\n",
+                    b"data: {not-json}\n",
+                    b'data: {"choices":[{"delta":{"content":"ok"}}]}\n',
+                    b"data: [DONE]\n",
+                ]
+            )
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    result = script.run_trial(
+        case,
+        index=1,
+        layer="stream-throughput",
+        prompt="stream",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert result.status == "FAIL"
+    assert result.error_type == "ModelMatrixStreamSourceError"
+    assert "model-matrix provider stream source must contain valid JSON object" in result.error
+
+
+def test_stream_trial_rejects_non_object_provider_event_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "text/event-stream"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __iter__(self):
+            return iter(
+                [
+                    b"data: []\n",
+                    b'data: {"choices":[{"delta":{"content":"ok"}}]}\n',
+                    b"data: [DONE]\n",
+                ]
+            )
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", lambda *_args, **_kwargs: _Response())
+
+    result = script.run_trial(
+        case,
+        index=1,
+        layer="stream-throughput",
+        prompt="stream",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert result.status == "FAIL"
+    assert result.error_type == "ModelMatrixStreamSourceError"
+    assert "model-matrix provider stream source must contain a JSON object" in result.error
+
+
+def test_non_stream_trial_rejects_bad_provider_response_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "application/json"}
+
+        def __init__(self, body: bytes) -> None:
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return self.body
+
+    bodies = iter((b"{not-json}", b"[]"))
+
+    def fake_urlopen(_request, timeout):  # noqa: ANN001
+        assert timeout == 1.0
+        return _Response(next(bodies))
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", fake_urlopen)
+
+    malformed = script.run_trial(
+        case,
+        index=1,
+        layer="health",
+        prompt="ping",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+    non_object = script.run_trial(
+        case,
+        index=2,
+        layer="health",
+        prompt="ping",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert malformed.status == "FAIL"
+    assert malformed.error_type == "ValueError"
+    assert "model-matrix provider response source must contain valid JSON object" in (
+        malformed.error or ""
+    )
+    assert "mimo-inside-openai-chat:mimo-1000:openai-chat health" in (malformed.error or "")
+    assert non_object.status == "FAIL"
+    assert non_object.error_type == "ValueError"
+    assert "model-matrix provider response source must contain a JSON object" in (
+        non_object.error or ""
+    )
+    assert "mimo-inside-openai-chat:mimo-1000:openai-chat health" in (non_object.error or "")
 
 
 def test_agent_cases_are_selectable_and_do_not_store_full_prompt() -> None:

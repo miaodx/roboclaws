@@ -45,6 +45,86 @@ def test_normalize_camera_control_list_accepts_explicit_resolution() -> None:
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
+        (
+            [
+                {
+                    "camera_model": "canonical_eye_target_camera_v1",
+                    "eye": [0.0, 0.0, 1.0],
+                }
+            ],
+            r"camera control request views\[1\] must include target",
+        ),
+        (
+            [
+                {
+                    "camera_model": "canonical_eye_target_camera_v1",
+                    "eye": [0.0, 0.0, 1.0],
+                    "target": [1.0, 0.0],
+                }
+            ],
+            r"camera control request views\[1\]\.target must be a 3-number vector",
+        ),
+        (
+            [
+                {
+                    "camera_model": "canonical_eye_target_camera_v1",
+                    "eye": [0.0, 0.0, 1.0],
+                    "target": [1.0, float("nan"), 0.0],
+                }
+            ],
+            r"camera control request views\[1\]\.target\[1\] must be a finite number",
+        ),
+        (
+            [
+                {
+                    "camera_model": "canonical_eye_target_camera_v1",
+                    "eye": [0.0, "bad", 1.0],
+                    "target": [1.0, 0.0, 0.0],
+                }
+            ],
+            r"camera control request views\[1\]\.eye\[1\] must be a finite number",
+        ),
+        (
+            [{"view_id": "anchor_only"}],
+            r"camera control request views\[1\] must include target or lookat",
+        ),
+        (
+            [{"target": [0.0, 0.0, 0.0], "lookat": [0.0, True, 0.0]}],
+            r"camera control request views\[1\]\.lookat\[1\] must be a finite number",
+        ),
+        (
+            [{"target": [0.0, 0.0, 0.0]}, "skip"],
+            r"camera control request views\[2\] must be an object",
+        ),
+    ],
+)
+def test_normalize_camera_control_rejects_invalid_explicit_view_vectors(
+    payload: list[object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        normalize_camera_control_request(payload, width=6, height=4)
+
+
+def test_normalize_camera_control_allows_focus_receptacle_without_explicit_target() -> None:
+    request = normalize_camera_control_request(
+        [
+            {
+                "camera_mode": "focus_receptacle",
+                "camera_model": "mujoco_focus_receptacle_camera",
+                "focus_receptacle_id": "sink_01",
+            }
+        ],
+        width=6,
+        height=4,
+    )
+
+    assert request["views"][0]["focus_receptacle_id"] == "sink_01"
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
         ({"views": []}, "camera control request render_resolution must be an object"),
         (
             {"render_resolution": {"height": 4}, "views": []},

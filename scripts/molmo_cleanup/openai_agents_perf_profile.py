@@ -372,7 +372,7 @@ def _model_input_compaction_profile(
         MODEL_INPUT_COMPACTION_ENV,
         default=default_enabled,
     )
-    min_chars = _int_setting(
+    min_chars = _positive_int_setting(
         args,
         "model_input_compaction_min_chars",
         MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
@@ -398,7 +398,7 @@ def _model_input_compaction_profile(
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": hook_enabled,
         "mode": "+".join(mode_parts) if mode_parts else "off",
-        "min_chars": int(min_chars or 1200),
+        "min_chars": min_chars,
         "candidate_ids": candidate_ids,
         "hook": "RunConfig.call_model_input_filter",
         "repeated_metric_map_delta": enabled,

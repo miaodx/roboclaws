@@ -22,6 +22,365 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Agent SDK perf-matrix calibration
+  source slice: explicit `calibration_path` artifacts now fail as row-level
+  blocked decision-packet evidence when malformed or non-object, matching
+  baseline/candidate run-source handling instead of letting a corrupt
+  calibration source abort matrix generation outside the row status surface.
+- Current shared-checkout note after the OpenAI Agents model-input
+  camera-grounded output source slice: camera-grounded history compaction now
+  treats JSON-looking MCP tool-output text wrappers as structured sources.
+  Malformed, non-object, or double-encoded non-object structured camera output
+  fails with source-labelled diagnostics before compaction can summarize it as
+  a plausible zero-candidate camera-grounded result. Plaintext unavailable-body
+  messages remain the explicit tolerated fallback.
+- Current shared-checkout note after the mify image probe HTTP source slice:
+  `scripts/dev/probe_mify_v25_image.py` remains stdlib-only but now validates
+  provider HTTP success bodies with a script-local JSON-object source parser
+  before chat/responses output extraction, so malformed or non-object 200
+  bodies fail aloud instead of producing `status: ok` with empty output. Bad
+  HTTP error bodies keep an explicit `HTTP <code> <reason>` source in the
+  fallback diagnostic.
+- Current shared-checkout note after the Kimi key smoke validation slice:
+  `scripts/dev/check_kimi_key.py` now validates model output as a JSON object
+  through the shared JSON-object source helper and requires
+  `action == "MoveAhead"` before reporting that the key returns parseable JSON,
+  so prose-wrapped, non-object, missing-action, or wrong-action replies fail
+  aloud instead of creating a false-green key smoke.
+- Current shared-checkout note after the direct Kimi provider response source
+  slice: `KimiCodingProvider` HTTP success bodies now parse through the shared
+  JSON-object text helper before action parsing and usage accounting, so
+  malformed or non-object provider response bodies fail as source-labelled
+  provider errors instead of producing fallback actions or cost evidence from
+  corrupt wire data.
+- Current shared-checkout note after the Kimi provider-health response source
+  slice: the direct Kimi coding probe now parses HTTP response text through
+  the shared JSON-object source helper and validates `choices[0].message`
+  before extracting output, so malformed, non-object, or wrong-shaped
+  provider-health wire bodies become labelled FAIL diagnostics.
+- Current shared-checkout note after the MiMo tool-call argument recovery
+  slice: OpenAI-compatible direct provider parsing now routes malformed or
+  parseable non-object tool-call arguments through the shared provider
+  fallback decision instead of raising from `json.loads`, while valid
+  dictionaries keep the existing action/reasoning validation and
+  `reasoning_content` fallback.
+- Current shared-checkout note after the RAW-FPV visual-labeler provider HTTP
+  source slice: provider Responses API success and error bodies now route
+  through a UTF-8 check plus the shared JSON-object text helper, so malformed,
+  non-UTF-8, or parseable non-object wire bodies surface labelled RAW-FPV
+  Responses API source errors before visual-labeler predictions can derive
+  confidence from corrupt provider HTTP payloads.
+- Current shared-checkout note after the OpenAI Agents compact metric detail
+  source slice: live-timing compact metric summaries now parse JSON-looking
+  terminal `detail` values as structured sources, preserve valid RAW-FPV
+  budget extraction, tolerate plaintext provider detail, and surface
+  `detail_source_error` / `detail_source_error_kind` when malformed or
+  non-object structured detail would otherwise be silently dropped from timing
+  attribution.
+- Current shared-checkout note after the OpenAI Agents SDK console readiness
+  source-parity slice: operator-console readiness now resolves SDK
+  provider/model/base-url/key settings through `openai_agents_runtime_settings()`
+  before publishing the provider gate, so unknown
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL` values, conflicting SDK/Codex model sources,
+  and route-incompatible SDK model overrides block start with the same
+  launch-time diagnostics. The generic `ROBOCLAWS_CODE_AGENT_MODEL` alias is
+  not a direct SDK model source.
+- Current shared-checkout note after the mify Anthropic base-url conflict
+  slice: provider-route base-url resolution now rejects conflicting
+  `XM_LLM_ANTHROPIC_BASE_URL` and derived `XM_LLM_BASE_URL` values before
+  readiness or coding-agent launch can publish a plausible Anthropic endpoint.
+  The Python provider registry is the single derivation owner; the shell
+  coding-agent helper no longer carries a duplicate URL derivation path.
+- Current shared-checkout note after the python-quality-ratchet source slice:
+  ratchet baseline reads and Ruff JSON diagnostics now fail through labelled
+  source-reader diagnostics instead of raw `json.loads` / type errors from the
+  gate itself, so malformed or wrong-shaped gate inputs cannot produce raw
+  tracebacks or valid-looking ratchet confidence.
+- Current shared-checkout note after the model-matrix stream source slice:
+  OpenAI Chat streaming `data:` events now fail malformed or parseable
+  non-object JSON as source-labelled trial failures instead of silently
+  skipping wrong-shaped structured events before a later valid event can
+  produce a healthy-looking stream result. Blank lines, SSE metadata, comments,
+  non-JSON noise, and `data: [DONE]` remain tolerated.
+- Current shared-checkout note after the operator-console MCP control response
+  source slice: manual-control MCP tool response text now routes JSON-looking
+  payloads through the shared JSON-object text helper instead of raw
+  `json.loads`, so malformed or parseable non-object tool text becomes a
+  source-labelled control-call error and persisted error row before operator
+  intervention state can derive confidence from corrupt MCP responses.
+- Current shared-checkout note after the operator-console camera state source
+  slice: camera-angle summary now consumes the validated trace JSONL row set
+  already collected by operator-console state instead of re-reading
+  `trace.jsonl` through a private raw JSON loop, so malformed trace rows keep
+  the canonical Trace source-error surface while camera state and latest-action
+  evidence share one source owner.
+- Current shared-checkout note after the visual-grounding HTTP source slice:
+  sidecar request bodies and client response bodies now reuse the shared
+  JSON-object text helper instead of local `json.loads`, so malformed,
+  non-UTF-8, or parseable non-object request/response wire packets produce
+  source-labelled sidecar/client diagnostics before adapter dispatch,
+  benchmark prediction scoring, or cleanup visual evidence can derive
+  confidence from wrong-shaped HTTP data.
+- Current shared-checkout note after the OpenClaw chat tail source slice:
+  parseable non-object Gateway session JSONL rows now render as flagged invalid
+  row evidence instead of crashing the host-side transcript tailer, while
+  malformed JSON keeps the existing compact invalid-row output.
+- Current shared-checkout note after the model-matrix provider response source
+  slice: non-stream benchmark HTTP responses now reuse the shared JSON-object
+  text helper instead of raw `json.loads`, so malformed or non-object provider
+  wire data becomes source-labelled FAIL rows tied to the case id and
+  benchmark layer before output extraction or route-support summaries.
+- Current shared-checkout note after the Isaac worker CLI inline waypoint
+  source slice: `navigate_to_waypoint --waypoint-json` now reuses the shared
+  JSON-object text helper instead of a local `json.loads` / type check, so
+  malformed or non-object public waypoint payloads fail at argparse with
+  source-labelled Isaac worker diagnostics before backend navigation handling.
+- Current shared-checkout note after the MolmoSpaces worker protocol source
+  slice: persistent-worker stdin requests and inline waypoint JSON now reuse
+  the shared JSON-object text helper instead of local `json.loads` / type
+  checks, so malformed or non-object worker command rows return
+  source-labelled error packets before dispatch and wrong-shaped waypoint JSON
+  cannot reach navigation handling.
+- Current shared-checkout note after the operator-console HTTP body source
+  slice: POST request bodies now reuse the shared JSON-object source helper
+  instead of raw `json.loads`, so malformed or non-object browser/operator
+  payloads return stable 400 diagnostics labelled by HTTP method/path before
+  launch, steer, next-goal, control, pause, or stop handlers can mutate run
+  state.
+- Current shared-checkout note after the launch goal-contract inline source
+  slice: inline goal-contract payloads now reuse the shared JSON-object source
+  helper instead of raw `json.loads`, so malformed or non-object
+  `--goal-contract-json` / `ROBOCLAWS_GOAL_CONTRACT_JSON` inputs fail with
+  source-labelled diagnostics before public launch prompt/server/cleanup
+  setup derives task intent from corrupt operator context.
+- Current shared-checkout note after the Molmo cleanup trace-preserving skill
+  inline projection source slice: `--static-fixture-projection-json` now routes
+  through a skill-local JSON-object source parser before routine-plan
+  inspection, so malformed or non-object inline fixture projection payloads
+  fail with concise CLI diagnostics instead of Python JSON tracebacks.
+- Current shared-checkout note after the Agibot nav artifact source slice:
+  vendor navigation artifact readers now fail saved raw-map gzip JSON and
+  candidate JSON sources with source-labelled `SystemExit` diagnostics instead
+  of raw JSON/gzip tracebacks. Offline target preparation, candidate
+  navigation submission, and robot-direction overlays now share the same
+  standalone Agibot artifact boundary before deriving map validation or heading
+  evidence from saved artifacts.
+- Current shared-checkout note after the persistent MolmoSpaces worker packet
+  source slice: persistent-worker ready and command-response stdout packets
+  now route through the shared worker JSON-object source helper instead of
+  local `json.loads` calls in `roboclaws/household/subprocess_backend.py`.
+  Malformed or non-object ready/response packets now fail with
+  `MolmoSpaces persistent worker ...` source diagnostics before readiness or
+  command result handling can derive confidence from a wrong-shaped packet.
+- Current shared-checkout note after the Agibot SDK cleanup backend source
+  slice: explicit vendor-runner JSON inputs now fail with source-labelled CLI
+  diagnostics instead of raw JSON tracebacks. `--context-json`,
+  `--agent-view-json`, live-navigation context checks, and attached Agibot map
+  artifact `source.json` all route through one runner-local JSON-object source
+  helper that preserves the standalone `vendors/agibot_sdk` subprocess context.
+- Current shared-checkout note after the scene-Gaussian alignment evidence
+  source slice: the skill handoff summarizer now routes required readiness
+  artifacts, explicit navigation artifacts, and explicit evidence-summary
+  artifacts through one source-labelled JSON-object helper before writing
+  alignment summaries or manifests, so corrupt proof inputs fail with concise
+  CLI diagnostics instead of raw JSON tracebacks.
+- Current shared-checkout note after the Molmo cleanup skill scratchpad CLI
+  source slice: the skill-local scratchpad helper now routes present
+  `cleanup_scratch.json` files and inline `--result-json` payloads through one
+  script-local JSON-object source parser, so malformed or non-object agent
+  memory sources fail with concise CLI diagnostics before validation or update.
+- Current shared-checkout note after the Molmo cleanup target-query runtime-map
+  source slice: the offline target-query helper now routes explicit
+  `runtime_metric_map.json` artifact reads through the shared JSON-object
+  source owner, so malformed, missing, or non-object public map artifacts fail
+  with concise CLI source diagnostics before target recovery can produce
+  valid-looking matches from corrupt map evidence.
+- Current shared-checkout note after the visual-result-showcase source slice:
+  showcase rendering now routes required `run_result.json` and present
+  `trace.jsonl` evidence through the shared JSON-object/JSONL source owners, so
+  malformed or non-object completed-run artifacts fail with concise showcase
+  diagnostics before GIF/contact-sheet output can derive visible proof from
+  corrupt result or trace evidence.
+- Current shared-checkout note after the eval-harness required JSON source
+  slice: eval-harness `eval_results.json` and detached `live_status.json`
+  artifact reads now reuse the shared JSON-object source owner instead of a
+  local duplicate parser and dead optional JSON loader, so malformed, missing,
+  or non-object row artifacts surface canonical source diagnostics before
+  aggregate classification or live-row polling derives confidence from them.
+- Current shared-checkout note after the core dotenv owner slice:
+  repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
+  Operator-console repo `.env` loading plus provider health/model-matrix dev
+  script `--dotenv` loading reuse the same no-overwrite, quote-cleaning, and
+  value-prefix handling while preserving explicit dotenv file paths and
+  process-env side effects where callers already had them.
+- Current shared-checkout note after the shared subprocess worker stdout source
+  consolidation slice: `roboclaws/household/worker_runner.py` now routes
+  JSON-looking one-shot worker result stdout rows through the core JSON-object
+  text helper instead of a local parser. MolmoSpaces and Isaac backend workers
+  keep ordinary stdout-noise tolerance, while malformed object-shaped result
+  rows or parseable non-object structured rows fail with line-labelled
+  `<worker> worker stdout row` source diagnostics before backend callers can
+  derive confidence from missing or stale worker packets.
+- Current shared-checkout note after the eval-runner trace JSONL source
+  consolidation slice: tolerant `trace.jsonl` row reads now route through a
+  core JSONL row collector instead of a local parser in
+  `roboclaws/evals/runner.py`. Eval trajectory graders keep valid partial
+  trace rows visible while malformed or non-object present rows preserve the
+  existing `trace_json_invalid` violation and row-level parse-error wording.
+- Current shared-checkout note after the operator-message inbox JSONL source
+  consolidation slice: `operator_messages.jsonl` reads now route through the
+  console-owned JSONL row collector instead of a local parser in
+  `interactions.py`. Valid partial message rows remain visible in
+  list/state views while malformed or non-object present rows keep the
+  existing operator-message source-error payload and MCP message checks fail
+  closed before returning queued steering.
+- Current shared-checkout note after the OpenAI Agents metrics JSONL source
+  consolidation slice: metrics and live-timing JSONL event reads now route
+  present OpenAI Agents event, span, and trace rows through the shared JSONL
+  source owner. Missing metric JSONL files remain intentional empty evidence,
+  while malformed or non-object present rows use canonical `OpenAI Agents
+  metrics` or `OpenAI Agents live` row-source diagnostics before event, span,
+  context-growth, or live-timing metrics can derive confidence from partial
+  artifacts.
+- Current shared-checkout note after the RAW-FPV Codex event artifact source
+  consolidation slice: the perception probe now routes present
+  `codex-events*.jsonl` rows through the shared JSONL source owner, including
+  line-numbered rows for embedded observe-result parsing. Malformed or
+  non-object present event rows now use canonical `RAW-FPV Codex event`
+  row-source diagnostics before observation frames can be collected from
+  partial event evidence.
+- Current shared-checkout note after the operator-console JSONL row source
+  consolidation slice: console state, history, and operator-control JSONL row
+  reads now share one console-owned collector. State and history still keep
+  valid partial rows visible while surfacing malformed or non-object present
+  rows as source errors, and operator control remains fail-fast before
+  appending a new operator command.
+- Current shared-checkout note after the OpenAI Agents RAW-FPV budget trace
+  source consolidation slice: budget-guard reads now route present
+  `trace.jsonl` rows through the shared JSONL source helper instead of a local
+  parser. Missing trace files remain the intentional no-budget-evidence path,
+  while malformed or non-object present rows use canonical
+  `OpenAI Agents budget trace` `path:row` diagnostics before candidate,
+  repeated-failure, or observe-per-waypoint budget decisions can derive
+  confidence from partial trace history.
+- Current shared-checkout note after the model-latency calibration JSONL source
+  consolidation slice: calibration now routes present `model_call_metrics.jsonl`
+  rows through the shared JSONL source helper instead of a local row parser.
+  Missing metric files remain the intentional insufficient-samples path, while
+  malformed or non-object present rows use canonical `model-call metrics`
+  `path:row` diagnostics before fitting, holdout validation, or coefficient-set
+  evidence can derive confidence from partial telemetry.
+- Current shared-checkout note after the report-performance JSONL source slice:
+  report-performance JSONL reads now route through the shared JSONL source
+  helper instead of a local row parser, while preserving the
+  `ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
+  Codex/Claude event, and provider-request metrics consumers. Malformed and
+  non-object present rows now use canonical `path:row` source wording before
+  metrics or comparison rows can derive confidence from partial JSONL
+  evidence.
+- Current shared-checkout note after the Codex/Claude live trace-source slice:
+  live cleanup timing trace readers now route present `trace.jsonl` and Codex
+  event JSONL rows through the shared JSONL source helper instead of duplicate
+  local row parsers. Missing trace sidecars remain optional, while malformed
+  or non-object present rows keep route-labelled source errors before MCP
+  timing/status confidence is derived.
+- Current shared-checkout note after the Isaac runtime checker stale-helper
+  slice: the unused `_trace_events_from_path` helper is removed from
+  `scripts/molmo_cleanup/isaac_runtime_checker.py`. Current cleanup trace and
+  Isaac semantic-pose trace source validation live in their dedicated checker
+  owners, so the stale raw JSONL reader is deleted instead of hardened.
+- Current shared-checkout note after the MCP self-trace source slice:
+  household cleanup and Agibot map-build MCP server self-trace reads now route
+  through the shared JSONL source helper, so malformed or non-object
+  `trace.jsonl` rows fail with server-labelled source errors before done
+  readiness, policy trace, raw-FPV observation, or run-result evidence can
+  derive confidence from partial MCP trace data.
+- Current shared-checkout note after the planner manipulation probe
+  stdout-source slice: worker stdout parsing now fails malformed or non-object
+  JSON-looking rows aloud while preserving ordinary log-line tolerance, so
+  timeout/runtime diagnostics cannot be assembled from partial structured
+  stdout evidence.
+- Current shared-checkout note after the cleanup artifact-report trace-source
+  slice: stale cleanup report re-rendering now routes trace JSONL reads through
+  the shared JSONL source helper instead of a local parser, so malformed or
+  non-object trace rows fail with row-labelled `cleanup report trace` source
+  errors before report timeline rendering can derive confidence from partial
+  trace evidence.
+- Current shared-checkout note after the RAW-FPV private-label trace-source
+  slice: private-label trace JSONL reads now route through the shared JSONL
+  source helper instead of a local parser, so malformed or non-object trace
+  rows fail with row-labelled `RAW-FPV private-label trace` source errors
+  before first-sweep observation extraction can derive confidence from partial
+  trace evidence.
+- Current shared-checkout note after the Isaac semantic-pose trace-source
+  slice: checker trace JSONL reads now route through the shared JSONL source
+  helper instead of a local parser, so malformed or non-object trace rows fail
+  with row-labelled `Isaac semantic-pose trace` source errors before
+  semantic-pose pick/place provenance checks can derive confidence from
+  partial trace evidence.
+- Current shared-checkout note after the Agibot map-build trace-source slice:
+  checker trace JSONL reads now route through the shared JSONL source helper
+  instead of a local parser, so malformed or non-object trace rows fail with
+  row-labelled `Agibot map-build trace` source errors before public-trace
+  privacy checks or duplicate-navigation checks can derive confidence from
+  partial trace evidence.
+- Current shared-checkout note after the Isaac runtime smoke sidecar-source
+  slice: the checker keeps stdout-last-JSON tolerance only for `--init-result`,
+  while explicit `--state-path` and `--robot-views-result` artifacts now route
+  through the shared JSON-object source helper. Prefixed log text, malformed
+  JSON, or non-object sidecars fail with path-labelled source errors before
+  state consistency or robot-view checks can produce valid-looking confidence.
+- Current shared-checkout note after the MolmoSpaces grasp initial-contact
+  candidate-source slice: initial-contact diagnostics now validate explicit
+  candidate grasp JSON in the parent before launching the child probe, so
+  malformed or non-object candidate files fail with path-labelled source
+  errors instead of becoming generic child-probe blocked payloads. Missing
+  candidate files keep the existing blocked-result path.
+- Current shared-checkout note after the generated-mess placement-field source
+  slice: MolmoSpaces and Isaac scenario-state placement seeding now reuse the
+  canonical generated-mess manifest validators for `relation` and
+  `placement_index`, so persisted or hand-built worker state with bad manifest
+  placement fields fails before backend defaults can produce valid-looking
+  placement diagnostics. Non-manifest seeding keeps its existing backend
+  fallback behavior.
+- Current shared-checkout note after the camera-control vector source slice:
+  public camera-control request normalization now rejects malformed or missing
+  explicit render-pose vectors and non-object view rows before MuJoCo or Isaac
+  renderers can synthesize valid-looking camera artifacts from origin/default
+  pose data. MolmoSpaces and Isaac camera-view spec helpers reuse the shared
+  strict vector parser for direct calls, while the intentional Isaac USD-bound
+  target derivation path remains covered.
+- Current shared-checkout note after the operator-console Docker inventory
+  mount source slice: runtime inventory now surfaces successful Docker
+  mount-inspect output with malformed or wrong-shaped JSON as a blocking
+  `source_error` task instead of omitting the running container as if no
+  repo-relevant mount existed.
+- Current shared-checkout note after the operator-console Docker mount source
+  slice: stop handling now treats successful Docker mount-inspect output with
+  malformed or wrong-shaped JSON as an operator stop source error instead of
+  silently deciding no task container is mounted, while Docker absence and
+  nonzero inspect results remain optional cleanup paths.
+- Current shared-checkout note after the MolmoSpaces visual backend slot
+  capacity config slice: invalid `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and
+  explicit `max_slots` values now fail aloud instead of falling back to a
+  plausible one-slot backend. Live household launch reports invalid slot
+  config separately from normal slot contention, and operator-console runtime
+  inventory surfaces the bad config as a blocking `source_error` task.
+- Current shared-checkout note after the RAW-FPV runtime-prior source slice:
+  explicit `--runtime-map-prior` paths now fail aloud when missing, including
+  both split and equals CLI spellings, while the default missing prior path
+  remains the deliberate no-prior convenience.
+- Current shared-checkout note after the OpenAI Agents model-input compaction
+  threshold slice: `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS`,
+  direct `model_input_compaction.min_chars`, and perf-profile
+  `model_input_compaction_min_chars` now reject booleans and non-positive
+  values instead of clamping them to plausible `1`/`1200` thresholds in
+  live-runtime or profile metadata.
+- Current shared-checkout note after the MolmoSpaces runtime probe preflight
+  slice: grasp-cache generation readiness now parses successful runtime-probe
+  stdout through the shared JSON-object text helper and blocks malformed,
+  non-object, or path-less probe output instead of reporting
+  `python_ready=True` with blank MolmoSpaces root/assets evidence.
 - Current shared-checkout note after the scene-camera MolmoSpaces source
   provenance slice: installed-package `direct_url.json` metadata in
   scene-camera comparison now reports explicit `metadata_unavailable` or

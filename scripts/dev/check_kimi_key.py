@@ -12,7 +12,10 @@ import time
 
 import anthropic
 
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
+
+EXPECTED_ACTION = "MoveAhead"
 
 
 def create_client() -> anthropic.Anthropic:
@@ -24,7 +27,7 @@ def create_client() -> anthropic.Anthropic:
 
 def validate_kimi_key(max_attempts: int = 4) -> str:
     client = create_client()
-    prompt = 'Reply with valid JSON: {"action": "MoveAhead"}'
+    prompt = f'Reply with valid JSON: {{"action": "{EXPECTED_ACTION}"}}'
 
     last_exc: Exception | None = None
     for attempt in range(max_attempts):
@@ -35,8 +38,7 @@ def validate_kimi_key(max_attempts: int = 4) -> str:
                 messages=[{"role": "user", "content": prompt}],
             )
             text = msg.content[0].text.strip()
-            if '"action"' not in text:
-                raise ValueError(f"Unexpected response: {text}")
+            _validate_response_text(text)
             return text
         except Exception as exc:  # pragma: no cover - concrete SDK exceptions are integration-only
             last_exc = exc
@@ -54,6 +56,20 @@ def validate_kimi_key(max_attempts: int = 4) -> str:
 
     assert last_exc is not None
     raise last_exc
+
+
+def _validate_response_text(text: str) -> None:
+    payload = parse_json_object_text(
+        text,
+        label="KIMI_API_KEY validation response",
+        source="model content",
+    )
+    action = payload.get("action")
+    if action != EXPECTED_ACTION:
+        raise ValueError(
+            "KIMI_API_KEY validation response source must contain "
+            f"action {EXPECTED_ACTION!r}; got {action!r}"
+        )
 
 
 def main() -> int:

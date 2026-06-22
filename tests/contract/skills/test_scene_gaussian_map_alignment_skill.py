@@ -124,6 +124,33 @@ def test_alignment_summary_cli_writes_json(tmp_path: Path) -> None:
     assert summary["source_artifacts"]["readiness_artifact"] == str(readiness_path)
 
 
+def test_alignment_summary_cli_rejects_malformed_readiness_source(tmp_path: Path) -> None:
+    readiness_path = tmp_path / "readiness.json"
+    output_path = tmp_path / "summary.json"
+    readiness_path.write_text("{bad json\n", encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--readiness-artifact",
+            str(readiness_path),
+            "--output",
+            str(output_path),
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Traceback" not in completed.stderr
+    assert "readiness artifact source must contain valid JSON object" in completed.stderr
+    assert str(readiness_path) in completed.stderr
+    assert not output_path.exists()
+
+
 def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
     tmp_path: Path,
 ) -> None:
@@ -197,6 +224,40 @@ def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
     assert manifest["semantics"]["semantic_anchors_are_usd_truth"] is False
     assert manifest["gaussian_assets"]["render_status"] == "inventoried_only"
     assert "semantic_usd_truth" in manifest["promotion_requirements"]
+
+
+def test_alignment_manifest_cli_rejects_non_object_summary_source(tmp_path: Path) -> None:
+    readiness_path = tmp_path / "readiness.json"
+    summary_path = tmp_path / "alignment_evidence_summary.json"
+    output_path = tmp_path / "alignment_manifest.json"
+    readiness_path.write_text(json.dumps(_readiness_with_gaussian_inventory()), encoding="utf-8")
+    summary_path.write_text("[]\n", encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "manifest",
+            "--readiness-artifact",
+            str(readiness_path),
+            "--evidence-summary",
+            str(summary_path),
+            "--map-bundle",
+            "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
+            "--output",
+            str(output_path),
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "Traceback" not in completed.stderr
+    assert "alignment evidence summary source must contain a JSON object" in completed.stderr
+    assert str(summary_path) in completed.stderr
+    assert not output_path.exists()
 
 
 def test_alignment_manifest_cli_writes_json(tmp_path: Path) -> None:
