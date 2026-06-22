@@ -66,4 +66,6 @@ just dev::model-matrix-benchmark --iterations 1 --timeout-s 240
 just dev::model-matrix-benchmark --list-agent-cases
 ```
 
-The benchmark writes under `output/dev/model-matrix/<timestamp>/`.
+The benchmark writes under `output/dev/model-matrix/<timestamp>/`. Weekly
+human-readable speed summaries live in
+`docs/status/provider-benchmarks/`.
