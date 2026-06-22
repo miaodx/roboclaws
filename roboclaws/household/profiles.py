@@ -39,9 +39,7 @@ CAMERA_LABELERS: tuple[str, ...] = (
 _CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE: dict[str, str] = {}
 _VISUAL_GROUNDING_PIPELINE_TO_CAMERA_LABELER: dict[str, str] = {}
 
-ISAAC_COMPATIBLE_PROFILES = frozenset(
-    {WORLD_PUBLIC_LABELS_PROFILE, CAMERA_RAW_PROFILE}
-)
+ISAAC_COMPATIBLE_PROFILES = frozenset({WORLD_PUBLIC_LABELS_PROFILE, CAMERA_RAW_PROFILE})
 
 WORLD_LABELS_INPUT = "world_labels"
 SANITIZED_WORLD_LABELS_INPUT = "sanitized_world_labels"
@@ -127,9 +125,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         include_robot=False,
         record_robot_views=False,
         requires_clean_success=True,
-        summary=(
-            "Cheap deterministic contract sanity with synthetic Public structured labels."
-        ),
+        summary=("Cheap deterministic contract sanity with synthetic Public structured labels."),
         model_input_note=(
             "The agent receives sanitized structured world labels from the synthetic "
             "contract; candidate destinations, cleanup recommendations, and "

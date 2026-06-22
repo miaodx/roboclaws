@@ -52,11 +52,7 @@ def household_intent_from_args(
 ) -> str:
     env = os.environ if env is None else env
     return normalize_household_intent(
-        str(
-            getattr(args, "intent", "")
-            or env.get("ROBOCLAWS_TASK_INTENT", "")
-            or fallback
-        )
+        str(getattr(args, "intent", "") or env.get("ROBOCLAWS_TASK_INTENT", "") or fallback)
     )
 
 

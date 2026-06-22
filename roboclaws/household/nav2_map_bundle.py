@@ -43,8 +43,7 @@ def selected_nav2_map_bundle_dir(
     validation = validate_base_navigation_map_v1_bundle(bundle_dir)
     if not validation.ok:
         raise ValueError(
-            f"invalid Base Navigation Map v1 bundle {bundle_dir}: "
-            f"{'; '.join(validation.errors)}"
+            f"invalid Base Navigation Map v1 bundle {bundle_dir}: {'; '.join(validation.errors)}"
         )
     return bundle_dir
 

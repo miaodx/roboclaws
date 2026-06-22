@@ -3517,8 +3517,7 @@ def test_checker_allows_weak_fpv_when_verify_view_is_grounded(tmp_path: Path) ->
     )
 
 
-def test_checker_allows_weak_place_view_when_surface_evidence_is_grounded(
-) -> None:
+def test_checker_allows_weak_place_view_when_surface_evidence_is_grounded() -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
     checker._assert_focused_robot_step(

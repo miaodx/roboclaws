@@ -48,7 +48,8 @@ def test_agent_harness_allows_isaac_runtime_preflight_target() -> None:
     assert re.search(r"^isaac-runtime-preflight \*overrides:", harness_text, re.MULTILINE)
     assert "check_isaac_lab_runtime.py" in harness_text
     recipe_match = re.search(
-        r"^isaac-runtime-preflight \*overrides:\n(?P<body>.*?)(?=^# Strict local Isaac Lab runtime smoke\.)",
+        r"^isaac-runtime-preflight \*overrides:\n"
+        r"(?P<body>.*?)(?=^# Strict local Isaac Lab runtime smoke\.)",
         harness_text,
         re.MULTILINE | re.DOTALL,
     )
