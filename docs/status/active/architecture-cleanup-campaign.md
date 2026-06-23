@@ -8,7 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Provider registry CLI dispatch deepening complete. Continue with the next
+- Cleanup MCP server initialization deepening complete. Continue with the next
   current Python quality-ratchet violation.
 
 Last proven evidence:
@@ -39,6 +39,12 @@ Last proven evidence:
   provider-registry command dispatch behind private helpers; focused provider
   catalog tests, Ruff, and `git diff --check` passed, and the quality-ratchet
   output no longer lists `roboclaws/agents/provider_registry.py`.
+- The second safe vertical slice moved cleanup MCP server initialization setup
+  into same-owner helpers and deleted shallow one-call/no-call helpers; focused
+  MCP contract tests, Ruff, and `git diff --check` passed, and the
+  quality-ratchet output no longer lists
+  `RealWorldMolmoCleanupMCPServer.__init__` or
+  `roboclaws/household/realworld_mcp_server.py` module-size growth.
 
 Completed slice batch:
 
@@ -87,6 +93,8 @@ Completed slice batch:
   `roboclaws.devtools.pages_site` module CLI.
 - Slice 21: deepened provider-registry CLI dispatch so `_main(...)` is no
   longer the command formatting owner.
+- Slice 22: deepened cleanup MCP server initialization while reducing the
+  module size below its previous line count.
 
 Next proof:
 
@@ -132,7 +140,6 @@ Parked work:
   real CLI argument/default behavior instead of pure pass-through wrapper
   behavior.
 - Remaining current quality-ratchet queue:
-  `RealWorldMolmoCleanupMCPServer.__init__`,
   `LiveOpenAIAgentsCleanupRunner._run_sdk_agent`, two overlong Agibot contract
   tests, and broader oversized-module baseline drift. Try safe owner-local
   shrink slices before considering a baseline refresh.

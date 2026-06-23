@@ -94,6 +94,7 @@ Surface metrics:
 | Move model-matrix benchmark helpers to agent owner | 2 | 1 | 1 | 1 | preserved |
 | Delete Pages prune script wrapper | 1 | 1 | 1 | 2 | preserved |
 | Deepen provider registry CLI dispatch | 0 | 1 | 0 | 0 | preserved |
+| Deepen cleanup MCP server initialization | 3 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -117,9 +118,6 @@ public module CLI.
 
 Next clear candidates:
 
-- Shrink `RealWorldMolmoCleanupMCPServer.__init__` by moving transport/tool
-  registration setup into existing MCP-server owner helpers. Keep the public
-  server target and MCP tool contract unchanged.
 - Shrink
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py:LiveOpenAIAgentsCleanupRunner._run_sdk_agent`
   by moving live-agent step construction into private script-owner helpers.
@@ -573,6 +571,27 @@ exhausted, or the stop/park criteria apply.
   Note: the quality ratchet still fails on other current files, but no longer
   lists `roboclaws/agents/provider_registry.py`. The remaining failures are
   tracked as the next candidate queue.
+
+- 2026-06-23: Deepened `RealWorldMolmoCleanupMCPServer` initialization by
+  moving runtime trace setup, public artifact bootstrap, FastMCP registration,
+  and initialization event writing behind same-owner private methods. The
+  slice also deleted three shallow one-call/no-call helpers, so the MCP server
+  module is smaller than before the slice while the public
+  `make_molmo_realworld_cleanup_mcp(...)` interface and registered MCP tool
+  contract are preserved.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_registered_tools_match_profile_public_surface tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_agent_sdk_camera_grounded_composite_tool_is_opt_in tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_tool_files_are_layered_by_capability -q
+  .venv/bin/ruff check roboclaws/household/realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on other current files, but no longer
+  lists `RealWorldMolmoCleanupMCPServer.__init__` or
+  `roboclaws/household/realworld_mcp_server.py` module-size growth.
 
 ## Parked Candidates
 
