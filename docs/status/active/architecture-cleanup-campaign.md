@@ -8,8 +8,9 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- OpenAI Agents runner status-loop simplification complete. Continue with the next
-  current Python quality-ratchet violation.
+- Agibot contract-test PLR0915 cleanup complete. Run fresh post-HEAD discovery
+  after committing this slice; remaining quality-ratchet output is broader
+  oversized-module baseline drift.
 
 Last proven evidence:
 
@@ -50,6 +51,11 @@ Last proven evidence:
   helper surface or growing the file; focused live-runtime tests, Ruff, and
   `git diff --check` passed, and the quality-ratchet output no longer lists
   that method.
+- The fourth safe vertical slice moved repeated Agibot contract-test artifact
+  reads and identity assertions into same-file helpers. Focused PLR0915 Ruff,
+  focused contract tests, touched-file Ruff, and `git diff --check` passed;
+  the quality-ratchet output no longer lists the two overlong Agibot contract
+  tests and now reports only broader oversized-module baseline drift.
 
 Completed slice batch:
 
@@ -102,6 +108,8 @@ Completed slice batch:
   module size below its previous line count.
 - Slice 23: simplified OpenAI Agents runner status-loop control flow without
   changing the public live-runner script.
+- Slice 24: extracted test-local Agibot artifact-read and run-identity helpers
+  so two contract tests no longer exceed the PLR0915 quality-ratchet threshold.
 
 Next proof:
 
@@ -146,7 +154,7 @@ Parked work:
   `scripts/molmo_cleanup/prepare_molmospaces_room.py` because they still own
   real CLI argument/default behavior instead of pure pass-through wrapper
   behavior.
-- Remaining current quality-ratchet queue:
-  two overlong Agibot contract tests and broader oversized-module baseline
-  drift. Try safe owner-local shrink slices before considering a baseline
-  refresh.
+- Remaining current quality-ratchet queue: broader oversized-module baseline
+  drift across Agibot, Molmo, visual-grounding, and test files. Treat as
+  architecture pressure and try safe owner-local shrink slices before
+  considering a baseline refresh.

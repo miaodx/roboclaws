@@ -158,32 +158,23 @@ def _assert_agibot_map_build_artifacts(
     assert "Agibot intent=map-build" in report_text
 
 
-def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
-    tmp_path: Path,
-) -> None:
-    _require_agibot_sdk_runner()
-    context_path = tmp_path / "agibot_map_context.completed.json"
-    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
-
-    run_result = run_physical_agibot_cleanup_pilot(
-        run_dir=tmp_path / "run",
-        context_json=context_path,
-    )
-
-    run_dir = tmp_path / "run"
+def _read_physical_pilot_artifacts(run_dir: Path) -> tuple[str, dict, dict, dict]:
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     persisted = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
-    runner = run_result["agibot_sdk_runner"]
-    subphase_reports = runner["subphase_reports"]
     public_agent_view_artifact = json.loads(
-        (run_dir / "subphases" / "01-agent-view" / "agent_view.json").read_text(encoding="utf-8")
+        (run_dir / "subphases" / "01-agent-view" / "agent_view.json").read_text(
+            encoding="utf-8"
+        )
     )
     vendor_agent_view_artifact = json.loads(
         (run_dir / "subphases" / "01-agent-view" / "vendor_agent_view.json").read_text(
             encoding="utf-8"
         )
     )
+    return report_text, persisted, public_agent_view_artifact, vendor_agent_view_artifact
 
+
+def _assert_physical_pilot_run_identity(run_result: dict) -> None:
     assert run_result["evidence_lane"] == "physical-robot-evidence"
     assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["backend"] == AGIBOT_SDK_RUNNER_BACKEND
@@ -198,6 +189,31 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert run_result["physical_agibot_pilot"]["navigation_attempt"]["navigation_status"] == (
         "dry_run_not_executed"
     )
+
+
+def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
+    tmp_path: Path,
+) -> None:
+    _require_agibot_sdk_runner()
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+
+    run_result = run_physical_agibot_cleanup_pilot(
+        run_dir=tmp_path / "run",
+        context_json=context_path,
+    )
+
+    run_dir = tmp_path / "run"
+    (
+        report_text,
+        persisted,
+        public_agent_view_artifact,
+        vendor_agent_view_artifact,
+    ) = _read_physical_pilot_artifacts(run_dir)
+    runner = run_result["agibot_sdk_runner"]
+    subphase_reports = runner["subphase_reports"]
+
+    _assert_physical_pilot_run_identity(run_result)
     capabilities = agent_view_module.capabilities(run_result["agent_view"])
     assert public_agent_view_artifact == run_result["agent_view"]
     assert public_agent_view_artifact["schema"] == agent_view_module.AGENT_VIEW_SCHEMA

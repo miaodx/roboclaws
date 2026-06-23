@@ -96,6 +96,7 @@ Surface metrics:
 | Deepen provider registry CLI dispatch | 0 | 1 | 0 | 0 | preserved |
 | Deepen cleanup MCP server initialization | 3 | 1 | 0 | 0 | preserved |
 | Simplify OpenAI Agents runner status loop | 0 | 1 | 0 | 0 | preserved |
+| Shrink Agibot contract-test PLR0915 rows | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -119,10 +120,10 @@ public module CLI.
 
 Next clear candidates:
 
-- Shrink two new overlong Agibot contract tests by moving fixture construction
-  into test-local helpers. Keep assertions and public contracts unchanged.
-  This is a test-owner cleanup candidate after production new violations are
-  handled.
+- Run fresh post-HEAD discovery after committing the Agibot contract-test
+  cleanup. Remaining quality-ratchet output is broader oversized-module
+  baseline drift and needs owner-local shrink candidates rather than a blind
+  baseline refresh.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -608,6 +609,24 @@ exhausted, or the stop/park criteria apply.
 
   Note: the quality ratchet still fails on other current files, but no longer
   lists `LiveOpenAIAgentsCleanupRunner._run_sdk_agent`.
+
+- 2026-06-23: Shrunk two new Agibot contract-test PLR0915 rows by moving
+  repeated artifact reads and run-identity assertions into same-file helpers.
+  The slice keeps the contract assertions, public artifact names, and test
+  targets unchanged while making the test owner easier to scan.
+
+  Proof:
+
+  ```bash
+  .venv/bin/ruff check --select PLR0915 tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement -q
+  .venv/bin/ruff check tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no longer lists the two overlong Agibot contract tests.
 
 ## Parked Candidates
 
