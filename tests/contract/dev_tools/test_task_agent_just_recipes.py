@@ -995,7 +995,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert resolved.backend == "mujoco"
     assert resolved.agent_engine == "codex-cli"
     assert resolved.provider_profile == "codex-router-responses"
-    assert resolved.mode == "smoke"
+    assert resolved.evidence_mode == "smoke"
 
     with pytest.raises(LaunchError, match="unsupported surface 'molmospace-cleanup'"):
         resolve_surface_launch(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
@@ -1157,7 +1157,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         )
     )
 
-    assert plan.mode == "world-public-labels"
+    assert plan.evidence_mode == "world-public-labels"
     assert plan.profile == "world-public-labels"
     assert plan.supported_profiles == (
         "world-public-labels",

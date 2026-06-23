@@ -74,6 +74,7 @@ Surface metrics:
 | Slice | Surfaces deleted | Duplicate owners merged | Callers migrated | Tests/docs updated | Public contracts |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Delete `devtools.commands` launch shim | 1 | 1 | 2 | 2 | preserved |
+| Remove `LaunchPlan.mode` alias | 1 | 1 | 4 | 2 | preserved |
 
 Low-value stop signal:
 
@@ -103,6 +104,18 @@ Fresh discovery required.
   ```bash
   ./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth tests/contract/dev_tools/test_code_just_recipes.py::test_retired_photo_task_facade_rejects_ai2thor_surface -q
   rg -n "roboclaws\.devtools\.commands|resolve_surface_run|CommandError|ResolvedCommand" roboclaws tests docs/human docs/agents just scripts .github pyproject.toml
+  git diff --check
+  ```
+
+- 2026-06-23: Removed the `LaunchPlan.mode` compatibility accessor and
+  migrated tracked callers/tests to the canonical `evidence_mode` field. Kept
+  the public trace label `mode=...` unchanged as output text only.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth tests/contract/dev_tools/test_task_agent_just_recipes.py::test_python_launch_plan_accepts_world_labels_sanitized_lane tests/unit/evals/test_eval_runner.py::test_live_surface_command_uses_current_public_launch_axes -q
+  rg -n "plan\.mode|resolved\.mode|\.mode ==|\.mode\b" roboclaws tests
   git diff --check
   ```
 

@@ -12,16 +12,19 @@ Current slice:
 
 Last proven evidence:
 
-- Deleted the test-only `roboclaws.devtools.commands` launch compatibility
-  module and migrated tests to `roboclaws.launch.catalog`.
+- Removed the `LaunchPlan.mode` compatibility accessor and migrated tracked
+  callers/tests to `evidence_mode`.
 - Focused pytest passed.
-- Stale-reference search found no current references.
+- Stale-reference search found no launch-plan accessor references; remaining
+  `.mode-*` hits are operator-console CSS classes.
 - `git diff --check` passed.
 
 Completed slice batch:
 
 - Slice 1: canonicalized launch route tests on `roboclaws.launch.catalog` and
   removed one shallow compatibility module.
+- Slice 2: removed one launch-plan compatibility alias while preserving public
+  trace text.
 
 Next proof:
 
