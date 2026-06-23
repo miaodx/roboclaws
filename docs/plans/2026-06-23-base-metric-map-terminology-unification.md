@@ -1,15 +1,15 @@
 ---
 plan_scope: base-metric-map-terminology-unification
-status: Draft
+status: Completed
 created: 2026-06-23
-implementation_allowed: false
+implementation_allowed: true
 source:
   - discussion about aligning Base Navigation Map and Runtime Metric Map naming
 related_context:
   - docs/plans/2026-06-17-sim-map-surface-simplification.md
   - docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md
   - docs/plans/2026-06-23-map-visual-role-contract.md
-  - docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md
+  - docs/adr/0136-use-base-metric-map-and-first-class-household-launch-contracts.md
 ---
 
 # Base Metric Map Terminology Unification
@@ -120,7 +120,7 @@ Focused proof should include:
   tests/contract/maps \
   tests/unit/operator_console \
   tests/contract/reports/test_molmo_cleanup_report.py \
-  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/checkers/test_realworld_base_metric_map_checker.py \
   tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
   tests/contract/dev_tools/test_task_agent_just_recipes.py
 ```
@@ -133,6 +133,19 @@ ruff format --check .
 rg -n "Base Navigation Map|base_navigation_map|BASE_NAVIGATION_MAP|base-navigation-map" \
   roboclaws scripts tests just skills AGENTS.md CLAUDE.md README.md ARCHITECTURE.md STATUS.md docs/human docs/adr assets
 ```
+
+Completed proof:
+
+- `uv sync --extra dev`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/agibot/test_agibot_map_context_scripts.py::test_generate_metric_map_from_base_metric_agibot_context tests/contract/agibot/test_agibot_map_context_scripts.py::test_vendor_sdk_runner_exports_base_metric_context_generated_candidates`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/maps tests/unit/operator_console tests/contract/reports/test_molmo_cleanup_report.py tests/contract/checkers/test_realworld_base_metric_map_checker.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/agibot/test_agibot_map_context_scripts.py`
+- `ruff check .`
+- `ruff format --check .`
+- `rg -n "Base Navigation Map|base_navigation_map|BASE_NAVIGATION_MAP|base-navigation-map" roboclaws scripts tests just skills AGENTS.md CLAUDE.md README.md ARCHITECTURE.md STATUS.md CONTEXT.md docs/human docs/adr assets vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`
+
+The final stale-token search returned no matches in active code, docs, assets,
+or the SDK-local Agibot runner. Broader `base_navigation` hits are limited to
+the intentionally preserved `base_navigation_area_*` waypoint sub-concepts.
 
 ## Stop Gates
 

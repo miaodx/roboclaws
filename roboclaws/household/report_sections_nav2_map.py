@@ -77,7 +77,7 @@ def nav2_map_bundle_section(
     )
     return (
         '<section class="panel nav2-map-bundle">'
-        "<h2>Base Navigation Map Preview "
+        "<h2>Base Metric Map Preview "
         f"<span>Nav2 Map Bundle / {html.escape(_map_contract_subtitle(bundle))}</span></h2>"
         '<p class="note">The Nav2 Map Bundle files are the map package a Nav2-style robot '
         "would consume: occupancy grid, navigation-area semantics, robot footprint, costmap "

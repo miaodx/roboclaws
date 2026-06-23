@@ -612,12 +612,12 @@
       "yaw": 0.0
     }
   ],
-  "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
-  "map_version": "base-navigation-map-v1",
+  "map_id": "molmospaces-procthor-val-0-7_base_metric_map",
+  "map_version": "base-metric-map-v1",
   "provenance": {
     "contains_private_scoring_truth": false,
     "contains_runtime_observations": false,
-    "source": "molmospaces_base_navigation_map"
+    "source": "molmospaces_base_metric_map"
   },
   "rooms": [
     {

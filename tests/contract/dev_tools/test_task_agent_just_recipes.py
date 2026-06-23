@@ -691,7 +691,7 @@ def test_surface_launch_rejects_public_map_mode_axis() -> None:
             )
         )
 
-    assert "Base Navigation Map" in str(exc.value.hint)
+    assert "Base Metric Map" in str(exc.value.hint)
     assert "runtime_map_prior=" in str(exc.value.hint)
 
 
@@ -1561,8 +1561,8 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
         1,
     )[0]
 
-    assert "build_b1_map12_base_navigation_map.py" in b1_branch
-    assert "augment_b1_map12_base_navigation_map.py" in b1_branch
+    assert "build_b1_map12_base_metric_map.py" in b1_branch
+    assert "augment_b1_map12_base_metric_map.py" in b1_branch
     assert "compile_b1_map12_runtime_bundle.py" not in b1_branch
     assert "convert_nav2_cleanup_bundle.py" in b1_branch
     assert "b1_robot_consumption_manifest.json" in b1_branch
@@ -1718,7 +1718,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "1" in route
 
 
-def test_map_build_routes_agibot_molmospaces_sim_to_base_navigation_map_prehardware() -> None:
+def test_map_build_routes_agibot_molmospaces_sim_to_base_metric_map_prehardware() -> None:
     route = trace_agent_run(
         "household-world.map-build",
         "direct-runner",
@@ -2043,7 +2043,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "only when the exact object class is uncertain" in prompt
     assert "use image_region={type:bbox,value:[x,y,width,height]}" in prompt
     assert "Never retry the same source_observation_id/category/region" in prompt
-    assert "Omit source_fixture_id with Base Navigation Map context" in prompt
+    assert "Omit source_fixture_id with Base Metric Map context" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt

@@ -808,9 +808,9 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert state["latest_view_assets"]["map"]["path"] == str(bundle_preview.resolve())
-    assert state["latest_view_assets"]["map"]["visual_role"] == "base_navigation_map_preview"
+    assert state["latest_view_assets"]["map"]["visual_role"] == "base_metric_map_preview"
     assert state["latest_view_assets"]["map"]["artifact_source_family"] == (
-        "base_navigation_map_bundle"
+        "base_metric_map_bundle"
     )
     assert state["latest_view_assets"]["runtime_map"]["path"] == str(runtime_preview.resolve())
     assert state["latest_view_assets"]["runtime_map"]["visual_role"] == (

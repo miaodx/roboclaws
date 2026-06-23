@@ -15,7 +15,7 @@ operator explicitly asks for cleanup.
 ## Loop
 
 1. Call `roboclaws__metric_map()` when map context is needed. Use Base
-   Navigation Map waypoints, public room labels, Runtime Metric Map evidence,
+   Metric Map waypoints, public room labels, Runtime Metric Map evidence,
    and `roboclaws__resolve_target_query()` for named places, stale labels, or
    search terms. Do not read private manifests, scene inventory, generated mess
    truth, or scoring artifacts.

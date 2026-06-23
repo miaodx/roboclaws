@@ -91,7 +91,7 @@ Public `visual_grounding=...`
 is no longer accepted on task routes; Visual Grounding Service terminology
 remains internal service and benchmark provenance.
 
-These lanes do not choose online/offline map behavior. Base Navigation Map is
+These lanes do not choose online/offline map behavior. Base Metric Map is
 the current start-of-run map context: occupancy geometry, generated exploration
 candidates, and public room-category hints when available. Use
 `runtime_map_prior=...` when a cleanup run should consume a prebuilt Runtime

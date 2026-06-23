@@ -145,7 +145,7 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
         assert metadata["views"]["topdown"]["provenance"] == (
             "mujoco_camera_control_canonical_eye_target"
         )
-        assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
+        assert metadata["views"]["map"]["view"] == "base_metric_map_preview"
         assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
         assert "semantic_projection" not in metadata["views"]["map"]
         assert "scene_alignment" not in metadata["views"]["map"]

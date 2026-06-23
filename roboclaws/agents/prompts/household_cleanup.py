@@ -239,7 +239,7 @@ def _camera_raw_compact_prompt(
         f"{candidate_budget} raw-FPV candidate attempts. Never retry the same "
         "source_observation_id/category/region or visual-candidate id after a public failure. "
         + raw_fpv_inline_candidate_instruction()
-        + " Omit source_fixture_id with Base Navigation Map context. Use "
+        + " Omit source_fixture_id with Base Metric Map context. Use "
         "navigate_to_visual_candidate -> pick -> navigate_to_receptacle -> open? -> "
         "place/place_inside when grounding succeeds, then observe once before choosing another "
         "candidate. Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets. If "

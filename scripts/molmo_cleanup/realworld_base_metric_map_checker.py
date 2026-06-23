@@ -11,24 +11,24 @@ from roboclaws.maps.base_waypoints import (
 )
 
 
-def assert_base_navigation_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+def assert_base_metric_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
+    metric_map = agent_view_module.base_metric_map(agent_view)
     static_fixture_projection: dict[str, Any] = {"rooms": []}
     runtime_map = data.get("runtime_metric_map") or agent_view_module.runtime_metric_map(agent_view)
     static_map = runtime_map.get("static_map") or {}
-    _assert_base_navigation_core(metric_map, static_fixture_projection, runtime_map)
+    _assert_base_metric_core(metric_map, static_fixture_projection, runtime_map)
     _assert_rooms_and_static_map(metric_map, static_fixture_projection, static_map)
     _assert_waypoints(metric_map, runtime_map)
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(static_fixture_projection)
 
 
-def _assert_base_navigation_core(
+def _assert_base_metric_core(
     metric_map: dict[str, Any],
     static_fixture_projection: dict[str, Any],
     runtime_map: dict[str, Any],
 ) -> None:
-    base_map = metric_map.get("base_navigation_map") or {}
+    base_map = metric_map.get("base_metric_map") or {}
     assert base_map.get("enabled") is True, metric_map
     assert static_fixture_projection.get("rooms") == [], static_fixture_projection
     assert runtime_map.get("source_map_mutated") is False, runtime_map
@@ -102,7 +102,7 @@ def _assert_exploration_waypoint(waypoint: dict[str, Any]) -> None:
     if waypoint.get("purpose") == BASE_WAYPOINT_PURPOSE:
         _assert_base_area_inspection_waypoint(waypoint)
         return
-    assert waypoint.get("purpose") == "base_navigation_map_exploration", waypoint
+    assert waypoint.get("purpose") == "base_metric_map_exploration", waypoint
     assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
     provenance = waypoint.get("candidate_provenance") or {}
     assert provenance.get("source") == "public_occupancy_free_space", waypoint

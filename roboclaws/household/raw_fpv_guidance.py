@@ -43,7 +43,7 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "pillow). Use broader cleanup categories such as "
         f"{RAW_FPV_CATEGORY_HINT} only when the exact object class is uncertain. "
         "Call navigate_to_visual_candidate with source_observation_id, category, "
-        "evidence_note, and image_region before pick. With Base Navigation Map "
+        "evidence_note, and image_region before pick. With Base Metric Map "
         "context, omit target_fixture_id and normally omit source_fixture_id; "
         "do not invent fixture ids from stale map labels or guesses about the room. "
         "Use the candidate_fixture_id/recommended_tool returned by "
@@ -81,7 +81,7 @@ def raw_fpv_visual_candidate_recovery(
         "required_tool": "navigate_to_visual_candidate",
         "required_next_action": "retry_navigate_to_visual_candidate",
         "declaration_strategy": RAW_FPV_DECLARATION_STRATEGY,
-        "base_navigation_map_target_fixture_rule": "omit_target_fixture_id",
+        "base_metric_map_target_fixture_rule": "omit_target_fixture_id",
         "accepted_image_region_forms": [dict(item) for item in RAW_FPV_ACCEPTED_IMAGE_REGION_FORMS],
         "invalid_fields_to_avoid": list(RAW_FPV_INVALID_FIELDS_TO_AVOID),
         "valid_example": example,
@@ -98,7 +98,7 @@ def raw_fpv_visual_candidate_recovery_hint(
         "Retry with a valid navigate_to_visual_candidate example: "
         f"source_observation_id={observation}, category=toy, evidence_note='small object "
         "visible on the bed', image_region={type:bbox,value:[0.1,0.2,0.3,0.4]}; "
-        "omit target_fixture_id with Base Navigation Map context. Avoid bbox_normalized, "
+        "omit target_fixture_id with Base Metric Map context. Avoid bbox_normalized, "
         "bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", and target_fixture_id=null.'
     )

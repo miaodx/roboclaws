@@ -68,13 +68,13 @@ def test_checker_rejects_missing_scene_index_semantics_source(tmp_path: Path) ->
 
 def _scene_index_run_result() -> dict[str, object]:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
-    map_id = f"{scenario_id}_base_navigation_map"
+    map_id = f"{scenario_id}_base_metric_map"
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "base-navigation-map-v1",
-        "source_provenance": "molmospaces_base_navigation_map",
+        "map_version": "base-metric-map-v1",
+        "source_provenance": "molmospaces_base_metric_map",
     }
     room = {
         "room_id": "living_room_01",
@@ -98,7 +98,7 @@ def _scene_index_run_result() -> dict[str, object]:
             "affordances": ["navigate", "observe"],
             "classification_status": "map_prior",
             "confidence": 0.8,
-            "producer_type": "base_navigation_map",
+            "producer_type": "base_metric_map",
         }
     ]
     metric_map = {
@@ -106,7 +106,7 @@ def _scene_index_run_result() -> dict[str, object]:
         "map_bundle": dict(map_bundle),
         "rooms": [room],
         "room_category_hints": room_category_hints,
-        "base_navigation_map": {"enabled": True},
+        "base_metric_map": {"enabled": True},
         "inspection_waypoints": list(candidates),
         "generated_exploration_candidates": list(candidates),
     }
@@ -143,8 +143,8 @@ def _scene_index_run_result() -> dict[str, object]:
             "schema": "nav2_map_bundle_snapshot_v1",
             "environment_id": scenario_id,
             "map_id": map_id,
-            "map_version": "base-navigation-map-v1",
-            "source_provenance": "molmospaces_base_navigation_map",
+            "map_version": "base-metric-map-v1",
+            "source_provenance": "molmospaces_base_metric_map",
             "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         },
     }
@@ -154,7 +154,7 @@ def _generated_candidate(waypoint_id: str, x: float, y: float) -> dict[str, obje
     return {
         "waypoint_id": waypoint_id,
         "waypoint_source": "generated_exploration_candidate",
-        "purpose": "base_navigation_map_exploration",
+        "purpose": "base_metric_map_exploration",
         "x": x,
         "y": y,
         "room_id": "living_room_01",

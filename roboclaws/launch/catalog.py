@@ -299,7 +299,7 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
     if _override_value(overrides, "map_mode"):
         raise LaunchError(
             "map_mode= is no longer a public run::surface argument",
-            "Base Navigation Map is the start-of-run map contract; "
+            "Base Metric Map is the start-of-run map contract; "
             "use runtime_map_prior=<path> to supply Runtime Metric Map evidence",
         )
     if _override_value(overrides, "environment_setup"):
@@ -310,7 +310,7 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
     if _override_value(overrides, "b1_semantic_projection_artifact"):
         raise LaunchError(
             "b1_semantic_projection_artifact= is no longer a public run::surface argument",
-            "Base Navigation Map room semantics are shared by B1 real-robot and "
+            "Base Metric Map room semantics are shared by B1 real-robot and "
             "Digital Twin routes; pass only b1_alignment_artifact= and "
             "b1_navigation_artifact= for robot-consumption proof",
         )

@@ -197,7 +197,7 @@ def runtime_metric_map_payload(
         "public_contract_note": (
             "Runtime Metric Map enriches the current run with public observed "
             "handles, public semantic anchors, and map-update candidates. It "
-            "does not mutate the source Navigation Map Artifact or include "
+            "does not mutate the source Base Metric Map artifact or include "
             "private scoring truth."
         ),
         "generated_target_inspection_candidates": [
@@ -234,7 +234,7 @@ def runtime_metric_map_payload(
         for item in contract._public_waypoints
     ]
     payload["public_contract_note"] = (
-        "Runtime Metric Map starts from Base Navigation Map occupancy/free-space "
+        "Runtime Metric Map starts from Base Metric Map occupancy/free-space "
         "geometry and generated exploration candidates, then enriches the run "
         "with public observations and run-local semantic anchors without "
         "mutating source-map semantics."
@@ -273,7 +273,7 @@ def agent_view_payload(
         perception_mode=contract.perception_mode,
         detection_exposure_policy=contract.visible_detection_exposure_policy,
         structured_detections_available=contract.perception_mode == visible_object_detections_mode,
-        base_navigation_map=metric_map,
+        base_metric_map=metric_map,
         runtime_metric_map=runtime_metric_map,
         observed_objects=observed_objects,
         raw_fpv_observations=[dict(item) for item in contract._raw_fpv_observations],
@@ -362,7 +362,7 @@ def policy_view_payload(
     payload = {
         "schema": "realworld_cleanup_policy_view_v1",
         "allowed_inputs": [
-            "base_navigation_map",
+            "base_metric_map",
             "runtime_metric_map",
             "observed_objects",
             "raw_fpv_observations",
@@ -377,7 +377,7 @@ def policy_view_payload(
         ],
         "chase_camera_policy_input": False,
         "public_contract_note": (
-            "Policy inputs are robot-local observations, Base Navigation Map "
+            "Policy inputs are robot-local observations, Base Metric Map "
             "context, and Runtime Metric Map evidence. Chase and third-person "
             "simulation views are report-only evidence."
         ),

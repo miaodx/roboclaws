@@ -195,7 +195,7 @@ invalid for world-label and raw-FPV lanes. The `smoke` token remains a cheap
 synthetic preset, not an evidence lane.
 
 Cleanup lanes do not select online/offline map behavior. The default
-start-of-run map context is the Base Navigation Map: occupancy geometry,
+start-of-run map context is the Base Metric Map: occupancy geometry,
 generated exploration candidates, and public room-category hints when
 available. Use `runtime_map_prior=...` to consume a raw runtime map or canonical
 Runtime Map Prior Snapshot prior. Historical `minimal` / `rich` map
@@ -298,7 +298,7 @@ Every serious run should produce reviewable evidence:
 - `trace.jsonl` for tool calls and state transitions.
 - `agent_view.json` / `run_result.json` for public agent-facing state. Current
   household Agent View artifacts use `schema=agent_view_v2` with task,
-  capabilities, Base Navigation Map, Runtime Metric Map, active perception,
+  capabilities, Base Metric Map, Runtime Metric Map, active perception,
   policy, readiness, and privacy sections.
 - `model_call_metrics.jsonl` for sanitized per-call model-work rows when a
   live Agent SDK, Codex CLI, or Claude Code route exposes compatible usage or

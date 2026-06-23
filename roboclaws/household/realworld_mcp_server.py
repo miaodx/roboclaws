@@ -275,9 +275,7 @@ class RealWorldMolmoCleanupMCPServer:
         )
         self._record_robot_view("before", label_suffix="before")
         if self.map_bundle_dir is None:
-            raise ValueError(
-                "map_bundle_dir is required to publish live Base Navigation Map snapshot"
-            )
+            raise ValueError("map_bundle_dir is required to publish live Base Metric Map snapshot")
         copy_nav2_map_bundle_snapshot(source_bundle_dir=self.map_bundle_dir, run_dir=self.run_dir)
         self._write_live_public_artifacts(trigger="server_initialized")
 

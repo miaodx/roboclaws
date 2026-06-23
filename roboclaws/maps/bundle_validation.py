@@ -12,7 +12,7 @@ from roboclaws.maps.spatial_contract import (
     validate_spatial_room_contract,
 )
 
-BASE_NAVIGATION_MAP_SCHEMA = "base_navigation_map_v1"
+BASE_METRIC_MAP_SCHEMA = "base_metric_map_v1"
 UNKNOWN_REVIEW_REQUIRED_CATEGORY = "unknown_review_required"
 PRODUCT_SEMANTIC_CATEGORIES = frozenset(
     {
@@ -29,7 +29,7 @@ PRODUCT_SEMANTIC_CATEGORIES = frozenset(
         "utility",
     }
 )
-BASE_NAVIGATION_FORBIDDEN_SEMANTIC_COLLECTIONS = (
+BASE_METRIC_FORBIDDEN_SEMANTIC_COLLECTIONS = (
     "static_landmarks",
     "fixtures",
     "receptacles",
@@ -102,7 +102,7 @@ def validate_nav2_map_bundle_payload(
     return tuple(errors), tuple(warnings), metadata
 
 
-def validate_base_navigation_map_v1_payload(
+def validate_base_metric_map_v1_payload(
     bundle_dir: Path,
     *,
     paths: dict[str, Path],
@@ -119,17 +119,15 @@ def validate_base_navigation_map_v1_payload(
     bundle_dir = Path(bundle_dir)
     semantics = _load_bundle_semantics(bundle_dir, paths, errors_list)
     if semantics is None:
-        metadata = {**metadata, "base_navigation_map_v1_ready": False}
+        metadata = {**metadata, "base_metric_map_v1_ready": False}
         return tuple(errors_list), warnings, metadata
-    _validate_base_navigation_map_v1_contract(semantics, errors_list)
+    _validate_base_metric_map_v1_contract(semantics, errors_list)
     metadata = {
         **metadata,
-        "base_navigation_map_schema": (semantics.get("base_navigation_map_contract") or {}).get(
-            "schema"
-        )
-        if isinstance(semantics.get("base_navigation_map_contract"), dict)
+        "base_metric_map_schema": (semantics.get("base_metric_map_contract") or {}).get("schema")
+        if isinstance(semantics.get("base_metric_map_contract"), dict)
         else None,
-        "base_navigation_map_v1_ready": not errors_list,
+        "base_metric_map_v1_ready": not errors_list,
     }
     return tuple(errors_list), warnings, metadata
 
@@ -262,12 +260,12 @@ def _validate_semantics_contract(
     driveable = (
         semantics.get("driveable_ways") if isinstance(semantics.get("driveable_ways"), list) else []
     )
-    base_navigation_map = not rooms and not landmarks
+    base_metric_map = not rooms and not landmarks
     if not waypoints:
         errors.append("semantics.json must contain inspection_waypoints")
-    if not driveable and not base_navigation_map:
+    if not driveable and not base_metric_map:
         errors.append("semantics.json must contain driveable_ways")
-    if base_navigation_map and waypoints:
+    if base_metric_map and waypoints:
         _validate_generated_waypoints(waypoints, errors)
     if not isinstance(semantics.get("frame_ids"), dict) or not semantics["frame_ids"].get("map"):
         errors.append("semantics.json must contain frame_ids.map")
@@ -315,45 +313,44 @@ def _validate_generated_waypoints(waypoints: list[Any], errors: list[str]) -> No
         )
 
 
-def _validate_base_navigation_map_v1_contract(
+def _validate_base_metric_map_v1_contract(
     semantics: dict[str, Any],
     errors: list[str],
 ) -> None:
-    contract = semantics.get("base_navigation_map_contract")
-    if not isinstance(contract, dict) or contract.get("schema") != BASE_NAVIGATION_MAP_SCHEMA:
+    contract = semantics.get("base_metric_map_contract")
+    if not isinstance(contract, dict) or contract.get("schema") != BASE_METRIC_MAP_SCHEMA:
         errors.append(
-            f"semantics.json must contain base_navigation_map_contract.schema="
-            f"{BASE_NAVIGATION_MAP_SCHEMA}"
+            f"semantics.json must contain base_metric_map_contract.schema={BASE_METRIC_MAP_SCHEMA}"
         )
 
-    _validate_base_navigation_forbidden_semantics(semantics, errors)
+    _validate_base_metric_forbidden_semantics(semantics, errors)
     rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
-    navigation_areas = _base_navigation_areas(rooms, errors)
+    navigation_areas = _base_metric_navigation_areas(rooms, errors)
     if not navigation_areas:
-        errors.append("Base Navigation Map v1 must contain navigation areas")
-    _validate_base_navigation_area_semantics(navigation_areas, errors)
-    _validate_base_navigation_waypoints(
+        errors.append("Base Metric Map v1 must contain navigation areas")
+    _validate_base_metric_navigation_area_semantics(navigation_areas, errors)
+    _validate_base_metric_waypoints(
         semantics.get("inspection_waypoints")
         if isinstance(semantics.get("inspection_waypoints"), list)
         else [],
         navigation_areas=navigation_areas,
         errors=errors,
     )
-    _validate_base_navigation_provenance(semantics, errors)
-    _validate_base_navigation_sidecar_scope(semantics, errors)
+    _validate_base_metric_provenance(semantics, errors)
+    _validate_base_metric_sidecar_scope(semantics, errors)
 
 
-def _validate_base_navigation_forbidden_semantics(
+def _validate_base_metric_forbidden_semantics(
     semantics: dict[str, Any],
     errors: list[str],
 ) -> None:
-    for key in BASE_NAVIGATION_FORBIDDEN_SEMANTIC_COLLECTIONS:
+    for key in BASE_METRIC_FORBIDDEN_SEMANTIC_COLLECTIONS:
         value = semantics.get(key)
         if value:
-            errors.append(f"Base Navigation Map v1 must not contain {key}")
+            errors.append(f"Base Metric Map v1 must not contain {key}")
 
 
-def _base_navigation_areas(
+def _base_metric_navigation_areas(
     rooms: list[Any],
     errors: list[str],
 ) -> dict[str, dict[str, Any]]:
@@ -373,25 +370,25 @@ def _base_navigation_areas(
             errors.append(f"navigation area rooms[{index}] missing navigation_area_id")
             continue
         if area_id in navigation_areas:
-            errors.append(f"duplicate navigation_area_id in Base Navigation Map v1: {area_id}")
+            errors.append(f"duplicate navigation_area_id in Base Metric Map v1: {area_id}")
             continue
         navigation_areas[area_id] = room
     return navigation_areas
 
 
-def _validate_base_navigation_area_semantics(
+def _validate_base_metric_navigation_area_semantics(
     navigation_areas: dict[str, dict[str, Any]],
     errors: list[str],
 ) -> None:
     for area_id, area in navigation_areas.items():
-        _validate_base_navigation_area_geometry(area, area_id=area_id, errors=errors)
-        _validate_base_navigation_area_label(area, area_id=area_id, errors=errors)
-        _validate_base_navigation_area_category(area, area_id=area_id, errors=errors)
-        _validate_base_navigation_area_sources(area, area_id=area_id, errors=errors)
-        _validate_base_navigation_area_review(area, area_id=area_id, errors=errors)
+        _validate_base_metric_navigation_area_geometry(area, area_id=area_id, errors=errors)
+        _validate_base_metric_navigation_area_label(area, area_id=area_id, errors=errors)
+        _validate_base_metric_navigation_area_category(area, area_id=area_id, errors=errors)
+        _validate_base_metric_navigation_area_sources(area, area_id=area_id, errors=errors)
+        _validate_base_metric_navigation_area_review(area, area_id=area_id, errors=errors)
 
 
-def _validate_base_navigation_area_geometry(
+def _validate_base_metric_navigation_area_geometry(
     area: dict[str, Any],
     *,
     area_id: str,
@@ -402,7 +399,7 @@ def _validate_base_navigation_area_geometry(
         errors.append(f"navigation area {area_id} must contain a source-frame polygon")
 
 
-def _validate_base_navigation_area_label(
+def _validate_base_metric_navigation_area_label(
     area: dict[str, Any],
     *,
     area_id: str,
@@ -413,7 +410,7 @@ def _validate_base_navigation_area_label(
         errors.append(f"navigation area {area_id} missing semantic label")
 
 
-def _validate_base_navigation_area_category(
+def _validate_base_metric_navigation_area_category(
     area: dict[str, Any],
     *,
     area_id: str,
@@ -425,16 +422,16 @@ def _validate_base_navigation_area_category(
     elif category == UNKNOWN_REVIEW_REQUIRED_CATEGORY:
         errors.append(
             f"navigation area {area_id} category {UNKNOWN_REVIEW_REQUIRED_CATEGORY} "
-            "is not valid for product Base Navigation Map v1"
+            "is not valid for product Base Metric Map v1"
         )
     elif category not in PRODUCT_SEMANTIC_CATEGORIES:
         errors.append(
             f"navigation area {area_id} semantic category {category!r} is not in "
-            "the product Base Navigation Map v1 vocabulary"
+            "the product Base Metric Map v1 vocabulary"
         )
 
 
-def _validate_base_navigation_area_sources(
+def _validate_base_metric_navigation_area_sources(
     area: dict[str, Any],
     *,
     area_id: str,
@@ -446,7 +443,7 @@ def _validate_base_navigation_area_sources(
         errors.append(f"navigation area {area_id} missing label_source")
 
 
-def _validate_base_navigation_area_review(
+def _validate_base_metric_navigation_area_review(
     area: dict[str, Any],
     *,
     area_id: str,
@@ -459,35 +456,35 @@ def _validate_base_navigation_area_review(
         errors.append(f"navigation area {area_id} semantic_labeling must be accepted")
 
 
-def _validate_base_navigation_waypoints(
+def _validate_base_metric_waypoints(
     waypoints: list[Any],
     *,
     navigation_areas: dict[str, dict[str, Any]],
     errors: list[str],
 ) -> None:
     if not waypoints:
-        errors.append("Base Navigation Map v1 must contain base inspection waypoints")
+        errors.append("Base Metric Map v1 must contain base inspection waypoints")
         return
     seen_waypoint_ids: set[str] = set()
     for index, waypoint in enumerate(waypoints):
         if not isinstance(waypoint, dict):
-            errors.append(f"Base Navigation Map waypoint {index} must be an object")
+            errors.append(f"Base Metric Map waypoint {index} must be an object")
             continue
         waypoint_id = str(waypoint.get("waypoint_id") or "")
         if not waypoint_id:
-            errors.append(f"Base Navigation Map waypoint {index} missing waypoint_id")
+            errors.append(f"Base Metric Map waypoint {index} missing waypoint_id")
             continue
         if waypoint_id in seen_waypoint_ids:
-            errors.append(f"duplicate Base Navigation Map waypoint_id: {waypoint_id}")
+            errors.append(f"duplicate Base Metric Map waypoint_id: {waypoint_id}")
         seen_waypoint_ids.add(waypoint_id)
-        _validate_base_navigation_waypoint_pose(waypoint, waypoint_id=waypoint_id, errors=errors)
-        _validate_base_navigation_waypoint_area_binding(
+        _validate_base_metric_waypoint_pose(waypoint, waypoint_id=waypoint_id, errors=errors)
+        _validate_base_metric_waypoint_area_binding(
             waypoint,
             waypoint_id=waypoint_id,
             navigation_areas=navigation_areas,
             errors=errors,
         )
-        _validate_base_navigation_waypoint_policy(
+        _validate_base_metric_waypoint_policy(
             waypoint,
             waypoint_id=waypoint_id,
             errors=errors,
@@ -495,12 +492,12 @@ def _validate_base_navigation_waypoints(
         forbidden_keys = sorted(BASE_WAYPOINT_FORBIDDEN_KEYS.intersection(waypoint))
         if forbidden_keys:
             errors.append(
-                f"Base Navigation Map waypoint {waypoint_id} contains forbidden fields: "
+                f"Base Metric Map waypoint {waypoint_id} contains forbidden fields: "
                 f"{forbidden_keys}"
             )
 
 
-def _validate_base_navigation_waypoint_pose(
+def _validate_base_metric_waypoint_pose(
     waypoint: dict[str, Any],
     *,
     waypoint_id: str,
@@ -510,12 +507,12 @@ def _validate_base_navigation_waypoint_pose(
         try:
             float(waypoint.get(key))
         except (TypeError, ValueError):
-            errors.append(f"Base Navigation Map waypoint {waypoint_id} missing numeric {key}")
+            errors.append(f"Base Metric Map waypoint {waypoint_id} missing numeric {key}")
     if not str(waypoint.get("frame_id") or ""):
-        errors.append(f"Base Navigation Map waypoint {waypoint_id} missing frame_id")
+        errors.append(f"Base Metric Map waypoint {waypoint_id} missing frame_id")
 
 
-def _validate_base_navigation_waypoint_area_binding(
+def _validate_base_metric_waypoint_area_binding(
     waypoint: dict[str, Any],
     *,
     waypoint_id: str,
@@ -529,15 +526,14 @@ def _validate_base_navigation_waypoint_area_binding(
         or ""
     )
     if not area_id:
-        errors.append(f"Base Navigation Map waypoint {waypoint_id} missing navigation_area_id")
+        errors.append(f"Base Metric Map waypoint {waypoint_id} missing navigation_area_id")
     elif area_id not in navigation_areas:
         errors.append(
-            f"Base Navigation Map waypoint {waypoint_id} binds unknown navigation_area_id "
-            f"{area_id!r}"
+            f"Base Metric Map waypoint {waypoint_id} binds unknown navigation_area_id {area_id!r}"
         )
 
 
-def _validate_base_navigation_waypoint_policy(
+def _validate_base_metric_waypoint_policy(
     waypoint: dict[str, Any],
     *,
     waypoint_id: str,
@@ -545,21 +541,21 @@ def _validate_base_navigation_waypoint_policy(
 ) -> None:
     if waypoint.get("purpose") != "base_navigation_area_inspection":
         errors.append(
-            f"Base Navigation Map waypoint {waypoint_id} purpose must be "
+            f"Base Metric Map waypoint {waypoint_id} purpose must be "
             "base_navigation_area_inspection"
         )
     if not str(waypoint.get("generation_policy") or ""):
-        errors.append(f"Base Navigation Map waypoint {waypoint_id} missing generation_policy")
+        errors.append(f"Base Metric Map waypoint {waypoint_id} missing generation_policy")
     try:
         sweep_index = int(waypoint.get("sweep_index"))
     except (TypeError, ValueError):
-        errors.append(f"Base Navigation Map waypoint {waypoint_id} missing numeric sweep_index")
+        errors.append(f"Base Metric Map waypoint {waypoint_id} missing numeric sweep_index")
         return
     if sweep_index <= 0:
-        errors.append(f"Base Navigation Map waypoint {waypoint_id} sweep_index must be positive")
+        errors.append(f"Base Metric Map waypoint {waypoint_id} sweep_index must be positive")
 
 
-def _validate_base_navigation_provenance(
+def _validate_base_metric_provenance(
     semantics: dict[str, Any],
     errors: list[str],
 ) -> None:
@@ -575,10 +571,10 @@ def _validate_base_navigation_provenance(
         "uses_navigation_memory_as_waypoint_source",
     ):
         if provenance.get(key) is not False:
-            errors.append(f"Base Navigation Map v1 provenance.{key} must be false")
+            errors.append(f"Base Metric Map v1 provenance.{key} must be false")
 
 
-def _validate_base_navigation_sidecar_scope(
+def _validate_base_metric_sidecar_scope(
     semantics: dict[str, Any],
     errors: list[str],
 ) -> None:
@@ -587,7 +583,7 @@ def _validate_base_navigation_sidecar_scope(
     provenance = (
         semantics.get("provenance") if isinstance(semantics.get("provenance"), dict) else {}
     )
-    if not provenance.get("b1_base_navigation_sidecar"):
+    if not provenance.get("b1_base_metric_sidecar"):
         errors.append("digital_twin_capabilities are allowed only as sidecar capability metadata")
 
 

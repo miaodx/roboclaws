@@ -457,7 +457,7 @@ lower-level implementation-rig namespace, useful when debugging a specific
 script or checker. The `molmo::*` report recipes below are convenience wrappers
 over the private household cleanup implementation runner; they are not a
 separate public cleanup dispatcher.
-All cleanup profiles require a selected prebuilt Base Navigation Map bundle; the
+All cleanup profiles require a selected prebuilt Base Metric Map bundle; the
 facade resolves `map_bundle=auto` to
 `assets/maps/molmospaces/<scene_source>/<scene_index>`, and `map_bundle=...`
 accepts either a path or an environment id under `assets/maps`. Generate a scene
@@ -560,7 +560,7 @@ sections.
 | Shape | Required Settings | Expected Sections |
 |-------|-------------------|-------------------|
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
-| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Base Navigation Map preview and Runtime Metric Map evidence are rendered separately from scene imagery. |
+| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Base Metric Map preview and Runtime Metric Map evidence are rendered separately from scene imagery. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
 | Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation permission remain policy-required until source-FPV confirmation. |
 | Model-declared camera cleanup | `camera-raw-fpv` or `camera-grounded-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
@@ -689,7 +689,7 @@ just harness::molmo-planner-proof-bundle-execute-rerun
   public Agent View vs private evaluation.
 - [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
   model-declared observations bridge camera evidence to cleanup handles.
-- [ADR-0136](../adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md):
+- [ADR-0136](../adr/0136-use-base-metric-map-and-first-class-household-launch-contracts.md):
   current launch, map, intent, and evidence-lane contract.
 - [ADR-0138](../adr/0138-use-detector-only-visual-grounding-sidecar.md):
   current detector-only visual-grounding sidecar boundary.

@@ -512,7 +512,7 @@ def _visual_candidate_validation_error(
         return {
             "field": "target_fixture_id",
             "reason": (
-                "target_fixture_id must be omitted in Base Navigation Map RAW_FPV; use the "
+                "target_fixture_id must be omitted in Base Metric Map RAW_FPV; use the "
                 "candidate_fixture_id returned by navigate_to_visual_candidate"
             ),
         }

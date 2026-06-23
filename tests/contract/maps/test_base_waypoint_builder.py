@@ -16,7 +16,7 @@ from roboclaws.maps.base_waypoints import (
 )
 from roboclaws.maps.bundle_validation import parse_map_yaml
 from roboclaws.maps.rasterize import FREE_PIXEL, OCCUPIED_PIXEL, OccupancyGrid, load_pgm
-from scripts.maps.build_b1_map12_base_navigation_map import (
+from scripts.maps.build_b1_map12_base_metric_map import (
     DEFAULT_LABELS,
     DEFAULT_MAP_BUNDLE,
     DEFAULT_ROBOT_PROFILE,
@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_base_waypoint_builder_preserves_b1_map12_waypoints() -> None:
-    labels = read_json_object(REPO_ROOT / DEFAULT_LABELS, label="B1 base navigation labels")
+    labels = read_json_object(REPO_ROOT / DEFAULT_LABELS, label="B1 base metric labels")
     room_semantics = read_json_object(REPO_ROOT / DEFAULT_ROOM_SEMANTICS, label="B1 rooms")
     map_yaml = parse_map_yaml((REPO_ROOT / DEFAULT_MAP_BUNDLE / "nav2.yaml").read_text())
     origin = _origin_payload(map_yaml)

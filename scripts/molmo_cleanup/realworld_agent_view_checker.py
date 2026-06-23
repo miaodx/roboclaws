@@ -69,10 +69,10 @@ def _assert_agent_view_core(agent_view: dict[str, Any]) -> None:
     assert agent_view.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA, agent_view
     assert agent_view.get("section_metadata"), agent_view
     assert agent_view_module.forbidden_private_fields_absent(agent_view), agent_view
-    assert agent_view_module.base_navigation_map(agent_view), agent_view
+    assert agent_view_module.base_metric_map(agent_view), agent_view
     assert "static_fixture_projection" not in agent_view, agent_view
     assert "observed_objects" not in agent_view, agent_view
-    assert "objects" not in agent_view_module.base_navigation_map(agent_view), agent_view
+    assert "objects" not in agent_view_module.base_metric_map(agent_view), agent_view
 
 
 def _assert_cleanup_worklist(agent_view: dict[str, Any]) -> None:

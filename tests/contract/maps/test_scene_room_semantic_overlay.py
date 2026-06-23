@@ -10,7 +10,7 @@ from roboclaws.maps.room_semantics import (
     ROOM_SEMANTIC_OVERLAY_SCHEMA,
     build_scene_room_semantic_overlay,
 )
-from scripts.maps.build_b1_map12_base_navigation_map import build_base_navigation_map_bundle
+from scripts.maps.build_b1_map12_base_metric_map import build_base_metric_map_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_ROOT = (
@@ -19,7 +19,7 @@ SCENE_ROOT = (
 MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
-BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
+BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-metric-labels.json"
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 
 
@@ -201,14 +201,14 @@ def test_scene_room_overlay_uses_source_bundle_room_geometry(tmp_path: Path) -> 
     assert room["map_center"] == {"x": 1.0, "y": 1.0}
 
 
-def test_b1_base_navigation_map_materializes_review_labels_without_retargeting_map(
+def test_b1_base_metric_map_materializes_review_labels_without_retargeting_map(
     tmp_path: Path,
 ) -> None:
-    result = build_base_navigation_map_bundle(
+    result = build_base_metric_map_bundle(
         map_bundle=MAP12_BUNDLE,
         labels_path=BASE_LABELS,
         room_semantics_path=ROOM_SEMANTICS,
-        output_dir=tmp_path / "base-navigation-map",
+        output_dir=tmp_path / "base-metric-map",
     )
     bundle_dir = Path(result["output_dir"])
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
@@ -218,7 +218,7 @@ def test_b1_base_navigation_map_materializes_review_labels_without_retargeting_m
     assert len(semantics["rooms"]) == 8
     assert semantics["fixtures"] == []
     assert semantics["navigation_memory_anchors"] == []
-    assert semantics["provenance"]["base_navigation_labels"] == str(BASE_LABELS)
+    assert semantics["provenance"]["base_metric_labels"] == str(BASE_LABELS)
     assert semantics["provenance"]["uses_navigation_memory_as_waypoint_source"] is False
     assert semantics["provenance"]["room_semantics_reference"] == str(ROOM_SEMANTICS)
 

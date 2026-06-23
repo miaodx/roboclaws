@@ -2157,7 +2157,7 @@ function setImageSlot(name, asset, emptyText) {
 function imageLabel(name) {
   const labels = {
     fpv: "FPV",
-    map: "Base Navigation Map preview",
+    map: "Base Metric Map preview",
     runtime_map: "Runtime Metric Map preview",
     topdown: "Top-down Scene View",
     grounding: "Grounding",

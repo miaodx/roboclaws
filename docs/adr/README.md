@@ -29,7 +29,7 @@ guidance:
 | [0132](0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md) | Keep Cleanup Memory Skill-First And Remove Promoted Composite | Keeps MCP small and cleanup strategy skill-side. |
 | [0134](0134-use-public-done-readiness-gates.md) | Use Public Done Readiness Gates | Completion enforcement uses public evidence only. |
 | [0135](0135-use-sanitized-report-performance-artifacts-for-speed-claims.md) | Use Sanitized Report Performance Artifacts For Speed Claims | Privacy and evidence boundary for live-agent speed claims. |
-| [0136](0136-use-base-navigation-map-and-first-class-household-launch-contracts.md) | Use Base Navigation Map And First-Class Household Launch Contracts | Current map, launch-axis, intent, and evidence-lane contract. |
+| [0136](0136-use-base-metric-map-and-first-class-household-launch-contracts.md) | Use Base Metric Map And First-Class Household Launch Contracts | Current map, launch-axis, intent, and evidence-lane contract. |
 | [0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md) | Retire AI2-THOR And Direct VLM Public Surfaces | Prevents revival of old public surfaces. |
 | [0138](0138-use-detector-only-visual-grounding-sidecar.md) | Use Detector-Only Visual Grounding Sidecar | Current visual-grounding sidecar and VLM-retirement boundary. |
 | [0139](0139-use-household-open-task-surface-with-presets.md) | Use Household Open Task Surface With Presets | Current household public surface and preset contract. |

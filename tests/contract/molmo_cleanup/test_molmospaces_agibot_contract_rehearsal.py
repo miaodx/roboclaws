@@ -300,7 +300,7 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     _assert_no_active_gdk_navigation_claim(run_result)
 
 
-def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_map(
+def test_agibot_molmospaces_prehardware_map_build_starts_from_base_metric_map(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()
@@ -339,13 +339,13 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_ma
     assert runtime_metric_map["source_map_mutated"] is False
     assert runtime_metric_map["generated_exploration_candidates"]
     assert runtime_metric_map["public_semantic_anchors"]
-    assert agent_view_module.base_navigation_map(agent_view)["rooms"] == []
-    assert agent_view_module.base_navigation_map(agent_view)["inspection_waypoints"]
+    assert agent_view_module.base_metric_map(agent_view)["rooms"] == []
+    assert agent_view_module.base_metric_map(agent_view)["inspection_waypoints"]
     assert agent_view_module.forbidden_private_fields_absent(agent_view) is True
-    assert runtime_export["base_navigation_map_start"] is True
+    assert runtime_export["base_metric_map_start"] is True
     assert runtime_export["online_map_build"] is True
     assert runtime_export["cleanup_actions_included"] is False
-    assert runtime_export["runtime_metric_map_summary"]["base_navigation_map_enabled"] is True
+    assert runtime_export["runtime_metric_map_summary"]["base_metric_map_enabled"] is True
     assert runtime_export["runtime_metric_map_summary"]["source_map_mutated"] is False
     reference = run_result["agibot_map_reference"]
     assert reference["used_as_scene_source"] is False
@@ -353,7 +353,7 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_ma
     assert (run_dir / "report.html").is_file()
 
 
-def test_agibot_molmospaces_prehardware_cleanup_uses_same_base_navigation_map(
+def test_agibot_molmospaces_prehardware_cleanup_uses_same_base_metric_map(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "prehardware-cleanup"
@@ -382,5 +382,5 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_base_navigation_map(
     assert "minimal_map_mode" not in runtime_metric_map
     assert runtime_metric_map["source_map_mutated"] is False
     assert runtime_export["cleanup_actions_included"] is True
-    assert runtime_export["runtime_metric_map_summary"]["base_navigation_map_enabled"] is True
+    assert runtime_export["runtime_metric_map_summary"]["base_metric_map_enabled"] is True
     assert result["semantic_substeps"]

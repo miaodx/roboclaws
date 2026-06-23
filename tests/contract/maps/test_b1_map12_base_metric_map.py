@@ -8,27 +8,27 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.maps.bundle import validate_base_navigation_map_v1_bundle, validate_nav2_map_bundle
-from scripts.maps.build_b1_map12_base_navigation_map import (
-    B1_BASE_NAVIGATION_LABELS_SCHEMA,
-    B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA,
+from roboclaws.maps.bundle import validate_base_metric_map_v1_bundle, validate_nav2_map_bundle
+from scripts.maps.build_b1_map12_base_metric_map import (
+    B1_BASE_METRIC_LABELS_SCHEMA,
+    B1_BASE_METRIC_MAP_MANIFEST_SCHEMA,
     WAYPOINT_GENERATION_POLICY,
-    build_base_navigation_map_bundle,
-    validate_base_navigation_labels,
+    build_base_metric_map_bundle,
+    validate_base_metric_labels,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
-BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
+BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-metric-labels.json"
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
-SCRIPT = REPO_ROOT / "scripts" / "maps" / "build_b1_map12_base_navigation_map.py"
+SCRIPT = REPO_ROOT / "scripts" / "maps" / "build_b1_map12_base_metric_map.py"
 
 
-def test_checked_in_base_navigation_labels_are_accepted_source_of_truth() -> None:
+def test_checked_in_base_metric_labels_are_accepted_source_of_truth() -> None:
     labels = _read_json(BASE_LABELS)
     areas = {label["navigation_area_id"]: label for label in labels["labels"]}
 
-    assert labels["schema"] == B1_BASE_NAVIGATION_LABELS_SCHEMA
+    assert labels["schema"] == B1_BASE_METRIC_LABELS_SCHEMA
     assert labels["review_status"] == "accepted"
     assert labels["source_map_mutated"] is False
     assert labels["policy"]["source_of_truth"] == ("operator_reviewed_map12_navigation_area_labels")
@@ -59,35 +59,35 @@ def test_checked_in_base_navigation_labels_are_accepted_source_of_truth() -> Non
     }
 
 
-def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
+def test_base_metric_map_builder_generates_shared_robot_and_dt_bundle(
     tmp_path: Path,
 ) -> None:
-    result = build_base_navigation_map_bundle(
+    result = build_base_metric_map_bundle(
         map_bundle=MAP_BUNDLE,
         labels_path=BASE_LABELS,
         room_semantics_path=ROOM_SEMANTICS,
-        output_dir=tmp_path / "base-navigation-map",
+        output_dir=tmp_path / "base-metric-map",
     )
     output_dir = Path(result["output_dir"])
     semantics = _read_json(output_dir / "semantics.json")
-    manifest = _read_json(output_dir / "base_navigation_map_manifest.json")
+    manifest = _read_json(output_dir / "base_metric_map_manifest.json")
     rooms = {room["room_id"]: room for room in semantics["rooms"]}
     waypoints = {
         waypoint["navigation_area_id"]: waypoint for waypoint in semantics["inspection_waypoints"]
     }
 
-    assert result["schema"] == B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA
+    assert result["schema"] == B1_BASE_METRIC_MAP_MANIFEST_SCHEMA
     assert result["status"] == "generated"
     assert validate_nav2_map_bundle(output_dir).ok
-    assert validate_base_navigation_map_v1_bundle(output_dir).ok
-    assert result["validation"]["metadata"]["base_navigation_map_v1_ready"] is True
+    assert validate_base_metric_map_v1_bundle(output_dir).ok
+    assert result["validation"]["metadata"]["base_metric_map_v1_ready"] is True
     assert manifest["policy"]["shared_by_real_robot_and_digital_twin"] is True
     assert manifest["policy"]["does_not_use_navigation_memory_as_waypoint_source"] is True
-    assert manifest["base_navigation_map"]["navigation_area_count"] == 5
-    assert manifest["base_navigation_map"]["semantic_label_count"] == 8
-    assert manifest["base_navigation_map"]["inspection_waypoint_count"] == 5
-    assert semantics["base_navigation_map_contract"] == {
-        "schema": "base_navigation_map_v1",
+    assert manifest["base_metric_map"]["navigation_area_count"] == 5
+    assert manifest["base_metric_map"]["semantic_label_count"] == 8
+    assert manifest["base_metric_map"]["inspection_waypoint_count"] == 5
+    assert semantics["base_metric_map_contract"] == {
+        "schema": "base_metric_map_v1",
         "navigation_area_count": 5,
         "semantic_label_count": 8,
         "inspection_waypoint_count": 5,
@@ -100,7 +100,7 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
         BASE_LABELS
     )
     assert semantics["provenance"]["raw_map_bundle"] == str(MAP_BUNDLE)
-    assert semantics["provenance"]["base_navigation_labels"] == str(BASE_LABELS)
+    assert semantics["provenance"]["base_metric_labels"] == str(BASE_LABELS)
     assert semantics["provenance"]["uses_navigation_memory_as_waypoint_source"] is False
     assert semantics["provenance"]["contains_static_fixtures"] is False
     assert semantics["provenance"]["contains_movable_objects"] is False
@@ -132,8 +132,8 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
     assert (output_dir / "preview.png").is_file()
 
 
-def test_base_navigation_map_cli_generates_bundle(tmp_path: Path) -> None:
-    output_dir = tmp_path / "cli-base-navigation-map"
+def test_base_metric_map_cli_generates_bundle(tmp_path: Path) -> None:
+    output_dir = tmp_path / "cli-base-metric-map"
 
     completed = subprocess.run(
         [
@@ -161,7 +161,7 @@ def test_base_navigation_map_cli_generates_bundle(tmp_path: Path) -> None:
     assert validate_nav2_map_bundle(output_dir).ok
 
 
-def test_base_navigation_map_rejects_dt_label_mismatch(tmp_path: Path) -> None:
+def test_base_metric_map_rejects_dt_label_mismatch(tmp_path: Path) -> None:
     labels_path = _write_modified_labels(tmp_path)
     labels = _read_json(labels_path)
     for label in labels["labels"]:
@@ -171,7 +171,7 @@ def test_base_navigation_map_rejects_dt_label_mismatch(tmp_path: Path) -> None:
     labels_path.write_text(json.dumps(labels), encoding="utf-8")
 
     with pytest.raises(ValueError, match="label .* must match DT room_label"):
-        build_base_navigation_map_bundle(
+        build_base_metric_map_bundle(
             map_bundle=MAP_BUNDLE,
             labels_path=labels_path,
             room_semantics_path=ROOM_SEMANTICS,
@@ -179,7 +179,7 @@ def test_base_navigation_map_rejects_dt_label_mismatch(tmp_path: Path) -> None:
         )
 
 
-def test_base_navigation_map_rejects_navigation_area_without_safe_waypoint(
+def test_base_metric_map_rejects_navigation_area_without_safe_waypoint(
     tmp_path: Path,
 ) -> None:
     labels_path = _write_modified_labels(tmp_path)
@@ -191,7 +191,7 @@ def test_base_navigation_map_rejects_navigation_area_without_safe_waypoint(
     labels_path.write_text(json.dumps(labels), encoding="utf-8")
 
     with pytest.raises(ValueError, match="navigation=true but no clearance-safe free waypoint"):
-        build_base_navigation_map_bundle(
+        build_base_metric_map_bundle(
             map_bundle=MAP_BUNDLE,
             labels_path=labels_path,
             room_semantics_path=ROOM_SEMANTICS,
@@ -199,14 +199,14 @@ def test_base_navigation_map_rejects_navigation_area_without_safe_waypoint(
         )
 
 
-def test_base_navigation_map_rejects_missing_label_source_frame(tmp_path: Path) -> None:
+def test_base_metric_map_rejects_missing_label_source_frame(tmp_path: Path) -> None:
     labels_path = _write_modified_labels(tmp_path)
     labels = _read_json(labels_path)
     labels.pop("source_map_frame_id")
     labels_path.write_text(json.dumps(labels), encoding="utf-8")
 
     with pytest.raises(ValueError, match="source_map_frame_id must be set"):
-        build_base_navigation_map_bundle(
+        build_base_metric_map_bundle(
             map_bundle=MAP_BUNDLE,
             labels_path=labels_path,
             room_semantics_path=ROOM_SEMANTICS,
@@ -214,7 +214,7 @@ def test_base_navigation_map_rejects_missing_label_source_frame(tmp_path: Path) 
         )
 
 
-def test_base_navigation_map_rejects_label_source_frame_drift(tmp_path: Path) -> None:
+def test_base_metric_map_rejects_label_source_frame_drift(tmp_path: Path) -> None:
     labels_path = _write_modified_labels(tmp_path)
     labels = _read_json(labels_path)
     labels["labels"][0]["source_map_frame_id"] = "operator_map"
@@ -225,7 +225,7 @@ def test_base_navigation_map_rejects_label_source_frame_drift(tmp_path: Path) ->
         match="label scene_bbox_seed_meeting_room_a source_map_frame_id must match "
         "top-level source_map_frame_id",
     ):
-        build_base_navigation_map_bundle(
+        build_base_metric_map_bundle(
             map_bundle=MAP_BUNDLE,
             labels_path=labels_path,
             room_semantics_path=ROOM_SEMANTICS,
@@ -233,7 +233,7 @@ def test_base_navigation_map_rejects_label_source_frame_drift(tmp_path: Path) ->
         )
 
 
-def test_base_navigation_label_validator_reports_all_fail_loud_errors(tmp_path: Path) -> None:
+def test_base_metric_label_validator_reports_all_fail_loud_errors(tmp_path: Path) -> None:
     labels = _read_json(BASE_LABELS)
     room_semantics = _read_json(ROOM_SEMANTICS)
     map_yaml = _read_map_yaml(MAP_BUNDLE / "nav2.yaml")
@@ -249,7 +249,7 @@ def test_base_navigation_label_validator_reports_all_fail_loud_errors(tmp_path: 
     labels["labels"][0]["review_status"] = "draft"
     labels["labels"][1]["label"] = "Open kitchen"
 
-    errors = validate_base_navigation_labels(
+    errors = validate_base_metric_labels(
         labels,
         room_semantics=room_semantics,
         grid=grid,

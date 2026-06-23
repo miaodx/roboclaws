@@ -670,7 +670,7 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
     semantics = {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": "test-b1-map12",
-        "map_id": "test-b1-map12_base_navigation_map",
+        "map_id": "test-b1-map12_base_metric_map",
         "frame_ids": {"map": "map", "base": "base_link", "camera": "camera"},
         "spatial_contract": source_frame_spatial_contract(frame_id="map"),
         "display_frame": None,

@@ -114,7 +114,7 @@ or `preset=map-build|cleanup`. The planner proof route is
 `surface=planner-proof intent=planner-proof`.
 
 Map guidance:
-- Base Navigation Map is the start-of-run map contract.
+- Base Metric Map is the start-of-run map contract.
 - Runtime Metric Map owns semantic evidence produced during map-build and
   observations.
 - `smoke` is a verification preset/private runner mode, not an evidence lane.

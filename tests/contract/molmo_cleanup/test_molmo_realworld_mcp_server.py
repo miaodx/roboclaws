@@ -454,7 +454,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     assert "household-cleanup direct world-public-labels" not in report
 
 
-def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
+def test_realworld_mcp_defaults_to_base_metric_map(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
@@ -470,7 +470,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     finally:
         server.close()
 
-    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["base_metric_map"]["enabled"] is True
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert metric_map["room_category_hints"]
@@ -479,7 +479,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     assert agent_view_module.cleanup_worklist(agent_view)["objects"]
 
 
-def test_realworld_mcp_base_navigation_map_exposes_actionable_runtime_anchors(
+def test_realworld_mcp_base_metric_map_exposes_actionable_runtime_anchors(
     tmp_path: Path,
 ) -> None:
     server = make_molmo_realworld_cleanup_mcp(

@@ -100,7 +100,7 @@ def runtime_metric_map_preview_section(run_dir: Path, run_result: dict[str, Any]
         '<section class="panel runtime-metric-map-preview">'
         "<h2>Runtime Metric Map preview <span>Current-run visual review artifact</span></h2>"
         '<p class="note">This image renders the Runtime Metric Map JSON on the same '
-        "Base Navigation Map visual language, adding public runtime overlays for review. "
+        "Base Metric Map visual language, adding public runtime overlays for review. "
         "The source truth remains <code>runtime_metric_map.json</code>.</p>"
         '<figure class="nav2-preview">'
         f'<img src="{html.escape(src)}" alt="Runtime Metric Map preview">'

@@ -11,7 +11,7 @@ from typing import Any
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.preview import (
     BASE_MAP_SOURCE_FAMILY,
-    BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+    BASE_METRIC_MAP_PREVIEW_ROLE,
     RUNTIME_MAP_SOURCE_FAMILY,
     RUNTIME_METRIC_MAP_PREVIEW_ROLE,
     SCENE_RENDER_SOURCE_FAMILY,
@@ -739,7 +739,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
 def _view_asset_role_metadata(key: str) -> dict[str, str]:
     if key == "map":
         return {
-            "visual_role": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+            "visual_role": BASE_METRIC_MAP_PREVIEW_ROLE,
             "artifact_source_family": BASE_MAP_SOURCE_FAMILY,
         }
     if key == "runtime_map":

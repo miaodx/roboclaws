@@ -434,7 +434,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
-    checker_map_build_args+=(--require-base-navigation-map)
+    checker_map_build_args+=(--require-base-metric-map)
 
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
@@ -459,12 +459,12 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         echo "error: world=b1-map12 requires raw map_bundle before runtime compilation" >&2
         exit 1
       fi
-      b1_base_map_bundle_dir="${output_dir}/b1-map12-base-navigation-map"
-      b1_runtime_map_bundle_dir="${output_dir}/b1-map12-base-navigation-map-with-proof"
-      "$python_bin" scripts/maps/build_b1_map12_base_navigation_map.py \
+      b1_base_map_bundle_dir="${output_dir}/b1-map12-base-metric-map"
+      b1_runtime_map_bundle_dir="${output_dir}/b1-map12-base-metric-map-with-proof"
+      "$python_bin" scripts/maps/build_b1_map12_base_metric_map.py \
         --map-bundle "$map_bundle_dir" \
         --output-dir "$b1_base_map_bundle_dir" >/dev/null
-      "$python_bin" scripts/maps/augment_b1_map12_base_navigation_map.py \
+      "$python_bin" scripts/maps/augment_b1_map12_base_metric_map.py \
         --base-map-bundle "$b1_base_map_bundle_dir" \
         --alignment-artifact "$b1_alignment_artifact" \
         --navigation-artifact "$b1_navigation_artifact" \

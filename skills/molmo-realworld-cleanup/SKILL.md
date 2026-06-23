@@ -15,7 +15,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 
 1. Call `roboclaws__metric_map()` first.
 2. Treat `inspection_waypoints` as public coverage candidates, not mess hints.
-   In the default Base Navigation Map contract, public room labels may be visible
+   In the default Base Metric Map contract, public room labels may be visible
    as search priors, but fixture tables remain hidden: useful destination anchors
    come from `cleanup_worklist.candidate_fixture_id`,
    `runtime_metric_map.public_semantic_anchors`, `resolve_target_query`, and
@@ -48,7 +48,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    evidence_note, image_region, ...)` only when you intend to act on a visual
    candidate. Omit `target_fixture_id` until grounding returns a public
    `candidate_fixture_id`; do not invent fixture ids from stale map labels.
-   With Base Navigation Map context, normally omit `source_fixture_id` too; do
+   With Base Metric Map context, normally omit `source_fixture_id` too; do
    not guess it from room context. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
    for `camera-grounded-labels`. Prefer the exact visual class when the image makes it

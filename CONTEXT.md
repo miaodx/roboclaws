@@ -121,7 +121,7 @@ The policy, object IDs, before/after locations, and relocation count stay
 private/report-side.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
-**Base Navigation Map**:
+**Base Metric Map**:
 The agent-facing static map context available at run start. It contains
 occupancy/free-space geometry, frame metadata, current robot pose, generated
 safe exploration or inspection candidates, and public room-category hints when
@@ -135,7 +135,7 @@ static fixture truth
 
 **Metric Map Projection**:
 The agent-facing JSON view derived from static map context and public runtime
-evidence. The Base Navigation Map is the start-of-run projection; Runtime
+evidence. The Base Metric Map is the start-of-run projection; Runtime
 Metric Map is the enriched current-run projection.
 _Avoid_: raw occupancy map, independent map source, private backend metadata
 

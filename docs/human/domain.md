@@ -54,7 +54,7 @@ _Avoid_: False-positive failure
 A public map of rooms, walls, doors, driveable ways, and robot pose.
 _Avoid_: Semantic object oracle
 
-**Base Navigation Map**:
+**Base Metric Map**:
 The start-of-run agent-facing map context: occupancy/free-space geometry,
 frame metadata, robot pose, public room-category hints when available, and
 artifact-authored safe exploration or inspection candidates. In product
@@ -238,7 +238,7 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
-- A **Base Navigation Map** is the current start-of-run projection of public
+- A **Base Metric Map** is the current start-of-run projection of public
   map context for household tasks; **Runtime Metric Map** evidence enriches it
   without mutating the source map.
 - Product runtime loads base **Inspection Waypoints** from a **Prebuilt Robot

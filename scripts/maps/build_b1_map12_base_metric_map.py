@@ -26,7 +26,7 @@ from roboclaws.maps.base_waypoints import (
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     DEFAULT_ROBOT_PROFILE,
-    validate_base_navigation_map_v1_bundle,
+    validate_base_metric_map_v1_bundle,
     validate_nav2_map_bundle,
     write_source_frame_bundle_preview,
 )
@@ -39,20 +39,20 @@ from roboclaws.maps.spatial_contract import (
     source_frame_spatial_contract,
 )
 
-B1_BASE_NAVIGATION_LABELS_SCHEMA = "b1_map12_base_navigation_labels_v1"
-B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA = "b1_map12_base_navigation_map_manifest_v1"
+B1_BASE_METRIC_LABELS_SCHEMA = "b1_map12_base_metric_labels_v1"
+B1_BASE_METRIC_MAP_MANIFEST_SCHEMA = "b1_map12_base_metric_map_manifest_v1"
 ROOM_SEMANTICS_REFERENCE_SCHEMA = "scene_room_semantic_overlay_overrides_v1"
 DEFAULT_MAP_BUNDLE = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
-DEFAULT_LABELS = Path("assets/maps/b1-map12-base-navigation-labels.json")
+DEFAULT_LABELS = Path("assets/maps/b1-map12-base-metric-labels.json")
 DEFAULT_ROOM_SEMANTICS = Path("assets/maps/b1-map12-room-semantics.json")
-DEFAULT_OUTPUT_DIR = Path("output/b1-map12/base-navigation-map")
+DEFAULT_OUTPUT_DIR = Path("output/b1-map12/base-metric-map")
 WAYPOINT_GENERATION_POLICY = BASE_WAYPOINT_GENERATION_POLICY
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate the strict B1 / Map 12 Base Navigation Map bundle shared by "
+            "Generate the strict B1 / Map 12 Base Metric Map bundle shared by "
             "real-robot and Digital Twin consumers."
         )
     )
@@ -66,7 +66,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        result = build_base_navigation_map_bundle(
+        result = build_base_metric_map_bundle(
             map_bundle=args.map_bundle,
             labels_path=args.labels,
             room_semantics_path=args.room_semantics,
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def build_base_navigation_map_bundle(
+def build_base_metric_map_bundle(
     *,
     map_bundle: Path,
     labels_path: Path = DEFAULT_LABELS,
@@ -91,7 +91,7 @@ def build_base_navigation_map_bundle(
     room_semantics_path = Path(room_semantics_path)
     output_dir = Path(output_dir)
 
-    labels = read_json_object(labels_path, label="base navigation labels")
+    labels = read_json_object(labels_path, label="base metric labels")
     room_semantics = read_json_object(room_semantics_path, label="room semantics")
     map_yaml = parse_map_yaml((map_bundle / "nav2.yaml").read_text(encoding="utf-8"))
     origin = _origin_payload(map_yaml)
@@ -101,7 +101,7 @@ def build_base_navigation_map_bundle(
         origin_x=origin["x"],
         origin_y=origin["y"],
     )
-    errors = validate_base_navigation_labels(
+    errors = validate_base_metric_labels(
         labels,
         room_semantics=room_semantics,
         grid=grid,
@@ -109,7 +109,7 @@ def build_base_navigation_map_bundle(
         map_bundle=map_bundle,
     )
     if errors:
-        raise ValueError("invalid B1 / Map 12 base navigation labels: " + "; ".join(errors))
+        raise ValueError("invalid B1 / Map 12 base metric labels: " + "; ".join(errors))
     frame_id = _labels_source_map_frame_id(labels)
 
     if output_dir.exists():
@@ -138,8 +138,8 @@ def build_base_navigation_map_bundle(
     write_source_frame_bundle_preview(output_dir)
     validation = validate_nav2_map_bundle(output_dir)
     validation.raise_for_errors()
-    base_navigation_validation = validate_base_navigation_map_v1_bundle(output_dir)
-    base_navigation_validation.raise_for_errors()
+    base_metric_validation = validate_base_metric_map_v1_bundle(output_dir)
+    base_metric_validation.raise_for_errors()
     manifest = _manifest_payload(
         output_dir=output_dir,
         map_bundle=map_bundle,
@@ -147,24 +147,24 @@ def build_base_navigation_map_bundle(
         room_semantics_path=room_semantics_path,
         labels=labels,
         semantics=semantics,
-        validation=base_navigation_validation.as_dict(),
+        validation=base_metric_validation.as_dict(),
     )
-    (output_dir / "base_navigation_map_manifest.json").write_text(
+    (output_dir / "base_metric_map_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return {
-        "schema": B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA,
+        "schema": B1_BASE_METRIC_MAP_MANIFEST_SCHEMA,
         "status": "generated",
         "output_dir": str(output_dir),
-        "manifest": str(output_dir / "base_navigation_map_manifest.json"),
-        "navigation_area_count": manifest["base_navigation_map"]["navigation_area_count"],
-        "inspection_waypoint_count": manifest["base_navigation_map"]["inspection_waypoint_count"],
-        "validation": base_navigation_validation.as_dict(),
+        "manifest": str(output_dir / "base_metric_map_manifest.json"),
+        "navigation_area_count": manifest["base_metric_map"]["navigation_area_count"],
+        "inspection_waypoint_count": manifest["base_metric_map"]["inspection_waypoint_count"],
+        "validation": base_metric_validation.as_dict(),
     }
 
 
-def validate_base_navigation_labels(
+def validate_base_metric_labels(
     payload: dict[str, Any],
     *,
     room_semantics: dict[str, Any],
@@ -172,7 +172,7 @@ def validate_base_navigation_labels(
     labels_path: Path,
     map_bundle: Path,
 ) -> list[str]:
-    errors = _base_navigation_source_errors(
+    errors = _base_metric_source_errors(
         payload,
         labels_path=labels_path,
         map_bundle=map_bundle,
@@ -193,15 +193,15 @@ def validate_base_navigation_labels(
     return errors
 
 
-def _base_navigation_source_errors(
+def _base_metric_source_errors(
     payload: dict[str, Any],
     *,
     labels_path: Path,
     map_bundle: Path,
 ) -> list[str]:
     errors: list[str] = []
-    if payload.get("schema") != B1_BASE_NAVIGATION_LABELS_SCHEMA:
-        errors.append(f"schema must be {B1_BASE_NAVIGATION_LABELS_SCHEMA}")
+    if payload.get("schema") != B1_BASE_METRIC_LABELS_SCHEMA:
+        errors.append(f"schema must be {B1_BASE_METRIC_LABELS_SCHEMA}")
     if payload.get("review_status") != "accepted":
         errors.append("review_status must be accepted")
     if payload.get("source_map_mutated") is not False:
@@ -444,7 +444,7 @@ def _room_from_label(
         "geometry_source": GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
         "alignment_status": ALIGNMENT_STATUS_VERIFIED,
         "polygon_usage": dict(label.get("polygon_usage") or {}),
-        "semantic_source": "operator_reviewed_map12_base_navigation_label",
+        "semantic_source": "operator_reviewed_map12_base_metric_label",
         "label_source": label_source,
         "asset_partition_id": partition_id,
         "source_room_semantics_id": partition_id,
@@ -497,8 +497,8 @@ def _semantics_payload(
             alignment_status=ALIGNMENT_STATUS_VERIFIED,
         ),
         "display_frame": None,
-        "map_id": "agibot-robot-map-12_base_navigation_map",
-        "map_version": "robot_map_12_base_navigation_map_v1",
+        "map_id": "agibot-robot-map-12_base_metric_map",
+        "map_version": "robot_map_12_base_metric_map_v1",
         "resolution_m": float(map_yaml.get("resolution") or 0.05),
         "origin": _origin_payload(map_yaml),
         "rooms": rooms,
@@ -519,8 +519,8 @@ def _semantics_payload(
             }
             for room in navigation_rooms
         ],
-        "base_navigation_map_contract": {
-            "schema": "base_navigation_map_v1",
+        "base_metric_map_contract": {
+            "schema": "base_metric_map_v1",
             "navigation_area_count": len(navigation_rooms),
             "semantic_label_count": len(rooms),
             "inspection_waypoint_count": len(waypoints),
@@ -528,11 +528,11 @@ def _semantics_payload(
             "consumer_scope": "real_robot_and_digital_twin",
         },
         "provenance": {
-            "source": "b1_map12_base_navigation_labels",
+            "source": "b1_map12_base_metric_labels",
             "raw_map_bundle": str(map_bundle),
-            "base_navigation_labels": str(labels_path),
+            "base_metric_labels": str(labels_path),
             "room_semantics_reference": str(room_semantics_path),
-            "b1_base_navigation_map_builder": _repo_relative_path(Path(__file__)),
+            "b1_base_metric_map_builder": _repo_relative_path(Path(__file__)),
             "contains_static_fixtures": False,
             "contains_receptacles": False,
             "contains_movable_objects": False,
@@ -560,7 +560,7 @@ def _manifest_payload(
     semantics: dict[str, Any],
     validation: dict[str, Any],
 ) -> dict[str, Any]:
-    contract = semantics["base_navigation_map_contract"]
+    contract = semantics["base_metric_map_contract"]
     source_files = [
         map_bundle / "nav2.yaml",
         map_bundle / "occupancy.pgm",
@@ -569,20 +569,20 @@ def _manifest_payload(
         room_semantics_path,
     ]
     return {
-        "schema": B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA,
+        "schema": B1_BASE_METRIC_MAP_MANIFEST_SCHEMA,
         "status": "generated",
         "generated_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "output_dir": str(output_dir),
         "source_assets": {
             "map_bundle": str(map_bundle),
-            "base_navigation_labels": str(labels_path),
+            "base_metric_labels": str(labels_path),
             "room_semantics_reference": str(room_semantics_path),
             "label_review_status": str(labels.get("review_status") or ""),
         },
         "source_file_hashes": {
             str(path): _file_sha256(path) for path in source_files if path.is_file()
         },
-        "base_navigation_map": {
+        "base_metric_map": {
             "schema": contract["schema"],
             "environment_id": semantics["environment_id"],
             "map_id": semantics["map_id"],
