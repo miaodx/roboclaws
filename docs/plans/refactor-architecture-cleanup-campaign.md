@@ -81,6 +81,7 @@ Surface metrics:
 | Delete `SIM_SERVER_URL` bootstrap fallback | 1 | 1 | 0 | 1 | preserved |
 | Delete empty `roboclaws.openclaw` package | 1 | 1 | 1 | 1 | preserved |
 | Delete stale AI issues roadmap | 1 | 1 | 0 | 0 | preserved |
+| Move operator-console display run id to state owner | 0 | 1 | 1 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -242,6 +243,25 @@ Fresh discovery required.
   test ! -e docs/ai/planning/issues-roadmap.md && test -f docs/agents/issue-tracker.md && test -f docs/agents/triage-labels.md
   git diff --check
   ```
+
+- 2026-06-23: Moved the duplicated operator-console display run id rule from
+  `roboclaws.operator_console.history` to the existing
+  `roboclaws.operator_console.state` owner. History now calls
+  `display_run_id(...)`, so nested wrapper-attempt ids are normalized by one
+  operator-state interface instead of two private helpers.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_state.py::test_state_surfaces_malformed_nested_live_status_and_run_result tests/unit/operator_console/test_state.py::test_state_follows_nested_live_attempt_under_console_wrapper tests/unit/operator_console/test_history.py::test_latest_run_payload_uses_history_index_and_nested_attempt_artifacts tests/unit/operator_console/test_history.py::test_latest_run_payload_surfaces_malformed_run_sidecar -q
+  .venv/bin/ruff check roboclaws/operator_console/state.py roboclaws/operator_console/history.py
+  rg -n "def _display_run_id|_display_run_id\(|display_run_id\(" roboclaws/operator_console tests/unit/operator_console -g '*.py'
+  git diff --check
+  ```
+
+  Note: the first proof attempt used stale specific test selectors and failed
+  during collection before executing tests; the corrected focused command above
+  passed.
 
 ## Parked Candidates
 

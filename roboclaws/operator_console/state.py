@@ -168,7 +168,7 @@ def derive_operator_state(
 
     return {
         "run_id": run_id,
-        "display_run_id": _display_run_id(run_dir, display_run_dir),
+        "display_run_id": display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
         "selected_intent": status.get("selected_intent") or (route.intent_id if route else ""),
         "run_dir": str(run_dir),
@@ -235,6 +235,17 @@ def resolve_display_run_dir(run_dir: Path) -> Path:
     if not candidates:
         return run_dir
     return max(candidates, key=_run_dir_activity_mtime)
+
+
+def display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
+    """Return the operator-facing id for a wrapper run or nested live attempt."""
+
+    if wrapper_run_dir == display_run_dir:
+        return wrapper_run_dir.name
+    try:
+        return str(display_run_dir.relative_to(wrapper_run_dir))
+    except ValueError:
+        return display_run_dir.name
 
 
 def redacted_artifact_text(path: Path, *, max_bytes: int = 200_000) -> str:
@@ -936,15 +947,6 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "primitive_provenance",
     )
     return {key: run_result[key] for key in allowed if key in run_result}
-
-
-def _display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
-    if wrapper_run_dir == display_run_dir:
-        return wrapper_run_dir.name
-    try:
-        return str(display_run_dir.relative_to(wrapper_run_dir))
-    except ValueError:
-        return display_run_dir.name
 
 
 def _run_dir_activity_mtime(path: Path) -> float:

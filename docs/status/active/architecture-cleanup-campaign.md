@@ -8,17 +8,17 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff after the stale `docs/ai/planning/issues-roadmap.md`
-  deletion slice.
+- Fresh discovery handoff after the operator-console display run id owner move.
 
 Last proven evidence:
 
-- Deleted unreferenced `docs/ai/planning/issues-roadmap.md`, which described an
-  old AI2-THOR/OpenClaw issue roadmap as current triage guidance.
-- Stale-reference search found no current references to the deleted doc or its
-  retired module paths, and `docs/agents/issue-tracker.md` remains the current
-  issue-tracker source.
-- `git diff --check` passed.
+- Moved the duplicated operator-console display run id rule into the existing
+  `roboclaws.operator_console.state.display_run_id` owner.
+- History and state still produce the same nested wrapper-attempt display ids,
+  but history no longer carries a private duplicate helper.
+- Focused state/history tests passed, ruff passed on touched modules, the
+  stale-reference search found no `_display_run_id` duplicate helper, and
+  `git diff --check` passed.
 
 Completed slice batch:
 
@@ -38,6 +38,8 @@ Completed slice batch:
   the pre-commit hook from routing staged changes in that retired package.
 - Slice 8: removed an unreferenced AI planning roadmap that conflicted with
   the current GitHub issue tracker guidance.
+- Slice 9: moved operator-console wrapper/display-run id normalization to one
+  state owner and updated history to call it.
 
 Next proof:
 
