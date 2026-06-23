@@ -8,7 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Live OpenAI Agents timing owner move complete. Continue with fresh post-HEAD
+- Agibot operator-gates owner move complete. Continue with fresh post-HEAD
   discovery after committing this slice; remaining quality-ratchet output is
   broader oversized-module baseline drift in other owners.
 
@@ -62,6 +62,13 @@ Last proven evidence:
   `roboclaws.agents.live_timing` owner. Focused timing tests, touched-file
   Ruff, and `git diff --check` passed; the quality-ratchet output no longer
   lists `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`.
+- The sixth safe vertical slice moved Agibot operator localization,
+  run-enablement, bounded-local-nudge, and human-takeover-stop gate logic from
+  the SDK subprocess adapter into the household operator-gates owner. Focused
+  SDK runner source tests, focused physical Agibot contract tests, touched-file
+  Ruff, and `git diff --check` passed; the quality-ratchet output no longer
+  lists `roboclaws/household/agibot_sdk_runner.py` or
+  `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
 
 Completed slice batch:
 
@@ -118,6 +125,8 @@ Completed slice batch:
   so two contract tests no longer exceed the PLR0915 quality-ratchet threshold.
 - Slice 25: moved reusable OpenAI Agents live timing interpretation out of the
   Molmo cleanup launcher script and into the agent runtime layer.
+- Slice 26: moved Agibot operator safety-gate interpretation out of the SDK
+  subprocess adapter and into the household operator-gates owner.
 
 Next proof:
 

@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 from roboclaws.household import agent_view as agent_view_module
+from roboclaws.household import agibot_operator_gates as gates
 from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.household.agibot_map_build_mcp_server import (
     AGIBOT_MAP_BUILD_TOOLS,
@@ -22,8 +23,6 @@ from roboclaws.household.agibot_map_defaults import (
 from roboclaws.household.agibot_sdk_runner import (
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
-    _human_takeover_stop_required,
-    _operator_localization_gate,
     run_physical_agibot_cleanup_pilot,
 )
 from roboclaws.household.artifact_report import (
@@ -686,28 +685,28 @@ def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -
 
 
 def test_physical_agibot_human_takeover_stop_covers_runtime_navigation_failures() -> None:
-    assert _human_takeover_stop_required(
+    assert gates.human_takeover_stop_required(
         {},
         {"failure_type": "operator_run_enablement_gate_not_confirmed"},
     )
-    assert _human_takeover_stop_required({}, {"failure_type": "timeout"})
-    assert _human_takeover_stop_required({}, {"failure_type": "pnc_failed"})
-    assert _human_takeover_stop_required({}, {"failure_type": "normal_navi_exception"})
-    assert _human_takeover_stop_required({}, {"failure_type": "gdk_localization_not_ready"})
-    assert _human_takeover_stop_required({}, {"failure_type": "map_mismatch"})
-    assert _human_takeover_stop_required({}, {"failure_type": "bounded_local_nudge_failed"})
-    assert not _human_takeover_stop_required(
+    assert gates.human_takeover_stop_required({}, {"failure_type": "timeout"})
+    assert gates.human_takeover_stop_required({}, {"failure_type": "pnc_failed"})
+    assert gates.human_takeover_stop_required({}, {"failure_type": "normal_navi_exception"})
+    assert gates.human_takeover_stop_required({}, {"failure_type": "gdk_localization_not_ready"})
+    assert gates.human_takeover_stop_required({}, {"failure_type": "map_mismatch"})
+    assert gates.human_takeover_stop_required({}, {"failure_type": "bounded_local_nudge_failed"})
+    assert not gates.human_takeover_stop_required(
         {},
         {"failure_type": "real_movement_not_enabled"},
     )
-    assert not _human_takeover_stop_required(
+    assert not gates.human_takeover_stop_required(
         {},
         {"failure_type": "waypoint_not_pnc_verified"},
     )
 
 
 def test_physical_agibot_localization_gate_enforces_optional_thresholds() -> None:
-    confirmed = _operator_localization_gate(
+    confirmed = gates.operator_localization_gate(
         {
             "operator_localization_gate": {
                 "selected_map_confirmed": True,
@@ -720,7 +719,7 @@ def test_physical_agibot_localization_gate_enforces_optional_thresholds() -> Non
             }
         }
     )
-    low_confidence = _operator_localization_gate(
+    low_confidence = gates.operator_localization_gate(
         {
             "operator_localization_gate": {
                 "selected_map_confirmed": True,
@@ -733,7 +732,7 @@ def test_physical_agibot_localization_gate_enforces_optional_thresholds() -> Non
             }
         }
     )
-    wrong_state = _operator_localization_gate(
+    wrong_state = gates.operator_localization_gate(
         {
             "operator_localization_gate": {
                 "selected_map_confirmed": True,

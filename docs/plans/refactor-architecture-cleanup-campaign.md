@@ -98,6 +98,7 @@ Surface metrics:
 | Simplify OpenAI Agents runner status loop | 0 | 1 | 0 | 0 | preserved |
 | Shrink Agibot contract-test PLR0915 rows | 0 | 1 | 0 | 0 | preserved |
 | Move live timing interpretation to agent owner | 0 | 1 | 1 | 1 | preserved |
+| Move Agibot operator gates to household owner | 0 | 1 | 1 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -121,10 +122,10 @@ public module CLI.
 
 Next clear candidates:
 
-- Run fresh post-HEAD discovery after committing the Agibot contract-test
-  cleanup and subsequent live-timing owner move. Remaining quality-ratchet
-  output is broader oversized-module baseline drift and needs owner-local
-  shrink candidates rather than a blind baseline refresh.
+- Run fresh post-HEAD discovery after committing the Agibot operator-gates
+  owner move. Remaining quality-ratchet output is broader oversized-module
+  baseline drift and needs owner-local shrink candidates rather than a blind
+  baseline refresh.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -649,6 +650,28 @@ exhausted, or the stop/park criteria apply.
   Note: the quality ratchet still fails on broader oversized-module baseline
   drift, but no longer lists
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`.
+
+- 2026-06-23: Moved Agibot operator localization, run-enablement,
+  bounded-local-nudge, and human-takeover-stop gate interpretation out of
+  `roboclaws.household.agibot_sdk_runner` and into the household-layer
+  `roboclaws.household.agibot_operator_gates` owner. This was the smallest
+  safe slice for the medium-risk Agibot SDK runner oversized-module candidate:
+  public physical-pilot payloads and SDK runner behavior are preserved, while
+  contract tests now import the gate interface from the canonical owner instead
+  of SDK-runner private helpers.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_agibot_sdk_runner_sources.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_real_movement_requires_operator_gates tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_human_takeover_stop_covers_runtime_navigation_failures tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_localization_gate_enforces_optional_thresholds -q
+  .venv/bin/ruff check roboclaws/household/agibot_sdk_runner.py roboclaws/household/agibot_operator_gates.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/unit/molmo_cleanup/test_agibot_sdk_runner_sources.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no longer lists `roboclaws/household/agibot_sdk_runner.py` or
+  `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
 
 ## Parked Candidates
 
