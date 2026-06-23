@@ -8,17 +8,16 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff after the empty `roboclaws.openclaw` package
+- Fresh discovery handoff after the stale `docs/ai/planning/issues-roadmap.md`
   deletion slice.
 
 Last proven evidence:
 
-- Deleted the empty `roboclaws.openclaw` source package and removed the stale
-  pre-commit hook branch for `roboclaws/openclaw/*`.
-- Focused hook and OpenClaw script tests, import absence proof, ruff on touched
-  tests, stale-reference search, and `git diff --check` passed.
-- The only remaining live-path `roboclaws/openclaw` text is the intentional
-  regression guard in `tests/contract/dev_tools/test_verify_just_recipes.py`.
+- Deleted unreferenced `docs/ai/planning/issues-roadmap.md`, which described an
+  old AI2-THOR/OpenClaw issue roadmap as current triage guidance.
+- Stale-reference search found no current references to the deleted doc or its
+  retired module paths, and `docs/agents/issue-tracker.md` remains the current
+  issue-tracker source.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -37,6 +36,8 @@ Completed slice batch:
   defaulting and overrides.
 - Slice 7: removed the empty `roboclaws.openclaw` source package and stopped
   the pre-commit hook from routing staged changes in that retired package.
+- Slice 8: removed an unreferenced AI planning roadmap that conflicted with
+  the current GitHub issue tracker guidance.
 
 Next proof:
 

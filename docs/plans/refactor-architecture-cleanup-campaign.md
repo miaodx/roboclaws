@@ -80,6 +80,7 @@ Surface metrics:
 | Delete root script symlink shims | 9 | 9 | 0 | 0 | preserved |
 | Delete `SIM_SERVER_URL` bootstrap fallback | 1 | 1 | 0 | 1 | preserved |
 | Delete empty `roboclaws.openclaw` package | 1 | 1 | 1 | 1 | preserved |
+| Delete stale AI issues roadmap | 1 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -227,6 +228,20 @@ Fresh discovery required.
   before the import proof; they were untracked cache from retired modules. The
   stale-reference search now returns only the intentional regression guard in
   `tests/contract/dev_tools/test_verify_just_recipes.py`.
+
+- 2026-06-23: Deleted `docs/ai/planning/issues-roadmap.md`, an unreferenced
+  current-looking AI2-THOR/OpenClaw issue roadmap that conflicted with the
+  current issue-tracker source of truth in `docs/agents/issue-tracker.md` and
+  GitHub Issues. Historical planning and retrospective evidence was left
+  untouched.
+
+  Proof:
+
+  ```bash
+  rg -n "docs/ai/planning/issues-roadmap.md|docs/ai/planning|issues-roadmap.md|GitHub Issues Roadmap|Issue 1: AI2-THOR|roboclaws/openclaw/skill.py|roboclaws/openclaw/bridge.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai .github just scripts tests pyproject.toml
+  test ! -e docs/ai/planning/issues-roadmap.md && test -f docs/agents/issue-tracker.md && test -f docs/agents/triage-labels.md
+  git diff --check
+  ```
 
 ## Parked Candidates
 
