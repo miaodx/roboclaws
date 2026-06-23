@@ -2,14 +2,14 @@
 
 Source gate: `docs/plans/refactor-architecture-cleanup-campaign.md`
 
-Latest user intent: autonomous architecture cleanup campaign with high
-autonomy; continue through verified commit slices until a stop gate or two
-post-HEAD discovery handoffs find no clear safe P1/P2 slice.
+Latest user intent: finish the current verified slice group, then stop the
+architecture cleanup campaign. No fresh discovery pass should run until the
+user explicitly resumes the campaign.
 
 Current slice:
 
-- Visual-grounding runtime-parameter owner merge complete. Continue with fresh post-HEAD
-  discovery after committing this slice; remaining quality-ratchet output is
+- Agibot contract-rehearsal runtime owner move complete. Campaign stopped by
+  user request after committing this slice; remaining quality-ratchet output is
   broader oversized-module baseline drift in other owners.
 
 Last proven evidence:
@@ -78,6 +78,16 @@ Last proven evidence:
   `git diff --check` passed; the quality-ratchet output no longer lists
   `scripts/visual_grounding/adapters.py` or
   `scripts/visual_grounding/run_visual_grounding_benchmark.py`.
+- The final slice for this campaign group moved Agibot simulated runtime
+  envelope builders, stage JSON/HTML artifact writing, and relative-path
+  formatting into `roboclaws.household.agibot_contract_rehearsal_runtime`.
+  `agibot_contract_rehearsal.py` now delegates those runtime shapes, and
+  `agibot_contract_rehearsal_stages.py` calls the canonical writer instead of
+  carrying a second local copy. The focused Agibot rehearsal tests passed;
+  touched-file Ruff and `git diff --check` passed. The quality-ratchet output
+  no longer lists `roboclaws/household/agibot_contract_rehearsal.py` or
+  `roboclaws/household/agibot_contract_rehearsal_stages.py`; it still fails on
+  unrelated oversized-module drift listed under parked work.
 
 Completed slice batch:
 
@@ -138,20 +148,23 @@ Completed slice batch:
   subprocess adapter and into the household operator-gates owner.
 - Slice 27: merged visual-grounding runtime-parameter sanitization into the
   visual-grounding contract owner and removed two duplicate private helpers.
+- Slice 28: moved Agibot simulated runtime envelopes, stage artifact writing,
+  and relative-path formatting into the Agibot contract-rehearsal runtime
+  owner, and updated contract tests to assert active GDK navigation claims
+  instead of scanning capability-profile metadata strings.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh <focused next-slice tests> -q
-.venv/bin/ruff check <touched files>
-.venv/bin/python scripts/dev/check_python_quality_ratchet.py
-git diff --check
+# Campaign stopped by user request after Slice 28.
+# On resume, run fresh post-HEAD discovery before selecting the next slice.
 ```
 
 Stop condition:
 
 - Stop for public contract migration, unavailable proof, external/hardware
   evidence, or two consecutive fresh post-HEAD no-clear-candidate handoffs.
+- Current stop reason: user requested stopping after the current slice group.
 
 No-touch scope:
 
@@ -186,3 +199,7 @@ Parked work:
   drift across Agibot, Molmo, visual-grounding, and test files. Treat as
   architecture pressure and try safe owner-local shrink slices before
   considering a baseline refresh.
+- Latest quality-ratchet residual after Slice 28: failures remain in
+  `agibot_map_build_mcp_server.py`, `realworld_contract.py`, several
+  `scripts/molmo_cleanup/*` files, and large contract/unit tests. These are
+  outside the final Agibot runtime-owner slice.

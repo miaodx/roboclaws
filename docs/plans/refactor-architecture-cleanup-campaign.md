@@ -1,6 +1,6 @@
 # Refactor: Architecture Cleanup Campaign
 
-**Status:** SATURATED
+**Status:** STOPPED_BY_USER
 **Created:** 2026-06-23
 **Source:** `$intuitive-reduce-entropy` saturation scan,
 `$improve-codebase-architecture` report-only review, `$intuitive-refactor`
@@ -100,6 +100,7 @@ Surface metrics:
 | Move live timing interpretation to agent owner | 0 | 1 | 1 | 1 | preserved |
 | Move Agibot operator gates to household owner | 0 | 1 | 1 | 1 | preserved |
 | Merge visual-grounding runtime parameter sanitizer | 0 | 2 | 2 | 1 | preserved |
+| Move Agibot contract-rehearsal runtime owner | 0 | 1 | 2 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -123,10 +124,11 @@ public module CLI.
 
 Next clear candidates:
 
-- Run fresh post-HEAD discovery after committing the visual-grounding
-  runtime-parameter owner merge. Remaining quality-ratchet output is broader
-  oversized-module baseline drift and needs owner-local shrink candidates
-  rather than a blind baseline refresh.
+- Stopped by user request after the Agibot contract-rehearsal runtime-owner
+  slice. Do not select another candidate until the user explicitly resumes.
+  On resume, run a fresh post-HEAD discovery handoff first. Remaining
+  quality-ratchet output is broader oversized-module baseline drift and needs
+  owner-local shrink candidates rather than a blind baseline refresh.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -158,6 +160,9 @@ Checked and parked:
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
 exhausted, or the stop/park criteria apply.
+
+The campaign is stopped at the user's request after the final verified Slice
+28. Resume only on explicit user instruction.
 
 ## Completed Slices
 
@@ -695,6 +700,30 @@ exhausted, or the stop/park criteria apply.
   Note: the quality ratchet still fails on broader oversized-module baseline
   drift, but no longer lists `scripts/visual_grounding/adapters.py` or
   `scripts/visual_grounding/run_visual_grounding_benchmark.py`.
+
+- 2026-06-23: Moved Agibot simulated runtime envelopes, stage result JSON/HTML
+  writing, and relative-path formatting into
+  `roboclaws.household.agibot_contract_rehearsal_runtime`. This was the
+  smallest safe slice for the medium-risk Agibot contract-rehearsal oversized
+  module candidate: `agibot_contract_rehearsal.py` no longer owns stage-runtime
+  artifact rendering, `agibot_contract_rehearsal_stages.py` calls the canonical
+  writer, and contract tests now assert that active simulated run evidence does
+  not claim `agibot_gdk_normal_navi` while allowing capability-profile metadata
+  to describe possible physical provenance.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_cli_runs_without_gdk tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps -q
+  .venv/bin/ruff check roboclaws/household/agibot_contract_rehearsal.py roboclaws/household/agibot_contract_rehearsal_stages.py roboclaws/household/agibot_contract_rehearsal_runtime.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on unrelated broader oversized-module
+  drift, but no longer lists
+  `roboclaws/household/agibot_contract_rehearsal.py` or
+  `roboclaws/household/agibot_contract_rehearsal_stages.py`.
 
 ## Parked Candidates
 
