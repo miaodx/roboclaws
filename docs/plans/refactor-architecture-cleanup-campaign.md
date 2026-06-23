@@ -97,6 +97,7 @@ Surface metrics:
 | Deepen cleanup MCP server initialization | 3 | 1 | 0 | 0 | preserved |
 | Simplify OpenAI Agents runner status loop | 0 | 1 | 0 | 0 | preserved |
 | Shrink Agibot contract-test PLR0915 rows | 0 | 1 | 0 | 0 | preserved |
+| Move live timing interpretation to agent owner | 0 | 1 | 1 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -121,9 +122,9 @@ public module CLI.
 Next clear candidates:
 
 - Run fresh post-HEAD discovery after committing the Agibot contract-test
-  cleanup. Remaining quality-ratchet output is broader oversized-module
-  baseline drift and needs owner-local shrink candidates rather than a blind
-  baseline refresh.
+  cleanup and subsequent live-timing owner move. Remaining quality-ratchet
+  output is broader oversized-module baseline drift and needs owner-local
+  shrink candidates rather than a blind baseline refresh.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -627,6 +628,27 @@ exhausted, or the stop/park criteria apply.
 
   Note: the quality ratchet still fails on broader oversized-module baseline
   drift, but no longer lists the two overlong Agibot contract tests.
+
+- 2026-06-23: Moved reusable OpenAI Agents live timing interpretation out of
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` and into the
+  agent-layer `roboclaws.agents.live_timing` module. This was the smallest
+  safe slice for the medium-risk oversized-launcher candidate: public
+  `live_timing.json`, model metrics writing, and launcher behavior are
+  preserved, while tests now import the timing/timeline interface from the
+  canonical live-agent owner.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_openai_agents_control_plane_metrics_parse_server_log tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_timeline_partitions_runner_and_attribution tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_compact_metrics_surface_structured_detail_errors tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_compact_metrics_tolerates_plaintext_detail tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_compact_metrics_extracts_valid_budget_detail tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_fails_aloud_on_malformed_mcp_timing_source -q
+  .venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/live_timing.py tests/unit/agents/test_live_runtime.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no longer lists
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`.
 
 ## Parked Candidates
 

@@ -29,6 +29,8 @@ from roboclaws.agents.live_runtime import (
     live_agent_result_from_artifacts,
 )
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.agents.live_timing import live_timing_timeline as _live_timing_timeline
+from roboclaws.agents.live_timing import mcp_control_plane_metrics as _mcp_control_plane_metrics
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from scripts.molmo_cleanup.openai_agents_perf_profile import (
     resolve_agent_sdk_perf_profile as _resolve_agent_sdk_perf_profile,
@@ -41,9 +43,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _context_growth_metrics,
     _context_metrics,
     _kickoff_prompt_source,
-    _live_timing_timeline,
     _load_agent_sdk_skill_context,
-    _mcp_control_plane_metrics,
     _model_input_filter_metrics,
     _model_racing_observability_metrics,
     _model_service_fallback_metrics,

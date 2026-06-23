@@ -8,9 +8,9 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Agibot contract-test PLR0915 cleanup complete. Run fresh post-HEAD discovery
-  after committing this slice; remaining quality-ratchet output is broader
-  oversized-module baseline drift.
+- Live OpenAI Agents timing owner move complete. Continue with fresh post-HEAD
+  discovery after committing this slice; remaining quality-ratchet output is
+  broader oversized-module baseline drift in other owners.
 
 Last proven evidence:
 
@@ -56,6 +56,12 @@ Last proven evidence:
   focused contract tests, touched-file Ruff, and `git diff --check` passed;
   the quality-ratchet output no longer lists the two overlong Agibot contract
   tests and now reports only broader oversized-module baseline drift.
+- The fifth safe vertical slice moved live-agent timing breakdown, MCP trace
+  timing, control-plane metrics, timeline construction, and compact metric
+  grouping from the Molmo cleanup launcher script to the agent-layer
+  `roboclaws.agents.live_timing` owner. Focused timing tests, touched-file
+  Ruff, and `git diff --check` passed; the quality-ratchet output no longer
+  lists `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`.
 
 Completed slice batch:
 
@@ -110,6 +116,8 @@ Completed slice batch:
   changing the public live-runner script.
 - Slice 24: extracted test-local Agibot artifact-read and run-identity helpers
   so two contract tests no longer exceed the PLR0915 quality-ratchet threshold.
+- Slice 25: moved reusable OpenAI Agents live timing interpretation out of the
+  Molmo cleanup launcher script and into the agent runtime layer.
 
 Next proof:
 
