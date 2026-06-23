@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 
 from roboclaws.launch.backends import (
@@ -13,6 +15,10 @@ from roboclaws.launch.environment_setup_metadata import ENVIRONMENT_SETUP_METADA
 from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS
 from roboclaws.launch.runners import export_env_from_overrides
+
+
+def test_launch_package_does_not_keep_unused_context_holder() -> None:
+    assert importlib.util.find_spec("roboclaws.launch.context") is None
 
 
 def test_launch_backend_catalog_exposes_private_implementation_choices() -> None:

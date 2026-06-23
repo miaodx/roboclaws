@@ -8,8 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Replace stale OpenClaw documentation paths, then run a fresh discovery
-  handoff.
+- Delete unused launch context holder, then run a fresh discovery handoff.
 
 Last proven evidence:
 
@@ -33,6 +32,9 @@ Last proven evidence:
   pointing readers at removed `docs/openclw/` and root `docs/model-matrix.md`
   paths; those now point to current `docs/human/openclaw/`,
   `docs/ai/openclaw/`, and `docs/human/model-matrix.md` owners.
+- Follow-up discovery found `roboclaws.launch.context.LaunchContext`, an
+  unexported launch context holder with no tracked current callers after launch
+  routing standardized on `LaunchPlan` and `resolve_surface_launch(...)`.
 
 Completed slice batch:
 
@@ -65,14 +67,20 @@ Completed slice batch:
   the current maintainer dispatcher route and added a contract guard.
 - Slice 14: replaced stale OpenClaw doc paths in bootstrap comments,
   plugin-allowlist guidance, and OpenClaw bootstrap contract-test guidance.
+- Slice 15: deleted the unused private `roboclaws.launch.context` module and
+  added a focused guard.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/openclaw/test_openclaw_bootstrap.py::test_nvidia_curated_to_single_multi_image_model tests/contract/openclaw/test_openclaw_bootstrap.py::test_only_curated_providers_supported tests/contract/openclaw/test_openclaw_bootstrap.py::test_advertised_context_windows_clear_flush_headroom tests/contract/openclaw/test_openclaw_bootstrap.py::test_mcp_seeds_per_agent_tools_profile_minimal tests/contract/openclaw/test_openclaw_bootstrap.py::test_bootstrap_reads_canonical_plugin_allowlist
-bash -n scripts/openclaw/openclaw-bootstrap.sh
-.venv/bin/ruff check scripts/openclaw/openclaw_plugin_allowlist.py tests/contract/openclaw/test_openclaw_bootstrap.py
-rg -n "docs/openclw|openclw|docs/model-matrix\.md" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py::test_launch_package_does_not_keep_unused_context_holder tests/unit/launch/test_environment_setup_catalog.py::test_launch_backend_catalog_exposes_private_implementation_choices tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth
+test ! -e roboclaws/launch/context.py && python - <<'PY'
+import importlib.util
+spec = importlib.util.find_spec('roboclaws.launch.context')
+assert spec is None, spec
+PY
+rg -n "LaunchContext|roboclaws\.launch\.context|launch/context\.py|launch\.context" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check tests/unit/launch/test_environment_setup_catalog.py roboclaws/launch
 git diff --check
 ```
 

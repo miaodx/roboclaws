@@ -87,6 +87,7 @@ Surface metrics:
 | Delete provider timing proxy script wrapper | 1 | 1 | 0 | 1 | preserved |
 | Replace stale OpenClaw image-update command | 1 | 1 | 0 | 2 | preserved |
 | Replace stale OpenClaw doc paths | 0 | 1 | 0 | 3 | preserved |
+| Delete unused launch context holder | 1 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -102,7 +103,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after stale OpenClaw doc-path replacement.
+Fresh discovery required after unused launch context holder deletion.
 
 ## Completed Slices
 
@@ -371,6 +372,30 @@ Fresh discovery required after stale OpenClaw doc-path replacement.
 
   Note: the stale-path search exits with no matches, which is the expected
   result.
+
+- 2026-06-23: Deleted the unused private
+  `roboclaws.launch.context` module. Launch callers use the canonical
+  `LaunchPlan` and `resolve_surface_launch(...)` interfaces; no tracked code,
+  tests, or current docs referenced `LaunchContext`. Added a focused launch
+  regression guard so the removed context-holder module does not return as
+  launch-package surface area.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py::test_launch_package_does_not_keep_unused_context_holder tests/unit/launch/test_environment_setup_catalog.py::test_launch_backend_catalog_exposes_private_implementation_choices tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth
+  test ! -e roboclaws/launch/context.py && python - <<'PY'
+  import importlib.util
+  spec = importlib.util.find_spec('roboclaws.launch.context')
+  assert spec is None, spec
+  PY
+  rg -n "LaunchContext|roboclaws\.launch\.context|launch/context\.py|launch\.context" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check tests/unit/launch/test_environment_setup_catalog.py roboclaws/launch
+  git diff --check
+  ```
+
+  Note: the stale-reference search now returns only the intentional regression
+  guard in `tests/unit/launch/test_environment_setup_catalog.py`.
 
 ## Parked Candidates
 
