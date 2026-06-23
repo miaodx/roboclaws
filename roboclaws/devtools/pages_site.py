@@ -116,7 +116,7 @@ def build_prune_plan(site_dir: Path) -> PrunePlan:
             resolved = _resolve_local_reference(site_dir, html_file, local_path)
             if resolved is None:
                 continue
-            if not _is_relative_to(resolved, site_dir):
+            if not resolved.is_relative_to(site_dir):
                 missing.append(
                     MissingReference(
                         source=html_file,
@@ -250,14 +250,6 @@ def _remove_empty_dirs(root: Path) -> None:
             path.rmdir()
         except OSError:
             pass
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
 
 
 def _print_summary(plan: PrunePlan, *, json_output: bool) -> None:

@@ -8,17 +8,16 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff after the operator-console display run id owner move.
+- Fresh discovery handoff after private path-containment helper deletion.
 
 Last proven evidence:
 
-- Moved the duplicated operator-console display run id rule into the existing
-  `roboclaws.operator_console.state.display_run_id` owner.
-- History and state still produce the same nested wrapper-attempt display ids,
-  but history no longer carries a private duplicate helper.
-- Focused state/history tests passed, ruff passed on touched modules, the
-  stale-reference search found no `_display_run_id` duplicate helper, and
-  `git diff --check` passed.
+- Deleted four duplicate private `_is_relative_to` helpers and used Python
+  3.12's native `Path.is_relative_to(...)` in the current operator-console and
+  Pages-prune call sites.
+- Focused artifact-serving, scene-preview, and Pages-prune tests passed; ruff
+  passed on touched modules; stale-helper search found no remaining
+  `_is_relative_to` helpers; and `git diff --check` passed.
 
 Completed slice batch:
 
@@ -40,6 +39,8 @@ Completed slice batch:
   the current GitHub issue tracker guidance.
 - Slice 9: moved operator-console wrapper/display-run id normalization to one
   state owner and updated history to call it.
+- Slice 10: deleted private path-containment helpers in favor of the native
+  `Path.is_relative_to(...)` interface.
 
 Next proof:
 

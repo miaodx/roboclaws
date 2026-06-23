@@ -82,6 +82,7 @@ Surface metrics:
 | Delete empty `roboclaws.openclaw` package | 1 | 1 | 1 | 1 | preserved |
 | Delete stale AI issues roadmap | 1 | 1 | 0 | 0 | preserved |
 | Move operator-console display run id to state owner | 0 | 1 | 1 | 0 | preserved |
+| Delete private path-containment helpers | 4 | 4 | 4 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -262,6 +263,25 @@ Fresh discovery required.
   Note: the first proof attempt used stale specific test selectors and failed
   during collection before executing tests; the corrected focused command above
   passed.
+
+- 2026-06-23: Deleted four private `_is_relative_to` helpers in
+  `roboclaws.operator_console.paths`, `roboclaws.operator_console.state`,
+  `roboclaws.operator_console.server`, and `roboclaws.devtools.pages_site`.
+  The repo's Python floor is 3.12, so these modules now use the native
+  `Path.is_relative_to(...)` interface directly for operator artifact serving,
+  preview serving, and Pages prune containment checks.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_operator_console.py::test_operator_console_serves_only_operator_output_artifacts tests/unit/operator_console/test_operator_console.py::test_operator_console_serves_scene_preview_assets tests/contract/reports/test_pages_site_prune.py::test_prune_pages_site_does_not_allow_references_outside_site -q
+  .venv/bin/ruff check roboclaws/operator_console/paths.py roboclaws/operator_console/state.py roboclaws/operator_console/server.py roboclaws/devtools/pages_site.py
+  rg -n "def _is_relative_to|_is_relative_to\(" roboclaws tests -g '*.py'
+  git diff --check
+  ```
+
+  Note: the stale-helper search exits with no matches, which is the expected
+  result.
 
 ## Parked Candidates
 

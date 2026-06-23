@@ -709,7 +709,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
 
 
 def _artifact_href(root: Path, path: Path) -> str:
-    if not _is_relative_to(path, root):
+    if not path.is_relative_to(root):
         return ""
     return f"/artifacts/{path.relative_to(root)}?v={path.stat().st_mtime_ns}"
 
@@ -971,11 +971,3 @@ def _safe_mtime(path: Path) -> float:
         return path.stat().st_mtime
     except OSError:
         return 0.0
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
