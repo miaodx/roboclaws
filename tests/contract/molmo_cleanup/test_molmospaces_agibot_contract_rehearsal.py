@@ -113,9 +113,10 @@ def _assert_no_active_gdk_navigation_claim(run_result: dict) -> None:
         "agibot_gdk_normal_navi"
     )
     assert run_result["primitive_provenance"] != "agibot_gdk_normal_navi"
-    assert run_result["molmospaces_agibot_contract_rehearsal"][
-        "navigation_primitive_provenance"
-    ] != "agibot_gdk_normal_navi"
+    assert (
+        run_result["molmospaces_agibot_contract_rehearsal"]["navigation_primitive_provenance"]
+        != "agibot_gdk_normal_navi"
+    )
     assert not any(
         item.get("tool_response", {}).get("primitive_provenance") == "agibot_gdk_normal_navi"
         for item in run_result["agibot_sdk_runner"]["subphase_reports"]
@@ -130,9 +131,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     result = run_molmospaces_agibot_contract_rehearsal(run_dir=tmp_path / "run")
 
     run_dir = tmp_path / "run"
-    run_result, runtime_export, report_text, serialized = _read_contract_rehearsal_outputs(
-        run_dir
-    )
+    run_result, runtime_export, report_text, serialized = _read_contract_rehearsal_outputs(run_dir)
 
     _assert_fixture_contract_rehearsal_identity(result, run_result)
     assert runtime_export["simulated"] is True

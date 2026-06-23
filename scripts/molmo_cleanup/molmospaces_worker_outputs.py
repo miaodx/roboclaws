@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -10,6 +11,7 @@ from PIL import Image
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
+    canonical_scene_camera_control_request,
     normalize_camera_control_request,
 )
 from roboclaws.household.color_management import apply_camera_color_profile
@@ -206,7 +208,24 @@ def write_robot_views(
     verify_image = Image.fromarray(verify)
     hooks.annotate_focus_image(verify_image, focus)
     verify_image.save(verify_path)
-    hooks.render_robot_map(state, focus=focus).save(topdown_path)
+    topdown_request = _robot_views_topdown_camera_request(state, width=width, height=height)
+    topdown_result = hooks.render_camera_views_with_model_data(
+        model,
+        data,
+        state=state,
+        output_dir=output_dir / f"{safe_label}.topdown_scene",
+        camera_request=topdown_request,
+        width=width,
+        height=height,
+    )
+    topdown_source = Path(str(topdown_result.get("images", {}).get("topdown_scene") or ""))
+    if not topdown_source.is_file():
+        return hooks.error(
+            "robot_views",
+            "topdown_scene_render_missing",
+            topdown_result=topdown_result,
+        )
+    Image.open(topdown_source).convert("RGB").save(topdown_path)
 
     return hooks.ok(
         "robot_views",
@@ -218,6 +237,7 @@ def write_robot_views(
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
         camera_diagnostics=camera_diagnostics,
+        topdown_scene_render=topdown_result,
         camera_adjustment=camera_adjustment,
         color_profile=color_profile,
         color_management=color_management,
@@ -233,7 +253,7 @@ def write_robot_views(
             "fpv": list(fpv.shape),
             "chase": list(chase.shape),
             "verify": list(verify.shape),
-            "topdown": [420, 620, 3],
+            "topdown": list(Image.open(topdown_path).size[::-1]) + [3],
         },
         render_resolution={"width": width, "height": height},
     )
@@ -301,6 +321,140 @@ def write_camera_views(
         width=width,
         height=height,
     )
+
+
+def _robot_views_topdown_camera_request(
+    state: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    alignment = _scene_alignment(state, width=width, height=height)
+    center = alignment["center"]
+    vertical_fov_deg = 45.0
+    camera_distance = (
+        float(alignment["span_y_m"]) / (2.0 * math.tan(math.radians(vertical_fov_deg / 2.0))) * 1.04
+    )
+    camera_height = float(center[2]) + max(1.0, camera_distance)
+    return canonical_scene_camera_control_request(
+        [
+            {
+                "view_id": "topdown_scene",
+                "label": "Top-down Scene View",
+                "camera_basis": "whole_scene_true_topdown_aligned_to_scene_bounds",
+                "eye": [center[0], center[1], camera_height],
+                "target": center,
+                "azimuth": 90.0,
+                "scene_alignment": alignment,
+                "calibration_status": "mujoco_scene_rendered",
+                "robot_view_role": "topdown",
+            }
+        ],
+        lens={"vertical_fov_deg": vertical_fov_deg, "focal_length_mm": 24.0},
+        width=width,
+        height=height,
+    )
+
+
+def _scene_alignment(
+    state: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    points = _scene_points(state)
+    if not points:
+        min_x = min_y = -0.5
+        max_x = max_y = 0.5
+    else:
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+    pad = 0.35
+    min_x -= pad
+    max_x += pad
+    min_y -= pad
+    max_y += pad
+    span_x = max(max_x - min_x, 1.0)
+    span_y = max(max_y - min_y, 1.0)
+    target_aspect = max(float(width) / max(float(height), 1.0), 0.001)
+    current_aspect = span_x / span_y
+    if current_aspect < target_aspect:
+        expanded_span_x = span_y * target_aspect
+        extra = (expanded_span_x - span_x) / 2.0
+        min_x -= extra
+        max_x += extra
+        span_x = expanded_span_x
+    elif current_aspect > target_aspect:
+        expanded_span_y = span_x / target_aspect
+        extra = (expanded_span_y - span_y) / 2.0
+        min_y -= extra
+        max_y += extra
+        span_y = expanded_span_y
+    center = [(min_x + max_x) / 2.0, (min_y + max_y) / 2.0, 0.4]
+    return {
+        "schema": "molmospaces_robot_view_scene_alignment_v1",
+        "bounds": {
+            "min_x": round(min_x, 6),
+            "max_x": round(max_x, 6),
+            "min_y": round(min_y, 6),
+            "max_y": round(max_y, 6),
+        },
+        "center": [round(float(value), 6) for value in center],
+        "span_x_m": round(float(span_x), 6),
+        "span_y_m": round(float(span_y), 6),
+        "screen_coordinate_convention": "screen_x_world_positive_x_screen_y_world_negative_y",
+        "topdown_azimuth_deg": 90.0,
+    }
+
+
+def _scene_points(state: dict[str, Any]) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for outline in state.get("room_outlines") or []:
+        if not isinstance(outline, dict):
+            continue
+        center = outline.get("center")
+        half_extents = outline.get("half_extents")
+        if _is_xy(center) and _is_xy(half_extents):
+            points.append(
+                (
+                    float(center[0]) - float(half_extents[0]),
+                    float(center[1]) - float(half_extents[1]),
+                )
+            )
+            points.append(
+                (
+                    float(center[0]) + float(half_extents[0]),
+                    float(center[1]) + float(half_extents[1]),
+                )
+            )
+    for collection_key in ("objects", "receptacles"):
+        collection = state.get(collection_key)
+        if not isinstance(collection, dict):
+            continue
+        for item in collection.values():
+            if isinstance(item, dict) and _is_xy(item.get("position")):
+                position = item["position"]
+                points.append((float(position[0]), float(position[1])))
+    for pose in state.get("robot_trajectory") or []:
+        if isinstance(pose, dict) and pose.get("x") is not None and pose.get("y") is not None:
+            points.append((float(pose["x"]), float(pose["y"])))
+    pose = state.get("robot_pose")
+    if isinstance(pose, dict) and pose.get("x") is not None and pose.get("y") is not None:
+        points.append((float(pose["x"]), float(pose["y"])))
+    return points
+
+
+def _is_xy(value: Any) -> bool:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return False
+    try:
+        float(value[0])
+        float(value[1])
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def render_camera_views_with_model_data(

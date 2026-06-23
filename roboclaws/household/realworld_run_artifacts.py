@@ -52,6 +52,7 @@ from roboclaws.launch.goals import (
     completion_claim_from_done_reason,
     write_goal_contract,
 )
+from roboclaws.maps.preview import render_runtime_metric_map_preview
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ class _RunArtifactPaths:
     trace: Path
     agent_view: Path
     runtime_metric_map: Path
+    runtime_metric_map_preview: Path
     private_evaluation: Path
     advisory_evaluation: Path
     goal_contract: Path
@@ -150,6 +152,7 @@ def _artifact_paths(output_dir: Path) -> _RunArtifactPaths:
         trace=output_dir / "trace.jsonl",
         agent_view=output_dir / "agent_view.json",
         runtime_metric_map=output_dir / "runtime_metric_map.json",
+        runtime_metric_map_preview=output_dir / "runtime_metric_map_preview.png",
         private_evaluation=output_dir / "private_evaluation.json",
         advisory_evaluation=output_dir / "advisory_evaluation.json",
         goal_contract=output_dir / "goal_contract.json",
@@ -210,6 +213,10 @@ def _write_public_artifacts(
 ) -> None:
     _write_json(artifacts.agent_view, payloads.agent_view)
     _write_json(artifacts.runtime_metric_map, payloads.runtime_metric_map)
+    write_runtime_metric_map_preview_artifact(
+        output_dir=inputs.output_dir,
+        runtime_metric_map=payloads.runtime_metric_map,
+    )
     _write_json(artifacts.private_evaluation, payloads.private_evaluation)
     _write_json(artifacts.advisory_evaluation, payloads.advisory_evaluation)
     _write_json(artifacts.agent_scratchpad, inputs.agent_scratchpad)
@@ -457,6 +464,7 @@ def _base_artifacts_payload(
     payload = {
         "agent_view": str(artifacts.agent_view),
         "runtime_metric_map": str(artifacts.runtime_metric_map),
+        "runtime_metric_map_preview": str(artifacts.runtime_metric_map_preview),
         "private_evaluation": str(artifacts.private_evaluation),
         "advisory_evaluation": str(artifacts.advisory_evaluation),
         "agent_scratchpad": str(artifacts.agent_scratchpad),
@@ -510,3 +518,16 @@ def _tool_event_counts(events: list[dict[str, Any]]) -> dict[str, int]:
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def write_runtime_metric_map_preview_artifact(
+    *,
+    output_dir: Path,
+    runtime_metric_map: dict[str, Any],
+) -> Path:
+    path = Path(output_dir) / "runtime_metric_map_preview.png"
+    render_runtime_metric_map_preview(
+        runtime_metric_map=runtime_metric_map,
+        output_path=path,
+    )
+    return path

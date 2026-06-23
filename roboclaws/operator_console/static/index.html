@@ -228,7 +228,8 @@
         <nav class="view-modes" aria-label="Workspace view modes">
           <button class="view-mode active" data-view="overview">Overview</button>
           <button class="view-mode" data-view="fpv">FPV</button>
-          <button class="view-mode" data-view="map">Base Navigation Map</button>
+          <button class="view-mode" data-view="map">Base Map</button>
+          <button class="view-mode" data-view="runtime_map">Runtime Map</button>
           <button class="view-mode" data-view="topdown">Top-down</button>
           <button class="view-mode" data-view="grounding">Grounding</button>
           <button class="view-mode" data-view="chase">Chase</button>
@@ -244,11 +245,15 @@
             <div class="image-frame ratio-4-3" id="grounding-frame">No grounding result yet.</div>
           </article>
           <article class="image-panel" data-panel="map">
-            <div class="panel-header"><span>Base Navigation Map</span><button data-copy="map">Copy Path</button></div>
+            <div class="panel-header"><span>Base Navigation Map preview</span><button data-copy="map">Copy Path</button></div>
             <div class="image-frame" id="map-frame">Base navigation map preview has not been written yet.</div>
           </article>
+          <article class="image-panel" data-panel="runtime_map">
+            <div class="panel-header"><span>Runtime Metric Map preview</span><button data-copy="runtime_map">Copy Path</button></div>
+            <div class="image-frame" id="runtime_map-frame">Runtime metric map preview has not been written yet.</div>
+          </article>
           <article class="image-panel" data-panel="topdown">
-            <div class="panel-header"><span>Top-down</span><button data-copy="topdown">Copy Path</button></div>
+            <div class="panel-header"><span>Top-down Scene View</span><button data-copy="topdown">Copy Path</button></div>
             <div class="image-frame" id="topdown-frame">Top-down scene view has not been written yet.</div>
           </article>
           <article class="image-panel" data-panel="chase">

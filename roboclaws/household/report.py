@@ -44,6 +44,7 @@ from roboclaws.household.report_sections_grasp_diagnostics import (
 from roboclaws.household.report_sections_isaac import isaac_runtime_section
 from roboclaws.household.report_sections_map import (
     map_evidence_refresh_summary_section,
+    runtime_metric_map_preview_section,
 )
 from roboclaws.household.report_sections_nav2_map import nav2_map_bundle_section
 from roboclaws.household.report_sections_probe import (
@@ -212,6 +213,7 @@ def _cleanup_report_sections(
                 [
                     _confidence_layer_note(run_result),
                     map_evidence_refresh_summary_section(run_result),
+                    runtime_metric_map_preview_section(run_dir, run_result),
                     _before_after_section(
                         before_snapshot=before_snapshot,
                         after_snapshot=after_snapshot,

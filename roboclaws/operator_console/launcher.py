@@ -252,9 +252,7 @@ def start_console_run(
         if route.supports_operator_steer:
             overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
         if route.supports_paused_handoff_resume:
-            overrides.setdefault(
-                "operator_resume_requests_path", str(run_dir / RESUME_REQUEST_LOG)
-            )
+            overrides.setdefault("operator_resume_requests_path", str(run_dir / RESUME_REQUEST_LOG))
         selected_intent = request.intent_id or route.intent_id
         launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
         preview = build_prompt_preview(

@@ -35,6 +35,9 @@ from roboclaws.household.realworld_mcp_run_artifacts import (
     RealWorldMCPDoneArtifactInputs,
     finalize_realworld_mcp_done,
 )
+from roboclaws.household.realworld_run_artifacts import (
+    write_runtime_metric_map_preview_artifact,
+)
 from roboclaws.household.report import (
     write_state_snapshot,
 )
@@ -421,6 +424,10 @@ class RealWorldMolmoCleanupMCPServer:
             runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
             _write_json(self.run_dir / "agent_view.json", agent_view)
             _write_json(self.run_dir / "runtime_metric_map.json", runtime_metric_map)
+            write_runtime_metric_map_preview_artifact(
+                output_dir=self.run_dir,
+                runtime_metric_map=runtime_metric_map,
+            )
         except Exception as exc:
             self.write_runtime_event(
                 "live_public_artifact_write_failed",

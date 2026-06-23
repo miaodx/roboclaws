@@ -1,9 +1,9 @@
 ---
 plan_scope: map-visual-role-contract
-status: Draft
+status: Implemented
 created: 2026-06-23
 last_reviewed: 2026-06-23
-implementation_allowed: false
+implementation_allowed: true
 source:
   - User review of latest UI E2E screenshots where Base Navigation Map and Top-down
     previews visually drifted again.
@@ -163,7 +163,7 @@ Disallowed annotations:
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED
 
 Task source: user prompt plus current plan.
 
@@ -366,8 +366,49 @@ To execute:
 
 Optional tracking: none.
 
-Approval: `LGTM`, `approve`, or `go ahead` approves this plan for execution;
-edits request revision.
+Approval: approved and executed through `$intuitive-flow`.
+
+## Implementation Evidence
+
+Implementation capsule:
+`docs/status/active/map-visual-role-contract.md`.
+
+Completed behavior:
+
+- Base Navigation Map preview and Runtime Metric Map preview now share the
+  canonical 900 x 560 overlay visual language through `roboclaws/maps/preview.py`.
+- Runtime preview is written as `runtime_metric_map_preview.png` beside
+  `runtime_metric_map.json` in direct finalization and live MCP refresh paths.
+- Operator-console view state exposes separate `map`, `runtime_map`, and
+  `topdown` roles with `visual_role` and `artifact_source_family`.
+- MolmoSpaces `robot_views/*.topdown.png` is scene/camera evidence again, not
+  schematic map output.
+- Report copy and focused tests now name Runtime Metric Map preview as the
+  visual review artifact while keeping `runtime_metric_map.json` as source
+  truth.
+
+Proof summary:
+
+- Focused operator-console unit/static/render tests passed.
+- Focused report/live/checker tests passed.
+- Full B1-inclusive map contract tests passed after initializing local vendor
+  submodules.
+- `ruff check .`, full `ruff format --check .`, and `git diff --check` passed.
+- Product proof passed:
+  `just run::surface surface=household-world world=molmospaces/procthor-objaverse-val/0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-public-labels seed=7`.
+- Latest product artifacts under
+  `output/household/household-world/map-build/direct-world-public-labels/0623_1756/seed-7`
+  verified `map_bundle/preview.png` 900x560,
+  `runtime_metric_map_preview.png` 900x560, and
+  `robot_views/0001_after.topdown.png` 540x360.
+- Browser validation passed against the operator console at
+  `http://127.0.0.1:18082/`; screenshot:
+  `output/operator-console/browser-map-role-proof.png`.
+
+Remaining caveats:
+
+- Static route previews leave Runtime Metric Map empty before a run; the
+  canonical role/source browser proof is artifact-backed run state.
 
 ## Proposed Implementation Slices
 

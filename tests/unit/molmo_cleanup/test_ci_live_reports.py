@@ -149,19 +149,10 @@ def test_ci_live_status_reader_rejects_non_object_source(tmp_path: Path) -> None
 def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
 
-    status = run_matrix.main(
-        _ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code")
-    )
+    status = run_matrix.main(_ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code"))
 
     assert status == 0
-    status_path = (
-        tmp_path
-        / "site"
-        / "molmo"
-        / "live"
-        / "agents-sdk-kimi-k2.7-code"
-        / "status.json"
-    )
+    status_path = tmp_path / "site" / "molmo" / "live" / "agents-sdk-kimi-k2.7-code" / "status.json"
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["status"] == "dry_run"
     assert payload["agent_engine"] == "openai-agents-sdk"
@@ -261,19 +252,12 @@ def test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch(
     run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
     monkeypatch.setenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", "0")
 
-    status = run_matrix.main(
-        _ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code")
-    )
+    status = run_matrix.main(_ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code"))
 
     assert status == 0
     payload = json.loads(
         (
-            tmp_path
-            / "site"
-            / "molmo"
-            / "live"
-            / "agents-sdk-kimi-k2.7-code"
-            / "status.json"
+            tmp_path / "site" / "molmo" / "live" / "agents-sdk-kimi-k2.7-code" / "status.json"
         ).read_text(encoding="utf-8")
     )
     assert payload["env"]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
@@ -2039,10 +2023,7 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
-    assert (
-        "molmo/live/agents-sdk-kimi-k2.7-code/diagnostics/seed-7/diagnostics.html"
-        in html
-    )
+    assert "molmo/live/agents-sdk-kimi-k2.7-code/diagnostics/seed-7/diagnostics.html" in html
     assert "OpenAI Agents SDK + Kimi K2.7 Code diagnostics" in html
 
 
