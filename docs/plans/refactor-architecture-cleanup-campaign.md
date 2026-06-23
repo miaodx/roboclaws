@@ -75,6 +75,7 @@ Surface metrics:
 | --- | ---: | ---: | ---: | ---: | --- |
 | Delete `devtools.commands` launch shim | 1 | 1 | 2 | 2 | preserved |
 | Remove `LaunchPlan.mode` alias | 1 | 1 | 4 | 2 | preserved |
+| Remove `TaskSurfaceSpec.name` alias | 1 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -119,6 +120,25 @@ Fresh discovery required.
   git diff --check
   ```
 
+- 2026-06-23: Removed the unused `TaskSurfaceSpec.name` compatibility accessor.
+  No tracked current caller used the alias; launch task specs now expose only
+  `surface_id`.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_launch_plan_exposes_domain_metadata_before_dispatch tests/unit/launch/test_environment_setup_catalog.py -q
+  rg -n "TaskSurfaceSpec|surface\.name|spec\.name|\.name ==|Compatibility accessor|compatibility accessor" roboclaws/launch tests/unit/launch tests/contract/dev_tools docs/human docs/agents just scripts .github pyproject.toml
+  git diff --check
+  ```
+
+  Note: the first proof attempt used a nonexistent specific test selector in
+  `tests/unit/launch/test_environment_setup_catalog.py` and failed during
+  collection before executing tests; the corrected focused command above passed.
+
 ## Parked Candidates
 
-None yet.
+- Public MolmoSpaces `world=molmospaces/val_*` alias removal: current human
+  docs still describe selected aliases as launchable. Removing or renaming that
+  public surface needs an accepted public command migration. A safe internal
+  slice may still rename implementation helpers if it preserves public world ids.

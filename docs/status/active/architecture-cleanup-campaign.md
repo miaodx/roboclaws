@@ -12,11 +12,9 @@ Current slice:
 
 Last proven evidence:
 
-- Removed the `LaunchPlan.mode` compatibility accessor and migrated tracked
-  callers/tests to `evidence_mode`.
+- Removed the unused `TaskSurfaceSpec.name` compatibility accessor.
 - Focused pytest passed.
-- Stale-reference search found no launch-plan accessor references; remaining
-  `.mode-*` hits are operator-console CSS classes.
+- Stale-reference search found no current launch surface accessor references.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -25,6 +23,7 @@ Completed slice batch:
   removed one shallow compatibility module.
 - Slice 2: removed one launch-plan compatibility alias while preserving public
   trace text.
+- Slice 3: removed one unused launch task-spec compatibility alias.
 
 Next proof:
 
@@ -46,4 +45,6 @@ No-touch scope:
 
 Parked work:
 
-- None yet.
+- Public MolmoSpaces `world=molmospaces/val_*` alias removal needs an accepted
+  public command migration; current docs still describe selected aliases as
+  launchable.

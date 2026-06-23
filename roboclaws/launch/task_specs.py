@@ -41,9 +41,3 @@ class TaskSurfaceSpec:
     required_capabilities: tuple[str, ...]
     supported_presets: tuple[str, ...] = ()
     default_preset: str | None = None
-
-    @property
-    def name(self) -> str:
-        """Compatibility accessor for older launch-plan readers."""
-
-        return self.surface_id
