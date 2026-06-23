@@ -8,7 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete unused launch context holder, then run a fresh discovery handoff.
+- Delete cleanup report regeneration script wrapper, then run a fresh discovery
+  handoff.
 
 Last proven evidence:
 
@@ -35,6 +36,9 @@ Last proven evidence:
 - Follow-up discovery found `roboclaws.launch.context.LaunchContext`, an
   unexported launch context holder with no tracked current callers after launch
   routing standardized on `LaunchPlan` and `resolve_surface_launch(...)`.
+- Follow-up discovery found
+  `scripts/reports/regenerate_molmo_cleanup_report.py`, a no-caller private
+  wrapper around the tested `roboclaws.household.artifact_report` owner.
 
 Completed slice batch:
 
@@ -69,18 +73,20 @@ Completed slice batch:
   plugin-allowlist guidance, and OpenClaw bootstrap contract-test guidance.
 - Slice 15: deleted the unused private `roboclaws.launch.context` module and
   added a focused guard.
+- Slice 16: deleted the no-caller cleanup report regeneration script wrapper
+  and added a focused guard while preserving the artifact-report owner.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py::test_launch_package_does_not_keep_unused_context_holder tests/unit/launch/test_environment_setup_catalog.py::test_launch_backend_catalog_exposes_private_implementation_choices tests/contract/dev_tools/test_task_agent_just_recipes.py::test_surface_router_is_importable_source_of_truth
-test ! -e roboclaws/launch/context.py && python - <<'PY'
-import importlib.util
-spec = importlib.util.find_spec('roboclaws.launch.context')
-assert spec is None, spec
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_regenerate_cleanup_report_script_wrapper_stays_removed tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest
+python - <<'PY'
+from roboclaws.household.artifact_report import rerender_cleanup_reports_from_artifact_paths
+assert callable(rerender_cleanup_reports_from_artifact_paths)
+print(rerender_cleanup_reports_from_artifact_paths.__name__)
 PY
-rg -n "LaunchContext|roboclaws\.launch\.context|launch/context\.py|launch\.context" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check tests/unit/launch/test_environment_setup_catalog.py roboclaws/launch
+test ! -e scripts/reports/regenerate_molmo_cleanup_report.py && rg -n "regenerate_molmo_cleanup_report|scripts/reports/regenerate_molmo_cleanup_report.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check roboclaws/household/artifact_report.py tests/contract/reports/test_molmo_cleanup_artifact_report.py
 git diff --check
 ```
 
@@ -103,6 +109,8 @@ Parked work:
   launchable.
 - Broader cleanup demo contract tests currently fail on missing
   `agent_view.observed_objects`; resolve as a separate Agent View v2/test
-  migration decision.
+  migration decision. This also blocks broad artifact-report re-render proof
+  for historical run-result shells; wrapper deletions should use focused
+  no-caller/importability proof unless that owner behavior is changed.
 - Obsolete checker flag removal needs public checker CLI migration approval
   because it would change an actionable error into a generic unknown-flag error.

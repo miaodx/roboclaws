@@ -88,6 +88,7 @@ Surface metrics:
 | Replace stale OpenClaw image-update command | 1 | 1 | 0 | 2 | preserved |
 | Replace stale OpenClaw doc paths | 0 | 1 | 0 | 3 | preserved |
 | Delete unused launch context holder | 1 | 1 | 0 | 1 | preserved |
+| Delete cleanup report regeneration script wrapper | 1 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -103,7 +104,8 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after unused launch context holder deletion.
+Fresh discovery required after cleanup report regeneration script wrapper
+deletion.
 
 ## Completed Slices
 
@@ -396,6 +398,32 @@ Fresh discovery required after unused launch context holder deletion.
 
   Note: the stale-reference search now returns only the intentional regression
   guard in `tests/unit/launch/test_environment_setup_catalog.py`.
+
+- 2026-06-23: Deleted the no-caller private
+  `scripts/reports/regenerate_molmo_cleanup_report.py` wrapper. The current
+  owner for cleanup report re-rendering is
+  `roboclaws.household.artifact_report`, whose importable
+  `rerender_cleanup_reports_from_artifact_paths(...)` function remains covered
+  directly by report contract tests.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_regenerate_cleanup_report_script_wrapper_stays_removed tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest
+  python - <<'PY'
+  from roboclaws.household.artifact_report import rerender_cleanup_reports_from_artifact_paths
+  assert callable(rerender_cleanup_reports_from_artifact_paths)
+  print(rerender_cleanup_reports_from_artifact_paths.__name__)
+  PY
+  test ! -e scripts/reports/regenerate_molmo_cleanup_report.py && rg -n "regenerate_molmo_cleanup_report|scripts/reports/regenerate_molmo_cleanup_report.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check roboclaws/household/artifact_report.py tests/contract/reports/test_molmo_cleanup_artifact_report.py
+  git diff --check
+  ```
+
+  Note: a broader report re-render proof still hits the pre-existing parked
+  Agent View v2 artifact-shape failure (`agent_view.observed_objects` /
+  missing `agent_view_v2` sections). The wrapper deletion does not change that
+  owner behavior, so this slice used no-caller and importability proof.
 
 ## Parked Candidates
 
