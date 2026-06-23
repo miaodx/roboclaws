@@ -8,8 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete stale AI2-THOR/refactor harness agent-only docs, then run a fresh
-  discovery handoff.
+- Delete unused provider timing proxy script wrapper, then run a fresh discovery
+  handoff.
 
 Last proven evidence:
 
@@ -22,6 +22,9 @@ Last proven evidence:
 - Current post-HEAD discovery found four stale `docs/ai` pages describing
   retired AI2-THOR/OpenClaw game, refactor-regression, and navigator harness
   scripts whose source files no longer exist.
+- Follow-up discovery found `scripts/dev/provider_timing_proxy.py`, an unused
+  private wrapper around the canonical module CLI that the live runner already
+  launches directly.
 
 Completed slice batch:
 
@@ -48,15 +51,16 @@ Completed slice batch:
 - Slice 11: deleted four stale agent-only docs for retired AI2-THOR/OpenClaw
   game and refactor-harness surfaces while preserving current run guidance and
   historical planning evidence.
+- Slice 12: deleted the unused provider timing proxy script wrapper and updated
+  the implemented provider-timing plan to name only the module owner.
 
 Next proof:
 
 ```bash
-test ! -e docs/ai/deployment/ai2thor-rendering.md
-test ! -e docs/ai/experiments/refactor-regression.md
-test ! -e docs/ai/experiments/view-experiment-2026-04.md
-test ! -e docs/ai/harness/self-improvement-loop.md
-rg -n "docs/ai/(deployment/ai2thor-rendering|experiments/refactor-regression|experiments/view-experiment-2026-04|harness/self-improvement-loop)|benchmark_ai2thor_rendering|capture_refactor_regression|analyze_refactor_regression|harness/run-next|harness/run.sh|harness/README" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_timing_proxy.py::test_provider_timing_proxy_cli_rejects_out_of_range_bind_port
+.venv/bin/python -m roboclaws.agents.provider_timing_proxy --help
+rg -n "scripts/dev/provider_timing_proxy.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai docs/plans/2026-06-11-coding-agent-provider-timing-proxy.md just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check roboclaws/agents/provider_timing_proxy.py tests/unit/agents/test_provider_timing_proxy.py
 git diff --check
 ```
 

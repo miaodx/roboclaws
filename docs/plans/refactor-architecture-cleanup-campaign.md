@@ -84,6 +84,7 @@ Surface metrics:
 | Move operator-console display run id to state owner | 0 | 1 | 1 | 0 | preserved |
 | Delete private path-containment helpers | 4 | 4 | 4 | 0 | preserved |
 | Delete stale AI2-THOR/harness agent docs | 4 | 4 | 0 | 0 | preserved |
+| Delete provider timing proxy script wrapper | 1 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -99,7 +100,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after stale AI2-THOR/harness agent docs deletion.
+Fresh discovery required after provider timing proxy script wrapper deletion.
 
 ## Completed Slices
 
@@ -307,6 +308,23 @@ Fresh discovery required after stale AI2-THOR/harness agent docs deletion.
   test ! -e docs/ai/experiments/view-experiment-2026-04.md
   test ! -e docs/ai/harness/self-improvement-loop.md
   rg -n "docs/ai/(deployment/ai2thor-rendering|experiments/refactor-regression|experiments/view-experiment-2026-04|harness/self-improvement-loop)|benchmark_ai2thor_rendering|capture_refactor_regression|analyze_refactor_regression|harness/run-next|harness/run.sh|harness/README" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  git diff --check
+  ```
+
+- 2026-06-23: Deleted the unused private
+  `scripts/dev/provider_timing_proxy.py` wrapper. The provider timing proxy is
+  already owned and launched through the module CLI
+  `python -m roboclaws.agents.provider_timing_proxy`, including from
+  `start_provider_timing_proxy(...)`; the implemented plan text now names only
+  the canonical module owner.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_timing_proxy.py::test_provider_timing_proxy_cli_rejects_out_of_range_bind_port
+  .venv/bin/python -m roboclaws.agents.provider_timing_proxy --help
+  rg -n "scripts/dev/provider_timing_proxy.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai docs/plans/2026-06-11-coding-agent-provider-timing-proxy.md just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check roboclaws/agents/provider_timing_proxy.py tests/unit/agents/test_provider_timing_proxy.py
   git diff --check
   ```
 
