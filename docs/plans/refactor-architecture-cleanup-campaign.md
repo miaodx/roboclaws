@@ -91,6 +91,7 @@ Surface metrics:
 | Delete cleanup report regeneration script wrapper | 1 | 1 | 0 | 1 | preserved |
 | Delete Kimi-only key checker wrapper | 1 | 1 | 0 | 1 | preserved |
 | Update stale OpenClaw image-bump docs | 0 | 1 | 0 | 2 | preserved |
+| Move model-matrix benchmark helpers to agent owner | 2 | 1 | 1 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -106,7 +107,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after stale OpenClaw image-bump doc update.
+Fresh discovery required after model-matrix benchmark helper owner move.
 
 ## Completed Slices
 
@@ -459,6 +460,27 @@ Fresh discovery required after stale OpenClaw image-bump doc update.
   ./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
   ! rg -n "active TODO|minimal\\+alsoAllow:\\[bundle-mcp\\]|territory/coverage scripts|just openclaw::run photo" docs/ai/openclaw
   .venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
+  git diff --check
+  ```
+
+- 2026-06-23: Moved the model-matrix benchmark catalog and wire-format helpers
+  from sibling modules under `scripts/dev/` into the package owner
+  `roboclaws.agents.model_matrix_benchmark`. The public
+  `just dev::model-matrix-benchmark` command still executes
+  `scripts/dev/benchmark_model_matrix.py`, but the CLI now imports provider
+  route cases, result models, endpoint/payload/header helpers, response
+  parsing, and stream parsing from the canonical agent/provider module instead
+  of mutating `sys.path` for private script-directory helpers. The two old
+  script helper modules were deleted and the MiMo migration guard now allows
+  the package owner as the only helper surface for the still-current benchmark
+  `mimo-v2.5-pro` probe rows.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
+  rg -n "model_matrix_benchmark_catalog|model_matrix_benchmark_wire|scripts/dev/model_matrix_benchmark_catalog.py|scripts/dev/model_matrix_benchmark_wire.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check scripts/dev/benchmark_model_matrix.py roboclaws/agents/model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
   git diff --check
   ```
 

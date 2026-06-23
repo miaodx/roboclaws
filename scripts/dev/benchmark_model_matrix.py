@@ -20,15 +20,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.dotenv import update_env_from_dotenv_file
-from roboclaws.core.json_sources import parse_json_object_text
-from roboclaws.operator_console.redaction import redact_text
-
-_SCRIPT_DIR = Path(__file__).resolve().parent
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
-
-from model_matrix_benchmark_catalog import (  # noqa: E402
+from roboclaws.agents.model_matrix_benchmark import (
     AGENT_BENCHMARK_CASES,
     DEFAULT_AGENT_CASE_MAX_TOKENS,
     DEFAULT_FIRST_CONTENT_MAX_TOKENS,
@@ -49,10 +41,6 @@ from model_matrix_benchmark_catalog import (  # noqa: E402
     MatrixCase,
     TrialResult,
     default_cases,
-    selected_agent_cases,
-    selected_cases,
-)
-from model_matrix_benchmark_wire import (  # noqa: E402
     endpoint_url,
     headers_for_case,
     latest_usage_tokens,
@@ -61,8 +49,13 @@ from model_matrix_benchmark_wire import (  # noqa: E402
     output_text,
     payload_for_case,
     response_model,
+    selected_agent_cases,
+    selected_cases,
     usage_tokens,
 )
+from roboclaws.core.dotenv import update_env_from_dotenv_file
+from roboclaws.core.json_sources import parse_json_object_text
+from roboclaws.operator_console.redaction import redact_text
 
 
 def load_dotenv(path: Path) -> None:

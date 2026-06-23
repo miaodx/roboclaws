@@ -8,42 +8,22 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Update stale OpenClaw image-bump docs, then run a fresh discovery handoff.
+- Move model-matrix benchmark helpers to the agent/provider owner, then run a
+  fresh discovery handoff after commit.
 
 Last proven evidence:
 
-- Deleted four duplicate private `_is_relative_to` helpers and used Python
-  3.12's native `Path.is_relative_to(...)` in the current operator-console and
-  Pages-prune call sites.
-- Focused artifact-serving, scene-preview, and Pages-prune tests passed; ruff
-  passed on touched modules; stale-helper search found no remaining
-  `_is_relative_to` helpers; and `git diff --check` passed.
-- Current post-HEAD discovery found four stale `docs/ai` pages describing
-  retired AI2-THOR/OpenClaw game, refactor-regression, and navigator harness
-  scripts whose source files no longer exist.
-- Follow-up discovery found `scripts/dev/provider_timing_proxy.py`, an unused
-  private wrapper around the canonical module CLI that the live runner already
-  launches directly.
-- Follow-up discovery found `docs/ai/openclaw/update.md` still named the
-  removed `just openclaw::run photo` private command; the checklist now uses
-  the current `agent::run` maintainer dispatcher and has a trace-mode contract
-  guard.
-- Follow-up discovery found OpenClaw scripts and contract-test guidance still
-  pointing readers at removed `docs/openclw/` and root `docs/model-matrix.md`
-  paths; those now point to current `docs/human/openclaw/`,
-  `docs/ai/openclaw/`, and `docs/human/model-matrix.md` owners.
-- Follow-up discovery found `roboclaws.launch.context.LaunchContext`, an
-  unexported launch context holder with no tracked current callers after launch
-  routing standardized on `LaunchPlan` and `resolve_surface_launch(...)`.
-- Follow-up discovery found
-  `scripts/reports/regenerate_molmo_cleanup_report.py`, a no-caller private
-  wrapper around the tested `roboclaws.household.artifact_report` owner.
-- Fresh post-HEAD discovery found `scripts/dev/check_kimi_key.py`, a no-caller
-  private wrapper around Kimi key validation after provider health checks moved
-  to the generic `scripts/dev/check_model_providers.py` owner.
-- Fresh post-HEAD discovery found current OpenClaw image-bump docs that still
-  pointed at a nonexistent `TODOS.md` item and retired territory/coverage phase
-  scripts instead of current OpenClaw maintainer routes.
+- Fresh post-HEAD discovery shrank a medium-risk model-matrix benchmark helper
+  owner move into an internal slice: keep public
+  `just dev::model-matrix-benchmark` and `scripts/dev/benchmark_model_matrix.py`,
+  but move catalog/dataclass/wire-format helper logic from sibling
+  `scripts/dev/model_matrix_benchmark_{catalog,wire}.py` modules into
+  `roboclaws.agents.model_matrix_benchmark`.
+- Deleted the two old script helper modules and updated the MiMo migration
+  guard to allow the package owner instead of the deleted catalog helper.
+- Focused model-matrix benchmark tests and MiMo migration guard passed; stale
+  helper path search returned no matches; ruff passed on touched files; and
+  `git diff --check` passed.
 
 Completed slice batch:
 
@@ -85,13 +65,16 @@ Completed slice batch:
 - Slice 18: updated stale OpenClaw image-bump docs away from the missing TODO
   and retired game-script examples while preserving current OpenClaw maintainer
   routes.
+- Slice 19: moved model-matrix benchmark catalog and wire helper logic from
+  private script-directory modules to the `roboclaws.agents` owner while
+  preserving the public dev benchmark command.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
-! rg -n "active TODO|minimal\\+alsoAllow:\\[bundle-mcp\\]|territory/coverage scripts|just openclaw::run photo" docs/ai/openclaw
-.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
+rg -n "model_matrix_benchmark_catalog|model_matrix_benchmark_wire|scripts/dev/model_matrix_benchmark_catalog.py|scripts/dev/model_matrix_benchmark_wire.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check scripts/dev/benchmark_model_matrix.py roboclaws/agents/model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
 git diff --check
 ```
 
