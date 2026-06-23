@@ -8,14 +8,17 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff for the next cleanup slice.
+- Fresh discovery handoff after the `SIM_SERVER_URL` bootstrap fallback
+  deletion slice.
 
 Last proven evidence:
 
-- Deleted nine unreferenced root `scripts/*` symlink shims.
-- Focused provider/OpenClaw/network-status tests passed.
-- Stale-reference search found no current references to the deleted root
-  script paths, and canonical subdirectory targets exist.
+- Deleted the stale `SIM_SERVER_URL` translate-and-warn fallback from
+  `scripts/openclaw/openclaw-bootstrap.sh`.
+- Focused OpenClaw preseed tests, bash syntax, ruff on the touched test file,
+  stale-reference search, and `git diff --check` passed.
+- The only remaining live-path `SIM_SERVER_URL` text is the intentional
+  regression guard in `tests/contract/openclaw/test_openclaw_bootstrap.py`.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -29,6 +32,9 @@ Completed slice batch:
   canonical nested manual wrapper.
 - Slice 5: removed nine root script symlink shims while preserving canonical
   subdirectory scripts.
+- Slice 6: removed the OpenClaw bootstrap's stale `SIM_SERVER_URL`
+  compatibility fallback while preserving canonical `ROBOCLAWS_MCP_URL`
+  defaulting and overrides.
 
 Next proof:
 

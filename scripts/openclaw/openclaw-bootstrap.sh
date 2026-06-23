@@ -28,8 +28,9 @@
 #   VOLUME       Named volume for /home/node/.openclaw (default: openclaw-gateway-config)
 #   HOST_IP      Bind address on the host            (default: 127.0.0.1)
 #   PORT         Gateway port                        (default: 18789)
-#   SIM_SERVER_URL URL for host-side sim tools       (default: http://host.docker.internal:18788)
 #   ROBOCLAWS_MCP_ENABLED  Seed Roboclaws MCP tools  (default: 1)
+#   ROBOCLAWS_MCP_URL      URL for the host-side MCP server
+#                                                     (default: http://host.docker.internal:18788/mcp)
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
@@ -115,7 +116,6 @@ IMAGE="${IMAGE:-${OPENCLAW_IMAGE:-$OPENCLAW_IMAGE_DEFAULT}}"
 VOLUME="${VOLUME:-openclaw-gateway-config}"
 HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT="${PORT:-18789}"
-SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
 
 # Optional: host-side dir for the `roboclaws__snapshot` tool. When set, we
 # bind-mount it into every agent's workspace at ``./snapshots`` so the
@@ -142,21 +142,8 @@ esac
 # enabled, so the Gateway exposes our MCP tool surface (observe/move/done) to
 # the agent. Must be set BEFORE first container start — mutating mcp.* on a
 # running Gateway triggers SIGUSR1 → PID-1 exit → container stop (spike F-3).
-# Default uses host.docker.internal (container→host loopback), same route
-# SIM_SERVER_URL used. Legacy SIM_SERVER_URL still accepted as a deprecated
-# fallback that appends /mcp and emits a warning; plan 05 removes it entirely
-# when the sim_server.py HTTP path is deleted.
-if [[ -n "${ROBOCLAWS_MCP_URL:-}" ]]; then
-    :  # explicit override wins
-elif [[ -n "${SIM_SERVER_URL:-}" && "${SIM_SERVER_URL}" != "http://host.docker.internal:18788" ]]; then
-    # Only warn when the legacy var was set to a non-default value — the
-    # default is baked into line 96 above and callers who never touched
-    # SIM_SERVER_URL should not see a deprecation message.
-    printf '[bootstrap] %s\n' "WARN: SIM_SERVER_URL is deprecated and ignored as the primary; use ROBOCLAWS_MCP_URL" >&2
-    ROBOCLAWS_MCP_URL="${SIM_SERVER_URL%/}/mcp"
-else
-    ROBOCLAWS_MCP_URL="http://host.docker.internal:18788/mcp"
-fi
+# Default uses host.docker.internal (container→host loopback).
+ROBOCLAWS_MCP_URL="${ROBOCLAWS_MCP_URL:-http://host.docker.internal:18788/mcp}"
 
 # ROBOCLAWS_TOOL_PROFILE controls which tool allowlist the Gateway applies to
 # every agent. Default "minimal" keeps the surface tight; when MCP is enabled

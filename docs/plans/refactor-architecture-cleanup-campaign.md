@@ -78,6 +78,7 @@ Surface metrics:
 | Remove `TaskSurfaceSpec.name` alias | 1 | 1 | 0 | 0 | preserved |
 | Delete duplicate root cleanup example wrapper | 1 | 1 | 0 | 0 | preserved |
 | Delete root script symlink shims | 9 | 9 | 0 | 0 | preserved |
+| Delete `SIM_SERVER_URL` bootstrap fallback | 1 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -178,6 +179,28 @@ Fresh discovery required.
 
   Note: two earlier OpenClaw proof attempts used nonexistent specific test
   selectors; the corrected command above passed.
+
+- 2026-06-23: Removed the stale `SIM_SERVER_URL` translate-and-warn fallback
+  from `scripts/openclaw/openclaw-bootstrap.sh`. The bootstrap interface now
+  names only `ROBOCLAWS_MCP_URL`, while the default
+  `http://host.docker.internal:18788/mcp` and explicit override behavior are
+  preserved. Added a contract guard so the old HTTP sim-server owner does not
+  return as a compatibility path.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/openclaw/test_openclaw_bootstrap.py::test_mcp_seeds_server_transport_and_url tests/contract/openclaw/test_openclaw_bootstrap.py::test_mcp_url_env_override_honored tests/contract/openclaw/test_openclaw_bootstrap.py::test_bootstrap_has_no_sim_server_url_compatibility_path -q
+  bash -n scripts/openclaw/openclaw-bootstrap.sh
+  .venv/bin/ruff check tests/contract/openclaw/test_openclaw_bootstrap.py
+  rg -n -F "SIM_SERVER_URL" scripts/openclaw tests/contract/openclaw just/openclaw.just just/chat.just just/molmo.just roboclaws/cli/household_agent_server.py docs/human/openclaw README.md ARCHITECTURE.md AGENTS.md CLAUDE.md
+  git diff --check
+  ```
+
+  Note: the stale-reference search now returns only the intentional regression
+  guard in `tests/contract/openclaw/test_openclaw_bootstrap.py`; production
+  bootstrap, recipes, current docs, and runtime adapters no longer reference
+  the legacy variable.
 
 ## Parked Candidates
 

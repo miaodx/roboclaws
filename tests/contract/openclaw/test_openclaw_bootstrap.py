@@ -913,6 +913,16 @@ def test_mcp_url_env_override_honored(tmp_path: Path) -> None:
     assert cfg["mcp"]["servers"]["roboclaws"]["url"] == "http://example.test:9999/mcp"
 
 
+def test_bootstrap_has_no_sim_server_url_compatibility_path() -> None:
+    """OpenClaw bootstrap accepts the canonical MCP URL env var only.
+
+    The old HTTP sim-server path is retired, so reintroducing a
+    SIM_SERVER_URL translate-and-warn branch would preserve a stale owner
+    instead of making callers use ROBOCLAWS_MCP_URL directly.
+    """
+    assert "SIM_SERVER_URL" not in _read_bootstrap()
+
+
 def test_tool_profile_env_override_honored(tmp_path: Path) -> None:
     """ROBOCLAWS_TOOL_PROFILE=coding (used by the live-probe plan 02.6-06)
     rewrites every agent's tools.profile to "coding" — no minimal lock-in
