@@ -77,6 +77,7 @@ Surface metrics:
 | Remove `LaunchPlan.mode` alias | 1 | 1 | 4 | 2 | preserved |
 | Remove `TaskSurfaceSpec.name` alias | 1 | 1 | 0 | 0 | preserved |
 | Delete duplicate root cleanup example wrapper | 1 | 1 | 0 | 0 | preserved |
+| Delete root script symlink shims | 9 | 9 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -157,6 +158,27 @@ Fresh discovery required.
   `agent_view.observed_objects`. The wrapper deletion was narrowed to
   stale-reference and canonical-wrapper proof.
 
+- 2026-06-23: Deleted nine unreferenced root `scripts/*` symlink shims:
+  `check_kimi_key.py`, `control_ui_watcher.py`, `network_status.sh`,
+  `openclaw-bootstrap.sh`, `openclaw-defaults.env`,
+  `openclaw_plugin_allowlist.py`, `regenerate_molmo_cleanup_report.py`,
+  `run_pytest_standalone.sh`, and `write_pages_index.py`. Current tracked
+  docs, tests, and recipes already use canonical subdirectory paths such as
+  `scripts/dev/run_pytest_standalone.sh` and
+  `scripts/openclaw/openclaw-bootstrap.sh`.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/providers/test_check_kimi_key.py tests/unit/openclaw/test_control_ui_watcher.py tests/unit/scripts/test_network_status_guard.py tests/contract/openclaw/test_openclaw_bootstrap.py::test_plugins_allow_seeded_from_canonical_allowlist tests/contract/openclaw/test_openclaw_bootstrap.py::test_bootstrap_reads_canonical_plugin_allowlist -q
+  rg -n "scripts/(check_kimi_key\.py|control_ui_watcher\.py|network_status\.sh|openclaw-bootstrap\.sh|openclaw-defaults\.env|openclaw_plugin_allowlist\.py|regenerate_molmo_cleanup_report\.py|run_pytest_standalone\.sh|write_pages_index\.py)" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents just scripts tests roboclaws .github pyproject.toml
+  for p in scripts/dev/check_kimi_key.py scripts/openclaw/control_ui_watcher.py scripts/dev/network_status.sh scripts/openclaw/openclaw-bootstrap.sh scripts/openclaw/openclaw-defaults.env scripts/openclaw/openclaw_plugin_allowlist.py scripts/reports/regenerate_molmo_cleanup_report.py scripts/dev/run_pytest_standalone.sh scripts/reports/write_pages_index.py; do test -e "$p"; done
+  git diff --check
+  ```
+
+  Note: two earlier OpenClaw proof attempts used nonexistent specific test
+  selectors; the corrected command above passed.
+
 ## Parked Candidates
 
 - Public MolmoSpaces `world=molmospaces/val_*` alias removal: current human
@@ -168,3 +190,9 @@ Fresh discovery required.
   `agent_view.observed_objects`. Unblock by deciding whether those tests should
   migrate to Agent View v2 sections or whether the cleanup artifact producer
   should restore a documented compatibility field.
+- Obsolete checker flag
+  `--require-canonical-robot-view-camera-control`: the checker currently
+  recognizes this public flag only to emit an actionable obsolete-flag error
+  pointing at `--require-robot-head-camera-fpv`. Removing it would change a
+  public checker error path to a generic argparse unknown-flag error. Unblock
+  with an accepted public checker CLI migration decision.

@@ -12,10 +12,10 @@ Current slice:
 
 Last proven evidence:
 
-- Deleted the duplicate root `examples/molmospaces_realworld_cleanup.py`
-  wrapper.
-- Focused checker pytest and canonical nested wrapper `--help` passed.
-- Stale-reference search found only the canonical nested wrapper path.
+- Deleted nine unreferenced root `scripts/*` symlink shims.
+- Focused provider/OpenClaw/network-status tests passed.
+- Stale-reference search found no current references to the deleted root
+  script paths, and canonical subdirectory targets exist.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -27,6 +27,8 @@ Completed slice batch:
 - Slice 3: removed one unused launch task-spec compatibility alias.
 - Slice 4: removed one duplicate root example wrapper while preserving the
   canonical nested manual wrapper.
+- Slice 5: removed nine root script symlink shims while preserving canonical
+  subdirectory scripts.
 
 Next proof:
 
@@ -54,3 +56,5 @@ Parked work:
 - Broader cleanup demo contract tests currently fail on missing
   `agent_view.observed_objects`; resolve as a separate Agent View v2/test
   migration decision.
+- Obsolete checker flag removal needs public checker CLI migration approval
+  because it would change an actionable error into a generic unknown-flag error.
