@@ -12,9 +12,10 @@ Current slice:
 
 Last proven evidence:
 
-- Removed the unused `TaskSurfaceSpec.name` compatibility accessor.
-- Focused pytest passed.
-- Stale-reference search found no current launch surface accessor references.
+- Deleted the duplicate root `examples/molmospaces_realworld_cleanup.py`
+  wrapper.
+- Focused checker pytest and canonical nested wrapper `--help` passed.
+- Stale-reference search found only the canonical nested wrapper path.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -24,6 +25,8 @@ Completed slice batch:
 - Slice 2: removed one launch-plan compatibility alias while preserving public
   trace text.
 - Slice 3: removed one unused launch task-spec compatibility alias.
+- Slice 4: removed one duplicate root example wrapper while preserving the
+  canonical nested manual wrapper.
 
 Next proof:
 
@@ -48,3 +51,6 @@ Parked work:
 - Public MolmoSpaces `world=molmospaces/val_*` alias removal needs an accepted
   public command migration; current docs still describe selected aliases as
   launchable.
+- Broader cleanup demo contract tests currently fail on missing
+  `agent_view.observed_objects`; resolve as a separate Agent View v2/test
+  migration decision.

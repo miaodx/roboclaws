@@ -76,6 +76,7 @@ Surface metrics:
 | Delete `devtools.commands` launch shim | 1 | 1 | 2 | 2 | preserved |
 | Remove `LaunchPlan.mode` alias | 1 | 1 | 4 | 2 | preserved |
 | Remove `TaskSurfaceSpec.name` alias | 1 | 1 | 0 | 0 | preserved |
+| Delete duplicate root cleanup example wrapper | 1 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -136,9 +137,34 @@ Fresh discovery required.
   `tests/unit/launch/test_environment_setup_catalog.py` and failed during
   collection before executing tests; the corrected focused command above passed.
 
+- 2026-06-23: Deleted the duplicate root
+  `examples/molmospaces_realworld_cleanup.py` wrapper. The canonical manual
+  wrapper remains at `examples/molmo_cleanup/molmospaces_realworld_cleanup.py`,
+  and current tracked callers already use that nested path.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_legacy_canonical_robot_view_camera_control_flag -q
+  python examples/molmo_cleanup/molmospaces_realworld_cleanup.py --help
+  rg -n "examples/molmospaces_realworld_cleanup|examples/molmo_cleanup/molmospaces_realworld_cleanup|molmospaces_realworld_cleanup.py" README.md ARCHITECTURE.md STATUS.md docs/human docs/agents just scripts tests roboclaws .github pyproject.toml examples
+  git diff --check
+  ```
+
+  Note: a broader proof attempt against
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` exposed
+  unrelated current artifact-shape failures around missing
+  `agent_view.observed_objects`. The wrapper deletion was narrowed to
+  stale-reference and canonical-wrapper proof.
+
 ## Parked Candidates
 
 - Public MolmoSpaces `world=molmospaces/val_*` alias removal: current human
   docs still describe selected aliases as launchable. Removing or renaming that
   public surface needs an accepted public command migration. A safe internal
   slice may still rename implementation helpers if it preserves public world ids.
+- `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+  current artifact-shape failures: four tests still expect
+  `agent_view.observed_objects`. Unblock by deciding whether those tests should
+  migrate to Agent View v2 sections or whether the cleanup artifact producer
+  should restore a documented compatibility field.
