@@ -93,6 +93,7 @@ Surface metrics:
 | Update stale OpenClaw image-bump docs | 0 | 1 | 0 | 2 | preserved |
 | Move model-matrix benchmark helpers to agent owner | 2 | 1 | 1 | 1 | preserved |
 | Delete Pages prune script wrapper | 1 | 1 | 1 | 2 | preserved |
+| Deepen provider registry CLI dispatch | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -104,12 +105,34 @@ Discovery cadence:
 - Run a fresh reduce-entropy discovery handoff when the candidate queue is
   exhausted.
 
-Consecutive no-clear-candidate passes: 2
+Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-No clear safe P1/P2 implementation slice found in two consecutive fresh
-discovery handoffs after the latest implementation commit.
+Fresh post-HEAD discovery after `39846ccb` found that the Python quality
+ratchet fails on current source. The first safe slice removed the new
+`provider_registry.py:_main` complexity violation by deepening provider
+registry CLI dispatch behind private command helpers while preserving the
+public module CLI.
+
+Next clear candidates:
+
+- Shrink `RealWorldMolmoCleanupMCPServer.__init__` by moving transport/tool
+  registration setup into existing MCP-server owner helpers. Keep the public
+  server target and MCP tool contract unchanged.
+- Shrink
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py:LiveOpenAIAgentsCleanupRunner._run_sdk_agent`
+  by moving live-agent step construction into private script-owner helpers.
+  Keep the public script command unchanged.
+- Shrink two new overlong Agibot contract tests by moving fixture construction
+  into test-local helpers. Keep assertions and public contracts unchanged.
+  This is a test-owner cleanup candidate after production new violations are
+  handled.
+
+Broader oversized-module growth remains architecture pressure, not one
+autonomous slice: several touched modules grew beyond the recorded baseline and
+need owner-specific refactors or a reviewed baseline refresh after clear new
+complexity violations are removed.
 
 Checked and parked:
 
@@ -127,9 +150,15 @@ Checked and parked:
 - Second post-HEAD handoff after `9c70b796` rechecked the same script-wrapper,
   package micro-module, stale owner-name, docs/tests/recipes, and high-noise
   surfaces. It found no new material safe slice.
+- Third post-HEAD handoff after `39846ccb` found a new false-confidence
+  candidate: `scripts/dev/check_python_quality_ratchet.py` fails on current
+  source. Medium-risk handling split this into safe internal slices for each
+  new complexity violation before considering broader oversized-module
+  baseline drift.
 
-The campaign stop condition is met. Restart only with a new accepted target,
-public migration decision, or proof surface.
+The campaign is reopened from the quality-ratchet proof surface. Continue with
+the clear current violations above until focused proof passes, the queue is
+exhausted, or the stop/park criteria apply.
 
 ## Completed Slices
 
@@ -524,6 +553,26 @@ public migration decision, or proof surface.
   .venv/bin/ruff check roboclaws/devtools/pages_site.py tests/contract/reports/test_pages_site_prune.py
   git diff --check
   ```
+
+- 2026-06-23: Deepened the `roboclaws.agents.provider_registry` module CLI by
+  moving command-specific model and route dispatch out of `_main(...)` into
+  private helpers. This removed the new Python quality-ratchet complexity
+  violation for `provider_registry.py:_main` while preserving the public
+  `python -m roboclaws.agents.provider_registry ...` interface and provider
+  route outputs.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/providers/test_provider_catalog.py -q
+  .venv/bin/ruff check roboclaws/agents/provider_registry.py tests/unit/providers/test_provider_catalog.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on other current files, but no longer
+  lists `roboclaws/agents/provider_registry.py`. The remaining failures are
+  tracked as the next candidate queue.
 
 ## Parked Candidates
 

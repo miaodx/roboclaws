@@ -8,8 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Campaign saturated. Two consecutive fresh post-HEAD discovery handoffs found
-  no clear safe P1/P2 implementation slice after shrink attempts.
+- Provider registry CLI dispatch deepening complete. Continue with the next
+  current Python quality-ratchet violation.
 
 Last proven evidence:
 
@@ -33,6 +33,12 @@ Last proven evidence:
   It found no new material safe slice.
 - Report-only architecture review artifact:
   `/tmp/architecture-review-20260623_095651.html`.
+- Fresh post-HEAD discovery after `39846ccb` found a current false-confidence
+  candidate: `.venv/bin/python scripts/dev/check_python_quality_ratchet.py`
+  fails on current source. The first safe vertical slice moved
+  provider-registry command dispatch behind private helpers; focused provider
+  catalog tests, Ruff, and `git diff --check` passed, and the quality-ratchet
+  output no longer lists `roboclaws/agents/provider_registry.py`.
 
 Completed slice batch:
 
@@ -79,11 +85,16 @@ Completed slice batch:
   preserving the public dev benchmark command.
 - Slice 20: deleted the Pages prune script wrapper and migrated CI to the
   `roboclaws.devtools.pages_site` module CLI.
+- Slice 21: deepened provider-registry CLI dispatch so `_main(...)` is no
+  longer the command formatting owner.
 
 Next proof:
 
 ```bash
-No next proof. Campaign stop condition is met.
+./scripts/dev/run_pytest_standalone.sh <focused next-slice tests> -q
+.venv/bin/ruff check <touched files>
+.venv/bin/python scripts/dev/check_python_quality_ratchet.py
+git diff --check
 ```
 
 Stop condition:
@@ -120,3 +131,8 @@ Parked work:
   `scripts/molmo_cleanup/prepare_molmospaces_room.py` because they still own
   real CLI argument/default behavior instead of pure pass-through wrapper
   behavior.
+- Remaining current quality-ratchet queue:
+  `RealWorldMolmoCleanupMCPServer.__init__`,
+  `LiveOpenAIAgentsCleanupRunner._run_sdk_agent`, two overlong Agibot contract
+  tests, and broader oversized-module baseline drift. Try safe owner-local
+  shrink slices before considering a baseline refresh.
