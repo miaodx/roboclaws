@@ -8,8 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete unused provider timing proxy script wrapper, then run a fresh discovery
-  handoff.
+- Replace stale OpenClaw image-upgrade checklist command, then run a fresh
+  discovery handoff.
 
 Last proven evidence:
 
@@ -25,6 +25,10 @@ Last proven evidence:
 - Follow-up discovery found `scripts/dev/provider_timing_proxy.py`, an unused
   private wrapper around the canonical module CLI that the live runner already
   launches directly.
+- Follow-up discovery found `docs/ai/openclaw/update.md` still named the
+  removed `just openclaw::run photo` private command; the checklist now uses
+  the current `agent::run` maintainer dispatcher and has a trace-mode contract
+  guard.
 
 Completed slice batch:
 
@@ -53,14 +57,16 @@ Completed slice batch:
   historical planning evidence.
 - Slice 12: deleted the unused provider timing proxy script wrapper and updated
   the implemented provider-timing plan to name only the module owner.
+- Slice 13: replaced the stale OpenClaw image-upgrade checklist command with
+  the current maintainer dispatcher route and added a contract guard.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_timing_proxy.py::test_provider_timing_proxy_cli_rejects_out_of_range_bind_port
-.venv/bin/python -m roboclaws.agents.provider_timing_proxy --help
-rg -n "scripts/dev/provider_timing_proxy.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai docs/plans/2026-06-11-coding-agent-provider-timing-proxy.md just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check roboclaws/agents/provider_timing_proxy.py tests/unit/agents/test_provider_timing_proxy.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
+ROBOCLAWS_JUST_TRACE=1 just agent::run household-world.cleanup openclaw-gateway world-public-labels
+rg -n "just openclaw::run photo|openclaw::run" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
 git diff --check
 ```
 

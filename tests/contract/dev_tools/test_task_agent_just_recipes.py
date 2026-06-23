@@ -1107,6 +1107,29 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
     assert "Guarded report recipes are maintainer-only validation routes" in settings
 
 
+def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
+    update_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "update.md").read_text(
+        encoding="utf-8"
+    )
+    route = trace_agent_run(
+        "household-world.cleanup",
+        "openclaw-gateway",
+        "world-public-labels",
+    )
+
+    assert "just openclaw::run photo" not in update_doc
+    assert "just agent::run household-world.cleanup openclaw-gateway world-public-labels" in (
+        update_doc
+    )
+    assert route[:5] == [
+        "just",
+        "molmo::household-world-impl",
+        "openclaw-live",
+        "world-public-labels",
+        "7",
+    ]
+
+
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     route, plan_trace = trace_household_cleanup_run_with_plan(
         "codex",

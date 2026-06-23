@@ -35,7 +35,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 
 - [ ] Re-run OpenClaw smoke/demo path(s):
   - `just chat::run`
-  - `just openclaw::run photo` (or equivalent local smoke)
+  - `just agent::run household-world.cleanup openclaw-gateway world-public-labels`
   - Any local autop-run commands used in phase tasks (e.g. territory/coverage scripts)
 - [ ] Re-run relevant test entry points that assert OpenClaw startup/config invariants:
   - `pytest -q tests/contract/openclaw/test_openclaw_bootstrap.py`

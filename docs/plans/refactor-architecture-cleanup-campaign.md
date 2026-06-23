@@ -85,6 +85,7 @@ Surface metrics:
 | Delete private path-containment helpers | 4 | 4 | 4 | 0 | preserved |
 | Delete stale AI2-THOR/harness agent docs | 4 | 4 | 0 | 0 | preserved |
 | Delete provider timing proxy script wrapper | 1 | 1 | 0 | 1 | preserved |
+| Replace stale OpenClaw image-update command | 1 | 1 | 0 | 2 | preserved |
 
 Low-value stop signal:
 
@@ -100,7 +101,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after provider timing proxy script wrapper deletion.
+Fresh discovery required after stale OpenClaw image-update command replacement.
 
 ## Completed Slices
 
@@ -327,6 +328,28 @@ Fresh discovery required after provider timing proxy script wrapper deletion.
   .venv/bin/ruff check roboclaws/agents/provider_timing_proxy.py tests/unit/agents/test_provider_timing_proxy.py
   git diff --check
   ```
+
+- 2026-06-23: Replaced the stale
+  `just openclaw::run photo` command in the OpenClaw image-upgrade checklist
+  with the current maintainer dispatcher route
+  `just agent::run household-world.cleanup openclaw-gateway world-public-labels`.
+  Added a focused contract guard proving the doc no longer points at the
+  removed private command and that the current dispatcher trace still resolves
+  to the OpenClaw live implementation route without launching Docker or a
+  provider.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
+  ROBOCLAWS_JUST_TRACE=1 just agent::run household-world.cleanup openclaw-gateway world-public-labels
+  rg -n "just openclaw::run photo|openclaw::run" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
+  git diff --check
+  ```
+
+  Note: the stale-reference search now returns only intentional regression
+  guards in `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
 
 ## Parked Candidates
 
