@@ -8,8 +8,9 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete the Pages prune script wrapper and migrate CI to the package module
-  CLI, then run a fresh discovery handoff after commit.
+- First fresh discovery handoff after `90e2c0d8` found no clear safe P1/P2
+  implementation slice. Run the required second fresh discovery handoff from
+  the next checkpoint commit.
 
 Last proven evidence:
 
@@ -25,6 +26,9 @@ Last proven evidence:
   --help` printed CLI help; stale wrapper path search returns only the
   intentional removal guard; ruff passed on touched files; and `git diff
   --check` passed.
+- Post-`90e2c0d8` discovery checked current script wrappers, current package
+  micro-modules, active docs/tests/recipes, and stale names from previous
+  slices. No clear safe P1/P2 slice remained after shrink attempts.
 
 Completed slice batch:
 
@@ -75,10 +79,8 @@ Completed slice batch:
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_pages_site_prune.py
-python -m roboclaws.devtools.pages_site --help
-rg -n "scripts/reports/prune_pages_site.py|prune_pages_site.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check roboclaws/devtools/pages_site.py tests/contract/reports/test_pages_site_prune.py
+node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs" --examples 4
+rg -n "<candidate-specific stale token>" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
 git diff --check
 ```
 
@@ -111,3 +113,8 @@ Parked work:
   used by `just/molmo.just` and covered by a CLI contract test. Removing it
   safely would need a separate recipe/test migration around a simulator-heavy
   surface.
+- No-clear pass 1 parked `scripts/maps/check_bundle.py`,
+  `scripts/maps/export_agibot_map_bundle.py`, and
+  `scripts/molmo_cleanup/prepare_molmospaces_room.py` because they still own
+  real CLI argument/default behavior instead of pure pass-through wrapper
+  behavior.

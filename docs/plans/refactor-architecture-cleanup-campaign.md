@@ -104,11 +104,28 @@ Discovery cadence:
 - Run a fresh reduce-entropy discovery handoff when the candidate queue is
   exhausted.
 
-Consecutive no-clear-candidate passes: 0
+Consecutive no-clear-candidate passes: 1
 
 ## Candidate Queue
 
-Fresh discovery required after Pages prune script wrapper deletion.
+No clear safe P1/P2 implementation slice found in the first fresh discovery
+handoff after `90e2c0d8`.
+
+Checked and parked:
+
+- Tiny script wrapper scan: `scripts/molmo_cleanup/run_molmospaces_scene_camera_comparison.py`
+  is still a live `just/molmo.just` recipe path and has a CLI contract test.
+  Removing it safely would require a separate recipe/test migration around a
+  simulator-heavy surface.
+- Tiny script scan: `scripts/maps/check_bundle.py`,
+  `scripts/maps/export_agibot_map_bundle.py`, and
+  `scripts/molmo_cleanup/prepare_molmospaces_room.py` still own real CLI
+  argument/default behavior rather than pure pass-through wrapper behavior.
+- Current stale-token scan: remaining hits are intentional regression guards,
+  current public aliases, historical docs explicitly marked as historical, or
+  compatibility readers for persisted artifacts.
+
+Run the required second fresh discovery handoff after this state checkpoint.
 
 ## Completed Slices
 
