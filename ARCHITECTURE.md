@@ -65,9 +65,11 @@ Harness recipes
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
-  (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  or `direct-runner`) from the model/key route (`provider_profile=codex-router-responses`,
+  (`agent_engine=codex-cli`, `claude-code`, or `openai-agents-sdk`) from the
+  model/key route (`provider_profile=codex-router-responses`,
   `mimo-mify-responses`, `mimo-tp-anthropic`, and related profiles).
+  `direct-runner` is the deterministic contract/eval baseline, not a live robot
+  agent runtime.
   Validation-required maintainer engines stay outside the normal public engine
   list until their separate proof gates are green. The active stabilization
   focus is coding-agent routes and the OpenAI Agents SDK route; higher-level
@@ -171,7 +173,7 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels scenario_setup=relocate-cleanup-related-objects seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run

@@ -18,8 +18,8 @@ route summary.
 | --- | --- | --- | --- |
 | `codex-cli` | `codex-router-responses` | `gpt-5.5` | Healthy default route for structured and camera-label lanes. |
 | `claude-code` | `mimo-tp-anthropic` | `mimo-v2.5` | Healthy when the repo-local key is configured. |
-| `openai-agents-sdk` | explicit profile required | route-specific | Experimental/non-default product route. |
-| `direct-runner` | none | none | Deterministic; no model route. |
+| `openai-agents-sdk` | `codex-router-responses` | `gpt-5.5` | Preferred product route for map-build and OpenAI Agents SDK live evals when provider capacity is healthy. |
+| `direct-runner` | none | none | Deterministic contract/eval baseline; no model route and not a live robot agent. |
 
 Useful explicit profiles:
 

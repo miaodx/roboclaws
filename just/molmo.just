@@ -250,8 +250,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         exit 1
         ;;
     esac
-    if [[ "$map_build_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" ]]; then
-      echo "error: map-build mode currently supports direct or codex-live driver only" >&2
+    if [[ "$map_build_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" && "$driver" != "openai-agents-live" ]]; then
+      echo "error: map-build mode currently supports direct, codex-live, or openai-agents-live driver only" >&2
       exit 1
     fi
     perception_mode="visible_object_detections"
@@ -366,7 +366,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     fi
     map_build_args=()
     checker_map_build_args=()
-    if [[ "$map_build_enabled" == "true" && "$driver" == "codex-live" ]]; then
+    if [[ "$map_build_enabled" == "true" && ( "$driver" == "codex-live" || "$driver" == "openai-agents-live" ) ]]; then
       checker_map_build_args=(--require-runtime-metric-map)
       profile_requires_clean_success="false"
       filtered_checker_visual_args=()

@@ -25,7 +25,7 @@
     "trajectory_policy_violation_count": 0
   },
   "metadata": {
-    "runner_scope": "direct-runner-only",
+    "runner_scope": "direct-runner-contract-baseline-and-openai-agents-live",
     "live_provider_required": false,
     "runtime_map_prior_flow": "map_build.baseline_seed7 -> cleanup.consume_map_seed7"
   }

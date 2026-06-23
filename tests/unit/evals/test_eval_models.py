@@ -339,6 +339,18 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
     assert {sample.sample_id for sample in loaded} <= suite_sample_ids
 
+    map_build_sample = next(
+        sample for sample in loaded if sample.sample_id == "map_build.baseline_seed7"
+    )
+    assert map_build_sample.evidence_lane == "camera-grounded-labels"
+    assert map_build_sample.camera_labeler == "grounding-dino"
+    assert map_build_sample.allowed_agent_engines == ("direct-runner", "openai-agents-sdk")
+    assert map_build_sample.provider_profiles == (
+        MISSING_NOT_APPLICABLE,
+        "codex-router-responses",
+        "minimax-responses",
+    )
+
     open_ended_suite = suites[3]
     assert open_ended_suite.suite_id == "household_world.open_ended_goals"
     assert open_ended_suite.sample_ids == (
