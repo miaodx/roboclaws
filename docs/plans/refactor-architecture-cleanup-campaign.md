@@ -89,6 +89,7 @@ Surface metrics:
 | Replace stale OpenClaw doc paths | 0 | 1 | 0 | 3 | preserved |
 | Delete unused launch context holder | 1 | 1 | 0 | 1 | preserved |
 | Delete cleanup report regeneration script wrapper | 1 | 1 | 0 | 1 | preserved |
+| Delete Kimi-only key checker wrapper | 1 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -104,8 +105,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after cleanup report regeneration script wrapper
-deletion.
+Fresh discovery required after Kimi-only key checker wrapper deletion.
 
 ## Completed Slices
 
@@ -424,6 +424,27 @@ deletion.
   Agent View v2 artifact-shape failure (`agent_view.observed_objects` /
   missing `agent_view_v2` sections). The wrapper deletion does not change that
   owner behavior, so this slice used no-caller and importability proof.
+
+- 2026-06-23: Deleted the no-caller private
+  `scripts/dev/check_kimi_key.py` wrapper and its wrapper-only tests. Current
+  provider health checks are owned by `scripts/dev/check_model_providers.py`,
+  which covers both `agents-sdk:kimi-openai-chat` and
+  `provider:kimi-coding-chat` routes with Kimi-specific request and response
+  guards.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_check_model_providers.py::test_provider_probe_defaults_cover_kimi_and_payload tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_provider_response_source tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_response_message_shape tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_reads_reasoning_content_from_valid_response tests/unit/providers/test_check_model_providers.py::test_select_probe_can_limit_kimi_route_across_sdk_and_provider_probes
+  test ! -e scripts/dev/check_kimi_key.py && test ! -e tests/unit/providers/test_check_kimi_key.py
+  rg -n "check_kimi_key|scripts/dev/check_kimi_key.py|test_check_kimi_key" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check scripts/dev/check_model_providers.py tests/unit/providers/test_check_model_providers.py
+  git diff --check
+  ```
+
+  Note: historical plans/research may still mention earlier Kimi-key smoke
+  checks as dated evidence. They are not current run guidance and were left as
+  history.
 
 ## Parked Candidates
 

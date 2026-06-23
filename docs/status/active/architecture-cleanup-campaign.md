@@ -8,8 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete cleanup report regeneration script wrapper, then run a fresh discovery
-  handoff.
+- Delete Kimi-only key checker wrapper, then run a fresh discovery handoff.
 
 Last proven evidence:
 
@@ -39,6 +38,9 @@ Last proven evidence:
 - Follow-up discovery found
   `scripts/reports/regenerate_molmo_cleanup_report.py`, a no-caller private
   wrapper around the tested `roboclaws.household.artifact_report` owner.
+- Fresh post-HEAD discovery found `scripts/dev/check_kimi_key.py`, a no-caller
+  private wrapper around Kimi key validation after provider health checks moved
+  to the generic `scripts/dev/check_model_providers.py` owner.
 
 Completed slice batch:
 
@@ -75,18 +77,16 @@ Completed slice batch:
   added a focused guard.
 - Slice 16: deleted the no-caller cleanup report regeneration script wrapper
   and added a focused guard while preserving the artifact-report owner.
+- Slice 17: deleted the no-caller Kimi-only key checker wrapper and its
+  wrapper-only tests while preserving the generic provider health-check owner.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_regenerate_cleanup_report_script_wrapper_stays_removed tests/contract/reports/test_molmo_cleanup_artifact_report.py::test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest
-python - <<'PY'
-from roboclaws.household.artifact_report import rerender_cleanup_reports_from_artifact_paths
-assert callable(rerender_cleanup_reports_from_artifact_paths)
-print(rerender_cleanup_reports_from_artifact_paths.__name__)
-PY
-test ! -e scripts/reports/regenerate_molmo_cleanup_report.py && rg -n "regenerate_molmo_cleanup_report|scripts/reports/regenerate_molmo_cleanup_report.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check roboclaws/household/artifact_report.py tests/contract/reports/test_molmo_cleanup_artifact_report.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_check_model_providers.py::test_provider_probe_defaults_cover_kimi_and_payload tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_provider_response_source tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_response_message_shape tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_reads_reasoning_content_from_valid_response tests/unit/providers/test_check_model_providers.py::test_select_probe_can_limit_kimi_route_across_sdk_and_provider_probes
+test ! -e scripts/dev/check_kimi_key.py && test ! -e tests/unit/providers/test_check_kimi_key.py
+rg -n "check_kimi_key|scripts/dev/check_kimi_key.py|test_check_kimi_key" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check scripts/dev/check_model_providers.py tests/unit/providers/test_check_model_providers.py
 git diff --check
 ```
 
