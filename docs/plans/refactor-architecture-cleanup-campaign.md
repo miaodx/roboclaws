@@ -1,6 +1,6 @@
 # Refactor: Architecture Cleanup Campaign
 
-**Status:** ACTIVE
+**Status:** SATURATED
 **Created:** 2026-06-23
 **Source:** `$intuitive-reduce-entropy` saturation scan,
 `$improve-codebase-architecture` report-only review, `$intuitive-refactor`
@@ -104,12 +104,12 @@ Discovery cadence:
 - Run a fresh reduce-entropy discovery handoff when the candidate queue is
   exhausted.
 
-Consecutive no-clear-candidate passes: 1
+Consecutive no-clear-candidate passes: 2
 
 ## Candidate Queue
 
-No clear safe P1/P2 implementation slice found in the first fresh discovery
-handoff after `90e2c0d8`.
+No clear safe P1/P2 implementation slice found in two consecutive fresh
+discovery handoffs after the latest implementation commit.
 
 Checked and parked:
 
@@ -124,8 +124,12 @@ Checked and parked:
 - Current stale-token scan: remaining hits are intentional regression guards,
   current public aliases, historical docs explicitly marked as historical, or
   compatibility readers for persisted artifacts.
+- Second post-HEAD handoff after `9c70b796` rechecked the same script-wrapper,
+  package micro-module, stale owner-name, docs/tests/recipes, and high-noise
+  surfaces. It found no new material safe slice.
 
-Run the required second fresh discovery handoff after this state checkpoint.
+The campaign stop condition is met. Restart only with a new accepted target,
+public migration decision, or proof surface.
 
 ## Completed Slices
 
