@@ -79,6 +79,7 @@ Surface metrics:
 | Delete duplicate root cleanup example wrapper | 1 | 1 | 0 | 0 | preserved |
 | Delete root script symlink shims | 9 | 9 | 0 | 0 | preserved |
 | Delete `SIM_SERVER_URL` bootstrap fallback | 1 | 1 | 0 | 1 | preserved |
+| Delete empty `roboclaws.openclaw` package | 1 | 1 | 1 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -201,6 +202,31 @@ Fresh discovery required.
   guard in `tests/contract/openclaw/test_openclaw_bootstrap.py`; production
   bootstrap, recipes, current docs, and runtime adapters no longer reference
   the legacy variable.
+
+- 2026-06-23: Deleted the empty `roboclaws.openclaw` source package and removed
+  the pre-commit hook branch that still treated `roboclaws/openclaw/*` as a
+  current source owner. OpenClaw maintainer implementation remains under
+  `scripts/openclaw/`; the tracked `tests/unit/openclaw` test still targets
+  `scripts/openclaw/control_ui_watcher.py` directly.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_verify_just_recipes.py::test_pre_commit_runs_scoped_tests_by_default_with_full_fast_opt_in tests/contract/dev_tools/test_verify_just_recipes.py::test_pre_commit_no_longer_infers_retired_domains tests/unit/openclaw/test_control_ui_watcher.py -q
+  test ! -e roboclaws/openclaw && python - <<'PY'
+  import importlib.util
+  spec = importlib.util.find_spec('roboclaws.openclaw')
+  assert spec is None, spec
+  PY
+  .venv/bin/ruff check tests/contract/dev_tools/test_verify_just_recipes.py tests/unit/openclaw/test_control_ui_watcher.py
+  rg -n "roboclaws/openclaw|roboclaws\.openclaw|tests/unit/openclaw" .githooks tests/contract/dev_tools tests/unit/openclaw roboclaws scripts examples docs/human docs/agents README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md pyproject.toml .github
+  git diff --check
+  ```
+
+  Note: local generated `roboclaws/openclaw/__pycache__` files were removed
+  before the import proof; they were untracked cache from retired modules. The
+  stale-reference search now returns only the intentional regression guard in
+  `tests/contract/dev_tools/test_verify_just_recipes.py`.
 
 ## Parked Candidates
 

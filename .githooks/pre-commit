@@ -115,10 +115,6 @@ infer_tests_for_path() {
         roboclaws/core/*)
             add_test_target "tests/unit/core"
             ;;
-        roboclaws/openclaw/*)
-            add_test_target "tests/unit/openclaw"
-            add_test_target "tests/contract/openclaw"
-            ;;
         roboclaws/maps/*)
             add_test_target "tests/contract/maps"
             ;;

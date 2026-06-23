@@ -8,17 +8,17 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff after the `SIM_SERVER_URL` bootstrap fallback
+- Fresh discovery handoff after the empty `roboclaws.openclaw` package
   deletion slice.
 
 Last proven evidence:
 
-- Deleted the stale `SIM_SERVER_URL` translate-and-warn fallback from
-  `scripts/openclaw/openclaw-bootstrap.sh`.
-- Focused OpenClaw preseed tests, bash syntax, ruff on the touched test file,
-  stale-reference search, and `git diff --check` passed.
-- The only remaining live-path `SIM_SERVER_URL` text is the intentional
-  regression guard in `tests/contract/openclaw/test_openclaw_bootstrap.py`.
+- Deleted the empty `roboclaws.openclaw` source package and removed the stale
+  pre-commit hook branch for `roboclaws/openclaw/*`.
+- Focused hook and OpenClaw script tests, import absence proof, ruff on touched
+  tests, stale-reference search, and `git diff --check` passed.
+- The only remaining live-path `roboclaws/openclaw` text is the intentional
+  regression guard in `tests/contract/dev_tools/test_verify_just_recipes.py`.
 - `git diff --check` passed.
 
 Completed slice batch:
@@ -35,6 +35,8 @@ Completed slice batch:
 - Slice 6: removed the OpenClaw bootstrap's stale `SIM_SERVER_URL`
   compatibility fallback while preserving canonical `ROBOCLAWS_MCP_URL`
   defaulting and overrides.
+- Slice 7: removed the empty `roboclaws.openclaw` source package and stopped
+  the pre-commit hook from routing staged changes in that retired package.
 
 Next proof:
 
