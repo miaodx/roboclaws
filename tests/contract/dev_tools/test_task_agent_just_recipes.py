@@ -1111,6 +1111,9 @@ def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
     update_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "update.md").read_text(
         encoding="utf-8"
     )
+    tool_profiles_doc = (
+        REPO_ROOT / "docs" / "ai" / "openclaw" / "tool-profiles.md"
+    ).read_text(encoding="utf-8")
     route = trace_agent_run(
         "household-world.cleanup",
         "openclaw-gateway",
@@ -1118,9 +1121,12 @@ def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
     )
 
     assert "just openclaw::run photo" not in update_doc
+    assert "territory/coverage scripts" not in update_doc
     assert "just agent::run household-world.cleanup openclaw-gateway world-public-labels" in (
         update_doc
     )
+    assert "active TODO" not in tool_profiles_doc
+    assert "minimal+alsoAllow:[bundle-mcp]" not in tool_profiles_doc
     assert route[:5] == [
         "just",
         "molmo::household-world-impl",

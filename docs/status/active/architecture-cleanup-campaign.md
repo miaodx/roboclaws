@@ -8,7 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Delete Kimi-only key checker wrapper, then run a fresh discovery handoff.
+- Update stale OpenClaw image-bump docs, then run a fresh discovery handoff.
 
 Last proven evidence:
 
@@ -41,6 +41,9 @@ Last proven evidence:
 - Fresh post-HEAD discovery found `scripts/dev/check_kimi_key.py`, a no-caller
   private wrapper around Kimi key validation after provider health checks moved
   to the generic `scripts/dev/check_model_providers.py` owner.
+- Fresh post-HEAD discovery found current OpenClaw image-bump docs that still
+  pointed at a nonexistent `TODOS.md` item and retired territory/coverage phase
+  scripts instead of current OpenClaw maintainer routes.
 
 Completed slice batch:
 
@@ -79,14 +82,16 @@ Completed slice batch:
   and added a focused guard while preserving the artifact-report owner.
 - Slice 17: deleted the no-caller Kimi-only key checker wrapper and its
   wrapper-only tests while preserving the generic provider health-check owner.
+- Slice 18: updated stale OpenClaw image-bump docs away from the missing TODO
+  and retired game-script examples while preserving current OpenClaw maintainer
+  routes.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_check_model_providers.py::test_provider_probe_defaults_cover_kimi_and_payload tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_provider_response_source tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_validates_response_message_shape tests/unit/providers/test_check_model_providers.py::test_kimi_provider_probe_reads_reasoning_content_from_valid_response tests/unit/providers/test_check_model_providers.py::test_select_probe_can_limit_kimi_route_across_sdk_and_provider_probes
-test ! -e scripts/dev/check_kimi_key.py && test ! -e tests/unit/providers/test_check_kimi_key.py
-rg -n "check_kimi_key|scripts/dev/check_kimi_key.py|test_check_kimi_key" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check scripts/dev/check_model_providers.py tests/unit/providers/test_check_model_providers.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
+! rg -n "active TODO|minimal\\+alsoAllow:\\[bundle-mcp\\]|territory/coverage scripts|just openclaw::run photo" docs/ai/openclaw
+.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
 git diff --check
 ```
 

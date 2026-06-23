@@ -90,6 +90,7 @@ Surface metrics:
 | Delete unused launch context holder | 1 | 1 | 0 | 1 | preserved |
 | Delete cleanup report regeneration script wrapper | 1 | 1 | 0 | 1 | preserved |
 | Delete Kimi-only key checker wrapper | 1 | 1 | 0 | 1 | preserved |
+| Update stale OpenClaw image-bump docs | 0 | 1 | 0 | 2 | preserved |
 
 Low-value stop signal:
 
@@ -105,7 +106,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after Kimi-only key checker wrapper deletion.
+Fresh discovery required after stale OpenClaw image-bump doc update.
 
 ## Completed Slices
 
@@ -445,6 +446,21 @@ Fresh discovery required after Kimi-only key checker wrapper deletion.
   Note: historical plans/research may still mention earlier Kimi-key smoke
   checks as dated evidence. They are not current run guidance and were left as
   history.
+
+- 2026-06-23: Updated current OpenClaw image-bump docs that still pointed
+  maintainers at a nonexistent TODO and retired territory/coverage phase
+  scripts. The tool-profile note now treats `minimal + alsoAllow` as the
+  current default until an image probe or accepted plan changes it, and the
+  image-update checklist now names only current OpenClaw maintainer routes.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
+  ! rg -n "active TODO|minimal\\+alsoAllow:\\[bundle-mcp\\]|territory/coverage scripts|just openclaw::run photo" docs/ai/openclaw
+  .venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
+  git diff --check
+  ```
 
 ## Parked Candidates
 
