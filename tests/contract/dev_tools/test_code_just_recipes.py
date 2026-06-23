@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from roboclaws.devtools.commands import resolve_surface_run
+from roboclaws.launch import resolve_surface_launch
 
 
 def _repo_root() -> Path:
@@ -206,7 +206,7 @@ def test_retired_photo_coding_agent_routes_are_not_advertised() -> None:
 
 def test_retired_photo_task_facade_rejects_ai2thor_surface() -> None:
     try:
-        resolve_surface_run(
+        resolve_surface_launch(
             ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=codex-cli")
         )
     except Exception as exc:

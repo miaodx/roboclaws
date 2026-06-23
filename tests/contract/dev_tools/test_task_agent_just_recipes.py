@@ -17,7 +17,6 @@ from roboclaws.agents.prompts.household_cleanup import (
     render_kickoff_prompt,
     render_map_build_prompt,
 )
-from roboclaws.devtools.commands import CommandError, resolve_surface_run
 from roboclaws.launch import resolve_surface_launch
 from roboclaws.launch.catalog import LaunchError
 from roboclaws.launch.evaluation import (
@@ -965,7 +964,7 @@ def test_surface_router_rejects_invalid_current_axis_values(
 
 
 def test_surface_router_is_importable_source_of_truth() -> None:
-    resolved = resolve_surface_run(
+    resolved = resolve_surface_launch(
         (
             "surface=household-world",
             "agent_engine=codex-cli",
@@ -998,8 +997,8 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert resolved.provider_profile == "codex-router-responses"
     assert resolved.mode == "smoke"
 
-    with pytest.raises(CommandError, match="unsupported surface 'molmospace-cleanup'"):
-        resolve_surface_run(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
+    with pytest.raises(LaunchError, match="unsupported surface 'molmospace-cleanup'"):
+        resolve_surface_launch(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
 
 
 def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
