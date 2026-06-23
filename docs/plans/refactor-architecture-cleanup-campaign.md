@@ -86,6 +86,7 @@ Surface metrics:
 | Delete stale AI2-THOR/harness agent docs | 4 | 4 | 0 | 0 | preserved |
 | Delete provider timing proxy script wrapper | 1 | 1 | 0 | 1 | preserved |
 | Replace stale OpenClaw image-update command | 1 | 1 | 0 | 2 | preserved |
+| Replace stale OpenClaw doc paths | 0 | 1 | 0 | 3 | preserved |
 
 Low-value stop signal:
 
@@ -101,7 +102,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after stale OpenClaw image-update command replacement.
+Fresh discovery required after stale OpenClaw doc-path replacement.
 
 ## Completed Slices
 
@@ -350,6 +351,26 @@ Fresh discovery required after stale OpenClaw image-update command replacement.
 
   Note: the stale-reference search now returns only intentional regression
   guards in `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
+
+- 2026-06-23: Replaced stale OpenClaw documentation paths that pointed to the
+  removed `docs/openclw/` and root `docs/model-matrix.md` locations. OpenClaw
+  bootstrap comments, the plugin allow-list module docstring, and OpenClaw
+  bootstrap contract-test guidance now point at the current documentation
+  owners under `docs/human/openclaw/`, `docs/ai/openclaw/`, and
+  `docs/human/model-matrix.md`.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/contract/openclaw/test_openclaw_bootstrap.py::test_nvidia_curated_to_single_multi_image_model tests/contract/openclaw/test_openclaw_bootstrap.py::test_only_curated_providers_supported tests/contract/openclaw/test_openclaw_bootstrap.py::test_advertised_context_windows_clear_flush_headroom tests/contract/openclaw/test_openclaw_bootstrap.py::test_mcp_seeds_per_agent_tools_profile_minimal tests/contract/openclaw/test_openclaw_bootstrap.py::test_bootstrap_reads_canonical_plugin_allowlist
+  bash -n scripts/openclaw/openclaw-bootstrap.sh
+  .venv/bin/ruff check scripts/openclaw/openclaw_plugin_allowlist.py tests/contract/openclaw/test_openclaw_bootstrap.py
+  rg -n "docs/openclw|openclw|docs/model-matrix\.md" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  git diff --check
+  ```
+
+  Note: the stale-path search exits with no matches, which is the expected
+  result.
 
 ## Parked Candidates
 

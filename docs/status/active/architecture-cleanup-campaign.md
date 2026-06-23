@@ -8,8 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Replace stale OpenClaw image-upgrade checklist command, then run a fresh
-  discovery handoff.
+- Replace stale OpenClaw documentation paths, then run a fresh discovery
+  handoff.
 
 Last proven evidence:
 
@@ -29,6 +29,10 @@ Last proven evidence:
   removed `just openclaw::run photo` private command; the checklist now uses
   the current `agent::run` maintainer dispatcher and has a trace-mode contract
   guard.
+- Follow-up discovery found OpenClaw scripts and contract-test guidance still
+  pointing readers at removed `docs/openclw/` and root `docs/model-matrix.md`
+  paths; those now point to current `docs/human/openclaw/`,
+  `docs/ai/openclaw/`, and `docs/human/model-matrix.md` owners.
 
 Completed slice batch:
 
@@ -59,14 +63,16 @@ Completed slice batch:
   the implemented provider-timing plan to name only the module owner.
 - Slice 13: replaced the stale OpenClaw image-upgrade checklist command with
   the current maintainer dispatcher route and added a contract guard.
+- Slice 14: replaced stale OpenClaw doc paths in bootstrap comments,
+  plugin-allowlist guidance, and OpenClaw bootstrap contract-test guidance.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py::test_openclaw_image_update_doc_uses_current_maintainer_dispatch
-ROBOCLAWS_JUST_TRACE=1 just agent::run household-world.cleanup openclaw-gateway world-public-labels
-rg -n "just openclaw::run photo|openclaw::run" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/openclaw/test_openclaw_bootstrap.py::test_nvidia_curated_to_single_multi_image_model tests/contract/openclaw/test_openclaw_bootstrap.py::test_only_curated_providers_supported tests/contract/openclaw/test_openclaw_bootstrap.py::test_advertised_context_windows_clear_flush_headroom tests/contract/openclaw/test_openclaw_bootstrap.py::test_mcp_seeds_per_agent_tools_profile_minimal tests/contract/openclaw/test_openclaw_bootstrap.py::test_bootstrap_reads_canonical_plugin_allowlist
+bash -n scripts/openclaw/openclaw-bootstrap.sh
+.venv/bin/ruff check scripts/openclaw/openclaw_plugin_allowlist.py tests/contract/openclaw/test_openclaw_bootstrap.py
+rg -n "docs/openclw|openclw|docs/model-matrix\.md" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
 git diff --check
 ```
 
