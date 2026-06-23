@@ -282,3 +282,7 @@ def _print_missing(plan: PrunePlan) -> None:
 def _print_deleted(plan: PrunePlan) -> None:
     for path in plan.delete_files:
         print(f"delete {path.relative_to(plan.site_dir)}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

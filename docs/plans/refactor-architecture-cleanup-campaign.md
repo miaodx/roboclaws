@@ -92,6 +92,7 @@ Surface metrics:
 | Delete Kimi-only key checker wrapper | 1 | 1 | 0 | 1 | preserved |
 | Update stale OpenClaw image-bump docs | 0 | 1 | 0 | 2 | preserved |
 | Move model-matrix benchmark helpers to agent owner | 2 | 1 | 1 | 1 | preserved |
+| Delete Pages prune script wrapper | 1 | 1 | 1 | 2 | preserved |
 
 Low-value stop signal:
 
@@ -107,7 +108,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required after model-matrix benchmark helper owner move.
+Fresh discovery required after Pages prune script wrapper deletion.
 
 ## Completed Slices
 
@@ -481,6 +482,25 @@ Fresh discovery required after model-matrix benchmark helper owner move.
   ./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
   rg -n "model_matrix_benchmark_catalog|model_matrix_benchmark_wire|scripts/dev/model_matrix_benchmark_catalog.py|scripts/dev/model_matrix_benchmark_wire.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
   .venv/bin/ruff check scripts/dev/benchmark_model_matrix.py roboclaws/agents/model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
+  git diff --check
+  ```
+
+- 2026-06-23: Deleted the pass-through
+  `scripts/reports/prune_pages_site.py` wrapper and migrated the GitHub Pages
+  workflow to the canonical module CLI
+  `python3 -m roboclaws.devtools.pages_site site`. The package owner already
+  held the Pages pruning implementation and direct unit/contract tests; this
+  slice added the missing module entrypoint plus a subprocess regression test
+  that proves `python -m roboclaws.devtools.pages_site` deletes unreferenced
+  files before CI relies on it.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_pages_site_prune.py
+  python -m roboclaws.devtools.pages_site --help
+  rg -n "scripts/reports/prune_pages_site.py|prune_pages_site.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  .venv/bin/ruff check roboclaws/devtools/pages_site.py tests/contract/reports/test_pages_site_prune.py
   git diff --check
   ```
 

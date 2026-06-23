@@ -8,22 +8,23 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Move model-matrix benchmark helpers to the agent/provider owner, then run a
-  fresh discovery handoff after commit.
+- Delete the Pages prune script wrapper and migrate CI to the package module
+  CLI, then run a fresh discovery handoff after commit.
 
 Last proven evidence:
 
-- Fresh post-HEAD discovery shrank a medium-risk model-matrix benchmark helper
-  owner move into an internal slice: keep public
-  `just dev::model-matrix-benchmark` and `scripts/dev/benchmark_model_matrix.py`,
-  but move catalog/dataclass/wire-format helper logic from sibling
-  `scripts/dev/model_matrix_benchmark_{catalog,wire}.py` modules into
-  `roboclaws.agents.model_matrix_benchmark`.
-- Deleted the two old script helper modules and updated the MiMo migration
-  guard to allow the package owner instead of the deleted catalog helper.
-- Focused model-matrix benchmark tests and MiMo migration guard passed; stale
-  helper path search returned no matches; ruff passed on touched files; and
-  `git diff --check` passed.
+- Fresh post-HEAD discovery found `scripts/reports/prune_pages_site.py`, a
+  pure pass-through wrapper around the existing
+  `roboclaws.devtools.pages_site` owner. The only tracked caller was the GitHub
+  Pages workflow.
+- Migrated `.github/workflows/ci.yml` to
+  `python3 -m roboclaws.devtools.pages_site site`, deleted the wrapper, added a
+  canonical module entrypoint, and added a subprocess regression test proving
+  the module CLI prunes an unreferenced file.
+- Focused Pages prune tests passed; `python -m roboclaws.devtools.pages_site
+  --help` printed CLI help; stale wrapper path search returns only the
+  intentional removal guard; ruff passed on touched files; and `git diff
+  --check` passed.
 
 Completed slice batch:
 
@@ -68,13 +69,16 @@ Completed slice batch:
 - Slice 19: moved model-matrix benchmark catalog and wire helper logic from
   private script-directory modules to the `roboclaws.agents` owner while
   preserving the public dev benchmark command.
+- Slice 20: deleted the Pages prune script wrapper and migrated CI to the
+  `roboclaws.devtools.pages_site` module CLI.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
-rg -n "model_matrix_benchmark_catalog|model_matrix_benchmark_wire|scripts/dev/model_matrix_benchmark_catalog.py|scripts/dev/model_matrix_benchmark_wire.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check scripts/dev/benchmark_model_matrix.py roboclaws/agents/model_matrix_benchmark.py tests/contract/regression/test_mimo_v25_migration_guard.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_pages_site_prune.py
+python -m roboclaws.devtools.pages_site --help
+rg -n "scripts/reports/prune_pages_site.py|prune_pages_site.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+.venv/bin/ruff check roboclaws/devtools/pages_site.py tests/contract/reports/test_pages_site_prune.py
 git diff --check
 ```
 
@@ -102,3 +106,8 @@ Parked work:
   no-caller/importability proof unless that owner behavior is changed.
 - Obsolete checker flag removal needs public checker CLI migration approval
   because it would change an actionable error into a generic unknown-flag error.
+- `scripts/molmo_cleanup/run_molmospaces_scene_camera_comparison.py` remains
+  parked: it is a pass-through module CLI wrapper, but it is still the path
+  used by `just/molmo.just` and covered by a CLI contract test. Removing it
+  safely would need a separate recipe/test migration around a simulator-heavy
+  surface.
