@@ -123,9 +123,12 @@ ROUTE_FIELD_APP_REQUIRED = (
     "markCurrentMessupStatus",
     "resetMessupStatusForManualSetup",
     "/next-goal",
+    "/resume",
     "Start Next Goal",
     "Confirm Next Goal",
+    "Resume With Prompt",
     "check_operator_messages",
+    "operator_resume_requests.jsonl",
     "attachLatestResult",
     "/api/runs/latest",
     "attachExistingRun",
@@ -553,6 +556,8 @@ def test_static_app_wires_manual_relative_navigation_controls() -> None:
     assert "/control" in app
     assert "supports_relative_navigation_control" in app
     assert "relative_navigation_control_available" in app
+    assert "operator_handoff_paused" in app
+    assert "supports_paused_handoff_resume" in app
     assert "operator moves are recorded as assisted interventions".lower() in app.lower()
     assert ".manual-control-panel" in css
     assert ".manual-control-grid" in css

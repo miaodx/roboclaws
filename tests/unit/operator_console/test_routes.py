@@ -37,6 +37,9 @@ MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
     "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
     "world-public-labels"
 )
+MUJOCO_CLAUDE_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
+)
 
 
 def test_world_catalog_exposes_scene_first_console_choices() -> None:
@@ -444,6 +447,14 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert "scenario_setup=baseline" in mujoco["argv_preview"]
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
+    assert mujoco["supports_operator_steer"] is True
+    assert mujoco["supports_paused_handoff_resume"] is True
+    assert get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()[
+        "supports_paused_handoff_resume"
+    ] is True
+    assert get_selection(MUJOCO_CLAUDE_OPEN_TASK).to_payload()[
+        "supports_paused_handoff_resume"
+    ] is False
 
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "context_json" in agibot["required_overrides"]
@@ -464,6 +475,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
         "b1_navigation_artifact",
     ]
     assert b1_openai_agents["supports_relative_navigation_control"] is True
+    assert b1_openai_agents["supports_paused_handoff_resume"] is True
     assert "agent_engine=openai-agents-sdk" in b1_openai_agents["argv_preview"]
 
 

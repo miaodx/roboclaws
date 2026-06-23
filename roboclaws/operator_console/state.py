@@ -157,6 +157,18 @@ def derive_operator_state(
     normalized_status = _status_from_phase(phase, checker, terminal_reason)
     controls_terminal = _control_terminal_state(phase, normalized_status, terminal_reason)
     supports_relative_control = bool(route.supports_relative_navigation_control) if route else False
+    operator_handoff_paused = _operator_handoff_paused(phase, terminal_reason)
+    supports_resume = bool(route.supports_paused_handoff_resume) if route else False
+    raw_resume_available = bool(
+        live_status.get("resume_available") or status.get("resume_available")
+    )
+    resume_available = bool(operator_handoff_paused and supports_resume and raw_resume_available)
+    steer_available = bool(
+        route
+        and route.supports_operator_steer
+        and not controls_terminal
+        and not operator_handoff_paused
+    )
     relative_control_available = bool(supports_relative_control and not controls_terminal)
     stop_available = _stop_available(
         root=root,
@@ -190,6 +202,9 @@ def derive_operator_state(
         "latest_view_assets": latest_view_assets,
         "checker_status": checker,
         "terminal_reason": terminal_reason,
+        "operator_handoff_paused": operator_handoff_paused,
+        "live_resume_available": raw_resume_available,
+        "live_retryable": bool(live_status.get("retryable")),
         "source_errors": [error.to_payload(root) for error in source_errors],
         "public_run_result": public_result,
         "prompt_preview": prompt_preview,
@@ -201,10 +216,12 @@ def derive_operator_state(
         "operator_interventions": status.get("operator_interventions") or {},
         "controls": {
             "next_goal_available": controls_terminal,
-            "steer_available": bool(route.supports_operator_steer)
-            if route and not controls_terminal
-            else False,
+            "steer_available": steer_available,
+            "resume_available": resume_available,
+            "resume_blocked": bool(operator_handoff_paused and not resume_available),
+            "operator_handoff_paused": operator_handoff_paused,
             "supports_operator_steer": bool(route.supports_operator_steer) if route else False,
+            "supports_paused_handoff_resume": supports_resume,
             "relative_navigation_control_available": relative_control_available,
             "supports_relative_navigation_control": supports_relative_control,
             "pause_available": bool(route.pause_supported) if route else False,
@@ -780,6 +797,13 @@ def _control_terminal_state(phase: str, status: str, terminal_reason: str) -> bo
         phase.lower() in terminal_values
         or status.lower() in terminal_values
         or terminal_reason.lower() in terminal_values
+    )
+
+
+def _operator_handoff_paused(phase: str, terminal_reason: str) -> bool:
+    return (
+        phase.lower() == "paused"
+        and terminal_reason.lower() == "operator_handoff_requested"
     )
 
 
