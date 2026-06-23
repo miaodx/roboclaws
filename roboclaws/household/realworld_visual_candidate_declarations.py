@@ -461,7 +461,7 @@ def camera_label_producer_candidates(
         run_id=contract.visual_grounding_run_id or contract.scenario.scenario_id,
         raw_observation=raw_observation,
         category_hints=list(realworld_visual_candidates.VISUAL_GROUNDING_CATEGORY_HINTS),
-        static_fixture_projection=realworld_visual_candidates._static_fixture_projection_for_visual_grounding_request(
+        public_map_hints=realworld_visual_candidates._public_map_hints_for_visual_grounding_request(
             contract.static_fixture_projection()
         ),
         pipeline_id=contract.visual_grounding_pipeline_id,

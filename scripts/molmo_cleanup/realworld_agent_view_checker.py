@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -23,16 +24,18 @@ def assert_public_agent_view(
     open_ended_intent: bool = False,
     map_build: bool = False,
 ) -> None:
+    agent_view_module.require_agent_view(agent_view)
     _assert_agent_view_core(agent_view)
-    if agent_view.get("runtime_metric_map"):
-        assert_runtime_metric_map(agent_view["runtime_metric_map"], agent_view=agent_view)
+    runtime_map = agent_view_module.runtime_metric_map(agent_view)
+    if runtime_map:
+        assert_runtime_metric_map(runtime_map, agent_view=agent_view)
     _assert_cleanup_worklist(agent_view)
     _assert_policy_view(agent_view)
     _assert_no_forbidden_keys(agent_view)
-    if agent_view.get("perception_mode") == "raw_fpv_only":
+    if agent_view_module.perception_mode(agent_view) == "raw_fpv_only":
         _assert_raw_fpv_agent_view(agent_view)
         return
-    if agent_view.get("perception_mode") == CAMERA_MODEL_POLICY_MODE:
+    if agent_view_module.perception_mode(agent_view) == CAMERA_MODEL_POLICY_MODE:
         _assert_camera_model_agent_view(
             agent_view,
             open_ended_intent=open_ended_intent,
@@ -63,15 +66,17 @@ def assert_runtime_metric_map(
 
 def _assert_agent_view_core(agent_view: dict[str, Any]) -> None:
     assert agent_view.get("contract") == REALWORLD_CONTRACT, agent_view
-    assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
-    assert "metric_map" in agent_view, agent_view
-    assert "static_fixture_projection" in agent_view, agent_view
-    assert "observed_objects" in agent_view, agent_view
-    assert "objects" not in agent_view.get("metric_map", {}), agent_view
+    assert agent_view.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA, agent_view
+    assert agent_view.get("section_metadata"), agent_view
+    assert agent_view_module.forbidden_private_fields_absent(agent_view), agent_view
+    assert agent_view_module.base_navigation_map(agent_view), agent_view
+    assert "static_fixture_projection" not in agent_view, agent_view
+    assert "observed_objects" not in agent_view, agent_view
+    assert "objects" not in agent_view_module.base_navigation_map(agent_view), agent_view
 
 
 def _assert_cleanup_worklist(agent_view: dict[str, Any]) -> None:
-    worklist = agent_view.get("cleanup_worklist") or {}
+    worklist = agent_view_module.cleanup_worklist(agent_view)
     if not worklist:
         return
     assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
@@ -79,22 +84,22 @@ def _assert_cleanup_worklist(agent_view: dict[str, Any]) -> None:
 
 
 def _assert_policy_view(agent_view: dict[str, Any]) -> None:
-    policy_view = agent_view.get("policy_view") or {}
+    policy_view = agent_view_module.policy_view(agent_view)
     if policy_view:
         assert policy_view.get("chase_camera_policy_input") is False, policy_view
 
 
 def _assert_raw_fpv_agent_view(agent_view: dict[str, Any]) -> None:
-    assert agent_view.get("structured_detections_available") is False, agent_view
-    raw = agent_view.get("raw_fpv_observations") or []
+    assert agent_view_module.structured_detections_available(agent_view) is False, agent_view
+    raw = agent_view_module.raw_fpv_observations(agent_view)
     assert raw, agent_view
     for item in raw:
         assert item.get("perception_mode") == "raw_fpv_only", item
         assert item.get("structured_detections_available") is False, item
         forbidden = {"category", "name", "support_estimate", "target_receptacle_id"}
         assert not forbidden.intersection(item), item
-    declared = agent_view.get("model_declared_observations") or []
-    observed = agent_view.get("observed_objects") or []
+    declared = agent_view_module.model_declared_observations(agent_view)
+    observed = agent_view_module.observed_objects(agent_view)
     if declared:
         assert observed, agent_view
         for item in observed:
@@ -111,16 +116,16 @@ def _assert_camera_model_agent_view(
     open_ended_intent: bool,
     map_build: bool,
 ) -> None:
-    assert agent_view.get("structured_detections_available") is False, agent_view
-    raw = agent_view.get("raw_fpv_observations") or []
+    assert agent_view_module.structured_detections_available(agent_view) is False, agent_view
+    raw = agent_view_module.raw_fpv_observations(agent_view)
     assert raw, agent_view
-    evidence = agent_view.get("camera_model_policy_evidence") or {}
+    evidence = agent_view_module.camera_model_policy_evidence(agent_view)
     assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
     assert evidence.get("enabled") is True, evidence
-    observed = agent_view.get("observed_objects") or []
+    observed = agent_view_module.observed_objects(agent_view)
     if not observed and (open_ended_intent or map_build):
-        assert agent_view.get("model_declared_observations") == [], agent_view
-        assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
+        assert agent_view_module.model_declared_observations(agent_view) == [], agent_view
+        assert agent_view_module.runtime_metric_map(agent_view).get("target_candidates"), agent_view
         return
     assert observed, agent_view
     for item in observed:
@@ -174,13 +179,15 @@ def _assert_visible_detection_agent_view(
     open_ended_intent: bool,
     map_build: bool,
 ) -> None:
-    observed = agent_view.get("observed_objects") or []
+    observed = agent_view_module.observed_objects(agent_view)
     if not observed and (open_ended_intent or map_build):
-        assert agent_view.get("perception_mode") == "visible_object_detections", agent_view
-        assert agent_view.get("structured_detections_available") is True, agent_view
-        assert agent_view.get("raw_fpv_observations") == [], agent_view
-        assert agent_view.get("model_declared_observations") == [], agent_view
-        assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
+        assert agent_view_module.perception_mode(agent_view) == "visible_object_detections", (
+            agent_view
+        )
+        assert agent_view_module.structured_detections_available(agent_view) is True, agent_view
+        assert agent_view_module.raw_fpv_observations(agent_view) == [], agent_view
+        assert agent_view_module.model_declared_observations(agent_view) == [], agent_view
+        assert agent_view_module.runtime_metric_map(agent_view).get("target_candidates"), agent_view
         return
     assert observed, agent_view
     for item in observed:
@@ -247,7 +254,7 @@ def _assert_runtime_observed_objects(
     agent_view: dict[str, Any],
 ) -> None:
     observed = runtime_metric_map.get("observed_objects") or []
-    agent_observed = agent_view.get("observed_objects") or []
+    agent_observed = agent_view_module.observed_objects(agent_view)
     current_observed = [item for item in observed if item.get("freshness") != "prior"]
     assert len(current_observed) == len(agent_observed), (runtime_metric_map, agent_view)
     for item in observed:

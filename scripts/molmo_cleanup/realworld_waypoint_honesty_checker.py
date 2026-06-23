@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.realworld_contract import (
     CLEANUP_POLICY_TRACE_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
@@ -17,11 +18,11 @@ def assert_waypoint_honesty(
     map_build: bool,
 ) -> None:
     agent_view = data.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
     _assert_metric_map(metric_map)
     _assert_waypoints(metric_map)
 
-    worklist = agent_view.get("cleanup_worklist") or {}
+    worklist = agent_view_module.cleanup_worklist(agent_view)
     trace = data.get("cleanup_policy_trace") or {}
     _assert_worklist(
         worklist,

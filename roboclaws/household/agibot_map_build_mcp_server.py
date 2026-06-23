@@ -10,6 +10,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from roboclaws.core.json_sources import read_jsonl_objects
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_map_build_mcp_tools import (
     AGIBOT_MAP_BUILD_TOOLS,
     dispatch_agibot_map_build_tool,
@@ -30,10 +31,13 @@ from roboclaws.household.profiles import (
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
+    CLEANUP_WORKLIST_SCHEMA,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    RUNTIME_METRIC_MAP_SCHEMA,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     VISUAL_GROUNDING_CATEGORY_HINTS,
+    forbidden_agent_view_keys,
 )
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -49,6 +53,11 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
     visual_grounding_failure_response,
     visual_grounding_request,
+)
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
 )
 
 DEFAULT_HOST = "127.0.0.1"
@@ -245,6 +254,76 @@ class AgibotMapBuildMCPServer:
             run_dir=self.run_dir,
             visual_grounding_client=self.visual_grounding_client,
         )
+        runtime_metric_map = _runtime_metric_map_payload(
+            metric_map=metric_map,
+            static_fixture_projection=static_fixture_projection,
+            readiness=readiness,
+        )
+        agent_view = agent_view_module.build_agent_view(
+            contract=REALWORLD_CONTRACT,
+            perception_mode=self.perception_mode,
+            detection_exposure_policy=self.evidence_lane,
+            structured_detections_available=False,
+            base_navigation_map=metric_map,
+            runtime_metric_map=runtime_metric_map,
+            observed_objects=[],
+            raw_fpv_observations=raw_observations,
+            camera_model_policy_evidence=camera_model_policy_evidence,
+            model_declared_observations=[],
+            model_declared_observation_evidence={
+                "schema": "model_declared_observations_v1",
+                "perception_mode": self.perception_mode,
+                "observation_count": 0,
+                "resolved_count": 0,
+                "acted_count": 0,
+                "observations": [],
+                "private_truth_included": False,
+            },
+            policy_view={
+                "schema": "realworld_cleanup_policy_view_v1",
+                "policy_observation_camera": "head_color",
+                "allowed_inputs": [
+                    "base_navigation_map",
+                    "runtime_metric_map",
+                    "raw_fpv_observations",
+                    "navigation_status",
+                ],
+                "excluded_report_only_views": [
+                    "private_operator_evidence",
+                    "private_evaluation",
+                ],
+                "chase_camera_policy_input": False,
+            },
+            cleanup_worklist={
+                "schema": CLEANUP_WORKLIST_SCHEMA,
+                "waypoint_source": "agibot_sdk_agent_view_export",
+                "held_object_id": None,
+                "objects": [],
+                "waypoints": [
+                    {
+                        "waypoint_id": str(item.get("waypoint_id") or ""),
+                        "room_id": str(item.get("room_id") or ""),
+                        "state": "visited"
+                        if str(item.get("waypoint_id") or "")
+                        in set(readiness["observed_waypoint_ids"])
+                        else "unvisited",
+                        "purpose": str(item.get("purpose") or ""),
+                        "waypoint_source": str(item.get("waypoint_source") or ""),
+                    }
+                    for item in metric_map.get("inspection_waypoints") or []
+                ],
+                "rooms": [],
+            },
+            observed_waypoint_ids=readiness["observed_waypoint_ids"],
+            public_tool_names=list(AGIBOT_MAP_BUILD_TOOLS),
+            blocked_capabilities=BLOCKED_MANIPULATION_TOOLS,
+            capability_profiles=(
+                HOUSEHOLD_WORLD_PROFILE,
+                HOUSEHOLD_MANIPULATION_PROFILE,
+                HOUSEHOLD_EPISODE_PROFILE,
+            ),
+            forbidden_keys=forbidden_agent_view_keys(),
+        )
         run_result = {
             "schema": AGIBOT_MAP_BUILD_SCHEMA,
             "contract": REALWORLD_CONTRACT,
@@ -282,30 +361,10 @@ class AgibotMapBuildMCPServer:
                     "Agibot intent=map-build does not run private cleanup scoring."
                 ),
             },
-            "agent_view": {
-                "metric_map": metric_map,
-                "static_fixture_projection": static_fixture_projection,
-                "observed_objects": [],
-                "raw_fpv_observations": raw_observations,
-                "perception_mode": self.perception_mode,
-                "structured_detections_available": False,
-                "camera_model_policy_evidence": camera_model_policy_evidence,
-                "policy_view": {"policy_observation_camera": "head_color"},
-                "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
-                "forbidden_private_fields_absent": True,
-                "public_tool_names": list(AGIBOT_MAP_BUILD_TOOLS),
-            },
+            "agent_view": agent_view,
             "raw_fpv_observations": raw_observations,
             "camera_model_policy_evidence": camera_model_policy_evidence,
-            "runtime_metric_map": {
-                "schema": "runtime_metric_map_v1",
-                "source": "agibot_map_build_mcp",
-                "metric_map": metric_map,
-                "static_fixture_projection": static_fixture_projection,
-                "observed_objects": [],
-                "visited_waypoint_ids": readiness["visited_waypoint_ids"],
-                "observed_waypoint_ids": readiness["observed_waypoint_ids"],
-            },
+            "runtime_metric_map": runtime_metric_map,
             "cleanup_policy_trace": {
                 "schema": "cleanup_policy_trace_v1",
                 "agent_review_kind": "agibot_codex_map_build_review",
@@ -653,6 +712,56 @@ def _readiness_from_trace(
     }
 
 
+def _runtime_metric_map_payload(
+    *,
+    metric_map: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
+    readiness: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": RUNTIME_METRIC_MAP_SCHEMA,
+        "contract": REALWORLD_CONTRACT,
+        "freshness": "current_run",
+        "source": "agibot_map_build_mcp",
+        "source_map_mutated": False,
+        "private_truth_included": False,
+        "metric_map": metric_map,
+        "static_fixture_projection": static_fixture_projection,
+        "static_map": {
+            "rooms": [dict(item) for item in metric_map.get("rooms") or []],
+            "fixtures": [
+                dict(fixture)
+                for room in static_fixture_projection.get("rooms") or []
+                for fixture in room.get("fixtures") or []
+                if isinstance(fixture, dict)
+            ],
+            "inspection_waypoints": [
+                dict(item) for item in metric_map.get("inspection_waypoints") or []
+            ],
+            "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
+            "contains_runtime_observations": False,
+        },
+        "public_semantic_anchors": [],
+        "observed_objects": [],
+        "target_candidates": [],
+        "map_update_candidates": [],
+        "visited_waypoint_ids": readiness["visited_waypoint_ids"],
+        "observed_waypoint_ids": readiness["observed_waypoint_ids"],
+        "cleanup_worklist_summary": {
+            "schema": CLEANUP_WORKLIST_SCHEMA,
+            "object_count": 0,
+            "pending_count": 0,
+            "held_object_id": None,
+            "prior_count": 0,
+        },
+        "producer_summary": {
+            "observed_object_count": 0,
+            "public_semantic_anchor_count": 0,
+            "map_update_candidate_count": 0,
+        },
+    }
+
+
 def _normalized_evidence_lane(value: str) -> str:
     lane = str(value or CAMERA_GROUNDED_LABELS_LANE).strip() or CAMERA_GROUNDED_LABELS_LANE
     if lane not in AGIBOT_MAP_BUILD_LANES:
@@ -847,9 +956,7 @@ def _camera_model_policy_event(
         run_id="agibot_map_build",
         raw_observation=_visual_grounding_raw_observation(raw_observation),
         category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
-        static_fixture_projection=_static_fixture_projection_for_visual_grounding_request(
-            static_fixture_projection
-        ),
+        public_map_hints=_public_map_hints_for_visual_grounding_request(static_fixture_projection),
         pipeline_id=visual_grounding_pipeline_id,
         image=image_payload_for_raw_observation(raw_observation, base_dir=run_dir),
     )
@@ -937,9 +1044,9 @@ def _visual_grounding_raw_observation(raw_observation: dict[str, Any]) -> dict[s
     return result
 
 
-def _static_fixture_projection_for_visual_grounding_request(
+def _public_map_hints_for_visual_grounding_request(
     static_fixture_projection: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     rows = []
     for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
@@ -957,7 +1064,12 @@ def _static_fixture_projection_for_visual_grounding_request(
                     "affordances": list(fixture.get("affordances") or []),
                 }
             )
-    return rows
+    return {
+        "schema": "visual_grounding_public_map_hints_v1",
+        "source": "public_agent_view_map_evidence",
+        "fixture_hints": rows,
+        "private_truth_included": False,
+    }
 
 
 def _observe_failure_reason(

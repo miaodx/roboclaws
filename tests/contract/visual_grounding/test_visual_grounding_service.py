@@ -643,14 +643,7 @@ def _request(pipeline_id: str, *, image: dict[str, Any] | None = None) -> dict[s
             "artifact_status": "recorded",
         },
         category_hints=["dish", "book", "toy"],
-        static_fixture_projection=[
-            {
-                "fixture_id": "sink_01",
-                "room_id": "kitchen",
-                "category": "sink",
-                "affordances": ["inside"],
-            }
-        ],
+        public_map_hints=_public_map_hints(),
         pipeline_id=pipeline_id,
         image=image
         or {
@@ -661,6 +654,22 @@ def _request(pipeline_id: str, *, image: dict[str, Any] | None = None) -> dict[s
         },
         proposer={"producer_id": pipeline_id.split("+", maxsplit=1)[0]},
     )
+
+
+def _public_map_hints() -> dict[str, Any]:
+    return {
+        "schema": "visual_grounding_public_map_hints_v1",
+        "source": "test_public_map_hints",
+        "fixture_hints": [
+            {
+                "fixture_id": "sink_01",
+                "room_id": "kitchen",
+                "category": "sink",
+                "affordances": ["inside"],
+            }
+        ],
+        "private_truth_included": False,
+    }
 
 
 def _jpeg_image_payload() -> dict[str, Any]:

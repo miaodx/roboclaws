@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.backend import ApiSemanticCleanupBackend
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
@@ -112,7 +113,22 @@ def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: P
         assert _fastmcp_tool_names(server) == public_tool_names
         assert not any(profile.privileged_tool_names() for profile in profiles)
         assert "resolve_target_query" in public_tool_names
-        assert "resolve_target_query" in server._agent_view_payload()["public_tool_names"]
+        agent_view = server._agent_view_payload()
+        capabilities = agent_view_module.capabilities(agent_view)
+        assert "resolve_target_query" in agent_view_module.public_tool_names(agent_view)
+        assert capabilities["capability_profiles"] == [
+            HOUSEHOLD_WORLD_PROFILE,
+            HOUSEHOLD_MANIPULATION_PROFILE,
+            HOUSEHOLD_EPISODE_PROFILE,
+        ]
+        assert set(capabilities["profile_public_tool_names"]) == public_tool_names
+        descriptor_by_name = {
+            item["name"]: item for item in capabilities["public_tool_descriptors"]
+        }
+        assert descriptor_by_name["resolve_target_query"]["source_profile_id"] == (
+            HOUSEHOLD_WORLD_PROFILE
+        )
+        assert descriptor_by_name["pick"]["source_profile_id"] == HOUSEHOLD_MANIPULATION_PROFILE
     finally:
         server.close()
 
@@ -126,9 +142,8 @@ def test_agent_sdk_camera_grounded_composite_tool_is_opt_in(tmp_path: Path) -> N
     )
     try:
         assert "observe_camera_grounded_candidates" not in _fastmcp_tool_names(default_server)
-        assert (
-            "observe_camera_grounded_candidates"
-            not in default_server._agent_view_payload()["public_tool_names"]
+        assert "observe_camera_grounded_candidates" not in agent_view_module.public_tool_names(
+            default_server._agent_view_payload()
         )
         with pytest.raises(ValueError, match="unknown Molmo real-world cleanup MCP tool"):
             default_server.call_tool("observe_camera_grounded_candidates")
@@ -144,10 +159,20 @@ def test_agent_sdk_camera_grounded_composite_tool_is_opt_in(tmp_path: Path) -> N
     )
     try:
         assert "observe_camera_grounded_candidates" in _fastmcp_tool_names(server)
-        assert (
-            "observe_camera_grounded_candidates"
-            in server._agent_view_payload()["public_tool_names"]
+        agent_view = server._agent_view_payload()
+        capabilities = agent_view_module.capabilities(agent_view)
+        assert "observe_camera_grounded_candidates" in agent_view_module.public_tool_names(
+            agent_view
         )
+        assert capabilities["runtime_extra_public_tool_names"] == [
+            "observe_camera_grounded_candidates"
+        ]
+        extra_descriptor = next(
+            item
+            for item in capabilities["public_tool_descriptors"]
+            if item["name"] == "observe_camera_grounded_candidates"
+        )
+        assert extra_descriptor["registration_status"] == "registered_extra"
         metric_map = server.call_tool("metric_map")
         server.call_tool(
             "navigate_to_waypoint",
@@ -352,7 +377,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
             )
             if declared["model_declared_observations"]:
                 break
-        prior_snapshot = prior_server._agent_view_payload()["runtime_metric_map"]
+        prior_snapshot = agent_view_module.runtime_metric_map(prior_server._agent_view_payload())
     finally:
         prior_server.close()
 
@@ -365,7 +390,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         runtime_map_prior_source="prior/runtime_metric_map.json",
     )
     try:
-        runtime_map = server._agent_view_payload()["runtime_metric_map"]
+        runtime_map = agent_view_module.runtime_metric_map(server._agent_view_payload())
         prior_rows = [
             item for item in runtime_map["observed_objects"] if item["freshness"] == "prior"
         ]
@@ -437,7 +462,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     )
     try:
         metric_map = server.call_tool("metric_map")
-        runtime_map = server._agent_view_payload()["runtime_metric_map"]
+        runtime_map = agent_view_module.runtime_metric_map(server._agent_view_payload())
         for waypoint in metric_map["inspection_waypoints"]:
             server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
             server.call_tool("observe")
@@ -451,7 +476,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     assert metric_map["room_category_hints"]
     assert metric_map["driveable_ways"]
     assert runtime_map["static_map"]["fixtures"] == []
-    assert agent_view["cleanup_worklist"]["objects"]
+    assert agent_view_module.cleanup_worklist(agent_view)["objects"]
 
 
 def test_realworld_mcp_base_navigation_map_exposes_actionable_runtime_anchors(
@@ -475,7 +500,7 @@ def test_realworld_mcp_base_navigation_map_exposes_actionable_runtime_anchors(
         agent_view = server._agent_view_payload()
         assert any(
             item["object_id"] == observed["object_id"]
-            for item in agent_view["cleanup_worklist"]["objects"]
+            for item in agent_view_module.cleanup_worklist(agent_view)["objects"]
         )
         target_anchor_id = _first_destination_option_from_done(server, str(observed["object_id"]))[
             "candidate_fixture_id"
@@ -532,7 +557,7 @@ def test_realworld_mcp_rejects_removed_cleanup_composite(
     try:
         removed_tool = "clean_observed_object"
         assert removed_tool not in _fastmcp_tool_names(server)
-        assert removed_tool not in server._agent_view_payload()["public_tool_names"]
+        assert removed_tool not in agent_view_module.public_tool_names(server._agent_view_payload())
         with pytest.raises(ValueError, match=removed_tool):
             server.call_tool(
                 removed_tool,
@@ -554,7 +579,9 @@ def test_realworld_mcp_rejects_removed_static_fixture_projection_tool(
     )
     try:
         assert "static_fixture_projection" not in _fastmcp_tool_names(server)
-        assert "static_fixture_projection" not in server._agent_view_payload()["public_tool_names"]
+        assert "static_fixture_projection" not in agent_view_module.public_tool_names(
+            server._agent_view_payload()
+        )
         with pytest.raises(ValueError, match="static_fixture_projection"):
             server.call_tool("static_fixture_projection")
     finally:
@@ -1321,4 +1348,7 @@ def test_realworld_mcp_camera_labels_declare_response_is_agent_compact(
     assert "model_declared_observation_evidence" not in declaration
     assert "visual_grounding_pipeline" not in declaration["model_declared_observations"][0]
     assert "model_declared_observation" not in declaration["camera_model_candidates"][0]
-    assert agent_view["camera_model_policy_evidence"]["visual_grounding_pipeline_id"] == "sim"
+    assert (
+        agent_view_module.camera_model_policy_evidence(agent_view)["visual_grounding_pipeline_id"]
+        == "sim"
+    )

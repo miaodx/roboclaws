@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.core.json_sources import read_json_object  # noqa: E402
+from roboclaws.household import agent_view as agent_view_module  # noqa: E402
 
 SCHEMA = "roboclaws_codex_cleanup_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-codex"
@@ -257,7 +258,7 @@ def _object_result_summary(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _worklist_summary(agent_view: dict[str, Any]) -> dict[str, Any]:
-    worklist = dict(agent_view.get("cleanup_worklist") or {})
+    worklist = agent_view_module.cleanup_worklist(agent_view)
     objects = _list_dicts(worklist.get("objects"))
     state_counts: dict[str, int] = {}
     for item in objects:

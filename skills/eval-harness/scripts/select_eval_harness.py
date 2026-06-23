@@ -93,6 +93,19 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "agent_view_module",
+        "label": "Agent View module contract",
+        "patterns": (
+            r"roboclaws/household/agent_view\.py",
+            r"realworld_agent_view_contract",
+            r"realworld_contract_payloads",
+            r"agibot_cleanup_contract",
+            r"agent_view\.json",
+            r"\bagent view\b",
+            r"Agent View",
+        ),
+    },
+    {
         "id": "visual_grounding",
         "label": "Visual grounding or camera labeler",
         "patterns": (

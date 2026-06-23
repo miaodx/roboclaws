@@ -5,10 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_jsonl_objects
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_map_build_mcp_server import (
     AGIBOT_MAP_BUILD_POLICY,
     AGIBOT_MAP_BUILD_SCHEMA,
 )
+from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE, PHYSICAL_ROBOT_EVIDENCE_LANE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -20,6 +22,11 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.semantic_timeline import duplicate_post_place_navigations
 from roboclaws.household.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 AGIBOT_MAP_BUILD_MCP_SERVER = "agibot_map_build"
 
@@ -59,7 +66,7 @@ def assert_agibot_map_build_result(
     _assert_agibot_map_build_agent_view(agent_view)
     if require_runtime_metric_map:
         _assert_agibot_map_build_runtime_map(
-            data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+            data.get("runtime_metric_map") or agent_view_module.runtime_metric_map(agent_view)
         )
     if min_sweep_coverage is not None:
         assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
@@ -196,16 +203,31 @@ def _assert_agibot_report_text(
 
 
 def _assert_agibot_map_build_agent_view(agent_view: dict[str, Any]) -> None:
-    assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
-    assert "metric_map" in agent_view, agent_view
-    assert "static_fixture_projection" in agent_view, agent_view
-    assert "static_fixture_projection" not in (agent_view.get("public_tool_names") or []), (
+    agent_view_module.require_agent_view(agent_view)
+    assert agent_view_module.forbidden_private_fields_absent(agent_view) is True, agent_view
+    assert agent_view_module.base_navigation_map(agent_view), agent_view
+    assert "static_fixture_projection" not in agent_view_module.public_tool_names(agent_view), (
         agent_view
     )
-    assert agent_view.get("observed_objects") == [], agent_view
-    policy_view = agent_view.get("policy_view") or {}
+    assert "static_fixture_projection" not in agent_view, agent_view
+    capabilities = agent_view_module.capabilities(agent_view)
+    assert capabilities.get("capability_profiles") == [
+        HOUSEHOLD_WORLD_PROFILE,
+        HOUSEHOLD_MANIPULATION_PROFILE,
+        HOUSEHOLD_EPISODE_PROFILE,
+    ], capabilities
+    blocked_details = {
+        str(item.get("name") or ""): item
+        for item in capabilities.get("blocked_capability_details") or []
+    }
+    assert set(blocked_details) == set(BLOCKED_MANIPULATION_TOOLS), capabilities
+    assert blocked_details["pick"].get("source_profile_id") == HOUSEHOLD_MANIPULATION_PROFILE, (
+        capabilities
+    )
+    assert agent_view_module.observed_objects(agent_view) == [], agent_view
+    policy_view = agent_view_module.policy_view(agent_view)
     assert policy_view.get("policy_observation_camera") == "head_color", policy_view
-    raw = agent_view.get("raw_fpv_observations") or []
+    raw = agent_view_module.raw_fpv_observations(agent_view)
     assert raw, agent_view
     for item in raw:
         assert item.get("camera") == "head_color", item
@@ -243,8 +265,9 @@ def _assert_agibot_map_build_camera_model_policy(
     require_failure: bool,
 ) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
+    agent_view = data.get("agent_view") or {}
     evidence = data.get("camera_model_policy_evidence") or (
-        (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+        agent_view_module.camera_model_policy_evidence(agent_view) if agent_view else {}
     )
     assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
     assert evidence.get("enabled") is True, evidence
@@ -309,8 +332,9 @@ def _assert_agibot_g2_hardware_map_build(
     assert data.get("evidence_lane") == CAMERA_GROUNDED_LABELS_LANE, data
     assert data.get("camera_labeler"), data
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
-    runtime_metric_map = data.get("runtime_metric_map") or (data.get("agent_view") or {}).get(
-        "runtime_metric_map"
+    agent_view = data.get("agent_view") or {}
+    runtime_metric_map = data.get("runtime_metric_map") or (
+        agent_view_module.runtime_metric_map(agent_view) if agent_view else {}
     )
     assert isinstance(runtime_metric_map, dict), data
     _assert_agibot_map_build_runtime_map(runtime_metric_map)

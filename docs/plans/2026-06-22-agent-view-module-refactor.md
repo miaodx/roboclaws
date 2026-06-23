@@ -1,9 +1,9 @@
 ---
 plan_scope: agent-view-module-refactor
-status: Proposed
+status: Implemented
 created: 2026-06-22
-last_reviewed: 2026-06-22
-implementation_allowed: false
+last_reviewed: 2026-06-23
+implementation_allowed: true
 source:
   - user north-star clarification on open-ended robot agency and eval-driven evolution
   - plan-bakeoff candidate selection, 2026-06-22
@@ -19,6 +19,7 @@ related_context:
   - docs/adr/0138-use-detector-only-visual-grounding-sidecar.md
   - docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md
   - docs/adr/0141-use-eval-harness-as-maintainer-orchestration-facade.md
+  - docs/adr/0145-use-agent-view-as-household-world-module-boundary.md
 ---
 
 # Agent View Module Refactor
@@ -229,6 +230,59 @@ Acceptance:
   including Agibot, while full builder migration is deferred until a later
   slice.
 
+#### Slice 1 Interface Inventory
+
+Status: complete for inventory, code movement intentionally not started in
+this slice.
+
+ADR: `docs/adr/0145-use-agent-view-as-household-world-module-boundary.md`
+
+Architecture layer: Agent View sits between **Agent Skill** strategy and the
+**MCP Capability Contract And Tools** / **Artifacts** layers. It owns the
+agent-facing evidence boundary and must not move cleanup strategy into server
+adapters.
+
+Inventory:
+
+| Surface | Current owner | Current field/response shape | Classification | Intended Agent View owner |
+| --- | --- | --- | --- | --- |
+| MolmoSpaces saved Agent View artifact | `roboclaws/household/realworld_contract_payloads.py::agent_view_payload`, called by `RealWorldCleanupContract.agent_view_payload` | `contract`, `perception_mode`, `metric_map`, `runtime_metric_map`, `static_fixture_projection`, `observed_objects`, `raw_fpv_observations`, camera/model evidence, `policy_view`, `cleanup_worklist`, `public_tool_names`, forbidden absence marker | Agent View-owned artifact payload | Move or wrap behind canonical Agent View builder in Slice 2, add explicit schema/version, and migrate known consumers to sectioned fields. |
+| Agibot cleanup saved Agent View artifact | `roboclaws/household/agibot_cleanup_contract.py::AgibotCleanupMCPContract.agent_view_payload` | Same broad top-level shape as MolmoSpaces, with physical navigation evidence and blocked manipulation | Backend-local Agent View producer | Wrap with shared Agent View schema/guard/provenance vocabulary in Slice 2; full builder unification may wait if it would pull Agibot-specific backend logic into Molmo realworld paths. |
+| Base Navigation Map / metric map | `realworld_contract_projection._metric_map`, Agibot adapter `metric_map`, MCP `metric_map` responses | Start-of-run map context, public rooms/waypoints/driveable geometry, inspection candidates, current visit state | Agent View-owned public map section | `base_navigation_map` section; must exclude static movable inventory, private relocation truth, and private scorer targets. |
+| Runtime Metric Map | `realworld_contract_payloads.runtime_metric_map_payload`, `realworld_runtime_map_contract`, `realworld_runtime_map_targets`, Agibot `runtime_metric_map_payload` | Current-run public map enrichment, observed objects, priors, public semantic anchors, target candidates, actionability, map-update candidates | Agent View-owned runtime evidence section | `runtime_metric_map` section; owns semantic enrichment and current-run evidence. |
+| Historical/static fixture projection | `realworld_contract_projection._static_fixture_projection`, Agibot `static_fixture_projection`, report/map readers | Static fixture/receptacle projection, sometimes copied inside saved Agent View today; active MCP calls reject `static_fixture_projection` | Migration/report-compatibility artifact, not new public Agent View center | Keep as report/map compatibility only where required; Slice 2 should stop treating it as a first-class Agent View section unless narrowed to public fixture hints under `base_navigation_map` or `runtime_metric_map`. |
+| Public cleanup worklist | `realworld_contract_payloads.cleanup_worklist_payload`, Agibot `cleanup_worklist_payload`, done readiness | Public observed handles, candidate fixtures or destination policies, waypoint/room sweep state | Agent View-derived task/readiness input | Belongs under `task` or `readiness`/`runtime_metric_map` derived state; no private acceptable destination sets. |
+| Policy view | `realworld_contract_payloads.policy_view_payload`, Agibot `policy_view_payload` | Allowed policy inputs and excluded report-only views | Agent View-owned privacy/policy section | `policy_view` plus `privacy`; explicitly list report-only exclusions. |
+| Forbidden private-key guard | `realworld_agent_view_contract.assert_no_forbidden_agent_view_keys`, local `_assert_no_forbidden_agent_view_keys` wrappers, Agibot currently implicit | Recursive guard rejects private keys such as generated mess state, relocation data, target count, private manifests, acceptable destinations, scorer fields | Agent View-owned guard | Centralize as canonical guard in Slice 2 and apply to MolmoSpaces artifacts, Agibot artifacts, and live response payloads. |
+| Live MCP success/error responses | `RealWorldCleanupContract._ok/_error`, `realworld_tool_responses.py`, MCP backend dispatch, Agibot map-build tools | Public tool response envelopes for map, navigation, observe, visual candidates, manipulation, blocked capability, and errors | Agent View-owned or Agent View-derived live response | Slice 2 must validate live agent-facing responses with the same forbidden-key guard used for artifacts. |
+| `done` readiness blocker | `realworld_done_readiness.evaluate_done_readiness` and `done_readiness_blocked_response`; server `done_readiness_evidence` summarizes public trace substeps | Structured blocker/recovery payloads based on public Agent View state, public trace evidence, public worklists, and acceptance config | Agent View-derived live response | Keep under Agent View guard; readiness may use public trace evidence, never private generated mess membership or scorer truth. |
+| RAW-FPV observations | `realworld_contract_payloads.record_raw_fpv_observation`, Agibot `_raw_observation_from_response`, `raw_fpv_guidance.py`, tests/probes | Robot-local camera observations, image artifact status, no structured detections before declaration | Agent View-owned active-perception evidence | Move under `active_perception.raw_fpv_observations` with source/provenance and blocked/unavailable states in Slice 3. |
+| Camera-grounded labels and visual grounding evidence | `visual_grounding.py`, `visual_grounding_contract.py`, `realworld_visual_candidates.py`, `camera_model_policy_payload` | Detector pipeline IDs, candidate evidence, failure counts, duplicate rate, model provenance | Agent View-owned active-perception adapter | `active_perception.camera_grounded_labels` / `visual_grounding` section; sidecar unavailable and provider unavailable states must be explicit. |
+| Visual candidate lifecycle/tool responses | `realworld_visual_candidate_lifecycle.py`, `realworld_visual_candidate_declarations.py`, `realworld_visual_candidates.py` | `declare_visual_candidates`, `navigate_to_visual_candidate`, candidate state/history/actionability and recovery | Agent View-derived live response | Continue using public runtime evidence and enforce canonical Agent View guard on responses; candidate summary folds into active perception. |
+| Active-perception sidecar requests | `visual_grounding_contract.py` and visual-grounding client/request code; tests currently include requests with `static_fixture_projection` in some Agibot pilot paths | Detector request inputs built from current camera evidence and context | Agent View-derived sidecar input | Slice 3 must prove requests are built from public Agent View/Base Navigation Map/Runtime Metric Map/public fixture hints/current camera evidence only; `static_fixture_projection` request fields are migration candidates. |
+| Capability/profile metadata | `roboclaws/mcp/profiles.py`, `realworld_mcp_backend.agent_view_public_tool_names`, `public_tool_names` methods | Public tool names, capability families, provenance expectations, blocked capabilities | Agent View-derived capability section | Slice 4 should derive `capabilities` and blocked capabilities from current MCP profiles/tool registration instead of duplicating stale prose. |
+| Private evaluation payloads | `RealWorldCleanupContract.private_evaluation_payload`, `AgibotCleanupMCPContract.private_evaluation_payload`, reports/scorers | Generated mess set/count, acceptable destination sets, object results, private scoring truth | Report/private-only | Never Agent View-owned or Agent View-derived; may appear only after run for scorer/report surfaces. |
+| Report-only robot views | Report renderers, robot-view/chase-camera artifacts, policy view exclusions | Chase/third-person or private operator views for human review | Report-only | Keep excluded through `policy_view`/`privacy`; do not feed Agent View or sidecar inputs. |
+| Eval-harness selection | `skills/eval-harness/scripts/select_eval_harness.py`, `eval_harness_rows.py` | Signals for realworld contract, MCP/checker, raw FPV, visual grounding, runtime maps, open-ended routes | Verification surface | Slice 2 should add a narrow Agent View module path signal so diffs under the canonical module select Agent View contract coverage. |
+
+Field ownership notes:
+
+- Public current contract fields: Base Navigation Map/metric map, Runtime
+  Metric Map, public observed handles, raw FPV observations, camera-grounded
+  labels, visual candidate public state, MCP tool names, blocked capabilities,
+  public acceptance config, done-readiness public blockers.
+- Historical/report compatibility fields: saved-artifact
+  `static_fixture_projection` and static fixture projection report/map readers.
+  This plan must not preserve it as the long-term Agent View center.
+- Private/report-only fields: generated mess state, relocation/setup details,
+  target counts, acceptable destination sets, private manifests, scorer object
+  results, simulator-only fixture oracles, report-only chase/third-person
+  camera views.
+- Agibot migration status: `agibot_cleanup_contract.agent_view_payload` remains
+  backend-local for the first implementation slice, but Slice 2 must wrap it in
+  the shared Agent View schema, guard, provenance labels, and blocked-capability
+  vocabulary. Leaving it as an unvalidated duplicate is not accepted.
+
 ### Slice 2: Canonical Agent View Builder
 
 - Move or wrap `agent_view_payload` construction behind one canonical builder.
@@ -266,6 +320,77 @@ Acceptance:
   wrapped by shared Agent View validation; leaving it as an unvalidated duplicate
   is not accepted.
 
+#### Slice 2 Implementation Evidence
+
+Status: complete for canonical builder and known in-repo consumer migration.
+
+Implementation notes:
+
+- Added `roboclaws/household/agent_view.py` as the canonical Agent View module
+  with `schema=agent_view_v2`, section metadata, section accessors, and the
+  shared private-field guard.
+- Routed MolmoSpaces, Agibot cleanup, Agibot map-build MCP, Agibot SDK export,
+  and MolmoSpaces Agibot rehearsal payload producers through the v2
+  schema/guard vocabulary.
+- Migrated known report, checker, probe, corpus, artifact, and focused test
+  consumers to v2 accessors. The remaining old-shape scan hits are local
+  pseudo-map fixtures in `tests/contract/maps/test_nav2_map_bundle_contract.py`,
+  not saved `agent_view.json` artifacts.
+- Added a narrow eval-harness path signal for the new Agent View module.
+
+Proof:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/unit/evals/test_eval_harness_selector.py \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  -k 'agent_view or agibot or raw_fpv or camera_model_policy or open_ended' \
+  tests/contract/agibot/test_agibot_map_context_scripts.py::test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_map
+```
+
+Result: passed with one environment/fixture skip.
+
+Additional proof:
+
+```bash
+ruff check roboclaws/household scripts/molmo_cleanup scripts/visual_grounding \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/unit/evals/test_eval_harness_selector.py
+
+ruff format --check roboclaws/household scripts/molmo_cleanup/realworld_agent_view_checker.py \
+  scripts/molmo_cleanup/realworld_base_navigation_map_checker.py \
+  scripts/molmo_cleanup/realworld_agibot_map_build_checker.py \
+  scripts/molmo_cleanup/realworld_waypoint_honesty_checker.py \
+  scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py \
+  scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py \
+  scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/unit/evals/test_eval_harness_selector.py
+
+just agent::eval recommend plan=docs/plans/2026-06-22-agent-view-module-refactor.md budget=focused
+```
+
+Result: static checks passed; eval-harness wrote
+`output/eval-harness/20260622T180801Z/eval_harness.json`.
+
 ### Slice 3: Active Perception Adapter
 
 - Bring RAW-FPV guidance, camera-grounded-label evidence, detector provenance,
@@ -292,6 +417,84 @@ Acceptance:
 - Existing RAW-FPV candidate recovery tests still pass or are updated to assert
   the new Agent View section.
 
+#### Slice 3 Implementation Evidence
+
+Status: complete for active-perception summaries and live sidecar request
+boundary.
+
+Implementation notes:
+
+- Added Agent View `active_perception.raw_fpv_summary`,
+  `active_perception.camera_grounded_labels`, and
+  `active_perception.visual_candidate_lifecycle` summaries derived from public
+  RAW-FPV rows, detector/model-declared evidence, and visual-candidate lifecycle
+  rows.
+- Advanced the live visual-grounding request schema to
+  `visual_grounding_request_v2` and replaced request
+  `static_fixture_projection` with `public_map_hints.fixture_hints`.
+- Updated MolmoSpaces, Agibot map-build, the visual-grounding HTTP service
+  adapter, and the benchmark runner to use the v2 request shape.
+- Added request validation that rejects legacy `static_fixture_projection`,
+  `public_map_hints.private_truth_included=true`, and known private scorer or
+  setup keys inside sidecar map hints.
+- Replaced stale policy-view allowed-input vocabulary with
+  `base_navigation_map` / `runtime_metric_map` for current Agent View policy
+  inputs.
+
+Proof:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/molmo_cleanup/test_visual_grounding.py \
+  tests/contract/visual_grounding/test_visual_grounding_service.py \
+  tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  -k 'raw_fpv_mode_suppresses_structured_detections or camera_model_policy_observe_exposes_model_declared_candidates or camera_model_policy_records_sim_pipeline_provenance or camera_labels_http_success_uses_destination_resolver or camera_labels_http_failure_is_visible_without_sim_fallback or camera_labels_missing_raw_image_fails_before_sidecar or agent_view_payload_keeps_private_evaluation_out' \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  -k 'camera_grounded_composite or raw_fpv or camera_labels_declare_response_is_agent_compact' \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_map_build_camera_labels_call_external_grounding
+```
+
+Result: passed.
+
+Additional proof:
+
+```bash
+ruff check roboclaws/household/agent_view.py \
+  roboclaws/household/visual_grounding.py \
+  roboclaws/household/visual_grounding_contract.py \
+  roboclaws/household/realworld_visual_candidates.py \
+  roboclaws/household/realworld_visual_candidate_declarations.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  roboclaws/household/realworld_contract_payloads.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  scripts/visual_grounding/adapters.py \
+  scripts/visual_grounding/run_visual_grounding_benchmark.py \
+  tests/unit/molmo_cleanup/test_visual_grounding.py \
+  tests/contract/visual_grounding/test_visual_grounding_service.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+
+ruff format --check roboclaws/household/agent_view.py \
+  roboclaws/household/visual_grounding.py \
+  roboclaws/household/visual_grounding_contract.py \
+  roboclaws/household/realworld_visual_candidates.py \
+  roboclaws/household/realworld_visual_candidate_declarations.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  roboclaws/household/realworld_contract_payloads.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  scripts/visual_grounding/adapters.py \
+  scripts/visual_grounding/run_visual_grounding_benchmark.py \
+  tests/unit/molmo_cleanup/test_visual_grounding.py \
+  tests/contract/visual_grounding/test_visual_grounding_service.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+
+git diff --check
+```
+
+Result: passed after formatting touched Slice 3 files.
+
 ### Slice 4: MCP Capability/Profile Adapter
 
 - Ensure Agent View capability metadata is derived from current MCP capability
@@ -306,6 +509,79 @@ Acceptance:
 - Agent View describes available public tools and blocked capabilities without
   duplicating stale profile semantics.
 - MCP server and launch routes keep the same public command grammar.
+
+#### Slice 4 Implementation Evidence
+
+Status: complete for MCP profile-derived capability metadata.
+
+Implementation notes:
+
+- Agent View now derives `capabilities` from MCP profile metadata and runtime
+  public-tool registration. The section includes profile metadata, expected
+  public tool names by profile, runtime extra public tools, public tool
+  descriptors, and blocked-capability details.
+- `with_public_tool_names(...)` rebuilds the derived capability section when
+  MCP server runtime tools such as `observe_camera_grounded_candidates` are
+  enabled, so opt-in tools are marked as runtime extras rather than profile
+  tools.
+- MolmoSpaces and Agibot Agent View builders now pass MCP profile constants
+  instead of duplicated string literals. Agibot paths that expose blocked
+  manipulation tools include the manipulation profile so blocked tool details
+  resolve to profile metadata.
+- The Agibot SDK runner wrapper now converts the SDK-local Agent View export
+  into the Roboclaws-owned `agent_view_v2` artifact, keeps
+  `vendor_agent_view.json` for subsequent vendor CLI stages, and embeds the v2
+  artifact in `run_result.json` instead of an old-shape inline payload.
+- Updated stale privacy proxy tests/checks that rejected public Agibot profile
+  provenance as if it were private map-source truth; map-source and
+  verification payloads remain forbidden.
+
+Proof:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_registered_tools_match_profile_public_surface \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_agent_sdk_camera_grounded_composite_tool_is_opt_in \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report \
+  tests/contract/agibot/test_agibot_map_context_scripts.py::test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates
+```
+
+Result: passed.
+
+Additional proof:
+
+```bash
+ruff check roboclaws/household/agent_view.py \
+  roboclaws/household/realworld_contract_payloads.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_sdk_runner.py \
+  scripts/molmo_cleanup/realworld_agibot_map_build_checker.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py
+
+ruff format --check roboclaws/household/agent_view.py \
+  roboclaws/household/realworld_contract_payloads.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_sdk_runner.py \
+  scripts/molmo_cleanup/realworld_agibot_map_build_checker.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py
+
+python -m py_compile vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py
+git diff --check
+```
+
+Result: passed.
 
 ### Slice 5: Eval-Harness Hook, Not Redesign
 
@@ -329,6 +605,81 @@ Acceptance:
 - No new provider matrix is introduced by this refactor.
 - No `evolution_target` or capability-slice eval grouping field is introduced
   by this refactor.
+
+#### Slice 5 Implementation Evidence
+
+Status: complete for narrow eval-harness Agent View gate coverage.
+
+Implementation notes:
+
+- Added `agent-view-contract-tests` as a focused deterministic eval-harness row.
+  The row reuses existing Agent View artifact, MCP/profile, active-perception,
+  visual-grounding request, and Agibot export tests instead of adding a new
+  row taxonomy.
+- Kept the existing `agent_view_module` path/text signal narrow and wired it to
+  the new deterministic gate, cleanup contract tests, and one direct
+  world-public product row.
+- Added selector coverage proving changes to
+  `roboclaws/household/agent_view.py`,
+  `roboclaws/household/realworld_agent_view_contract.py`,
+  `roboclaws/household/realworld_contract_payloads.py`, and
+  `roboclaws/household/agibot_cleanup_contract.py` select the same Agent View
+  gate.
+- Corrected the current real-robot alignment checker/report readiness proof to
+  require `real_robot_readiness.public_static_map=true` and
+  `static_fixture_projection=false`, matching the new Agent View boundary. The
+  direct product row first exposed the stale assertion that still required the
+  historical Agent View static fixture projection.
+- No provider matrix, `evolution_target`, or capability-slice grouping fields
+  were added.
+
+Proof:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/evals/test_eval_harness_selector.py
+```
+
+Result: passed.
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_agent_view_payload_keeps_private_evaluation_out \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_raw_fpv_mode_suppresses_structured_detections \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_model_policy_registers_model_labelled_candidates \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_model_policy_records_sim_pipeline_provenance \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_missing_raw_image_fails_before_sidecar \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_success_uses_destination_resolver \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_registered_tools_match_profile_public_surface \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_agent_sdk_camera_grounded_composite_tool_is_opt_in \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_rejects_removed_static_fixture_projection_tool \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/unit/molmo_cleanup/test_visual_grounding.py::test_visual_grounding_request_rejects_static_fixture_projection_field \
+  tests/unit/molmo_cleanup/test_visual_grounding.py::test_visual_grounding_request_rejects_private_public_map_hints \
+  tests/unit/molmo_cleanup/test_visual_grounding.py::test_visual_grounding_request_rejects_private_hint_keys \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_map_build_camera_labels_call_external_grounding \
+  tests/contract/agibot/test_agibot_map_context_scripts.py::test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates
+```
+
+Result: passed.
+
+```bash
+just agent::eval recommend plan=docs/plans/2026-06-22-agent-view-module-refactor.md budget=focused
+```
+
+Result: wrote `output/eval-harness/20260622T185007Z/eval_harness.json`.
+The recommendation selects `agent-view-contract-tests` as a required
+deterministic row for the `agent_view_module` signal.
+
+```bash
+just agent::eval execute changed_file=roboclaws/household/agent_view.py budget=focused
+```
+
+Result: passed after the readiness checker fix. The narrowed manifest
+`output/eval-harness/20260622T185559Z/eval_harness.json` selected three rows:
+`cleanup-contract-tests`, `agent-view-contract-tests`, and
+`household-direct-world-public-product`; all three ran and passed.
 
 ## Non-Goals
 
@@ -698,3 +1049,95 @@ Approval: `LGTM`, `approve`, or `go ahead` approves; edits request revision.
 
 Proceed to `$intuitive-flow` for the full Agent View Module refactor using the
 preflight contract above.
+
+## Implementation Closeout
+
+Status: implemented on 2026-06-23.
+
+Final result:
+
+- Agent View is now a sectioned v2 household-world boundary owned by
+  `roboclaws/household/agent_view.py`.
+- MolmoSpaces, Agibot cleanup, Agibot map-build MCP, the Roboclaws Agibot SDK
+  wrapper, report, checker, probe, visual-grounding, and focused test consumers
+  use the v2 Agent View schema/accessors for current saved artifacts and live
+  agent-facing payloads. The vendor Agibot SDK runner remains SDK-local and is
+  consumed through the wrapper boundary.
+- Active perception, visual-grounding sidecar requests, and capability metadata
+  are Agent View-owned or Agent View-derived without private scorer/setup truth.
+- Eval-harness has a narrow `agent-view-contract-tests` deterministic gate for
+  the `agent_view_module` signal.
+- `ARCHITECTURE.md` names the canonical Agent View module and the current
+  `agent_view_v2` artifact sections.
+
+Final proof:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py \
+  tests/unit/molmo_cleanup/test_visual_grounding.py \
+  tests/unit/evals/test_eval_harness_selector.py
+
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  -k 'agent_view or real_robot_alignment or runtime_metric_map or raw_fpv or camera_model_policy or static_fixture_projection or base_navigation_map' \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py::test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_map_build_camera_labels_call_external_grounding \
+  tests/contract/visual_grounding/test_visual_grounding_service.py
+
+just agent::eval execute changed_file=roboclaws/household/agent_view.py budget=focused
+
+ruff check roboclaws/household roboclaws/mcp skills/eval-harness tests scripts/molmo_cleanup scripts/visual_grounding
+
+ruff format --check roboclaws/household roboclaws/mcp \
+  skills/eval-harness/scripts/eval_harness_rows.py \
+  skills/eval-harness/scripts/select_eval_harness.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/checkers/test_realworld_base_navigation_map_checker.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/visual_grounding/test_visual_grounding_service.py \
+  tests/unit/evals/test_eval_harness_selector.py \
+  tests/unit/molmo_cleanup/test_visual_grounding.py \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  scripts/molmo_cleanup/realworld_agent_view_checker.py \
+  scripts/molmo_cleanup/realworld_agibot_map_build_checker.py \
+  scripts/molmo_cleanup/realworld_base_navigation_map_checker.py \
+  scripts/molmo_cleanup/realworld_waypoint_honesty_checker.py \
+  scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py \
+  scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py \
+  scripts/visual_grounding/adapters.py \
+  scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py \
+  scripts/visual_grounding/run_visual_grounding_benchmark.py
+
+python -m py_compile vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py
+git diff --check
+```
+
+Result: passed.
+
+Skipped or partial proof:
+
+- Repo-wide `ruff format --check roboclaws/household roboclaws/mcp
+  skills/eval-harness tests scripts/molmo_cleanup scripts/visual_grounding`
+  found unrelated pre-existing format drift in
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
+  `tests/unit/launch/test_environment_setup_catalog.py`, and
+  `tests/unit/molmo_cleanup/test_ci_live_reports.py`. The owned changed scope
+  format check passed.
+
+Parked follow-ups:
+
+- Add eval `evolution_target` after Agent View exists as a stable target.
+- Add capability-slice eval grouping metadata after the Agent View and
+  evolution-target contracts exist.
+- Provider matrix changes and live-provider proof remain separate opt-in
+  follow-ups.

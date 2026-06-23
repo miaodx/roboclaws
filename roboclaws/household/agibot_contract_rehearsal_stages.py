@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_contract_rehearsal import (
     BLOCKED_MANIPULATION_TOOLS,
     REHEARSAL_MODE_CLEANUP_ACTIONS,
@@ -281,8 +282,8 @@ def _prepare_rehearsal_preflight(
     )
     preflight_agent_view = _load_json(preflight["agent_view"])
     waypoint_sequence = _load_json(preflight["waypoint_sequence"])
-    metric_map = dict(preflight_agent_view["metric_map"])
-    static_fixture_projection = dict(preflight_agent_view["static_fixture_projection"])
+    metric_map = agent_view_module.base_navigation_map(preflight_agent_view)
+    static_fixture_projection = _load_json(preflight["static_fixture_projection"])
     subphase_reports = [
         _agent_view_stage_report(
             run_dir=run_dir,

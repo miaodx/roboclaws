@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_COLOR_PROFILE
 from scripts.molmo_cleanup import robot_camera_visual_parity_gates as parity_gates
 from scripts.molmo_cleanup import robot_camera_visual_parity_payloads as parity_payloads
@@ -939,14 +940,15 @@ def _raw_fpv_summary(path: Path) -> dict[str, Any]:
     camera = _dict(payload.get("robot_view_camera_control"))
     agent_view = _dict(payload.get("agent_view"))
     raw_observations = _list_dicts(
-        payload.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations")
+        payload.get("raw_fpv_observations") or agent_view_module.raw_fpv_observations(agent_view)
     )
     return {
         "status": "loaded",
         "path": str(path),
         "backend": payload.get("backend"),
         "cleanup_profile": payload.get("cleanup_profile"),
-        "perception_mode": payload.get("perception_mode") or agent_view.get("perception_mode"),
+        "perception_mode": payload.get("perception_mode")
+        or agent_view_module.perception_mode(agent_view),
         "raw_fpv_observation_count": len(raw_observations),
         "model_declared_observation_count": len(
             _list_dicts(payload.get("model_declared_observations"))

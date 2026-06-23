@@ -4,6 +4,7 @@ import html
 from collections.abc import Callable
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.report_sections_robot import robot_view_camera_contract_summary
 
 ViewFigureRenderer = Callable[[Any, str], str]
@@ -13,17 +14,16 @@ def agent_view_section(run_result: dict[str, Any]) -> str:
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
     agent_view = run_result.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
-    runtime_metric_map = (
-        agent_view.get("runtime_metric_map") or run_result.get("runtime_metric_map") or {}
-    )
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
-    observed = agent_view.get("observed_objects") or []
-    raw_observations = agent_view.get("raw_fpv_observations") or []
-    worklist = agent_view.get("cleanup_worklist") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
+    runtime_metric_map = run_result.get(
+        "runtime_metric_map"
+    ) or agent_view_module.runtime_metric_map(agent_view)
+    observed = agent_view_module.observed_objects(agent_view)
+    raw_observations = agent_view_module.raw_fpv_observations(agent_view)
+    worklist = agent_view_module.cleanup_worklist(agent_view)
     scratchpad = run_result.get("agent_scratchpad") or {}
     waypoints = metric_map.get("inspection_waypoints") or []
-    rooms = static_fixture_projection.get("rooms") or []
+    rooms = (runtime_metric_map.get("static_map") or {}).get("fixtures") or []
     summary = (
         f"{len(metric_map.get('rooms') or [])} public rooms, "
         f"{len(rooms)} static fixture projection room rows, {len(waypoints)} inspection waypoints, "
@@ -115,7 +115,7 @@ def raw_fpv_observations_section(
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
     observations = run_result.get("raw_fpv_observations") or (
-        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+        agent_view_module.raw_fpv_observations(run_result.get("agent_view") or {})
     )
     if not observations:
         return ""
@@ -150,7 +150,7 @@ def raw_fpv_observations_section(
 
 def model_declared_observations_section(run_result: dict[str, Any]) -> str:
     evidence = run_result.get("model_declared_observation_evidence") or (
-        (run_result.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+        agent_view_module.model_declared_observation_evidence(run_result.get("agent_view") or {})
     )
     observations = run_result.get("model_declared_observations") or evidence.get(
         "observations",
@@ -215,7 +215,7 @@ def model_declared_observations_section(run_result: dict[str, Any]) -> str:
 
 def camera_model_policy_section(run_result: dict[str, Any]) -> str:
     evidence = run_result.get("camera_model_policy_evidence") or (
-        (run_result.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+        agent_view_module.camera_model_policy_evidence(run_result.get("agent_view") or {})
     )
     if not evidence or not evidence.get("enabled"):
         return ""
@@ -451,7 +451,7 @@ def skill_scratchpad_table(scratchpad: dict[str, Any]) -> str:
 
 
 def _observed_objects_table(agent_view: dict[str, Any], observed: list[dict[str, Any]]) -> str:
-    mode = agent_view.get("perception_mode", "visible_object_detections")
+    mode = agent_view_module.perception_mode(agent_view) or "visible_object_detections"
     if mode == "raw_fpv_only":
         return (
             '<p class="note">Raw FPV-only mode is active. Structured movable-object '
@@ -682,7 +682,7 @@ def _real_robot_readiness_badges(readiness: dict[str, Any]) -> str:
         (
             _badge("Map shape", readiness.get("map_bundle_fields_present", False)),
             _badge("PoseStamped waypoints", readiness.get("pose_stamped_waypoints", False)),
-            _badge("Static fixtures only", readiness.get("static_fixture_projection", False)),
+            _badge("Public static map", readiness.get("public_static_map", False)),
             _badge(
                 "Chase excluded from policy",
                 readiness.get("policy_view_chase_excluded", False),

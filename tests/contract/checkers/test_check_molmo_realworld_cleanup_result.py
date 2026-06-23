@@ -9,13 +9,18 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
-from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE
+from roboclaws.household.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    REALWORLD_CONTRACT,
+    forbidden_agent_view_keys,
+)
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
@@ -274,9 +279,10 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
     result["observed_objects"] = []
     result["model_declared_observations"] = []
     result["runtime_metric_map"]["observed_objects"] = []
-    result["agent_view"]["observed_objects"] = []
-    result["agent_view"]["model_declared_observations"] = []
-    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+    active_perception = agent_view_module.active_perception(result["agent_view"])
+    active_perception["observed_objects"] = []
+    active_perception["model_declared_observations"] = []
+    agent_view_module.runtime_metric_map(result["agent_view"])["observed_objects"] = []
     evidence = result["camera_model_policy_evidence"]
     evidence["candidate_count"] = 0
     for event in evidence["events"]:
@@ -284,7 +290,7 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
         event["registered_observed_handles"] = []
         pipeline = event.get("visual_grounding_pipeline") or {}
         pipeline["candidate_count"] = 0
-    result["agent_view"]["camera_model_policy_evidence"] = evidence
+    active_perception["camera_model_policy_evidence"] = evidence
 
     checker._assert_result(
         result,
@@ -394,7 +400,7 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
         pipeline["pipeline_id"] = "sim"
     agent_view = data["agent_view"]
     assert isinstance(agent_view, dict)
-    agent_view["camera_model_policy_evidence"] = camera_policy
+    agent_view_module.active_perception(agent_view)["camera_model_policy_evidence"] = camera_policy
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -530,9 +536,10 @@ def test_checker_can_require_base_navigation_map_map_build(tmp_path: Path) -> No
         require_map_build=True,
         require_base_navigation_map=True,
     )
-    assert result["agent_view"]["metric_map"]["rooms"]
-    assert result["agent_view"]["metric_map"]["room_category_hints"]
-    assert result["agent_view"]["static_fixture_projection"]["rooms"] == []
+    base_navigation_map = agent_view_module.base_navigation_map(result["agent_view"])
+    assert base_navigation_map["rooms"]
+    assert base_navigation_map["room_category_hints"]
+    assert "static_fixture_projection" not in result["agent_view"]
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
     anchors = result["runtime_metric_map"]["public_semantic_anchors"]
@@ -860,12 +867,14 @@ def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
     result["private_evaluation"]["generated_mess_count"] = 0
     result["private_evaluation"]["acceptable_destination_sets"] = {}
     agent_view = result["agent_view"]
-    agent_view["observed_objects"] = []
-    agent_view["raw_fpv_observations"] = []
-    agent_view["model_declared_observations"] = []
-    agent_view["perception_mode"] = "visible_object_detections"
-    agent_view["structured_detections_available"] = True
-    agent_view["runtime_metric_map"]["observed_objects"] = []
+    agent_view_module.active_perception(agent_view)["observed_objects"] = []
+    agent_view_module.active_perception(agent_view)["raw_fpv_observations"] = []
+    agent_view_module.active_perception(agent_view)["model_declared_observations"] = []
+    agent_view_module.task(agent_view)["perception_mode"] = "visible_object_detections"
+    agent_view_module.task(agent_view)["structured_detections_available"] = True
+    agent_view_module.active_perception(agent_view)["perception_mode"] = "visible_object_detections"
+    agent_view_module.active_perception(agent_view)["structured_detections_available"] = True
+    agent_view_module.runtime_metric_map(agent_view)["observed_objects"] = []
 
     checker._assert_result(
         result,
@@ -1094,12 +1103,13 @@ def test_checker_rejects_stale_prebuilt_map_bundle_for_isaac_scene_index(
     data = _isaac_runtime_result(tmp_path, scene_bindings)
     _write_isaac_scene_index(tmp_path, scene_bindings)
     _add_isaac_scene_index_map_context(data, tmp_path)
+    base_navigation_map = agent_view_module.base_navigation_map(data["agent_view"])
     stale_bundle = {
-        **data["agent_view"]["metric_map"]["map_bundle"],
+        **base_navigation_map["map_bundle"],
         "environment_id": "molmospaces-procthor-val-0-7",
         "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
     }
-    data["agent_view"]["metric_map"]["map_bundle"] = stale_bundle
+    base_navigation_map["map_bundle"] = stale_bundle
     data["runtime_metric_map"]["static_map"]["map_bundle"] = stale_bundle
     data["nav2_map_bundle"]["environment_id"] = "molmospaces-procthor-val-0-7"
     data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_base_navigation_map"
@@ -2341,7 +2351,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     _add_molmospaces_robot_view_artifacts(result, tmp_path, prefix="raw")
     for item in result["raw_fpv_observations"]:
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
-    for item in result["agent_view"]["raw_fpv_observations"]:
+    for item in agent_view_module.raw_fpv_observations(result["agent_view"]):
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
     result["robot_view_steps"] = [
         {
@@ -2432,7 +2442,7 @@ def test_checker_accepts_live_raw_fpv_map_build_shape(tmp_path: Path) -> None:
     result["artifacts"]["robot_views"] = str(robot_views)
     for item in result["raw_fpv_observations"]:
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
-    for item in result["agent_view"]["raw_fpv_observations"]:
+    for item in agent_view_module.raw_fpv_observations(result["agent_view"]):
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
 
     checker._assert_result(
@@ -3058,20 +3068,27 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
     result["camera_model_policy_evidence"]["events"].append(manual_event)
 
     checker._assert_public_agent_view(
-        {
-            "contract": checker.REALWORLD_CONTRACT,
-            "forbidden_private_fields_absent": True,
-            "metric_map": {},
-            "static_fixture_projection": [],
-            "perception_mode": CAMERA_MODEL_POLICY_MODE,
-            "structured_detections_available": False,
-            "raw_fpv_observations": result["raw_fpv_observations"],
-            "camera_model_policy_evidence": result["camera_model_policy_evidence"],
-            "observed_objects": [
+        _minimal_agent_view(
+            perception_mode=CAMERA_MODEL_POLICY_MODE,
+            structured_detections_available=False,
+            raw_fpv_observations=result["raw_fpv_observations"],
+            camera_model_policy_evidence=result["camera_model_policy_evidence"],
+            observed_objects=[
                 result["model_declared_observations"][0],
                 main_agent_retry,
             ],
-        }
+            model_declared_observations=[
+                result["model_declared_observations"][0],
+                main_agent_retry,
+            ],
+            model_declared_observation_evidence={
+                **result["model_declared_observation_evidence"],
+                "observations": [
+                    result["model_declared_observations"][0],
+                    main_agent_retry,
+                ],
+            },
+        )
     )
     checker._assert_camera_model_policy(
         result,
@@ -3103,17 +3120,18 @@ def test_checker_allows_camera_grounded_label_lane_public_provenance() -> None:
     )
 
     checker._assert_public_agent_view(
-        {
-            "contract": checker.REALWORLD_CONTRACT,
-            "forbidden_private_fields_absent": True,
-            "metric_map": {},
-            "static_fixture_projection": [],
-            "perception_mode": CAMERA_MODEL_POLICY_MODE,
-            "structured_detections_available": False,
-            "raw_fpv_observations": result["raw_fpv_observations"],
-            "camera_model_policy_evidence": result["camera_model_policy_evidence"],
-            "observed_objects": [observed],
-        }
+        _minimal_agent_view(
+            perception_mode=CAMERA_MODEL_POLICY_MODE,
+            structured_detections_available=False,
+            raw_fpv_observations=result["raw_fpv_observations"],
+            camera_model_policy_evidence=result["camera_model_policy_evidence"],
+            observed_objects=[observed],
+            model_declared_observations=[observed],
+            model_declared_observation_evidence={
+                **result["model_declared_observation_evidence"],
+                "observations": [observed],
+            },
+        )
     )
 
 
@@ -3731,7 +3749,7 @@ def _promote_agibot_fixture_to_hardware_shape(
     )
     agent_view = data["agent_view"]
     assert isinstance(agent_view, dict)
-    agent_view["raw_fpv_observations"] = raw
+    agent_view_module.active_perception(agent_view)["raw_fpv_observations"] = raw
 
     camera_policy = data["camera_model_policy_evidence"]
     assert isinstance(camera_policy, dict)
@@ -3751,7 +3769,7 @@ def _promote_agibot_fixture_to_hardware_shape(
             ],
         }
     )
-    agent_view["camera_model_policy_evidence"] = camera_policy
+    agent_view_module.active_perception(agent_view)["camera_model_policy_evidence"] = camera_policy
 
     trace = data["cleanup_policy_trace"]
     assert isinstance(trace, dict)
@@ -3968,6 +3986,58 @@ def _add_isaac_loaded_scene(
     return scene_usd
 
 
+def _minimal_agent_view(
+    *,
+    base_navigation_map: dict[str, object] | None = None,
+    runtime_metric_map: dict[str, object] | None = None,
+    perception_mode: str = "visible_object_detections",
+    structured_detections_available: bool = True,
+    observed_objects: list[dict[str, object]] | None = None,
+    raw_fpv_observations: list[dict[str, object]] | None = None,
+    camera_model_policy_evidence: dict[str, object] | None = None,
+    model_declared_observations: list[dict[str, object]] | None = None,
+    model_declared_observation_evidence: dict[str, object] | None = None,
+) -> dict[str, object]:
+    base_navigation_map = base_navigation_map or _minimal_base_navigation_map()
+    runtime_metric_map = runtime_metric_map or {}
+    return agent_view_module.build_agent_view(
+        contract=REALWORLD_CONTRACT,
+        perception_mode=perception_mode,
+        detection_exposure_policy="sanitized_visible_object_detections",
+        structured_detections_available=structured_detections_available,
+        base_navigation_map=base_navigation_map,
+        runtime_metric_map=runtime_metric_map,
+        observed_objects=observed_objects or [],
+        raw_fpv_observations=raw_fpv_observations or [],
+        camera_model_policy_evidence=camera_model_policy_evidence or {},
+        model_declared_observations=model_declared_observations or [],
+        model_declared_observation_evidence=model_declared_observation_evidence or {},
+        policy_view={
+            "schema": "realworld_cleanup_policy_view_v1",
+            "allowed_inputs": ["base_navigation_map", "runtime_metric_map"],
+            "chase_camera_policy_input": False,
+            "excluded_report_only_views": ["chase_camera"],
+        },
+        cleanup_worklist={
+            "schema": "cleanup_worklist_v1",
+            "waypoint_source": "generated_exploration_candidate",
+            "objects": [],
+        },
+        observed_waypoint_ids=[],
+        public_tool_names=[],
+        forbidden_keys=frozenset(forbidden_agent_view_keys()),
+    )
+
+
+def _minimal_base_navigation_map() -> dict[str, object]:
+    return {
+        "schema": "real_robot_map_bundle_v1",
+        "rooms": [{"room_id": "room_1", "label": "Room 1"}],
+        "room_category_hints": [],
+        "inspection_waypoints": [],
+    }
+
+
 def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
     map_id = f"{scenario_id}_base_navigation_map"
@@ -3987,25 +4057,24 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
     }
     runtime_map = {
         "schema": "runtime_metric_map_v1",
-        "static_map": {"map_bundle": dict(map_bundle), "rooms": [_isaac_scene_index_room()]},
-    }
-    static_fixture_projection = {
-        "schema": "static_fixture_projection_v1",
-        "scene_index_fixture_overlay": {
-            "enabled": True,
-            "source": "isaac_scene_index",
-            "fixture_count": 1,
+        "static_map": {
+            "map_bundle": dict(map_bundle),
+            "rooms": [_isaac_scene_index_room()],
+            "scene_index_fixture_overlay": {
+                "enabled": True,
+                "source": "isaac_scene_index",
+                "fixture_count": 1,
+            },
         },
     }
     data["scenario_id"] = scenario_id
     isaac_runtime = data["isaac_runtime"]
     assert isinstance(isaac_runtime, dict)
     isaac_runtime["scenario_source"] = "isaac_scene_index"
-    data["agent_view"] = {
-        "metric_map": metric_map,
-        "static_fixture_projection": static_fixture_projection,
-        "runtime_metric_map": runtime_map,
-    }
+    data["agent_view"] = _minimal_agent_view(
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_map,
+    )
     data["runtime_metric_map"] = runtime_map
     semantics_path = base / "map_bundle" / "semantics.json"
     semantics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4114,19 +4183,14 @@ def _add_isaac_scene_index_base_navigation_map_context(data: dict[str, object], 
             }
         ],
     }
-    static_fixture_projection = {
-        "schema": "static_fixture_projection_v1",
-        "rooms": [],
-    }
     data["scenario_id"] = scenario_id
     isaac_runtime = data["isaac_runtime"]
     assert isinstance(isaac_runtime, dict)
     isaac_runtime["scenario_source"] = "isaac_scene_index"
-    data["agent_view"] = {
-        "metric_map": metric_map,
-        "static_fixture_projection": static_fixture_projection,
-        "runtime_metric_map": runtime_map,
-    }
+    data["agent_view"] = _minimal_agent_view(
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_map,
+    )
     data["runtime_metric_map"] = runtime_map
     semantics_path = base / "map_bundle" / "semantics.json"
     semantics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4831,7 +4895,7 @@ def _seed7_cleanup_bindings(anchor_probe: dict[str, object]) -> list[dict[str, o
 def _runtime_anchor_by_id(result: dict[str, object]) -> dict[str, dict[str, object]]:
     agent_view = result.get("agent_view")
     agent_view = agent_view if isinstance(agent_view, dict) else {}
-    runtime_map = agent_view.get("runtime_metric_map")
+    runtime_map = agent_view_module.runtime_metric_map(agent_view) if agent_view else {}
     runtime_map = runtime_map if isinstance(runtime_map, dict) else {}
     return {
         str(item.get("anchor_id") or ""): item
@@ -4890,7 +4954,7 @@ def _primitive_evidence_target_fixture_id(result: dict[str, object], object_id: 
 
 def _agent_view_worklist_candidate_fixture_id(result: dict[str, object], object_id: str) -> str:
     agent_view = result.get("agent_view") if isinstance(result.get("agent_view"), dict) else {}
-    worklist = agent_view.get("cleanup_worklist") if isinstance(agent_view, dict) else {}
+    worklist = agent_view_module.cleanup_worklist(agent_view) if agent_view else {}
     rows = worklist.get("objects", []) if isinstance(worklist, dict) else []
     for item in rows:
         if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.rerun import report_rerun_command_from_env
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.advisory_scoring import build_advisory_evaluation
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
@@ -163,7 +164,7 @@ def _build_payloads(
     artifacts: _RunArtifactPaths,
 ) -> _RunPayloads:
     agent_view = inputs.contract.agent_view_payload()
-    runtime_metric_map = agent_view.get("runtime_metric_map", {})
+    runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
     cleanup_policy_trace = cleanup_policy_trace_from_events(inputs.trace_events, agent_view)
     real_robot_readiness = real_robot_readiness_from_events(
         agent_view=agent_view,
@@ -274,11 +275,15 @@ def _base_run_result(
         "real_robot_readiness": payloads.real_robot_readiness,
         "agent_view": payloads.agent_view,
         "runtime_metric_map": payloads.runtime_metric_map,
-        "raw_fpv_observations": payloads.agent_view.get("raw_fpv_observations", []),
-        "camera_model_policy_evidence": payloads.agent_view.get("camera_model_policy_evidence", {}),
-        "model_declared_observations": payloads.agent_view.get("model_declared_observations", []),
-        "model_declared_observation_evidence": payloads.agent_view.get(
-            "model_declared_observation_evidence", {}
+        "raw_fpv_observations": agent_view_module.raw_fpv_observations(payloads.agent_view),
+        "camera_model_policy_evidence": agent_view_module.camera_model_policy_evidence(
+            payloads.agent_view
+        ),
+        "model_declared_observations": agent_view_module.model_declared_observations(
+            payloads.agent_view
+        ),
+        "model_declared_observation_evidence": (
+            agent_view_module.model_declared_observation_evidence(payloads.agent_view)
         ),
         "map_build": _map_build_payload(inputs, artifacts),
         "agent_scratchpad": inputs.agent_scratchpad,

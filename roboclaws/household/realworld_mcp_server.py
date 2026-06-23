@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as MCPImage
 
 from roboclaws.core.json_sources import read_jsonl_objects
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -389,22 +390,20 @@ class RealWorldMolmoCleanupMCPServer:
 
     def _agent_view_payload(self) -> dict[str, Any]:
         agent_view = self.contract.agent_view_payload()
-        agent_view["public_tool_names"] = agent_view_public_tool_names(
-            self,
-            list(agent_view.get("public_tool_names") or []),
+        return agent_view_module.with_public_tool_names(
+            agent_view,
+            agent_view_public_tool_names(
+                self,
+                agent_view_module.public_tool_names(agent_view),
+            ),
         )
-        return agent_view
 
     def _write_live_public_artifacts(self, *, trigger: str) -> None:
         """Refresh public map artifacts while a live MCP run is still in progress."""
 
         try:
             agent_view = self._agent_view_payload()
-            runtime_metric_map = (
-                agent_view.get("runtime_metric_map")
-                if isinstance(agent_view.get("runtime_metric_map"), dict)
-                else {}
-            )
+            runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
             _write_json(self.run_dir / "agent_view.json", agent_view)
             _write_json(self.run_dir / "runtime_metric_map.json", runtime_metric_map)
         except Exception as exc:

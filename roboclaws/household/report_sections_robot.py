@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.report_sections_action import action_evidence_summary
 from roboclaws.household.semantic_timeline import (
     CLOSE_RECEPTACLE_PHASE,
@@ -328,7 +329,7 @@ def _draw_bbox(draw: ImageDraw.ImageDraw, box: dict[str, Any]) -> None:
 
 def _has_raw_fpv_observations(run_result: dict[str, Any]) -> bool:
     observations = run_result.get("raw_fpv_observations") or (
-        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+        agent_view_module.raw_fpv_observations(run_result.get("agent_view") or {})
     )
     return bool(observations)
 

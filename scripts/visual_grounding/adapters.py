@@ -1663,7 +1663,8 @@ def _destination_hint(payload: dict[str, Any], category: str) -> dict[str, Any]:
     preferences = _destination_preferences(category)
     if not preferences:
         return {}
-    for fixture in payload.get("static_fixture_projection") or []:
+    public_map_hints = payload.get("public_map_hints") or {}
+    for fixture in public_map_hints.get("fixture_hints") or []:
         searchable = " ".join(
             [
                 str(fixture.get("fixture_id") or ""),

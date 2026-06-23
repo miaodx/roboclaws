@@ -4,6 +4,8 @@ import html
 from pathlib import Path
 from typing import Any, Callable
 
+from roboclaws.household import agent_view as agent_view_module
+
 
 def molmospaces_agibot_rehearsal_section(
     run_dir: Path,
@@ -18,13 +20,10 @@ def molmospaces_agibot_rehearsal_section(
         return ""
     scene = run_result.get("molmospaces_scene") or {}
     agent_view = run_result.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view) if agent_view else {}
+    static_fixtures = agent_view_module.static_map_fixtures(agent_view) if agent_view else []
     rooms = metric_map.get("rooms") or []
     waypoints = metric_map.get("inspection_waypoints") or []
-    fixtures = []
-    for room in static_fixture_projection.get("rooms") or []:
-        fixtures.extend(room.get("fixtures") or [])
     runtime = str(scene.get("runtime") or rehearsal.get("runtime") or "unknown")
     if runtime == "fixture":
         note = (
@@ -47,7 +46,7 @@ def molmospaces_agibot_rehearsal_section(
         f"{metric('Scene source', scene.get('scene_source', 'unknown'))}"
         f"{metric('Map id', metric_map.get('map_id', 'unknown'))}"
         f"{metric('Rooms', len(rooms))}"
-        f"{metric('Fixtures', len(fixtures))}"
+        f"{metric('Fixtures', len(static_fixtures))}"
         f"{metric('Waypoints', len(waypoints))}"
         f"{metric('Simulated', rehearsal.get('simulated', 'n/a'))}"
         "</div>"
