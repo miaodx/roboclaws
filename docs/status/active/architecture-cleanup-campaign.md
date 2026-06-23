@@ -8,7 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Agibot operator-gates owner move complete. Continue with fresh post-HEAD
+- Visual-grounding runtime-parameter owner merge complete. Continue with fresh post-HEAD
   discovery after committing this slice; remaining quality-ratchet output is
   broader oversized-module baseline drift in other owners.
 
@@ -69,6 +69,15 @@ Last proven evidence:
   Ruff, and `git diff --check` passed; the quality-ratchet output no longer
   lists `roboclaws/household/agibot_sdk_runner.py` or
   `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+- Fresh post-`4bb038bc` discovery found a shrinkable duplicate-owner candidate
+  in visual grounding: both the sidecar adapter and benchmark runner sanitized
+  runtime parameters locally while the request/response contract owner existed
+  in `roboclaws.household.visual_grounding`. The safe vertical slice merged
+  sanitizer ownership into that contract module and migrated both callers.
+  Focused visual-grounding unit/contract tests, touched-file Ruff, and
+  `git diff --check` passed; the quality-ratchet output no longer lists
+  `scripts/visual_grounding/adapters.py` or
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py`.
 
 Completed slice batch:
 
@@ -127,6 +136,8 @@ Completed slice batch:
   Molmo cleanup launcher script and into the agent runtime layer.
 - Slice 26: moved Agibot operator safety-gate interpretation out of the SDK
   subprocess adapter and into the household operator-gates owner.
+- Slice 27: merged visual-grounding runtime-parameter sanitization into the
+  visual-grounding contract owner and removed two duplicate private helpers.
 
 Next proof:
 

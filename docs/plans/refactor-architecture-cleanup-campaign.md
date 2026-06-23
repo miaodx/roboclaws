@@ -99,6 +99,7 @@ Surface metrics:
 | Shrink Agibot contract-test PLR0915 rows | 0 | 1 | 0 | 0 | preserved |
 | Move live timing interpretation to agent owner | 0 | 1 | 1 | 1 | preserved |
 | Move Agibot operator gates to household owner | 0 | 1 | 1 | 1 | preserved |
+| Merge visual-grounding runtime parameter sanitizer | 0 | 2 | 2 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -122,10 +123,10 @@ public module CLI.
 
 Next clear candidates:
 
-- Run fresh post-HEAD discovery after committing the Agibot operator-gates
-  owner move. Remaining quality-ratchet output is broader oversized-module
-  baseline drift and needs owner-local shrink candidates rather than a blind
-  baseline refresh.
+- Run fresh post-HEAD discovery after committing the visual-grounding
+  runtime-parameter owner merge. Remaining quality-ratchet output is broader
+  oversized-module baseline drift and needs owner-local shrink candidates
+  rather than a blind baseline refresh.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -672,6 +673,28 @@ exhausted, or the stop/park criteria apply.
   Note: the quality ratchet still fails on broader oversized-module baseline
   drift, but no longer lists `roboclaws/household/agibot_sdk_runner.py` or
   `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+
+- 2026-06-23: Merged visual-grounding runtime-parameter sanitization into
+  `roboclaws.household.visual_grounding.safe_runtime_parameters` and migrated
+  both `scripts/visual_grounding/adapters.py` and
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py` off their
+  duplicate private helpers. This was a safe shrink of a medium-risk
+  oversized-module candidate: the visual-grounding request/response contract
+  owner now owns the interface for safe runtime knobs, while sidecar adapter
+  behavior and benchmark matrix behavior are preserved.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py::test_safe_runtime_parameters_keeps_only_json_scalar_knobs tests/contract/visual_grounding/test_visual_grounding_service.py::test_real_mode_reports_grounding_dino_device_unavailable tests/contract/visual_grounding/test_visual_grounding_service.py::test_real_mode_rejects_malformed_request_runtime_parameter tests/contract/visual_grounding/test_visual_grounding_benchmark.py::test_visual_grounding_first_wave_matrix_covers_required_sweeps -q
+  .venv/bin/ruff check roboclaws/household/visual_grounding.py scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no longer lists `scripts/visual_grounding/adapters.py` or
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py`.
 
 ## Parked Candidates
 
