@@ -8,7 +8,8 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Fresh discovery handoff after private path-containment helper deletion.
+- Delete stale AI2-THOR/refactor harness agent-only docs, then run a fresh
+  discovery handoff.
 
 Last proven evidence:
 
@@ -18,6 +19,9 @@ Last proven evidence:
 - Focused artifact-serving, scene-preview, and Pages-prune tests passed; ruff
   passed on touched modules; stale-helper search found no remaining
   `_is_relative_to` helpers; and `git diff --check` passed.
+- Current post-HEAD discovery found four stale `docs/ai` pages describing
+  retired AI2-THOR/OpenClaw game, refactor-regression, and navigator harness
+  scripts whose source files no longer exist.
 
 Completed slice batch:
 
@@ -41,11 +45,19 @@ Completed slice batch:
   state owner and updated history to call it.
 - Slice 10: deleted private path-containment helpers in favor of the native
   `Path.is_relative_to(...)` interface.
+- Slice 11: deleted four stale agent-only docs for retired AI2-THOR/OpenClaw
+  game and refactor-harness surfaces while preserving current run guidance and
+  historical planning evidence.
 
 Next proof:
 
 ```bash
-Run a fresh `$intuitive-reduce-entropy` discovery handoff against current HEAD.
+test ! -e docs/ai/deployment/ai2thor-rendering.md
+test ! -e docs/ai/experiments/refactor-regression.md
+test ! -e docs/ai/experiments/view-experiment-2026-04.md
+test ! -e docs/ai/harness/self-improvement-loop.md
+rg -n "docs/ai/(deployment/ai2thor-rendering|experiments/refactor-regression|experiments/view-experiment-2026-04|harness/self-improvement-loop)|benchmark_ai2thor_rendering|capture_refactor_regression|analyze_refactor_regression|harness/run-next|harness/run.sh|harness/README" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+git diff --check
 ```
 
 Stop condition:

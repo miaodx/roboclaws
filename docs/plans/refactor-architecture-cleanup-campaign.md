@@ -83,6 +83,7 @@ Surface metrics:
 | Delete stale AI issues roadmap | 1 | 1 | 0 | 0 | preserved |
 | Move operator-console display run id to state owner | 0 | 1 | 1 | 0 | preserved |
 | Delete private path-containment helpers | 4 | 4 | 4 | 0 | preserved |
+| Delete stale AI2-THOR/harness agent docs | 4 | 4 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -98,7 +99,7 @@ Consecutive no-clear-candidate passes: 0
 
 ## Candidate Queue
 
-Fresh discovery required.
+Fresh discovery required after stale AI2-THOR/harness agent docs deletion.
 
 ## Completed Slices
 
@@ -282,6 +283,32 @@ Fresh discovery required.
 
   Note: the stale-helper search exits with no matches, which is the expected
   result.
+
+- 2026-06-23: Deleted four stale agent-only docs under `docs/ai/` that still
+  described retired AI2-THOR/OpenClaw game, refactor-regression, and navigator
+  harness surfaces as runnable implementation guidance. Their referenced
+  modules, examples, and scripts no longer exist in the current codebase; the
+  shipped historical context remains in `.planning/` and current run guidance
+  remains in `README.md`, `ARCHITECTURE.md`, `just/README.md`, and
+  `docs/human/`.
+
+  Deleted:
+
+  - `docs/ai/deployment/ai2thor-rendering.md`
+  - `docs/ai/experiments/refactor-regression.md`
+  - `docs/ai/experiments/view-experiment-2026-04.md`
+  - `docs/ai/harness/self-improvement-loop.md`
+
+  Proof:
+
+  ```bash
+  test ! -e docs/ai/deployment/ai2thor-rendering.md
+  test ! -e docs/ai/experiments/refactor-regression.md
+  test ! -e docs/ai/experiments/view-experiment-2026-04.md
+  test ! -e docs/ai/harness/self-improvement-loop.md
+  rg -n "docs/ai/(deployment/ai2thor-rendering|experiments/refactor-regression|experiments/view-experiment-2026-04|harness/self-improvement-loop)|benchmark_ai2thor_rendering|capture_refactor_regression|analyze_refactor_regression|harness/run-next|harness/run.sh|harness/README" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
+  git diff --check
+  ```
 
 ## Parked Candidates
 
