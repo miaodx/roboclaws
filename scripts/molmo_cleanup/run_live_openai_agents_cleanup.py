@@ -570,7 +570,6 @@ class LiveOpenAIAgentsCleanupRunner:
         )
 
     def _run_sdk_agent(self) -> None:
-        self._write_status("running-openai-agents")
         self._mark_timing("openai_agents_start")
         recovery_policy = IncompleteTurnRecoveryPolicy(
             max_attempts=int(self.agent_sdk_perf_profile["max_continuations"]),
@@ -582,12 +581,13 @@ class LiveOpenAIAgentsCleanupRunner:
         result = None
         attempts: list[dict[str, Any]] = []
         while True:
+            self._write_status(
+                "running-openai-agents-continuation" if attempt_index else "running-openai-agents"
+            )
             self._raise_agent_sdk_budget_failure_if_any(
                 attempt_index=attempt_index,
                 stage="before",
             )
-            if attempt_index:
-                self._write_status("running-openai-agents-continuation")
             request = self._sdk_request(prompt=prompt, attempt_index=attempt_index)
             result = runtime.run(request)
             attempt_summary = _sdk_attempt_summary(result, attempt_index=attempt_index)
@@ -662,9 +662,9 @@ class LiveOpenAIAgentsCleanupRunner:
                 f"OpenAI Agents SDK runtime failed: {failure.reason}",
                 failure,
             )
+        if self.operator_handoff_active:
+            return
         if not (self.run_dir / "run_result.json").is_file():
-            if self.operator_handoff_active:
-                return
             raise RuntimeError(
                 "OpenAI Agents SDK turn ended without done after "
                 f"{len(attempts)} OpenAI Agents SDK invocation(s)"

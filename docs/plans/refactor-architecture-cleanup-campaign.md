@@ -95,6 +95,7 @@ Surface metrics:
 | Delete Pages prune script wrapper | 1 | 1 | 1 | 2 | preserved |
 | Deepen provider registry CLI dispatch | 0 | 1 | 0 | 0 | preserved |
 | Deepen cleanup MCP server initialization | 3 | 1 | 0 | 0 | preserved |
+| Simplify OpenAI Agents runner status loop | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -118,10 +119,6 @@ public module CLI.
 
 Next clear candidates:
 
-- Shrink
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py:LiveOpenAIAgentsCleanupRunner._run_sdk_agent`
-  by moving live-agent step construction into private script-owner helpers.
-  Keep the public script command unchanged.
 - Shrink two new overlong Agibot contract tests by moving fixture construction
   into test-local helpers. Keep assertions and public contracts unchanged.
   This is a test-owner cleanup candidate after production new violations are
@@ -592,6 +589,25 @@ exhausted, or the stop/park criteria apply.
   Note: the quality ratchet still fails on other current files, but no longer
   lists `RealWorldMolmoCleanupMCPServer.__init__` or
   `roboclaws/household/realworld_mcp_server.py` module-size growth.
+
+- 2026-06-23: Simplified
+  `LiveOpenAIAgentsCleanupRunner._run_sdk_agent` by writing the initial versus
+  continuation status through one expression at the top of each SDK attempt.
+  This removed the new C901 violation without adding helper surface, changing
+  the public script command, or growing the already-oversized runner file.
+
+  Proof:
+
+  ```bash
+  .venv/bin/ruff check --select C901 scripts/molmo_cleanup/run_live_openai_agents_cleanup.py
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_fails_after_bounded_continuation -q
+  .venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on other current files, but no longer
+  lists `LiveOpenAIAgentsCleanupRunner._run_sdk_agent`.
 
 ## Parked Candidates
 

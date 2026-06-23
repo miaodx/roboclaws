@@ -8,7 +8,7 @@ post-HEAD discovery handoffs find no clear safe P1/P2 slice.
 
 Current slice:
 
-- Cleanup MCP server initialization deepening complete. Continue with the next
+- OpenAI Agents runner status-loop simplification complete. Continue with the next
   current Python quality-ratchet violation.
 
 Last proven evidence:
@@ -45,6 +45,11 @@ Last proven evidence:
   quality-ratchet output no longer lists
   `RealWorldMolmoCleanupMCPServer.__init__` or
   `roboclaws/household/realworld_mcp_server.py` module-size growth.
+- The third safe vertical slice simplified
+  `LiveOpenAIAgentsCleanupRunner._run_sdk_agent` status writing without adding
+  helper surface or growing the file; focused live-runtime tests, Ruff, and
+  `git diff --check` passed, and the quality-ratchet output no longer lists
+  that method.
 
 Completed slice batch:
 
@@ -95,6 +100,8 @@ Completed slice batch:
   longer the command formatting owner.
 - Slice 22: deepened cleanup MCP server initialization while reducing the
   module size below its previous line count.
+- Slice 23: simplified OpenAI Agents runner status-loop control flow without
+  changing the public live-runner script.
 
 Next proof:
 
@@ -140,6 +147,6 @@ Parked work:
   real CLI argument/default behavior instead of pure pass-through wrapper
   behavior.
 - Remaining current quality-ratchet queue:
-  `LiveOpenAIAgentsCleanupRunner._run_sdk_agent`, two overlong Agibot contract
-  tests, and broader oversized-module baseline drift. Try safe owner-local
-  shrink slices before considering a baseline refresh.
+  two overlong Agibot contract tests and broader oversized-module baseline
+  drift. Try safe owner-local shrink slices before considering a baseline
+  refresh.
