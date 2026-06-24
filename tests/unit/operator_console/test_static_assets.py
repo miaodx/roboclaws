@@ -152,6 +152,8 @@ ROUTE_FIELD_APP_REQUIRED = (
     "enabledLaunchCount > 0",
     "isMolmospacesWorld",
     "return leftMolmo ? 1 : -1",
+    "preferredPreviewCombination(state.combinations)",
+    "routeHasPreviewAssets",
     "payload.runtime",
     "/api/runtime/tasks",
     "/api/prompt-preview",
@@ -166,7 +168,7 @@ ROUTE_FIELD_APP_REQUIRED = (
     "TASK RUNNING",
     "data-open-background-tasks",
     "backgroundTaskViewAvailable",
-    "els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== \"tasks\";",
+    'els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== "tasks";',
     "copyVisualPath",
     "copy_command",
     "api_post",
@@ -195,6 +197,19 @@ def test_static_app_references_existing_dom_ids() -> None:
     referenced_ids = set(re.findall(r'getElementById\("([^"`$]+)"\)', app))
 
     assert referenced_ids - declared_ids == set()
+
+
+def test_static_app_references_existing_els_keys() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+    els_match = re.search(r"const els = \{(?P<body>.*?)\n\};", app, re.DOTALL)
+    assert els_match is not None
+    declared_keys = set(
+        re.findall(r"^\s*([A-Za-z][A-Za-z0-9]*):", els_match.group("body"), re.MULTILINE)
+    )
+    referenced_keys = set(re.findall(r"\bels\.([A-Za-z][A-Za-z0-9]*)\b", app))
+
+    assert referenced_keys - declared_keys == set()
 
 
 def test_static_app_has_route_specific_field_groups() -> None:
@@ -325,9 +340,7 @@ def _assert_preview_png_files_exist(preview_dir: Path, preview_by_view: dict[str
         if asset_path.startswith("/previews/"):
             path = preview_dir / Path(asset_path).name
         elif asset_path.startswith("/asset-previews/maps/"):
-            path = REPO_ROOT / "assets" / "maps" / asset_path.removeprefix(
-                "/asset-previews/maps/"
-            )
+            path = REPO_ROOT / "assets" / "maps" / asset_path.removeprefix("/asset-previews/maps/")
         else:
             raise AssertionError(f"unsupported preview asset path: {asset_path}")
         assert path.is_file(), view_name

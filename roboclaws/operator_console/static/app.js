@@ -115,11 +115,12 @@ async function boot() {
   state.worlds = orderedVisibleWorlds(payload.worlds || []);
   state.readiness = payload.readiness || {};
   state.runtime = payload.runtime || { tasks: [], summary: {} };
-  state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
-    preferredDefaultCombination(combinationsForWorld(state.selectedWorld && state.selectedWorld.id)) ||
+    preferredPreviewCombination(state.combinations) ||
+    preferredDefaultCombination(combinationsForWorld(state.worlds[0] && state.worlds[0].id)) ||
     preferredDefaultCombination(state.combinations) ||
     state.combinations[0];
+  state.selectedWorld = state.worlds[0] || null;
   if (state.selectedRoute) {
     state.selectedWorld =
       state.worlds.find((world) => world.id === state.selectedRoute.world_id) || state.selectedWorld;
@@ -301,6 +302,14 @@ function preferredDefaultCombination(combinations) {
     combinations.find((item) => item.enabled) ||
     combinations[0]
   );
+}
+
+function preferredPreviewCombination(combinations) {
+  return preferredDefaultCombination(combinations.filter(routeHasPreviewAssets));
+}
+
+function routeHasPreviewAssets(route) {
+  return Boolean(route && route.preview_assets && Object.keys(route.preview_assets).length);
 }
 
 function selectedCombinationFromAxes() {
@@ -702,8 +711,6 @@ function renderRouteFields(route) {
   const fieldGroups = new Set(route.field_groups || ["common"]);
 
   els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
-  els.codexFields.hidden = true;
-  els.claudeFields.hidden = true;
   els.isaacFields.hidden = !fieldGroups.has("isaac");
   els.agibotFields.hidden = !fieldGroups.has("agibot");
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
