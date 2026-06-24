@@ -34,12 +34,9 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
 
     assert "network: work" in result.stdout
     assert "api-router.evad.mioffice.cn" in result.stdout
-    assert "OpenClaw and system-provider Claude Code" in result.stdout
-    assert "mimo-mify-anthropic" in result.stdout
-    assert (
-        "Codex defaults to codex-router-responses; "
-        "mimo-mify-responses/minimax-responses require explicit"
-    ) in result.stdout
+    assert "OpenClaw and system-provider Codex/Claude manual-debug recipes" in result.stdout
+    assert "SDK live routes use repo-local CODEX_BASE_URL/CODEX_API_KEY" in result.stdout
+    assert ("SDK mimo-mify-responses/minimax-responses require explicit") in result.stdout
     assert "system-provider Codex just recipes are blocked" not in result.stdout
 
 
@@ -304,7 +301,7 @@ def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_pat
     assert "repo-local Codex provider (codex-router-responses)" in result.stderr
 
 
-def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
+def test_current_and_manual_debug_just_recipes_use_network_guard() -> None:
     assert not (JUST_DIR / "appliance.just").exists()
     assert not (REPO_ROOT / "Dockerfile.railway").exists()
     assert not (REPO_ROOT / "railway.toml").exists()
@@ -323,12 +320,14 @@ def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
         text = path.read_text(encoding="utf-8")
         assert "bash scripts/dev/network_status.sh --assert-off-work" in text, path
 
-    for path in (JUST_DIR / "molmo.just",):
-        text = path.read_text(encoding="utf-8")
-        assert "roboclaws_assert_claude_code_network_allowed" in text, path
+    molmo_text = (JUST_DIR / "molmo.just").read_text(encoding="utf-8")
+    assert "roboclaws_assert_openai_agents_network_allowed" in molmo_text
 
-    for path in (JUST_DIR / "code.just", JUST_DIR / "agent.just", JUST_DIR / "molmo.just"):
-        text = path.read_text(encoding="utf-8")
-        assert "roboclaws_assert_codex_network_allowed" in text, path
+    code_text = (JUST_DIR / "code.just").read_text(encoding="utf-8")
+    assert "roboclaws_assert_codex_network_allowed" in code_text
+
+    agent_text = (JUST_DIR / "agent.just").read_text(encoding="utf-8")
+    assert "unsupported agent_engine 'codex-cli'" in agent_text
+    assert "unsupported agent_engine 'claude-code'" in agent_text
 
     assert "network-status:" in (JUST_DIR / "dev.just").read_text(encoding="utf-8")

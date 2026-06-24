@@ -129,7 +129,7 @@ Key pieces:
 - `roboclaws/maps/` owns reusable navigation map artifacts, projections, and
   Runtime Map Prior Snapshot conversion.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
-  capability surface for coding agents and future higher-level MCP clients.
+  capability surface for SDK live agents and future higher-level MCP clients.
 - `roboclaws/cli/household_agent_server.py` and
   `roboclaws/cli/agibot_map_build_agent_server.py` are thin server adapters
   that assemble live household MCP server processes behind
@@ -276,7 +276,7 @@ Going forward:
 - Add a new backend runtime in `roboclaws/launch/backends.py` as a reusable
   adapter boundary; implementation backend ids stay private metadata.
 - Add a new agent engine in `roboclaws/launch/agent_engines.py`. For live
-  coding agents, shared launcher and status semantics should flow through
+  agent engines, shared launcher and status semantics should flow through
   `roboclaws/agents/live_runtime.py`, with task-specific kickoff text in
   `roboclaws/agents/prompts/`.
 - Add or revise thin server adapters only for transport and lifecycle concerns:

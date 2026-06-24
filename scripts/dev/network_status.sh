@@ -56,20 +56,20 @@ print_status() {
     0)
       echo "network: work"
       echo "probe: reachable $probe_url"
-      echo "guard: OpenClaw and system-provider Claude Code just recipes are blocked here"
-      echo "guard: Claude Code may run with repo-local mimo-mify-anthropic or mimo-tp-anthropic profiles"
-      echo "guard: Codex defaults to codex-router-responses; mimo-mify-responses/minimax-responses require explicit provider overrides"
-      echo "guard: Codex recipes do not fall back to a missing repo-local provider route"
+      echo "guard: OpenClaw and system-provider Codex/Claude manual-debug recipes are blocked here"
+      echo "guard: SDK live routes use repo-local CODEX_BASE_URL/CODEX_API_KEY by default"
+      echo "guard: SDK mimo-mify-responses/minimax-responses require explicit provider overrides"
+      echo "guard: retired Codex/Claude engines do not fall back to missing repo-local provider routes"
       ;;
     1)
       echo "network: non-work"
       echo "probe: unreachable $probe_url"
-      echo "guard: OpenClaw and coding-agent just recipes may run, subject to normal provider keys"
+      echo "guard: OpenClaw and SDK live-agent routes may run, subject to normal provider keys"
       ;;
     *)
       echo "network: unknown"
       echo "probe: could not run curl against $probe_url"
-      echo "guard: OpenClaw and coding-agent just recipes fail closed when they require a network decision"
+      echo "guard: OpenClaw and SDK live-agent routes fail closed when they require a network decision"
       ;;
   esac
 }

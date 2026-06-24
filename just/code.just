@@ -1,8 +1,8 @@
-# Coding-agent MCP launcher for Codex/Claude Code.
+# Retired Docker coding-agent MCP launcher for manual debugging.
 #
 # Preferred entrypoints:
 # - just code::docker-build              build the pinned coding-agent image
-# - just code::docker-install-wrappers   install wrapper shims for live routes
+# - just code::docker-install-wrappers   install wrapper shims for manual debugging
 # - just code::codex-provider-smoke      check the repo-local Codex provider route
 
 set working-directory := '..'
@@ -10,15 +10,14 @@ set working-directory := '..'
 default:
     @just --list code
 
-# Supported local demos intentionally run coding agents with full permissions.
-# Any new just recipe that launches Codex or Claude Code should call these
-# recipes or scripts/dev/coding_agent_docker.sh. Bare host CLI launches are
-# unsupported unless a human explicitly asks for system-CLI debugging.
+# Current product demos do not launch Codex or Claude Code. These arguments are
+# retained only for explicit manual debugging through the retired Docker helper.
+# Bare host CLI launches are unsupported unless a human explicitly asks for
+# system-CLI debugging.
 codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"
 claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
 
-# Build the pinned Codex / Claude Code Docker image used by supported
-# coding-agent runs.
+# Build the pinned Codex / Claude Code Docker image used by manual debugging.
 docker-build:
     @scripts/dev/coding_agent_docker.sh build
 

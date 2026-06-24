@@ -1,4 +1,4 @@
-"""Safe launcher for operator-console coding-agent routes."""
+"""Safe launcher for operator-console SDK/direct routes."""
 
 from __future__ import annotations
 

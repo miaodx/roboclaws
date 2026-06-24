@@ -1,6 +1,6 @@
 # Roboclaws
 
-Household robot demo routes with MCP tools, reusable skills, and coding-agent
+Household robot demo routes with MCP tools, reusable skills, and SDK/direct
 runtimes. Python 3.12+.
 
 `AGENTS.md` is the canonical repo playbook. This file is a Claude-specific

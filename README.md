@@ -8,7 +8,7 @@
 
 > **Let's Bring Brain To Robots**
 
-**Visible household-robot demos driven by MCP tools, reusable skills, and AI coding agents.**
+**Visible household-robot demos driven by MCP tools, reusable skills, and live-agent SDK/direct runtimes.**
 
 Roboclaws is a thin demo repo for making AI-driven robotics behavior reviewable:
 frames, maps, tool traces, scores, and public/private evaluation boundaries are
