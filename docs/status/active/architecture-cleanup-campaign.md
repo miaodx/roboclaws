@@ -2,15 +2,15 @@
 
 Source gate: `docs/plans/refactor-architecture-cleanup-campaign.md`
 
-Latest user intent: finish the current verified slice group, then stop the
-architecture cleanup campaign. No fresh discovery pass should run until the
-user explicitly resumes the campaign.
+Latest user intent: resume the autonomous codebase simplification campaign
+with fresh reduce-entropy discovery, architecture-report input, and verified
+refactor slices until the stop condition is met.
 
 Current slice:
 
-- Agibot contract-rehearsal runtime owner move complete. Campaign stopped by
-  user request after committing this slice; remaining quality-ratchet output is
-  broader oversized-module baseline drift in other owners.
+- MolmoSpaces worker-output owner-local slice complete. Continue with fresh
+  discovery around the remaining current quality-ratchet complexity rows before
+  touching broader oversized-module baseline drift.
 
 Last proven evidence:
 
@@ -88,6 +88,18 @@ Last proven evidence:
   no longer lists `roboclaws/household/agibot_contract_rehearsal.py` or
   `roboclaws/household/agibot_contract_rehearsal_stages.py`; it still fails on
   unrelated oversized-module drift listed under parked work.
+- Fresh post-`12b66126` discovery found a current false-confidence candidate:
+  `.venv/bin/python scripts/dev/check_python_quality_ratchet.py` failed with
+  new complexity rows in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` and two
+  operator-console test helpers.
+- Slice 29 moved robot-view artifact path naming and scene-alignment point
+  collection into same-owner private helpers in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py`. Focused robot-view
+  worker tests, touched-file Ruff, touched-file format check, and
+  `git diff --check` passed. The quality-ratchet output no longer lists
+  `molmospaces_worker_outputs.py`; it still fails on two operator-console test
+  helper PLR0915 rows plus broader oversized-module baseline drift.
 
 Completed slice batch:
 
@@ -152,19 +164,21 @@ Completed slice batch:
   and relative-path formatting into the Agibot contract-rehearsal runtime
   owner, and updated contract tests to assert active GDK navigation claims
   instead of scanning capability-profile metadata strings.
+- Slice 29: deepened MolmoSpaces worker robot-view output assembly and
+  scene-alignment point collection inside the current worker-output owner.
 
 Next proof:
 
 ```bash
-# Campaign stopped by user request after Slice 28.
-# On resume, run fresh post-HEAD discovery before selecting the next slice.
+.venv/bin/python scripts/dev/check_python_quality_ratchet.py
+# Expect remaining failures only outside molmospaces_worker_outputs.py.
 ```
 
 Stop condition:
 
 - Stop for public contract migration, unavailable proof, external/hardware
   evidence, or two consecutive fresh post-HEAD no-clear-candidate handoffs.
-- Current stop reason: user requested stopping after the current slice group.
+- Current stop reason: none; campaign is active.
 
 No-touch scope:
 
@@ -203,3 +217,10 @@ Parked work:
   `agibot_map_build_mcp_server.py`, `realworld_contract.py`, several
   `scripts/molmo_cleanup/*` files, and large contract/unit tests. These are
   outside the final Agibot runtime-owner slice.
+- Latest quality-ratchet residual after Slice 29: current complexity rows
+  remain in
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
+  and
+  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
+  Treat broader oversized-module drift as architecture pressure and prefer
+  safe owner-local shrink slices before any baseline refresh.

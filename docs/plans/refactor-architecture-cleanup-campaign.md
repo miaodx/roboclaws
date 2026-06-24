@@ -1,6 +1,6 @@
 # Refactor: Architecture Cleanup Campaign
 
-**Status:** STOPPED_BY_USER
+**Status:** ACTIVE
 **Created:** 2026-06-23
 **Source:** `$intuitive-reduce-entropy` saturation scan,
 `$improve-codebase-architecture` report-only review, `$intuitive-refactor`
@@ -101,6 +101,7 @@ Surface metrics:
 | Move Agibot operator gates to household owner | 0 | 1 | 1 | 1 | preserved |
 | Merge visual-grounding runtime parameter sanitizer | 0 | 2 | 2 | 1 | preserved |
 | Move Agibot contract-rehearsal runtime owner | 0 | 1 | 2 | 1 | preserved |
+| Deepen MolmoSpaces robot-view output owner | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -124,11 +125,13 @@ public module CLI.
 
 Next clear candidates:
 
-- Stopped by user request after the Agibot contract-rehearsal runtime-owner
-  slice. Do not select another candidate until the user explicitly resumes.
-  On resume, run a fresh post-HEAD discovery handoff first. Remaining
-  quality-ratchet output is broader oversized-module baseline drift and needs
-  owner-local shrink candidates rather than a blind baseline refresh.
+- Fresh post-HEAD discovery on 2026-06-25 found a current false-confidence
+  candidate: `.venv/bin/python scripts/dev/check_python_quality_ratchet.py`
+  failed with new complexity rows in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` plus two
+  operator-console test helpers. Slice 29 removed the MolmoSpaces worker output
+  rows; the next clear shrink candidate is the operator-console test helper
+  pair, if focused owner-local proof stays available.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -156,13 +159,19 @@ Checked and parked:
   source. Medium-risk handling split this into safe internal slices for each
   new complexity violation before considering broader oversized-module
   baseline drift.
+- Fresh 2026-06-25 handoff after `12b66126` found four new current complexity
+  rows. Slice 29 removed the two MolmoSpaces worker-output rows. Remaining
+  current complexity rows are
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
+  and
+  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
 
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
 exhausted, or the stop/park criteria apply.
 
-The campaign is stopped at the user's request after the final verified Slice
-28. Resume only on explicit user instruction.
+The campaign resumed on explicit user instruction after the final verified
+Slice 28 stop.
 
 ## Completed Slices
 
@@ -724,6 +733,27 @@ The campaign is stopped at the user's request after the final verified Slice
   drift, but no longer lists
   `roboclaws/household/agibot_contract_rehearsal.py` or
   `roboclaws/household/agibot_contract_rehearsal_stages.py`.
+
+- 2026-06-25: Deepened
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` by moving robot-view
+  artifact path naming and scene-alignment point collection behind same-owner
+  private helpers. This removed the current quality-ratchet complexity rows
+  for `write_robot_views` and `_scene_points` while preserving the worker
+  command interface and robot-view output schema.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_worker_robot_views_uses_robot_head_camera_for_fpv tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_worker_robot_views_keeps_backend_local_fallback_without_pose -q
+  .venv/bin/ruff check scripts/molmo_cleanup/molmospaces_worker_outputs.py
+  .venv/bin/ruff format --check scripts/molmo_cleanup/molmospaces_worker_outputs.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on two unrelated operator-console test
+  helper PLR0915 rows plus broader oversized-module baseline drift, but no
+  longer lists `scripts/molmo_cleanup/molmospaces_worker_outputs.py`.
 
 ## Parked Candidates
 

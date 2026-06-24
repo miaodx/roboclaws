@@ -112,10 +112,7 @@ def write_robot_views(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_label = safe_file_stem(label)
-    fpv_path = output_dir / f"{safe_label}.fpv.png"
-    chase_path = output_dir / f"{safe_label}.chase.png"
-    topdown_path = output_dir / f"{safe_label}.topdown.png"
-    verify_path = output_dir / f"{safe_label}.verify.png"
+    view_paths = _robot_view_paths(output_dir, safe_label)
 
     focus = hooks.focus_payload(state, focus_object_id, focus_receptacle_id)
     fpv = hooks.render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
@@ -203,11 +200,11 @@ def write_robot_views(
     )
     camera_control_contract["camera_adjustment"] = camera_adjustment
     camera_control_contract["agent_facing_fpv"]["camera_adjustment"] = camera_adjustment
-    Image.fromarray(fpv).save(fpv_path)
-    Image.fromarray(chase).save(chase_path)
+    Image.fromarray(fpv).save(view_paths["fpv"])
+    Image.fromarray(chase).save(view_paths["chase"])
     verify_image = Image.fromarray(verify)
     hooks.annotate_focus_image(verify_image, focus)
-    verify_image.save(verify_path)
+    verify_image.save(view_paths["verify"])
     topdown_request = _robot_views_topdown_camera_request(state, width=width, height=height)
     topdown_result = hooks.render_camera_views_with_model_data(
         model,
@@ -225,7 +222,7 @@ def write_robot_views(
             "topdown_scene_render_missing",
             topdown_result=topdown_result,
         )
-    Image.open(topdown_source).convert("RGB").save(topdown_path)
+    Image.open(topdown_source).convert("RGB").save(view_paths["topdown"])
 
     return hooks.ok(
         "robot_views",
@@ -243,20 +240,22 @@ def write_robot_views(
         color_management=color_management,
         focus=focus,
         room_outline_count=len(state.get("room_outlines", [])),
-        views={
-            "fpv": str(fpv_path),
-            "chase": str(chase_path),
-            "topdown": str(topdown_path),
-            "verify": str(verify_path),
-        },
+        views={key: str(path) for key, path in view_paths.items()},
         shapes={
             "fpv": list(fpv.shape),
             "chase": list(chase.shape),
             "verify": list(verify.shape),
-            "topdown": list(Image.open(topdown_path).size[::-1]) + [3],
+            "topdown": list(Image.open(view_paths["topdown"]).size[::-1]) + [3],
         },
         render_resolution={"width": width, "height": height},
     )
+
+
+def _robot_view_paths(output_dir: Path, safe_label: str) -> dict[str, Path]:
+    return {
+        view_id: output_dir / f"{safe_label}.{view_id}.png"
+        for view_id in ("fpv", "chase", "topdown", "verify")
+    }
 
 
 def robot_view_camera_adjustment(
@@ -411,38 +410,54 @@ def _scene_alignment(
 
 def _scene_points(state: dict[str, Any]) -> list[tuple[float, float]]:
     points: list[tuple[float, float]] = []
-    for outline in state.get("room_outlines") or []:
+    points.extend(_room_outline_points(state.get("room_outlines") or []))
+    points.extend(_collection_position_points(state.get("objects")))
+    points.extend(_collection_position_points(state.get("receptacles")))
+    points.extend(_pose_points(state.get("robot_trajectory") or []))
+    points.extend(_pose_points([state.get("robot_pose")]))
+    return points
+
+
+def _room_outline_points(room_outlines: Any) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for outline in room_outlines:
         if not isinstance(outline, dict):
             continue
         center = outline.get("center")
         half_extents = outline.get("half_extents")
-        if _is_xy(center) and _is_xy(half_extents):
-            points.append(
-                (
-                    float(center[0]) - float(half_extents[0]),
-                    float(center[1]) - float(half_extents[1]),
-                )
-            )
-            points.append(
-                (
-                    float(center[0]) + float(half_extents[0]),
-                    float(center[1]) + float(half_extents[1]),
-                )
-            )
-    for collection_key in ("objects", "receptacles"):
-        collection = state.get(collection_key)
-        if not isinstance(collection, dict):
+        if not (_is_xy(center) and _is_xy(half_extents)):
             continue
-        for item in collection.values():
-            if isinstance(item, dict) and _is_xy(item.get("position")):
-                position = item["position"]
-                points.append((float(position[0]), float(position[1])))
-    for pose in state.get("robot_trajectory") or []:
+        points.append(
+            (
+                float(center[0]) - float(half_extents[0]),
+                float(center[1]) - float(half_extents[1]),
+            )
+        )
+        points.append(
+            (
+                float(center[0]) + float(half_extents[0]),
+                float(center[1]) + float(half_extents[1]),
+            )
+        )
+    return points
+
+
+def _collection_position_points(collection: Any) -> list[tuple[float, float]]:
+    if not isinstance(collection, dict):
+        return []
+    points: list[tuple[float, float]] = []
+    for item in collection.values():
+        if isinstance(item, dict) and _is_xy(item.get("position")):
+            position = item["position"]
+            points.append((float(position[0]), float(position[1])))
+    return points
+
+
+def _pose_points(poses: Any) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for pose in poses:
         if isinstance(pose, dict) and pose.get("x") is not None and pose.get("y") is not None:
             points.append((float(pose["x"]), float(pose["y"])))
-    pose = state.get("robot_pose")
-    if isinstance(pose, dict) and pose.get("x") is not None and pose.get("y") is not None:
-        points.append((float(pose["x"]), float(pose["y"])))
     return points
 
 
