@@ -551,8 +551,14 @@ def _cleanup_summary_section(
     score: dict[str, Any],
 ) -> str:
     restored_summary = f"{score['restored_count']}/{score['total_targets']}"
-    eyebrow = str(run_result.get("report_eyebrow") or "Cleanup artifact")
-    title = str(run_result.get("report_title") or "MolmoSpaces Cleanup Pilot")
+    if _is_open_ended_result(run_result):
+        default_eyebrow = "Open-ended artifact"
+        default_title = "MolmoSpaces Open-ended Pilot"
+    else:
+        default_eyebrow = "Cleanup artifact"
+        default_title = "MolmoSpaces Cleanup Pilot"
+    eyebrow = str(run_result.get("report_eyebrow") or default_eyebrow)
+    title = str(run_result.get("report_title") or default_title)
     return f"""
     <section class="summary">
       <div class="summary-head">
@@ -567,7 +573,7 @@ def _cleanup_summary_section(
           {_badge("Scenario", scenario.scenario_id)}
           {_badge("Backend", run_result.get("backend", "unknown"))}
           {_badge("Contract", run_result.get("contract", "legacy"))}
-          {_badge("Status", run_result["cleanup_status"])}
+          {_badge("Status", _summary_status_label(_summary_status(run_result)))}
           {_badge("Restored", restored_summary)}
           {_badge("Generated mess", _generated_mess_summary(run_result))}
           {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
@@ -775,7 +781,7 @@ def _summary_metrics(run_result: dict[str, Any], score: dict[str, Any]) -> str:
     restored_count = f"{score.get('restored_count', 0)}/{score.get('total_targets', 0)}"
     return (
         '<div class="metric-grid">'
-        f"{_metric('Status', _summary_status_label(run_result.get('cleanup_status', 'unknown')))}"
+        f"{_metric('Status', _summary_status_label(_summary_status(run_result)))}"
         f"{_metric('Restored', restored_count)}"
         f"{_metric('Generated', _generated_mess_summary(run_result))}"
         f"{_metric('Sweep', _rate_text(run_result.get('sweep_coverage_rate')))}"
@@ -800,11 +806,20 @@ def _failure_reason_summary(run_result: dict[str, Any]) -> str:
 
 
 def _is_failure_status(run_result: dict[str, Any]) -> bool:
-    statuses = [
-        run_result.get("cleanup_status"),
-        run_result.get("completion_status"),
-        run_result.get("status"),
-    ]
+    statuses = (
+        [
+            run_result.get("intent_status"),
+            run_result.get("goal_status"),
+            run_result.get("final_status"),
+            run_result.get("status"),
+        ]
+        if _is_open_ended_result(run_result)
+        else [
+            run_result.get("cleanup_status"),
+            run_result.get("completion_status"),
+            run_result.get("status"),
+        ]
+    )
     live_status = run_result.get("live_status")
     if isinstance(live_status, dict):
         statuses.append(live_status.get("phase"))
@@ -812,6 +827,28 @@ def _is_failure_status(run_result: dict[str, Any]) -> bool:
         str(status or "").strip().lower()
         in {"failed", "failure", "blocked", "error", "errored", "timeout", "timed_out"}
         for status in statuses
+    )
+
+
+def _summary_status(run_result: dict[str, Any]) -> Any:
+    keys = (
+        ("intent_status", "goal_status", "final_status", "status", "cleanup_status")
+        if _is_open_ended_result(run_result)
+        else ("cleanup_status", "status")
+    )
+    for key in keys:
+        value = run_result.get(key)
+        if value:
+            return value
+    return "unknown"
+
+
+def _is_open_ended_result(run_result: dict[str, Any]) -> bool:
+    goal_contract = run_result.get("goal_contract")
+    goal_contract = goal_contract if isinstance(goal_contract, dict) else {}
+    return (
+        str(run_result.get("task_intent") or goal_contract.get("intent") or "").strip()
+        == "open-ended"
     )
 
 
