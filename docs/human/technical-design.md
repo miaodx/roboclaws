@@ -75,14 +75,13 @@ hidden or compatibility route.
 Agent engines are product runtimes, not tasks:
 
 - deterministic direct runner;
-- Docker-backed Codex CLI;
-- Docker-backed Claude Code;
-- OpenAI Agents SDK.
+- OpenAI Agents SDK live route.
 
 Validation-required maintainer routes stay outside the normal public engine
-list until their separate proof gates are green. Script-style proof and dry-run
-paths belong under direct runners, harness recipes, or backend adapters; they
-are not public agent engines.
+list until their separate proof gates are green. Retired Docker-backed
+`codex-cli` and `claude-code` routes are not current product engines.
+Script-style proof and dry-run paths belong under direct runners, harness
+recipes, or backend adapters; they are not public agent engines.
 
 Reusable behavior belongs in skills. The maintained cleanup skill drives
 `preset=cleanup`; the `household-open-task` skill drives no-preset household

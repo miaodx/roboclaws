@@ -34,7 +34,7 @@ from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ProductRun = Callable[..., dict[str, Any]]
-DEFAULT_DETACHED_LIVE_TIMEOUT_S = 3600.0
+DEFAULT_LIVE_TIMEOUT_S = 3600.0
 DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S = 30.0
 
 
@@ -180,7 +180,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         if run_result and _live_surface_already_complete(
             sample_run_dir,
             allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
-            require_terminal_status=_live_surface_route_can_detach(kwargs),
+            require_terminal_status=False,
         ):
             record["returncode"] = "timeout_after_completion"
             _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
@@ -308,51 +308,15 @@ def wait_for_live_surface_completion(
     allow_open_ended_checker_failure: bool = False,
     started_wall_time_s: float | None = None,
 ) -> Path:
-    """Wait for a detached live product route to finish when the route returns early."""
+    """Validate foreground live-product artifacts after the public route exits."""
 
-    require_terminal_status = _live_surface_route_can_detach(kwargs)
     if _live_surface_already_complete(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-        require_terminal_status=require_terminal_status,
+        require_terminal_status=False,
     ):
         return effective_run_dir
-    if not require_terminal_status:
-        return effective_run_dir
-
-    timeout_s = live_surface_timeout_s(kwargs)
-    deadline = _live_surface_wait_deadline(timeout_s=timeout_s, elapsed_s=elapsed_s)
-    while time.monotonic() <= deadline:
-        effective_run_dir = discover_live_surface_run_dir(
-            kwargs,
-            output_dir=output_dir,
-            fallback_run_dir=effective_run_dir,
-            started_wall_time_s=started_wall_time_s,
-        )
-        if _live_surface_already_complete(
-            effective_run_dir,
-            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-            require_terminal_status=True,
-        ):
-            return effective_run_dir
-        time.sleep(max(poll_s, 0.05))
-    effective_run_dir = wait_for_timed_out_live_surface_artifact(
-        kwargs,
-        output_dir=output_dir,
-        effective_run_dir=effective_run_dir,
-        poll_s=poll_s,
-        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-        started_wall_time_s=started_wall_time_s,
-    )
-    if _live_surface_already_complete(
-        effective_run_dir,
-        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-        require_terminal_status=True,
-    ):
-        return effective_run_dir
-    raise TimeoutError(
-        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
-    )
+    return effective_run_dir
 
 
 def _live_surface_already_complete(
@@ -362,6 +326,13 @@ def _live_surface_already_complete(
     require_terminal_status: bool,
 ) -> bool:
     if (effective_run_dir / "run_result.json").is_file() and not require_terminal_status:
+        status = _load_json(effective_run_dir / "live_status.json")
+        if status:
+            exit_status = status.get("exit_status")
+            if exit_status not in {None, 0}:
+                if allow_open_ended_checker_failure and _is_open_ended_checker_failure(status):
+                    return True
+                _raise_for_terminal_live_status(effective_run_dir, status)
         return True
     return _live_surface_run_is_terminal(
         effective_run_dir,
@@ -372,7 +343,7 @@ def _live_surface_already_complete(
 def live_surface_timeout_s(kwargs: dict[str, Any]) -> float:
     timeout_s = kwargs.get("live_timeout_s")
     if timeout_s is None:
-        return DEFAULT_DETACHED_LIVE_TIMEOUT_S
+        return DEFAULT_LIVE_TIMEOUT_S
     return _positive_timeout_value(timeout_s, "live_timeout_s")
 
 
@@ -397,31 +368,9 @@ def wait_for_timed_out_live_surface_artifact(
     allow_open_ended_checker_failure: bool = False,
     started_wall_time_s: float | None = None,
 ) -> Path:
-    """Give detached routes a short grace window after subprocess timeout."""
+    """Return the last discovered run dir after a foreground subprocess timeout."""
 
-    if not _live_surface_route_can_detach(kwargs):
-        return effective_run_dir
-    deadline = time.monotonic() + live_timeout_completion_grace_s()
-    while time.monotonic() <= deadline:
-        effective_run_dir = discover_live_surface_run_dir(
-            kwargs,
-            output_dir=output_dir,
-            fallback_run_dir=effective_run_dir,
-            started_wall_time_s=started_wall_time_s,
-        )
-        if _live_surface_already_complete(
-            effective_run_dir,
-            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-            require_terminal_status=True,
-        ):
-            return effective_run_dir
-        time.sleep(max(poll_s, 0.05))
-    return discover_live_surface_run_dir(
-        kwargs,
-        output_dir=output_dir,
-        fallback_run_dir=effective_run_dir,
-        started_wall_time_s=started_wall_time_s,
-    )
+    return effective_run_dir
 
 
 def live_timeout_completion_grace_s() -> float:
@@ -640,16 +589,12 @@ def live_surface_env(kwargs: dict[str, Any], *, base_env: Any) -> dict[str, str]
     env = dict(base_env)
     provider_profile = str(kwargs.get("provider_profile") or "")
     if provider_profile:
-        if kwargs["agent_engine"] in {"codex-cli", "openai-agents-sdk"}:
-            env["ROBOCLAWS_PROVIDER_PROFILE"] = provider_profile
-        elif kwargs["agent_engine"] == "claude-code":
+        if kwargs["agent_engine"] == "openai-agents-sdk":
             env["ROBOCLAWS_PROVIDER_PROFILE"] = provider_profile
     model = str(kwargs.get("model") or "")
     if model:
-        if kwargs["agent_engine"] in {"codex-cli", "openai-agents-sdk"}:
+        if kwargs["agent_engine"] == "openai-agents-sdk":
             env["ROBOCLAWS_CODEX_MODEL"] = model
-        elif kwargs["agent_engine"] == "claude-code":
-            env["ROBOCLAWS_CLAUDE_MODEL"] = model
     return env
 
 
@@ -796,10 +741,6 @@ def _is_open_ended_checker_failure(status: dict[str, Any]) -> bool:
     return "cleanup checker exited with status" in reason
 
 
-def _live_surface_route_can_detach(kwargs: dict[str, Any]) -> bool:
-    return str(kwargs.get("agent_engine") or "") == "codex-cli"
-
-
 def _raise_for_terminal_live_status(run_dir: Path, status: dict[str, Any]) -> None:
     if not status:
         return
@@ -809,5 +750,5 @@ def _raise_for_terminal_live_status(run_dir: Path, status: dict[str, Any]) -> No
     reason = str(status.get("reason") or status.get("provider_reason") or "").strip()
     detail = f": {reason}" if reason else ""
     raise RuntimeError(
-        f"detached live surface run failed with exit {exit_status} at {run_dir}{detail}"
+        f"live surface run reported failed status {exit_status} at {run_dir}{detail}"
     )

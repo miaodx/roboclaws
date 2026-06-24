@@ -36,8 +36,6 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
         supported_dispatch_runners=(
             "direct",
             "mcp-smoke",
-            "codex",
-            "claude",
             "openai-agents-live",
             "openclaw",
         ),
@@ -60,7 +58,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "map-build": TaskIntentSpec(
         intent_id="map-build",
         surface_ids=("household-world",),
-        supported_dispatch_runners=("direct", "codex", "openai-agents-live"),
+        supported_dispatch_runners=("direct", "openai-agents-live"),
         dispatch_target="household-world.map-build",
         prompt_id="map_build",
         checker_id="runtime_metric_map",
@@ -82,7 +80,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "open-ended": TaskIntentSpec(
         intent_id="open-ended",
         surface_ids=("household-world",),
-        supported_dispatch_runners=("mcp-smoke", "codex", "claude", "openai-agents-live"),
+        supported_dispatch_runners=("mcp-smoke", "openai-agents-live"),
         dispatch_target="household-world.open-ended",
         prompt_id="household_open_ended",
         checker_id="open_ended_report",

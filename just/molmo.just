@@ -7,9 +7,7 @@
 # - direct          deterministic Python cleanup loop; no MCP server
 # - mcp-smoke       deterministic ADR-0003 MCP tool smoke; no live LLM agent
 # - openclaw-smoke  OpenClaw-labeled MCP smoke; no live Gateway
-# - codex-live      live Codex CLI connected to the cleanup MCP server
-# - claude-live     live Claude Code connected to the cleanup MCP server
-# - openai-agents-live experimental OpenAI Agents SDK route, private/non-default
+# - openai-agents-live OpenAI Agents SDK route connected to the cleanup MCP server
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
 # Cleanup evidence lanes:
@@ -24,16 +22,11 @@
 # - just molmo::mcp-smoke-report
 # - just molmo::openclaw-smoke-report
 # - just molmo::camera-raw-fpv-report
-# - just molmo::codex-report
-# - just molmo::claude-report
 # - just molmo::openclaw-report
 
 set working-directory := '..'
 
 timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"
-codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"
-claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
-
 default:
     @just --list molmo
 
@@ -210,11 +203,11 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     fi
 
     case "$driver" in
-      direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openai-agents-live|openclaw-live)
+      direct|mcp-smoke|openclaw-smoke|openai-agents-live|openclaw-live)
         ;;
       *)
         echo "error: unsupported driver '$driver'" >&2
-        echo "       expected direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openai-agents-live|openclaw-live" >&2
+        echo "       expected direct|mcp-smoke|openclaw-smoke|openai-agents-live|openclaw-live" >&2
         echo "       use mcp-smoke/openclaw-smoke for deterministic substitutes; live agent names are explicit" >&2
         exit 1
         ;;
@@ -250,8 +243,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         exit 1
         ;;
     esac
-    if [[ "$map_build_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" && "$driver" != "openai-agents-live" ]]; then
-      echo "error: map-build mode currently supports direct, codex-live, or openai-agents-live driver only" >&2
+    if [[ "$map_build_enabled" == "true" && "$driver" != "direct" && "$driver" != "openai-agents-live" ]]; then
+      echo "error: map-build mode currently supports direct or openai-agents-live driver only" >&2
       exit 1
     fi
     perception_mode="visible_object_detections"
@@ -366,7 +359,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     fi
     map_build_args=()
     checker_map_build_args=()
-    if [[ "$map_build_enabled" == "true" && ( "$driver" == "codex-live" || "$driver" == "openai-agents-live" ) ]]; then
+    if [[ "$map_build_enabled" == "true" && "$driver" == "openai-agents-live" ]]; then
       checker_map_build_args=(--require-runtime-metric-map)
       profile_requires_clean_success="false"
       filtered_checker_visual_args=()
@@ -524,7 +517,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       interactive_visual_cap="${ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS:-1}"
     fi
 
-    live_drivers=(codex-live claude-live openai-agents-live openclaw-live)
+    live_drivers=(openai-agents-live openclaw-live)
     for live_driver in "${live_drivers[@]}"; do
       if [[ "$driver" == "$live_driver" ]]; then
         seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
@@ -556,52 +549,22 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
         server_startup_timeout_s="${ROBOCLAWS_MOLMO_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
-        source scripts/dev/coding_agent_env.sh
-        roboclaws_load_dotenv .env
         if [[ "$driver" == "openclaw-live" ]]; then
           bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
           server_host="0.0.0.0"
           client_url="http://host.docker.internal:${port}/mcp"
-        elif [[ "$driver" == "claude-live" ]]; then
-          roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"
-        elif [[ "$driver" == "codex-live" ]]; then
-          roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
         elif [[ "$driver" == "openai-agents-live" ]]; then
+          source scripts/dev/coding_agent_env.sh
+          roboclaws_load_dotenv .env
           roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
         fi
-        codex_model=""
-        codex_profile_summary="system defaults"
         openai_agents_model=""
         openai_agents_profile="codex-router-responses"
         openai_agents_profile_summary="codex-router-responses model=gpt-5.5"
-        claude_profile_summary="system defaults"
-        codex_model_args=()
-        claude_model_args=()
-        claude_env_args=()
-        if [[ "$driver" == "codex-live" ]]; then
-          codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
-          codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
-          roboclaws_codex_provider_args codex_model_args
-        elif [[ "$driver" == "openai-agents-live" ]]; then
+        if [[ "$driver" == "openai-agents-live" ]]; then
           openai_agents_profile="$(roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
           openai_agents_model="$(roboclaws_code_agent_model ROBOCLAWS_OPENAI_AGENTS_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
           openai_agents_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_OPENAI_AGENTS_MODEL codex-router-responses)"
-        elif [[ "$driver" == "claude-live" ]]; then
-          claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CLAUDE_MODEL auto-claude)"
-          roboclaws_claude_provider_args claude_model_args claude_env_args
-        fi
-        codex_bin=""
-        claude_bin=""
-        if [[ "$driver" == "codex-live" || "$driver" == "claude-live" ]]; then
-          scripts/dev/coding_agent_docker.sh ensure
-          docker_shim_dir=".tmp/coding-agent-bin"
-          scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir" >/dev/null
-          codex_bin="$PWD/${docker_shim_dir}/codex"
-          claude_bin="$PWD/${docker_shim_dir}/claude"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_run_id}}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
         prompt_cleanup_count="$generated_mess_count"
         if [[ "$profile" == "camera-raw-fpv" ]]; then
@@ -658,188 +621,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         fi
         operator_resume_requests_path="${ROBOCLAWS_OPERATOR_RESUME_REQUESTS_PATH:-}"
         live_lock_backend="${backend//[^A-Za-z0-9_.-]/-}"
-        codex_lock_path="output/molmo/live-locks/${live_lock_backend}.codex.lock"
-        claude_lock_path="output/molmo/live-locks/${live_lock_backend}.claude.lock"
         openai_agents_lock_path="output/molmo/live-locks/${live_lock_backend}.openai-agents.lock"
-
-        if [[ "$driver" == "codex-live" ]]; then
-          if ! command -v tmux >/dev/null 2>&1; then
-            echo "error: tmux command not found; install tmux before running detached Codex cleanup" >&2
-            exit 1
-          fi
-
-          if [[ "$backend" == "molmospaces_subprocess" && "$interactive_visual_cap" == "1" ]]; then
-            active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
-            if [[ -n "$active_sessions" ]]; then
-              echo "error: another interactive Codex Molmo cleanup session appears to be active" >&2
-              echo "active tmux sessions:" >&2
-              echo "$active_sessions" >&2
-              echo "probe latest: just molmo::status" >&2
-              exit 1
-            fi
-          fi
-
-          probe_host="$host"
-          if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
-            probe_host="127.0.0.1"
-          fi
-          if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
-            echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
-            echo "       refusing to choose another port because each live visual cleanup run owns a MuJoCo-backed backend" >&2
-            exit 1
-          fi
-
-          session_suffix="$(basename "$(dirname "$run_root")")-$(basename "$run_root")"
-          session_name="roboclaws-molmo-codex-${stamp}-${session_suffix}-p${port}-seed-${seed}"
-          session_name="${session_name//[^A-Za-z0-9_.-]/-}"
-          if tmux has-session -t "$session_name" >/dev/null 2>&1; then
-            echo "error: tmux session already exists: ${session_name}" >&2
-            echo "       attach with: tmux attach -t ${session_name}" >&2
-            exit 1
-          fi
-
-          runner="${run_dir}/run_live_codex.sh"
-          status_path="${run_dir}/live_status.json"
-          printf '%s\n' "$session_name" > "${run_dir}/tmux_session.txt"
-
-          runner_args=(
-            .venv/bin/python
-            scripts/molmo_cleanup/run_live_codex_cleanup.py
-            --repo-root "$PWD"
-            --run-dir "$run_dir"
-            --status-path "$status_path"
-            --client-url "$client_url"
-            --host "$host"
-            --port "$port"
-            --lock-path "$codex_lock_path"
-            --tmux-session "$session_name"
-            --codex-bin "$codex_bin"
-            --codex-model "$codex_model"
-            --codex-provider-summary "$codex_profile_summary"
-            --server-startup-timeout-s "$server_startup_timeout_s"
-            --kickoff-prompt "$kickoff_prompt"
-            --backend "$backend"
-            --task-surface "$task_surface"
-            --intent "$task_intent"
-            --skill-name "$skill_name"
-            --policy "$policy"
-            --task "$task"
-            --min-generated-mess-count "$min_generated_mess_count"
-            --profile "$profile"
-            --checker-profile "$implementation_evidence_lane"
-          )
-          if [[ -n "$operator_resume_requests_path" ]]; then
-            runner_args+=(--operator-resume-requests-path "$operator_resume_requests_path")
-          fi
-          for arg in "${server_args[@]}"; do
-            runner_args+=("--server-arg=$arg")
-          done
-          for arg in "${codex_model_args[@]}"; do
-            runner_args+=("--codex-model-arg=$arg")
-          done
-          for arg in "${checker_visual_args[@]}"; do
-            runner_args+=("--checker-visual-arg=$arg")
-          done
-
-          {
-            printf '#!/usr/bin/env bash\n'
-            printf 'set -Eeuo pipefail\n'
-            printf 'cd %q\n' "$PWD"
-            printf 'if [[ -f .env ]]; then set -a; source .env; set +a; fi\n'
-            printf 'exec > >(tee -a %q) 2>&1\n' "${run_dir}/driver.log"
-            printf 'exec'
-            for arg in "${runner_args[@]}"; do
-              printf ' %q' "$arg"
-            done
-            printf '\n'
-          } > "$runner"
-          chmod +x "$runner"
-          printf '{"phase":"queued","started_at_epoch":%s}\n' "$(date +%s)" > "$status_path"
-
-          tmux_env_args=()
-          for env_name in \
-            OPENAI_API_KEY CODEX_API_KEY CODEX_BASE_URL KIMI_API_KEY MIMO_TP_KEY \
-            XM_LLM_API_KEY XM_LLM_BASE_URL MM_API_KEY MM_BASE_URL \
-            HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
-            http_proxy https_proxy all_proxy no_proxy \
-            DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
-            ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL ROBOCLAWS_OPENAI_AGENTS_MODEL \
-            ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
-            ROBOCLAWS_PROVIDER_TIMING_PROXY \
-            ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL \
-            ROBOCLAWS_TIMING_PROXY_BIND_HOST \
-            ROBOCLAWS_TIMING_PROXY_BIND_PORT \
-            ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S \
-            ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \
-            ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS \
-            ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
-            ROBOCLAWS_REPORT_RERUN_COMMAND ROBOCLAWS_TASK_INTENT ROBOCLAWS_TASK_PRESET ROBOCLAWS_TASK_SKILL
-          do
-            if [[ -n "${!env_name:-}" ]]; then
-              tmux_env_args+=(-e "${env_name}=${!env_name}")
-            fi
-          done
-          tmux new-session -d -s "$session_name" "${tmux_env_args[@]}" "bash $(printf '%q' "$runner")"
-          echo "==> launched detached Codex Molmo cleanup"
-          echo "    tmux session : ${session_name}"
-          echo "    run dir      : ${run_dir}"
-          echo "    status       : just molmo::status ${run_dir}"
-          echo "    attach       : tmux attach -t ${session_name}"
-          echo "    tail         : tail -f ${run_dir}/driver.log"
-          exit 0
-        fi
-
-        if [[ "$driver" == "claude-live" ]]; then
-          probe_host="$host"
-          if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
-            probe_host="127.0.0.1"
-          fi
-          if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
-            echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
-            echo "       refusing to choose another port because each live visual cleanup run owns a MuJoCo-backed backend" >&2
-            exit 1
-          fi
-
-          status_path="${run_dir}/live_status.json"
-          runner_args=(
-            .venv/bin/python
-            scripts/molmo_cleanup/run_live_claude_cleanup.py
-            --repo-root "$PWD"
-            --run-dir "$run_dir"
-            --status-path "$status_path"
-            --client-url "$client_url"
-            --host "$host"
-            --port "$port"
-            --lock-path "$claude_lock_path"
-            --claude-bin "$claude_bin"
-            --claude-provider-summary "$claude_profile_summary"
-            --server-startup-timeout-s "$server_startup_timeout_s"
-            --kickoff-prompt "$kickoff_prompt"
-            --backend "$backend"
-            --task-surface "$task_surface"
-            --intent "$task_intent"
-            --skill-name "$skill_name"
-            --policy "$policy"
-            --task "$task"
-            --min-generated-mess-count "$min_generated_mess_count"
-            --profile "$profile"
-            --checker-profile "$implementation_evidence_lane"
-          )
-          for arg in "${server_args[@]}"; do
-            runner_args+=("--server-arg=$arg")
-          done
-          for arg in "${claude_model_args[@]}"; do
-            runner_args+=("--claude-model-arg=$arg")
-          done
-          for entry in "${claude_env_args[@]}"; do
-            export "$entry"
-          done
-          for arg in "${checker_visual_args[@]}"; do
-            runner_args+=("--checker-visual-arg=$arg")
-          done
-
-          exec "${runner_args[@]}"
-        fi
 
         if [[ "$driver" == "openai-agents-live" ]]; then
           probe_host="$host"
@@ -1168,11 +950,7 @@ openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" t
 camera-raw-fpv-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
     just molmo::household-world-impl direct camera-raw-fpv "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
-# Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
-codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-public-labels" host="127.0.0.1" port="18788":
-    just molmo::household-world-impl codex-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
-
-# Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
+# Probe a live-agent run. Defaults to the latest live cleanup report.
 status path="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -1180,10 +958,6 @@ status path="":
       exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py "{{path}}"
     fi
     exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py
-
-# Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
-claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-public-labels" host="127.0.0.1" port="18788":
-    just molmo::household-world-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
 ci-rehearsal entry="agents-sdk-kimi-k2.7-code" dry_run="":

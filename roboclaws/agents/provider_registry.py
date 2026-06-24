@@ -8,6 +8,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from roboclaws.launch.retired_agent_engines import (
+    is_retired_agent_engine,
+    retired_agent_engine_message,
+)
+
 MODEL_CAP_TEXT = "text"
 MODEL_CAP_IMAGE_INPUT = "image_input"
 
@@ -246,7 +251,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         route_id=PROVIDER_PROFILE_CODEX_RESPONSES,
         public_profile=PROVIDER_PROFILE_CODEX_RESPONSES,
         label="Codex Router Responses",
-        supported_engines=("codex-cli", "openai-agents-sdk"),
+        supported_engines=("openai-agents-sdk",),
         default_model_id="gpt-5.5",
         required_env_keys=("CODEX_BASE_URL", "CODEX_API_KEY"),
         api_key_env="CODEX_API_KEY",
@@ -258,7 +263,6 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         default_use_note="Default Codex router route; uses gpt-5.5.",
         compatible_model_ids=("gpt-5.5",),
         per_engine_status={
-            "codex-cli": ROUTE_HEALTHY,
             "openai-agents-sdk": ROUTE_EXPERIMENTAL,
         },
         route_capabilities={
@@ -270,7 +274,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         route_id=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
         public_profile=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
         label="MiMo mify Responses Gateway",
-        supported_engines=("codex-cli", "openai-agents-sdk"),
+        supported_engines=("openai-agents-sdk",),
         default_model_id="xiaomi/mimo-v2.5",
         required_env_keys=("XM_LLM_API_KEY",),
         api_key_env="XM_LLM_API_KEY",
@@ -284,23 +288,19 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         ),
         compatible_model_ids=("xiaomi/mimo-v2.5",),
         per_engine_status={
-            "codex-cli": ROUTE_DEGRADED,
             "openai-agents-sdk": ROUTE_PROVISIONAL,
         },
         route_capabilities={
             "image_transport": ROUTE_CAP_UNKNOWN,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
-        status_note=(
-            "MiMo via mify can call MCP tools in Codex, but current Codex probes "
-            "early-stop after one live-agent turn."
-        ),
+        status_note=("MiMo via mify is SDK-provisional until broader live route proof is healthy."),
     ),
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MINIMAX_RESPONSES,
         public_profile=PROVIDER_PROFILE_MINIMAX_RESPONSES,
         label="MiniMax Responses",
-        supported_engines=("codex-cli", "openai-agents-sdk"),
+        supported_engines=("openai-agents-sdk",),
         default_model_id="MiniMax-M3",
         required_env_keys=("MM_API_KEY",),
         api_key_env="MM_API_KEY",
@@ -312,18 +312,13 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         default_use_note="Default-enabled MiniMax route; uses MiniMax-M3.",
         compatible_model_ids=("MiniMax-M3",),
         per_engine_status={
-            "codex-cli": ROUTE_BLOCKED,
             "openai-agents-sdk": ROUTE_HEALTHY,
         },
         route_capabilities={
             "image_transport": ROUTE_CAP_UNKNOWN,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
-        status_note=(
-            "OpenAI Agents SDK structured cleanup works. Codex CLI is blocked by "
-            "MiniMax Responses MCP tool-name shape; Codex rejects flattened names "
-            "such as mcp__cleanup__metric_map or cleanup__ping_tool as unsupported calls."
-        ),
+        status_note=("OpenAI Agents SDK structured cleanup works."),
     ),
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MIMO_OPENAI_CHAT,
@@ -400,7 +395,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         route_id=PROVIDER_PROFILE_MIMO_ANTHROPIC,
         public_profile=PROVIDER_PROFILE_MIMO_ANTHROPIC,
         label="MiMo token plan Anthropic",
-        supported_engines=("claude-code",),
+        supported_engines=(),
         default_model_id="mimo-v2.5",
         required_env_keys=("MIMO_TP_KEY",),
         api_key_env="MIMO_TP_KEY",
@@ -409,17 +404,17 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_SHIM,
         compatible_model_ids=("mimo-v2.5",),
-        per_engine_status={"claude-code": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
+        status_note="Retained for historical Claude Code route metadata; not an active engine.",
     ),
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC,
         public_profile=PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC,
         label="MiMo mify Anthropic Gateway",
-        supported_engines=("claude-code",),
+        supported_engines=(),
         default_model_id="xiaomi/mimo-v2.5",
         required_env_keys=("XM_LLM_API_KEY",),
         api_key_env="XM_LLM_API_KEY",
@@ -428,11 +423,11 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_api=WIRE_ANTHROPIC,
         wire_source=WIRE_SOURCE_GATEWAY,
         compatible_model_ids=("xiaomi/mimo-v2.5",),
-        per_engine_status={"claude-code": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
+        status_note="Retained for historical Claude Code route metadata; not an active engine.",
     ),
 )
 
@@ -527,16 +522,14 @@ def supported_provider_profiles(agent_engine: str) -> tuple[str, ...]:
 
 def default_provider_profile(agent_engine: str) -> str | None:
     defaults = {
-        "codex-cli": PROVIDER_PROFILE_CODEX_RESPONSES,
         "openai-agents-sdk": PROVIDER_PROFILE_CODEX_RESPONSES,
-        "claude-code": PROVIDER_PROFILE_MIMO_ANTHROPIC,
         "openclaw-gateway": "kimi",
     }
     return defaults.get(agent_engine)
 
 
 def provider_env_key(agent_engine: str) -> str | None:
-    if agent_engine in {"codex-cli", "openai-agents-sdk", "claude-code"}:
+    if agent_engine == "openai-agents-sdk":
         return "ROBOCLAWS_PROVIDER_PROFILE"
     return None
 
@@ -606,10 +599,23 @@ def provider_readiness(
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     env_map = os.environ if env is None else env
+    selected = str(provider_profile or default_provider_profile(agent_engine) or "")
+    if is_retired_agent_engine(agent_engine):
+        return {
+            "driver": _driver_for_agent_engine(agent_engine),
+            "agent_engine": agent_engine,
+            "provider": selected,
+            "provider_profile": selected,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": retired_agent_engine_message(agent_engine),
+            "route_status": "retired",
+        }
     try:
         route = resolve_provider_route_for_engine(agent_engine, provider_profile)
     except KeyError:
-        selected = str(provider_profile or default_provider_profile(agent_engine) or "")
         message = (
             f"provider_profile {selected!r} is unknown for agent_engine {agent_engine!r}; "
             "add it to the provider registry or use a supported provider profile."
@@ -626,7 +632,6 @@ def provider_readiness(
             "message": message,
         }
     except ValueError as exc:
-        selected = str(provider_profile or default_provider_profile(agent_engine) or "")
         return {
             "driver": _driver_for_agent_engine(agent_engine),
             "agent_engine": agent_engine,
@@ -896,18 +901,14 @@ def _mify_anthropic_base_url_from_generic(base: str) -> str:
 
 def _driver_for_agent_engine(agent_engine: str) -> str:
     return {
-        "codex-cli": "codex",
         "openai-agents-sdk": "openai-agents-sdk",
-        "claude-code": "claude",
         "openclaw-gateway": "openclaw",
     }.get(agent_engine, agent_engine)
 
 
 def _engine_label(agent_engine: str) -> str:
     return {
-        "codex-cli": "Codex",
         "openai-agents-sdk": "OpenAI Agents SDK",
-        "claude-code": "Claude",
         "openclaw-gateway": "OpenClaw",
     }.get(agent_engine, agent_engine)
 

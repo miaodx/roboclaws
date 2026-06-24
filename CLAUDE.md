@@ -59,15 +59,15 @@ Run current public demos through the launch catalog:
 
 ```bash
 just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
-just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
+just run::surface surface=household-world agent_engine=openai-agents-sdk preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=openai-agents-sdk prompt="find something useful to drink"
 ```
 
 Common `just` recipes use the small public facade:
 
 ```bash
 just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=openai-agents-sdk preset=cleanup evidence_lane=world-public-labels
 just run::surface surface=planner-proof agent_engine=direct-runner intent=planner-proof mode=dry-run
 just agent::verify mock                          # maintainer confidence gate
 ```
@@ -77,21 +77,18 @@ Work-network restriction: if `just dev::network-status` reports `network: work`
 OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
 `just chat::run`, and OpenClaw local/integration verification gates.
 System-provider Claude Code is also blocked on the work
-network. `just molmo::claude-report` may run there when `.env` contains a supported MiMo
-or MiMo mify Anthropic key route. Codex recipes default to `codex-router-responses` and may
-run there when `CODEX_BASE_URL` and `CODEX_API_KEY` are configured. The mimo-mify-responses
-and MiniMax routes are available only with explicit
+network. The current active live product route is `agent_engine=openai-agents-sdk`.
+It defaults to `provider_profile=codex-router-responses` and may run there when
+`CODEX_BASE_URL` and `CODEX_API_KEY` are configured. The mimo-mify-responses
+and MiniMax SDK routes are available only with explicit
 `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` and `XM_LLM_API_KEY` or `MM_API_KEY`.
 Model-only overrides do not bypass the guard.
 
-Coding-agent runtime contract: run Codex / Claude Code demos through the public
-launch catalog, for example
-`just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels`.
-The pinned Docker-backed coding-agent runtime is the only supported task
-runtime; it runs with full local-demo permissions and an isolated task-skill
-workspace. New `just` recipes that launch Codex or Claude Code must route
-through `run::surface`, the private `agent::*` dispatcher, or
-`scripts/dev/coding_agent_docker.sh`.
+Live-agent runtime contract: run current live demos through
+`agent_engine=openai-agents-sdk`. `codex-cli` and `claude-code` are retired from
+active product launch; do not add new public recipes, operator-console rows, or
+eval rows for those engines. The pinned Docker-backed coding-agent runtime may
+remain for explicit manual debugging only when the human asks for it.
 Bare host `codex` or `claude` launches are unsupported unless the human
 explicitly asks for a system-CLI debugging run.
 

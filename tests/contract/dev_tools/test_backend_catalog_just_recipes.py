@@ -87,7 +87,7 @@ def test_molmo_cleanup_rejects_unscoped_isaac_backend_from_private_impl() -> Non
     assert "backend=isaaclab_subprocess is scoped to world=b1-map12" in result.stderr
 
 
-def test_codex_map_build_rejects_unknown_backend_from_catalog() -> None:
+def test_sdk_map_build_rejects_unknown_backend_from_catalog() -> None:
     env = os.environ.copy()
     env["ROBOCLAWS_JUST_TRACE"] = "1"
     result = subprocess.run(
@@ -95,7 +95,7 @@ def test_codex_map_build_rejects_unknown_backend_from_catalog() -> None:
             just_bin(),
             "agent::run",
             "household-world.map-build",
-            "codex-cli",
+            "openai-agents-sdk",
             "world-public-labels",
             "backend=missing_backend",
         ],
@@ -107,7 +107,31 @@ def test_codex_map_build_rejects_unknown_backend_from_catalog() -> None:
     )
 
     assert result.returncode != 0
-    assert "household-world.map-build codex-cli unsupported backend 'missing_backend'" in (
+    assert "household-world.map-build openai-agents-sdk unsupported backend 'missing_backend'" in (
         result.stderr
     )
-    assert "expected auto|molmospaces_subprocess|isaaclab_subprocess|agibot_gdk" in (result.stderr)
+    assert "expected auto|molmospaces_subprocess|isaaclab_subprocess|agibot_gdk" in result.stderr
+
+
+def test_agent_run_rejects_retired_codex_map_build_engine() -> None:
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    result = subprocess.run(
+        [
+            just_bin(),
+            "agent::run",
+            "household-world.map-build",
+            "codex-cli",
+            "world-public-labels",
+            "backend=molmospaces_subprocess",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "unsupported agent_engine 'codex-cli'" in result.stderr
+    assert "expected direct-runner|openai-agents-sdk" in result.stderr

@@ -65,7 +65,7 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 For full command routing, profiles, and maintainer-only recipes, read
 [just/README.md](just/README.md).
 
-To monitor and launch the supported local coding-agent household routes from a
+To monitor and launch the supported local SDK household routes from a
 standalone browser console, run:
 
 ```bash
@@ -73,7 +73,7 @@ just console::run
 ```
 
 The console uses the same world/backend/preset/agent-engine catalog for local
-coding-agent runs; it does not accept arbitrary browser-submitted shell
+SDK/direct runs; it does not accept arbitrary browser-submitted shell
 commands.
 
 ## Demo Matrix
@@ -87,7 +87,7 @@ Pages republishes from successful `main` runs.
 | --- | --- | --- |
 | Map build | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino seed=7 scenario_setup=baseline` | Local artifact today. Use `agent_engine=direct-runner` only for deterministic contract baselines. |
 | Household cleanup | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/) |
-| Open household goal | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"` | Local artifact today. |
+| Open household goal | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="find something useful to drink"` | Local artifact today. |
 | Planner proof | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` | Local artifact today. |
 | Operator console | `just console::run` | Local-only operator surface. |
 | Maintainer gate | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
@@ -107,7 +107,6 @@ mode contract.
 | Skill library convention         | [skills/README.md](skills/README.md)                                                                       |
 | Public command grammar           | [just/README.md](just/README.md)                                                                           |
 | Local keys and report artifacts  | [docs/human/local-runtime.md](docs/human/local-runtime.md)                                                 |
-| Coding-agent household MCP guide | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
 | MolmoSpaces settings             | [docs/human/molmospaces-settings.md](docs/human/molmospaces-settings.md)                                   |
 | Current project focus            | [STATUS.md](STATUS.md)                                                                                     |
 | Agent operating rules            | [AGENTS.md](AGENTS.md)                                                                                     |

@@ -14,7 +14,7 @@ from roboclaws.operator_console.launcher import (
 )
 from roboclaws.operator_console.routes import get_selection
 
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 
 
 def _b1_required_overrides(tmp_path: Path) -> dict[str, str]:
@@ -35,7 +35,7 @@ def _free_port() -> str:
 
 
 def test_provider_gate_rejects_conflicting_provider_profile_env_override(tmp_path: Path) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
 
     with pytest.raises(ConsoleLaunchError, match="conflicting provider profile selection"):
         route_readiness(
@@ -48,7 +48,7 @@ def test_provider_gate_rejects_conflicting_provider_profile_env_override(tmp_pat
 
 
 def test_provider_gate_route_selection_overrides_ambient_provider_profile(tmp_path: Path) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
 
     readiness = route_readiness(
         tmp_path,
@@ -70,7 +70,7 @@ def test_provider_gate_route_selection_overrides_ambient_provider_profile(tmp_pa
 
 
 def test_start_console_run_uses_one_provider_profile_selection(tmp_path: Path) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     seen_env: dict[str, str] = {}
 
     class FakeProcess:

@@ -43,8 +43,6 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
         supported_dispatch_runners=(
             "direct",
             "mcp-smoke",
-            "codex",
-            "claude",
             "openai-agents-live",
             "openclaw",
         ),

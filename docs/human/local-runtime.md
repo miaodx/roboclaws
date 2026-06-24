@@ -17,30 +17,25 @@ MIMO_TP_KEY=        # MiMo
 NV_API_KEY=          # NVIDIA NIM, optional
 
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1  # Internal multi-model aggregator
-XM_LLM_ANTHROPIC_BASE_URL=      # Optional Claude mimo-mify-responses route override
-XM_LLM_API_KEY=      # Codex mimo-mify-responses key only with explicit ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses
+XM_LLM_API_KEY=      # SDK mimo-mify-responses key only with explicit ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses
 
-CODEX_BASE_URL=      # Default Codex codex-router-responses Responses-compatible endpoint
-CODEX_API_KEY=       # Default Codex codex-router-responses endpoint key
+CODEX_BASE_URL=      # Default SDK codex-router-responses Responses-compatible endpoint
+CODEX_API_KEY=       # Default SDK codex-router-responses endpoint key
 ```
 
 The launch recipes infer the repo-local runtime route from explicit provider
-settings. Codex defaults to `codex-router-responses` and requires `CODEX_BASE_URL` plus
-`CODEX_API_KEY` (`gpt-5.5`, Responses API). It does not fall back to mimo-mify-responses when
-`XM_LLM_API_KEY` is present. To use mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
+settings. OpenAI Agents SDK defaults to `codex-router-responses` and requires
+`CODEX_BASE_URL` plus `CODEX_API_KEY` (`gpt-5.5`, Responses API). It does not
+fall back to mimo-mify-responses when `XM_LLM_API_KEY` is present. To use
+mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
 explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
 API, and web search disabled.
-Claude Code prefers a MiMo key when available, then the mimo-mify-responses
-Anthropic route from `XM_LLM_API_KEY` (`mimo-mify-anthropic`,
-`xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
-network.
 
-Run `just dev::network-status` before Claude Code, Codex, or
-validation-required maintainer workflows. On the work network, guarded
-maintainer routes and system-provider Claude Code are blocked; the repo-local
-Codex `codex-router-responses` route (`CODEX_BASE_URL` plus `CODEX_API_KEY`),
-explicit Codex mimo-mify-responses override, and Claude
-`mimo-mify-anthropic` remain allowed. Work-network restrictions are documented in
+Run `just dev::network-status` before validation-required maintainer workflows.
+On the work network, guarded maintainer routes and system-provider Claude Code
+are blocked; the repo-local SDK `codex-router-responses` route
+(`CODEX_BASE_URL` plus `CODEX_API_KEY`) and explicit SDK
+`mimo-mify-responses` override remain allowed. Work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see

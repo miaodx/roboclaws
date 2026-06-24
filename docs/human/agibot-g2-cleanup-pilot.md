@@ -1,17 +1,17 @@
 # Agibot G2 导航与感知验证手册
 
 这是 Agibot G2 当前唯一的人类操作手册。它的目标不是证明 physical cleanup
-成功，而是证明 **Codex 可以通过 Agibot-backed MCP surface 驱动 G2 完成导航 +
+成功，而是证明 **OpenAI Agents SDK 可以通过 Agibot-backed MCP surface 驱动 G2 完成导航 +
 感知 + Runtime Metric Map 证据刷新**。
 
 当前硬件验收只接受这个组合：
 
 - public surface/preset: `surface=household-world preset=map-build`
-- driver: `codex`
+- agent engine: `openai-agents-sdk`
 - evidence lane: `camera-grounded-labels`
 - backend: `agibot_gdk`
 - MCP server: `agibot_map_build`
-- policy: `codex_agibot_map_build_pilot`
+- policy: `openai_agents_agibot_map_build`
 - camera labeler: `grounding-dino`
 - checker: `--require-agibot-g2-hardware`
 
@@ -25,9 +25,9 @@
   -> 人工采集 map context
   -> 人工确认 localization / run enablement / E-stop
   -> PNC waypoint verification（会移动机器人）
-  -> Codex dry run（不移动）
+  -> SDK dry run（不移动）
   -> 启动 DINO sidecar
-  -> Codex hardware run（会移动）
+  -> SDK hardware run（会移动）
   -> hardware checker
 ```
 
@@ -36,7 +36,7 @@
 
 ## 自动预检
 
-这一节可以先跑完。它不需要 G2，不移动机器人，不启动 live Codex，不需要
+这一节可以先跑完。它不需要 G2，不移动机器人，不启动 live SDK agent，不需要
 operator 站在机器人旁边。
 
 ### 1. 环境和网络
@@ -47,8 +47,9 @@ set -a && source .env && set +a
 just dev::network-status
 ```
 
-如果 `network: work`，guarded maintainer routes 禁止。Codex 可以用 repo-local `.env` 里的
-`XM_LLM_API_KEY`，或显式 `CODEX_BASE_URL` + `CODEX_API_KEY`。不要把 key 写进日志、
+如果 `network: work`，guarded maintainer routes 禁止。SDK 默认使用 repo-local `.env` 里的
+`CODEX_BASE_URL` + `CODEX_API_KEY`，也可以显式选择 `mimo-mify-responses` 或
+`minimax-responses` profile。不要把 key 写进日志、
 报告或文档。
 
 ### 2. 离线 Agibot map 转 snapshot
@@ -106,7 +107,7 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 ### 4. Console route sanity
 
 HTML control console 已经注册了 Agibot G2 Map 12 world + Agibot GDK backend +
-map-build intent + Codex CLI engine 组合。可以自动验证 gate 和 launcher 仍然可用：
+map-build intent + OpenAI Agents SDK engine 组合。可以自动验证 gate 和 launcher 仍然可用：
 
 ```bash
 ./scripts/dev/run_pytest_standalone.sh \
@@ -115,14 +116,14 @@ map-build intent + Codex CLI engine 组合。可以自动验证 gate 和 launche
   tests/unit/operator_console/test_operator_console.py -q
 ```
 
-也可以 trace 硬件命令是否会路由到 Agibot live runner。这个命令只打印 route，不启动
-Codex 或机器人：
+也可以 trace 硬件命令是否会路由到 Agibot SDK live runner。这个命令只打印 route，不启动
+SDK agent 或机器人：
 
 ```bash
-ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
   output_dir=output/agibot/map-build-hardware \
-  policy=codex_agibot_map_build_pilot \
+  policy=openai_agents_agibot_map_build \
   camera_labeler=grounding-dino \
   visual_grounding_timeout_s=20 \
   real_movement_enabled=true
@@ -130,7 +131,7 @@ ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2
 
 期望 trace 里出现：
 
-- `scripts/molmo_cleanup/run_live_codex_agibot_map_build.py`
+- `scripts/molmo_cleanup/run_live_openai_agents_agibot_map_build.py`
 - `--server-arg=--evidence-lane` / `--server-arg=camera-grounded-labels`
 - `--server-arg=--camera-labeler` / `--server-arg=grounding-dino`
 - `--server-arg=--real-movement-enabled`
@@ -288,18 +289,18 @@ missing-sidecar / adapter-unavailable 证据，而不是伪造候选：
 
 ## 命令行运行
 
-### 1. Codex dry run
+### 1. SDK dry run
 
-不启用 movement，确认 Docker-backed Codex 可以启动并连接
+不启用 movement，确认 OpenAI Agents SDK 可以启动并连接
 `agibot_map_build` MCP server：
 
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有 Runtime Metric Map，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
-  output_dir=output/agibot/map-build-codex-dry-run \
-  policy=codex_agibot_map_build_pilot \
+  output_dir=output/agibot/map-build-sdk-dry-run \
+  policy=openai_agents_agibot_map_build \
   prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   camera_labeler=grounding-dino \
   visual_grounding_timeout_s=20
@@ -314,15 +315,15 @@ dry run 应产出：
 
 dry run 不能称为 hardware evidence。
 
-### 2. Codex hardware run
+### 2. SDK hardware run
 
 只有 operator 确认 run-level gate 后，才启用 movement：
 
 ```bash
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/map-build-hardware \
-  policy=codex_agibot_map_build_pilot \
+  policy=openai_agents_agibot_map_build \
   prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   camera_labeler=grounding-dino \
   visual_grounding_timeout_s=20 \
@@ -338,7 +339,7 @@ output/agibot/map-build-hardware/<stamp>/seed-7/
 ## HTML control console
 
 可以和 HTML control console 结合。console 仍然走同一个 public selection：
-`surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli evidence_lane=camera-grounded-labels`。
+`surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=openai-agents-sdk evidence_lane=camera-grounded-labels`。
 
 启动 console：
 

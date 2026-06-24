@@ -18,27 +18,22 @@ from roboclaws.operator_console.routes import (
     validate_supported_routes_against_catalog,
 )
 
-AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-AGIBOT_CODEX_MAP_BUILD = (
-    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+AGIBOT_SDK_CLEANUP = (
+    "agibot-g2/map-12::agibot-gdk::cleanup::openai-agents-sdk::camera-grounded-labels"
 )
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+AGIBOT_SDK_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::openai-agents-sdk::camera-grounded-labels"
+)
 B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_SDK_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
 )
-MUJOCO_CODEX_MAP_BUILD = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
-)
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+MUJOCO_DIRECT_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::direct-runner::world-public-labels"
 )
 MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
     "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
     "world-public-labels"
-)
-MUJOCO_CLAUDE_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
 )
 
 
@@ -200,39 +195,23 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "molmospaces/procthor-objaverse-val/0",
             "mujoco",
             "map-build",
-            "codex-cli",
-            "codex-router-responses",
-            "world-public-labels",
-        ),
-        (
-            "molmospaces/procthor-objaverse-val/0",
-            "mujoco",
-            "open-ended",
-            "codex-cli",
-            "codex-router-responses",
+            "direct-runner",
+            None,
             "world-public-labels",
         ),
         (
             "molmospaces/procthor-objaverse-val/1",
             "mujoco",
             "open-ended",
-            "codex-cli",
+            "openai-agents-sdk",
             "codex-router-responses",
             "world-public-labels",
-        ),
-        (
-            "agibot-g2/map-12",
-            "agibot-gdk",
-            "map-build",
-            "codex-cli",
-            "codex-router-responses",
-            "camera-grounded-labels",
         ),
         (
             "b1-map12",
             "isaaclab",
             "open-ended",
-            "codex-cli",
+            "openai-agents-sdk",
             "codex-router-responses",
             "world-public-labels",
         ),
@@ -278,32 +257,20 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
     enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
     for lane in lanes:
         assert (
-            f"molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::{lane}"
-            in enabled_ids
-        )
-        assert (
             f"molmospaces/procthor-objaverse-val/0::mujoco::map-build::direct-runner::{lane}"
-            in enabled_ids
-        )
-        assert (
-            f"molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::{lane}"
             in enabled_ids
         )
         assert (
             f"molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
             f"{lane}" in enabled_ids
         )
-        assert (
-            f"molmospaces/procthor-objaverse-val/1::mujoco::open-task::codex-cli::{lane}"
-            in enabled_ids
-        )
-        assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
-        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::direct-runner::camera-grounded-labels"
     )
     assert "camera_labeler=grounding-dino" in grounded.launch_default_overrides
-    agibot_grounded = get_selection(AGIBOT_CODEX_MAP_BUILD)
+    agibot_grounded = get_selection(AGIBOT_SDK_MAP_BUILD)
+    assert agibot_grounded.enabled
     assert "camera_labeler=grounding-dino" in agibot_grounded.launch_default_overrides
 
 
@@ -315,14 +282,14 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
         route.id for route in list_console_combinations(include_disabled=True) if not route.enabled
     }
     assert MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS == ()
-    for world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
-        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in disabled_ids
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
-        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in disabled_ids
+        assert (
+            f"{world_id}::mujoco::cleanup::openai-agents-sdk::world-public-labels" in disabled_ids
+        )
 
-    objaverse0 = get_selection(MUJOCO_CODEX_CLEANUP)
+    objaverse0 = get_selection(MUJOCO_SDK_CLEANUP)
     val10 = get_selection(
-        "molmospaces/procthor-objaverse-val/10::mujoco::map-build::codex-cli::world-public-labels"
+        "molmospaces/procthor-objaverse-val/10::mujoco::map-build::direct-runner::world-public-labels"
     )
 
     assert "scene_index=0" in objaverse0.launch_default_overrides
@@ -356,11 +323,17 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert not any(route_id.startswith("molmospaces/val_6::") for route_id in all_ids)
     assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
 
-    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-public-labels" not in all_ids
-    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-public-labels" not in all_ids
+    assert (
+        "molmospaces/val_1::mujoco::map-build::openai-agents-sdk::world-public-labels"
+        not in all_ids
+    )
+    assert (
+        "molmospaces/val_1::mujoco::cleanup::openai-agents-sdk::world-public-labels" not in all_ids
+    )
 
     cleanup_disabled = (
-        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::"
+        "world-public-labels"
     )
     assert cleanup_disabled in disabled
     assert "at least 5 generated cleanup targets" in disabled[cleanup_disabled]
@@ -368,18 +341,13 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
         "::isaaclab::" in route_id for route_id in all_ids if route_id.startswith("molmospaces/")
     )
     assert (
-        "molmospaces/procthor-objaverse-val/1::mujoco::map-build::codex-cli::"
-        "world-public-labels" in enabled_ids
-    )
-    assert (
-        "molmospaces/procthor-objaverse-val/1::mujoco::open-task::codex-cli::"
+        "molmospaces/procthor-objaverse-val/1::mujoco::map-build::direct-runner::"
         "world-public-labels" in enabled_ids
     )
     assert (
         "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
         "world-public-labels" in enabled_ids
     )
-    assert B1_CODEX_OPEN_TASK in enabled_ids
     assert B1_OPENAI_AGENTS_OPEN_TASK in enabled_ids
 
     enabled_mujoco_cleanup_worlds = {
@@ -388,7 +356,7 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
         if (
             route.backend_id == "mujoco"
             and route.intent_id == "cleanup"
-            and route.agent_engine_id == "codex-cli"
+            and route.agent_engine_id == "openai-agents-sdk"
             and route.evidence_lane == "world-public-labels"
         )
     }
@@ -403,12 +371,11 @@ def test_console_keeps_b1_unsupported_isaac_lane_visible_but_disabled() -> None:
     }
 
     enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
-    for engine in ("codex-cli", "openai-agents-sdk"):
-        route_id = f"b1-map12::isaaclab::open-task::{engine}::camera-grounded-labels"
-        reason = disabled[route_id]
-        assert "not wired yet" in reason
-        assert route_id not in enabled_ids
-        assert f"b1-map12::isaaclab::open-task::{engine}::camera-raw-fpv" in enabled_ids
+    route_id = "b1-map12::isaaclab::open-task::openai-agents-sdk::camera-grounded-labels"
+    reason = disabled[route_id]
+    assert "not wired yet" in reason
+    assert route_id not in enabled_ids
+    assert "b1-map12::isaaclab::open-task::openai-agents-sdk::camera-raw-fpv" in enabled_ids
 
 
 def test_disabled_combinations_have_concrete_reasons() -> None:
@@ -416,34 +383,22 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
 
     assert disabled
     reasons = {route.id: route.disabled_reason for route in disabled}
-    assert (
-        reasons[AGIBOT_CODEX_CLEANUP]
-        == "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
-    )
-    assert (
-        "Map-build"
-        in reasons[
-            "molmospaces/procthor-objaverse-val/0::mujoco::map-build::claude-code::"
-            "world-public-labels"
-        ]
-    )
-    for engine in ("codex-cli", "openai-agents-sdk"):
-        b1_camera_grounded = f"b1-map12::isaaclab::open-task::{engine}::camera-grounded-labels"
-        assert "not wired yet" in reasons[b1_camera_grounded]
+    assert "Physical manipulation is not active" in reasons[AGIBOT_SDK_CLEANUP]
+    b1_camera_grounded = "b1-map12::isaaclab::open-task::openai-agents-sdk::camera-grounded-labels"
+    assert "not wired yet" in reasons[b1_camera_grounded]
 
 
 def test_payload_exposes_orthogonal_ui_metadata() -> None:
-    mujoco = get_selection(MUJOCO_CODEX_OPEN_TASK).to_payload()
-    agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
-    b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
+    mujoco = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()
+    agibot = get_selection(AGIBOT_SDK_MAP_BUILD).to_payload()
     b1_openai_agents = get_selection(B1_OPENAI_AGENTS_OPEN_TASK).to_payload()
 
     assert mujoco["world_id"] == "molmospaces/procthor-objaverse-val/0"
     assert mujoco["backend_id"] == "mujoco"
-    assert mujoco["agent_engine_id"] == "codex-cli"
+    assert mujoco["agent_engine_id"] == "openai-agents-sdk"
     assert mujoco["provider_profile"] == "codex-router-responses"
     assert mujoco["scenario_setup"] == "baseline"
-    assert "agent_engine=codex-cli" in mujoco["argv_preview"]
+    assert "agent_engine=openai-agents-sdk" in mujoco["argv_preview"]
     assert "scenario_setup=baseline" in mujoco["argv_preview"]
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
@@ -453,21 +408,11 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
         get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()["supports_paused_handoff_resume"]
         is True
     )
-    assert (
-        get_selection(MUJOCO_CLAUDE_OPEN_TASK).to_payload()["supports_paused_handoff_resume"]
-        is False
-    )
 
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "context_json" in agibot["required_overrides"]
     assert "grounding" in agibot["view_modes"]
 
-    assert b1["default_intent"] == "open-ended"
-    assert b1["field_groups"] == ["common", "isaac"]
-    assert b1["required_overrides"] == ["b1_alignment_artifact", "b1_navigation_artifact"]
-    assert "grounding" in b1["view_modes"]
-    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1["argv_preview"]
-    assert "robot_views=on" in b1["argv_preview"]
     assert b1_openai_agents["world_id"] == "b1-map12"
     assert b1_openai_agents["backend_id"] == "isaaclab"
     assert b1_openai_agents["agent_engine_id"] == "openai-agents-sdk"
@@ -491,7 +436,7 @@ def test_legacy_route_api_stays_removed() -> None:
 
 
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
-    selection = get_selection(MUJOCO_CODEX_CLEANUP)
+    selection = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     argv = build_launch_argv(
         selection,
         root=tmp_path,
@@ -499,23 +444,22 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         prompt="collect mugs; rm -rf / should stay text",
     )
 
-    assert argv[:7] == [
+    assert argv[:6] == [
         "just",
         "run::surface",
         "surface=household-world",
         "world=molmospaces/procthor-objaverse-val/0",
         "backend=mujoco",
-        "preset=cleanup",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
     ]
     assert "evidence_lane=world-public-labels" in argv
     assert "provider_profile=codex-router-responses" in argv
-    assert "scenario_setup=relocate-cleanup-related-objects" in argv
+    assert "scenario_setup=baseline" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 
 
 def test_map_build_launch_defaults_to_baseline_scenario_setup(tmp_path) -> None:
-    selection = get_selection(MUJOCO_CODEX_MAP_BUILD)
+    selection = get_selection(MUJOCO_DIRECT_MAP_BUILD)
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
     assert "preset=map-build" in argv
@@ -526,7 +470,7 @@ def test_map_build_launch_defaults_to_baseline_scenario_setup(tmp_path) -> None:
 
 def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -> None:
     selection = get_selection(
-        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::direct-runner::camera-grounded-labels"
     )
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
@@ -537,45 +481,41 @@ def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     alignment_artifact = tmp_path / "alignment_residuals.json"
     navigation_artifact = tmp_path / "navigation_smoke.json"
-    for route_id, expected_engine in (
-        (B1_CODEX_OPEN_TASK, "codex-cli"),
-        (B1_OPENAI_AGENTS_OPEN_TASK, "openai-agents-sdk"),
-    ):
-        selection = get_selection(route_id)
-        argv = build_launch_argv(
-            selection,
-            root=tmp_path,
-            run_id="run-1",
-            overrides={
-                "b1_alignment_artifact": str(alignment_artifact),
-                "b1_navigation_artifact": str(navigation_artifact),
-            },
-        )
+    selection = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
+    argv = build_launch_argv(
+        selection,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={
+            "b1_alignment_artifact": str(alignment_artifact),
+            "b1_navigation_artifact": str(navigation_artifact),
+        },
+    )
 
-        assert not any(item.startswith("intent=") for item in argv)
-        assert not any(item.startswith("preset=") for item in argv)
-        assert f"agent_engine={expected_engine}" in argv
-        assert "backend=isaaclab" in argv
-        assert "scenario_setup=baseline" in argv
-        assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in argv
-        assert "robot_views=on" in argv
-        assert (
-            "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "B1_floor2_slow/usda/F2_all/default.usda"
-        ) in argv
-        assert f"b1_alignment_artifact={alignment_artifact}" in argv
-        assert f"b1_navigation_artifact={navigation_artifact}" in argv
-        assert not any(item.startswith("relocation_count=") for item in argv)
+    assert not any(item.startswith("intent=") for item in argv)
+    assert not any(item.startswith("preset=") for item in argv)
+    assert "agent_engine=openai-agents-sdk" in argv
+    assert "backend=isaaclab" in argv
+    assert "scenario_setup=baseline" in argv
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in argv
+    assert "robot_views=on" in argv
+    assert (
+        "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
+        "B1_floor2_slow/usda/F2_all/default.usda"
+    ) in argv
+    assert f"b1_alignment_artifact={alignment_artifact}" in argv
+    assert f"b1_navigation_artifact={navigation_artifact}" in argv
+    assert not any(item.startswith("relocation_count=") for item in argv)
 
 
 def test_b1_map12_launch_requires_explicit_robot_proof_artifacts(tmp_path) -> None:
-    selection = get_selection(B1_CODEX_OPEN_TASK)
+    selection = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
 
     with pytest.raises(ConsoleLaunchError, match="b1_alignment_artifact"):
         build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
 
 def test_prompt_rejected_for_unsupported_selection(tmp_path) -> None:
-    selection = get_selection(AGIBOT_CODEX_CLEANUP)
+    selection = get_selection(AGIBOT_SDK_CLEANUP)
     with pytest.raises(ConsoleLaunchError, match="custom prompt"):
         build_launch_argv(selection, root=tmp_path, run_id="run-1", prompt="unsafe")

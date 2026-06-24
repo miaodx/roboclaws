@@ -38,12 +38,11 @@ new public surfaces.
 Current agent engines:
 
 - `direct-runner`
-- `codex-cli`
-- `claude-code`
 - `openai-agents-sdk`
 
 Validation-required maintainer engines are not part of the normal public engine
-list.
+list. Retired `codex-cli` and `claude-code` values fail current launch
+validation instead of acting as compatibility aliases.
 
 `prompt=...` without a household preset runs the default open-task contract.
 `preset=cleanup prompt=...` keeps cleanup semantics while narrowing the

@@ -31,6 +31,11 @@ from roboclaws.launch.evaluation import evaluation_spec_for_intent
 from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS, TaskIntentSpec
 from roboclaws.launch.plans import LaunchPlan
+from roboclaws.launch.retired_agent_engines import (
+    ACTIVE_AGENT_ENGINE_IDS,
+    is_retired_agent_engine,
+    retired_agent_engine_message,
+)
 from roboclaws.launch.runners import build_agent_run_argv
 from roboclaws.launch.task_specs import TaskPresetSpec, TaskSurfaceSpec
 from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WorldSpec, world_spec
@@ -294,7 +299,7 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
     if _override_value(overrides, "driver"):
         raise LaunchError(
             "driver= is no longer a public run::surface argument",
-            "use agent_engine=codex-cli|claude-code|openai-agents-sdk|direct-runner",
+            f"use agent_engine={'|'.join(ACTIVE_AGENT_ENGINE_IDS)}",
         )
     if _override_value(overrides, "map_mode"):
         raise LaunchError(
@@ -364,11 +369,19 @@ def _normalize_backend(value: str | None, *, world: WorldSpec) -> BackendSpec:
 
 def _normalize_agent_engine(value: str) -> AgentEngineSpec:
     agent_engine = _strip_named(value, "agent_engine")
+    if is_retired_agent_engine(agent_engine):
+        raise LaunchError(retired_agent_engine_message(agent_engine))
+    if agent_engine == "openclaw-gateway":
+        raise LaunchError(
+            "openclaw-gateway is validation-required future abstraction work, "
+            "not a current active product engine",
+            f"expected {'|'.join(ACTIVE_AGENT_ENGINE_IDS)}",
+        )
     spec = AGENT_ENGINE_SPECS.get(agent_engine)
     if spec is None:
         raise LaunchError(
             f"unsupported agent_engine '{agent_engine}'",
-            "expected codex-cli|claude-code|openai-agents-sdk|direct-runner; "
+            f"expected {'|'.join(ACTIVE_AGENT_ENGINE_IDS)}; "
             "openclaw-gateway is validation-required and documented under maintainer routes",
         )
     return spec

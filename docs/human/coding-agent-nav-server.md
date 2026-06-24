@@ -1,9 +1,10 @@
-# Direct Coding-Agent Household MCP Driver
+# Retired Docker Coding-Agent Household MCP Driver
 
-Docker-backed Codex and Claude Code runs drive the household MCP server through
-the public launch catalog. The simulator/backend and MCP server stay on the
-host; the coding-agent CLI runs in the pinned `Dockerfile.coding-agents` image
-with an isolated task workspace.
+This page is historical reference for the retired Docker-backed
+`codex-cli` / `claude-code` household routes. Current public live-agent runs use
+`agent_engine=openai-agents-sdk`; deterministic local proof uses
+`agent_engine=direct-runner`. Do not use the commands below as current launch
+guidance.
 
 ## Run Through The Public Catalog
 
@@ -13,18 +14,17 @@ Install the repo environment once:
 uv sync --extra dev
 ```
 
-Use `just run::surface` for normal runs:
+Use the current SDK route for normal live runs:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-tp-anthropic evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="find something useful to drink"
 ```
 
 For map-only work:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 ```
 
 The launch catalog resolves world, backend, intent, provider profile, goal
@@ -33,13 +33,13 @@ recipes run.
 
 ## Credentials And Runtime
 
-Copy `.env.example` to `.env`, then fill the keys you have. Codex defaults to
-`codex-router-responses` and requires `CODEX_BASE_URL` plus `CODEX_API_KEY`. To use mimo-mify-responses for
-Codex, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` explicitly with `XM_LLM_API_KEY`.
-To use MiniMax's Responses-compatible route, set
+Copy `.env.example` to `.env`, then fill the keys you have. OpenAI Agents SDK
+defaults to `codex-router-responses` and requires `CODEX_BASE_URL` plus
+`CODEX_API_KEY`. To use `mimo-mify-responses`, set
+`ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` explicitly with
+`XM_LLM_API_KEY`. To use MiniMax's Responses-compatible route, set
 `ROBOCLAWS_PROVIDER_PROFILE=minimax-responses` with `MM_API_KEY`; it defaults to
 `MiniMax-M3`. M3 is the only current MiniMax model in the active route catalog.
-Claude Code uses repo-local MiMo or MiMo mify Anthropic routes when present.
 
 Provider/model metadata is centralized in
 `roboclaws/agents/provider_registry.py`. The launch catalog, operator console,
@@ -60,16 +60,9 @@ and do not send the old explicit `thinking` body. Live route verdicts are
 recorded in
 `docs/human/model-route-verdicts.yaml`.
 
-Before long Codex runs, verify the selected endpoint:
-
-```bash
-just code::codex-provider-smoke
-```
-
-The public recipes launch Codex and Claude Code with the required local-demo
-permissions through `scripts/dev/coding_agent_docker.sh`. Bare host `codex` or
-`claude` runs are outside the supported demo path unless a human explicitly asks
-for system-CLI debugging.
+`just code::codex-provider-smoke` and
+`scripts/dev/coding_agent_docker.sh` are manual debugging helpers only. They are
+not current product launch paths.
 
 ## MCP Lifecycle
 

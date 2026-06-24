@@ -69,10 +69,12 @@ run dispatch_target agent_engine mode="" *overrides:
 
     case "$agent_engine" in
       codex-cli)
-        driver="codex"
+        echo "error: unsupported agent_engine 'codex-cli'; expected direct-runner|openai-agents-sdk" >&2
+        exit 1
         ;;
       claude-code)
-        driver="claude"
+        echo "error: unsupported agent_engine 'claude-code'; expected direct-runner|openai-agents-sdk" >&2
+        exit 1
         ;;
       openai-agents-sdk)
         driver="openai-agents-live"
@@ -147,7 +149,7 @@ run dispatch_target agent_engine mode="" *overrides:
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|max_wall_seconds|min_generated_mess_count|\
-        b1_alignment_artifact|b1_navigation_artifact|map_bundle|mode|output_dir|policy|port|prompt|provider|\
+        b1_alignment_artifact|b1_navigation_artifact|map_bundle|mode|model|output_dir|policy|port|prompt|provider|provider_profile|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|operator_resume_requests_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
@@ -250,12 +252,6 @@ run dispatch_target agent_engine mode="" *overrides:
         ;;
     esac
     case "$driver" in
-      codex)
-        report_rerun_parts+=("agent_engine=codex-cli")
-        ;;
-      claude)
-        report_rerun_parts+=("agent_engine=claude-code")
-        ;;
       openai-agents-live)
         report_rerun_parts+=("agent_engine=openai-agents-sdk")
         ;;
@@ -284,20 +280,14 @@ run dispatch_target agent_engine mode="" *overrides:
     export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
     case "$dispatch_surface.$dispatch_intent:$driver" in
-      household-world.map-build:direct|household-world.map-build:codex|household-world.map-build:openai-agents-live|\
+      household-world.map-build:direct|household-world.map-build:openai-agents-live|\
       household-world.cleanup:direct|household-world.cleanup:mcp-smoke|household-world.cleanup:openclaw-smoke|\
-      household-world.cleanup:codex|household-world.cleanup:claude|household-world.cleanup:openai-agents-live|household-world.cleanup:openclaw|\
+      household-world.cleanup:openai-agents-live|household-world.cleanup:openclaw|\
       household-world.open-ended:direct|household-world.open-ended:mcp-smoke|household-world.open-ended:openclaw-smoke|\
-      household-world.open-ended:codex|household-world.open-ended:claude|household-world.open-ended:openai-agents-live|household-world.open-ended:openclaw)
+      household-world.open-ended:openai-agents-live|household-world.open-ended:openclaw)
         case "$driver" in
           direct|mcp-smoke|openclaw-smoke)
             impl_driver="$driver"
-            ;;
-          codex)
-            impl_driver="codex-live"
-            ;;
-          claude)
-            impl_driver="claude-live"
             ;;
           openai-agents-live)
             impl_driver="openai-agents-live"
@@ -306,8 +296,8 @@ run dispatch_target agent_engine mode="" *overrides:
             impl_driver="openclaw-live"
             ;;
         esac
-        if [[ "$dispatch_intent" == "map-build" && "$driver" != "direct" && "$driver" != "codex" && "$driver" != "openai-agents-live" ]]; then
-          echo "error: household-world.map-build currently supports direct-runner, codex-cli, or openai-agents-sdk only" >&2
+        if [[ "$dispatch_intent" == "map-build" && "$driver" != "direct" && "$driver" != "openai-agents-live" ]]; then
+          echo "error: household-world.map-build currently supports direct-runner or openai-agents-sdk only" >&2
           exit 1
         fi
 
@@ -412,11 +402,24 @@ run dispatch_target agent_engine mode="" *overrides:
         scene_source="$(get scene_source procthor-10k-val)"
         scene_index="$(get scene_index 0)"
         isaac_scene_usd_path="$(get isaac_scene_usd_path "")"
+        if [[ "$dispatch_intent" == "map-build" ]]; then
+          case "$backend" in
+            auto|molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)
+              ;;
+            agibot_molmospaces_sim)
+              if [[ "$driver" != "direct" ]]; then
+                echo "error: backend=agibot_molmospaces_sim currently supports direct driver only" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "error: household-world.map-build ${agent_engine} unsupported backend '$backend' (expected auto|molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)" >&2
+              exit 1
+              ;;
+          esac
+        fi
         if [[ "$backend" == "agibot_molmospaces_sim" && ! -v "kv[seeds]" && ! -v "kv[seed]" ]]; then
           seeds="7"
-        fi
-        if [[ "$dispatch_intent" == "map-build" && "$driver" == "codex" ]]; then
-          backend="$(.venv/bin/python -m roboclaws.launch.backends map-build-codex-implementation-backend "$backend" --context "household-world.map-build codex-cli")"
         fi
         if [[ "$backend" == "isaaclab_subprocess" && "$world_id" != "b1-map12" ]]; then
           echo "error: backend=isaaclab_subprocess is scoped to world=b1-map12; MolmoSpaces household routes use backend=molmospaces_subprocess" >&2
@@ -516,14 +519,14 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
         if [[ "$backend" == "agibot_gdk" ]]; then
           context_json="$(get context_json "")"
-          if [[ "$dispatch_intent" == "map-build" && "$driver" == "codex" ]]; then
+          if [[ "$dispatch_intent" == "map-build" && "$driver" == "openai-agents-live" ]]; then
             if [[ -z "$context_json" ]]; then
-              echo "error: backend=agibot_gdk household-world.map-build codex-cli requires context_json=<agibot map context JSON>" >&2
+              echo "error: backend=agibot_gdk household-world.map-build ${agent_engine} requires context_json=<agibot map context JSON>" >&2
               exit 1
             fi
             seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
             if [[ "$seed_count" != "1" ]]; then
-              echo "error: Agibot household-world.map-build codex-cli accepts exactly one seed per live run" >&2
+              echo "error: Agibot household-world.map-build ${agent_engine} accepts exactly one seed per live run" >&2
               exit 1
             fi
             seed="$seeds"
@@ -532,7 +535,7 @@ run dispatch_target agent_engine mode="" *overrides:
             if [[ -z "$run_dir" ]]; then
               run_dir="${output_dir}/${stamp}/seed-${seed}"
             fi
-            policy="$(get policy codex_agent)"
+            policy="$(get policy openai_agents_agibot_map_build)"
             server_startup_timeout_s="${ROBOCLAWS_AGIBOT_MAP_BUILD_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
             client_url="http://${host}:${port}/mcp"
 
@@ -577,24 +580,25 @@ run dispatch_target agent_engine mode="" *overrides:
                 ;;
             esac
 
-            if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+            if [[ "$driver" == "openai-agents-live" ]]; then
+              provider_profile="$(get provider_profile "${ROBOCLAWS_PROVIDER_PROFILE:-codex-router-responses}")"
+              model="$(get model "${ROBOCLAWS_OPENAI_AGENTS_MODEL:-${ROBOCLAWS_CODEX_MODEL:-}}")"
               runner_args=(
                 .venv/bin/python
-                scripts/molmo_cleanup/run_live_codex_agibot_map_build.py
+                scripts/molmo_cleanup/run_live_openai_agents_agibot_map_build.py
                 --repo-root "$PWD"
                 --run-dir "$run_dir"
                 --status-path "${run_dir}/live_status.json"
                 --client-url "$client_url"
                 --host "$host"
                 --port "$port"
-                --codex-bin ".tmp/coding-agent-bin/codex"
-                --codex-model ""
-                --codex-provider-summary "system defaults"
+                --provider-profile "$provider_profile"
+                --model "$model"
                 --server-startup-timeout-s "$server_startup_timeout_s"
                 --kickoff-prompt "$prompt"
                 --backend "$backend"
                 --policy "$policy"
-                --intent "$resolved_task_intent"
+                --task "$resolved_task_intent"
               )
               for arg in "${server_args[@]}"; do
                 runner_args+=("--server-arg=$arg")
@@ -602,108 +606,6 @@ run dispatch_target agent_engine mode="" *overrides:
               run_cmd "${runner_args[@]}"
             fi
 
-            mkdir -p "$run_dir"
-            source scripts/dev/coding_agent_env.sh
-            roboclaws_load_dotenv .env
-            roboclaws_assert_codex_network_allowed "Codex Agibot household-world.map-build live report"
-
-            codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
-            codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
-            codex_model_args=()
-            roboclaws_codex_provider_args codex_model_args
-
-            scripts/dev/coding_agent_docker.sh ensure
-            docker_shim_dir=".tmp/coding-agent-bin"
-            scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir" >/dev/null
-            codex_bin="$PWD/${docker_shim_dir}/codex"
-            export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-            export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${household_run_token}}"
-            export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
-            export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
-
-            probe_host="$host"
-            if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
-              probe_host="127.0.0.1"
-            fi
-            if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
-              echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
-              exit 1
-            fi
-
-            runner="${run_dir}/run_live_codex_agibot_map_build.sh"
-            status_path="${run_dir}/live_status.json"
-            runner_args=(
-              .venv/bin/python
-              scripts/molmo_cleanup/run_live_codex_agibot_map_build.py
-              --repo-root "$PWD"
-              --run-dir "$run_dir"
-              --status-path "$status_path"
-              --client-url "$client_url"
-              --host "$host"
-              --port "$port"
-              --codex-bin "$codex_bin"
-              --codex-model "$codex_model"
-              --codex-provider-summary "$codex_profile_summary"
-              --server-startup-timeout-s "$server_startup_timeout_s"
-              --kickoff-prompt "$prompt"
-              --backend "$backend"
-              --policy "$policy"
-              --intent "$resolved_task_intent"
-            )
-            for arg in "${server_args[@]}"; do
-              runner_args+=("--server-arg=$arg")
-            done
-            for arg in "${codex_model_args[@]}"; do
-              runner_args+=("--codex-model-arg=$arg")
-            done
-
-            {
-              printf '#!/usr/bin/env bash\n'
-              printf 'set -Eeuo pipefail\n'
-              printf 'cd %q\n' "$PWD"
-              printf 'if [[ -f .env ]]; then set -a; source .env; set +a; fi\n'
-              printf 'exec > >(tee -a %q) 2>&1\n' "${run_dir}/driver.log"
-              printf 'exec'
-              for arg in "${runner_args[@]}"; do
-                printf ' %q' "$arg"
-              done
-              printf '\n'
-            } > "$runner"
-            chmod +x "$runner"
-            printf '{"phase":"queued","started_at_epoch":%s}\n' "$(date +%s)" > "$status_path"
-
-            if command -v tmux >/dev/null 2>&1; then
-              session_name="roboclaws-agibot-map-codex-${stamp}-seed-${seed}"
-              session_name="${session_name//[^A-Za-z0-9_.-]/-}"
-              if tmux has-session -t "$session_name" >/dev/null 2>&1; then
-                echo "error: tmux session already exists: ${session_name}" >&2
-                exit 1
-              fi
-              printf '%s\n' "$session_name" > "${run_dir}/tmux_session.txt"
-              tmux_env_args=()
-              for env_name in \
-                OPENAI_API_KEY CODEX_API_KEY CODEX_BASE_URL KIMI_API_KEY MIMO_TP_KEY \
-                XM_LLM_API_KEY XM_LLM_BASE_URL MM_API_KEY MM_BASE_URL \
-                HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
-                http_proxy https_proxy all_proxy no_proxy \
-                ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL \
-                ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
-                ROBOCLAWS_REPORT_RERUN_COMMAND
-              do
-                if [[ -n "${!env_name:-}" ]]; then
-                  tmux_env_args+=(-e "${env_name}=${!env_name}")
-                fi
-              done
-              tmux new-session -d -s "$session_name" "${tmux_env_args[@]}" "bash $(printf '%q' "$runner")"
-              echo "==> launched detached Codex Agibot household-world.map-build"
-              echo "    tmux session : ${session_name}"
-              echo "    run dir      : ${run_dir}"
-              echo "    attach       : tmux attach -t ${session_name}"
-              echo "    tail         : tail -f ${run_dir}/driver.log"
-              exit 0
-            fi
-
-            exec "${runner_args[@]}"
           fi
           agibot_args=(.venv/bin/python scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py
             --output-dir "$output_dir")
@@ -868,7 +770,6 @@ harness target *args:
 
     case "$target" in
       molmo-realworld-cleanup|\
-      molmo-cleanup-codex-perf|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\

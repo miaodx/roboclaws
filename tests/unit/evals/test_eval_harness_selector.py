@@ -4,6 +4,7 @@ import importlib.util
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pytest import MonkeyPatch
@@ -53,7 +54,10 @@ def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) 
         {
             "name": "cleanup_skill",
             "changed_files": ["skills/molmo-realworld-cleanup/SKILL.md"],
-            "present_rows": ("cleanup-capability-eval-suite", "codex-cleanup-live-eval"),
+            "present_rows": (
+                "cleanup-capability-eval-suite",
+                "openai-agents-sdk-cleanup-live-eval",
+            ),
         },
         {
             "name": "agent_sdk",
@@ -69,7 +73,10 @@ def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) 
         {
             "name": "raw_fpv",
             "changed_files": ["roboclaws/household/raw_fpv_guidance.py"],
-            "present_rows": ("direct-camera-raw-fpv", "codex-cleanup-camera-raw-fpv-live-product"),
+            "present_rows": (
+                "direct-camera-raw-fpv",
+                "openai-agents-sdk-cleanup-camera-raw-fpv-live-product",
+            ),
         },
         {
             "name": "agent_view_module",
@@ -113,7 +120,7 @@ def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) 
             "present_rows": (
                 "open-ended-household-contract-tests",
                 "open-ended-goals-eval-suite",
-                "codex-open-task-live-eval",
+                "openai-agents-sdk-open-task-live-eval",
             ),
             "absent_rows": (
                 "map-build-consumer-eval-suite",
@@ -204,7 +211,6 @@ def test_explicit_intent_axes_select_expected_eval_harness_rows(tmp_path: Path) 
             "present_rows": (
                 "open-ended-household-contract-tests",
                 "open-ended-goals-eval-suite",
-                "codex-open-task-live-eval",
                 "openai-agents-sdk-open-task-live-eval",
             ),
             "absent_rows": ("openai-agents-sdk-codex-router-responses-availability",),
@@ -286,7 +292,7 @@ def test_smoke_budget_records_relevant_expensive_rows_as_user_budget_skipped(
     )
 
     rows = _selected_rows(manifest)
-    assert rows["codex-cleanup-live-eval"]["status"] == "skipped_by_budget"
+    assert rows["openai-agents-sdk-cleanup-live-eval"]["status"] == "skipped_by_budget"
     assert rows["cleanup-contract-tests"]["status"] == "not_run"
 
 
@@ -295,7 +301,7 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
 ) -> None:
     manifest = selector.build_eval_harness(
         budget="focused",
-        agent_engine=["codex-cli", "openai-agents-sdk"],
+        agent_engine=["openai-agents-sdk"],
         provider_profile=["mimo-mify-responses"],
         evidence_lane=["camera-grounded-labels"],
         camera_labeler=["grounding-dino"],
@@ -303,7 +309,6 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
     )
 
     rows = _selected_rows(manifest)
-    assert rows["codex-cleanup-live-eval"]["axes"]["provider_profile"] == "mimo-mify-responses"
     assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == (
         "mimo-mify-responses"
     )
@@ -350,8 +355,11 @@ def test_execute_marks_live_row_blocked_when_provider_is_missing(
     runner._execute_harness(manifest)
 
     rows = _selected_rows(manifest)
-    assert rows["codex-cleanup-live-eval"]["status"] == "blocked"
-    assert rows["codex-cleanup-live-eval"]["blocker_category"] == "model_or_provider_unavailable"
+    assert rows["openai-agents-sdk-cleanup-live-eval"]["status"] == "blocked"
+    assert (
+        rows["openai-agents-sdk-cleanup-live-eval"]["blocker_category"]
+        == "model_or_provider_unavailable"
+    )
 
 
 def test_provider_blocker_rejects_unknown_profile_even_when_codex_env_exists(
@@ -361,16 +369,16 @@ def test_provider_blocker_rejects_unknown_profile_even_when_codex_env_exists(
     monkeypatch.setenv("CODEX_API_KEY", "key")
 
     blocker = runner._provider_requirement_blocker(
-        {"agent_engine": "codex-cli", "provider_profile": "not-a-provider-route"}
+        {"agent_engine": "openai-agents-sdk", "provider_profile": "not-a-provider-route"}
     )
 
     assert blocker is not None
     assert blocker["category"] == "model_or_provider_unavailable"
     assert "provider_profile 'not-a-provider-route' is unknown" in blocker["detail"]
-    assert "agent_engine 'codex-cli'" in blocker["detail"]
+    assert "agent_engine 'openai-agents-sdk'" in blocker["detail"]
 
 
-def test_execute_defaults_provider_timing_proxy_for_live_codex_row(
+def test_execute_does_not_default_provider_timing_proxy_for_sdk_rows(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -379,7 +387,7 @@ def test_execute_defaults_provider_timing_proxy_for_live_codex_row(
     monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
 
     def fake_run(command, **kwargs):
-        if "agent_engine=codex-cli" in command:
+        if "agent_engine=openai-agents-sdk" in command:
             env = kwargs.get("env")
             assert isinstance(env, dict)
             captured.append(env)
@@ -402,9 +410,9 @@ def test_execute_defaults_provider_timing_proxy_for_live_codex_row(
     runner._execute_harness(manifest)
 
     assert captured
-    assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "1"
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" not in captured[0]
     rows = _selected_rows(manifest)
-    assert rows["codex-cleanup-live-eval"]["defaulted_provider_timing_proxy"] is True
+    assert "defaulted_provider_timing_proxy" not in rows["openai-agents-sdk-cleanup-live-eval"]
 
 
 def test_execute_preserves_provider_timing_proxy_escape_hatch(
@@ -416,7 +424,7 @@ def test_execute_preserves_provider_timing_proxy_escape_hatch(
     monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
 
     def fake_run(command, **kwargs):
-        if "agent_engine=codex-cli" in command:
+        if "agent_engine=openai-agents-sdk" in command:
             env = kwargs.get("env")
             assert isinstance(env, dict)
             captured.append(env)
@@ -441,153 +449,37 @@ def test_execute_preserves_provider_timing_proxy_escape_hatch(
     assert captured
     assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
     rows = _selected_rows(manifest)
-    assert "defaulted_provider_timing_proxy" not in rows["codex-cleanup-live-eval"]
+    assert "defaulted_provider_timing_proxy" not in rows["openai-agents-sdk-cleanup-live-eval"]
 
 
-def test_detached_live_product_row_waits_for_terminal_artifact(
+def test_sdk_live_product_row_records_foreground_command_outputs(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    monkeypatch: MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
-    clock = {"now": 0.0, "sleeps": 0}
-
-    def fake_run(command, **_kwargs):
-        output_arg = next(item for item in command if str(item).startswith("output_dir="))
-        output_dir = Path(str(output_arg).split("=", 1)[1])
-        run_dir = output_dir / "0615_1225" / "seed-7"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "live_status.json").write_text('{"phase":"queued"}\n', encoding="utf-8")
-
-        class _Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return _Result()
-
-    def fake_sleep(_seconds: float) -> None:
-        clock["sleeps"] += 1
-        run_dir = (
-            tmp_path
-            / "rows"
-            / "codex-cleanup-camera-raw-fpv-live-product"
-            / "run"
-            / "0615_1225"
-            / "seed-7"
-        )
-        (run_dir / "run_result.json").write_text('{"cleanup_success":true}\n', encoding="utf-8")
-        (run_dir / "live_status.json").write_text(
-            '{"phase":"finished","exit_status":0}\n',
-            encoding="utf-8",
-        )
-        (run_dir / "report.html").write_text("<html></html>\n", encoding="utf-8")
-
-    def fake_monotonic() -> float:
-        clock["now"] += 0.1
-        return clock["now"]
-
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
-    monkeypatch.setattr(runner.time, "sleep", fake_sleep)
-    monkeypatch.setattr(runner.time, "monotonic", fake_monotonic)
     manifest = selector.build_eval_harness(
-        mode="execute",
         budget="focused",
         changed_files=["roboclaws/household/raw_fpv_guidance.py"],
         output_dir=tmp_path,
     )
+    row = _selected_rows(manifest)["openai-agents-sdk-cleanup-camera-raw-fpv-live-product"]
 
-    runner._execute_harness(manifest)
+    def fake_run(*_args: Any, **_kwargs: Any) -> Any:
+        class _Result:
+            returncode = 0
+            stdout = "sdk foreground stdout"
+            stderr = ""
 
-    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
-    assert clock["sleeps"] == 1
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    runner._run_row(row, manifest)
+
     assert row["status"] == "ran"
     assert row["outcome"] == "passed"
-    assert row["detached_live_run_dir"].endswith("0615_1225/seed-7")
-    assert any(path.endswith("run_result.json") for path in row["output_artifacts"])
-
-
-def test_detached_live_product_row_does_not_pass_on_running_status_with_result(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
-    monkeypatch.setattr(runner, "DETACHED_LIVE_PRODUCT_TIMEOUT_S", 0.0)
-
-    def fake_run(command, **_kwargs):
-        output_arg = next(item for item in command if str(item).startswith("output_dir="))
-        output_dir = Path(str(output_arg).split("=", 1)[1])
-        run_dir = output_dir / "0615_1226" / "seed-7"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "live_status.json").write_text(
-            '{"phase":"running-codex"}\n',
-            encoding="utf-8",
-        )
-        (run_dir / "run_result.json").write_text(
-            '{"cleanup_success":true}\n',
-            encoding="utf-8",
-        )
-
-        class _Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return _Result()
-
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
-    manifest = selector.build_eval_harness(
-        mode="execute",
-        budget="focused",
-        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
-        output_dir=tmp_path,
-    )
-
-    runner._execute_harness(manifest)
-
-    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
-    assert row["status"] == "blocked"
-    assert row["outcome"] == "blocked"
-    assert row["blocker_category"] == "environment_blocked"
-    assert "detached live product row did not finish" in row["blockers"][0]["detail"]
-    assert any(path.endswith("live_status.json") for path in row["output_artifacts"])
-
-
-def test_detached_live_product_row_blocks_on_malformed_live_status_source(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
-
-    def fake_run(command, **_kwargs):
-        output_arg = next(item for item in command if str(item).startswith("output_dir="))
-        output_dir = Path(str(output_arg).split("=", 1)[1])
-        run_dir = output_dir / "0615_1225" / "seed-7"
-        run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "live_status.json").write_text("{", encoding="utf-8")
-
-        class _Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return _Result()
-
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
-    manifest = selector.build_eval_harness(
-        mode="execute",
-        budget="focused",
-        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
-        output_dir=tmp_path,
-    )
-
-    runner._execute_harness(manifest)
-
-    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
-    assert row["status"] == "blocked"
-    assert row["outcome"] == "blocked"
-    assert row["blocker_category"] == "environment_blocked"
-    assert "live_status source must contain valid JSON object" in row["blockers"][0]["detail"]
-    assert any(path.endswith("live_status.json") for path in row["output_artifacts"])
+    assert "detached_live_run_dir" not in row
+    assert any(path.endswith("stdout.log") for path in row["output_artifacts"])
+    assert any(path.endswith("stderr.log") for path in row["output_artifacts"])
 
 
 def test_failed_live_row_with_busy_mcp_port_is_classified_as_blocked() -> None:

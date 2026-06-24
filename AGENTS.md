@@ -89,32 +89,29 @@ just dev::network-status
 
 If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, or OpenClaw integration/local verification gates. Do not run
-system-provider Claude Code workflows on the
-work network. Claude Code recipes may run there only when the repo-local `.env`
-contains a supported MiMo or MiMo mify Anthropic key route. Codex recipes
-default to `codex-router-responses` and may run there when `CODEX_BASE_URL` and
-`CODEX_API_KEY` are configured; mimo-mify-responses and MiniMax are available only as explicit
-`ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` overrides with `XM_LLM_API_KEY` or
-`MM_API_KEY`.
-Model-only overrides do not bypass the guard. Guarded coding-agent recipes
-should fail before launching when the work-network probe is reachable and no
-allowed repo-local key route is available.
+system-provider Claude Code workflows on the work network. The current active
+live product route is `agent_engine=openai-agents-sdk`; use repo-local
+`CODEX_BASE_URL` / `CODEX_API_KEY` for the default
+`codex-router-responses` SDK provider profile, or explicit
+`ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` overrides
+with `XM_LLM_API_KEY` or `MM_API_KEY`.
+Model-only overrides do not bypass the guard. Guarded live-agent recipes should
+fail before launching when the work-network probe is reachable and no allowed
+repo-local key route is available.
 
-### 1.1.2 Coding-agent permissions
+### 1.1.2 Live-agent permissions
 
-The pinned coding-agent Docker runtime is the only supported runtime for local
-Codex / Claude Code household demos. Launch those demos through the public
-catalog:
+OpenAI Agents SDK is the only active live-agent product engine. Launch SDK
+household demos through the public catalog:
 
 ```bash
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
-just run::surface surface=household-world agent_engine=claude-code preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=openai-agents-sdk preset=cleanup evidence_lane=world-public-labels
 ```
 
-The recipes carry the required bypass-approval / bypass-sandbox flags and
-isolate the agent to the task skill. New `just` recipes that launch Codex or
-Claude Code must route through `run::surface`, the private `agent::*`
-dispatcher, or `scripts/dev/coding_agent_docker.sh`.
+`codex-cli` and `claude-code` are retired from active product launch. Do not add
+new public recipes, operator-console rows, or eval rows for those engines. The
+pinned Docker coding-agent tooling may remain for explicit manual debugging
+only when the human asks for it.
 
 Bare host `codex` or `claude` launches are unsupported and must not be used
 unless the human explicitly asks for a system-CLI debugging run. If that happens,
@@ -219,8 +216,8 @@ Use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
 just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
-just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
+just run::surface surface=household-world agent_engine=openai-agents-sdk preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=openai-agents-sdk prompt="find something useful to drink"
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -451,8 +448,8 @@ scope.
 Examples:
 
 - "run the map-build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino`
-- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels`
-- "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"`
+- "run the household cleanup task with the SDK" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=world-public-labels`
+- "run an open-ended household goal with the SDK" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"`
 - "run the planner proof dry run" -> `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run`
 
 Use `agent::*` for deeper maintainer control:

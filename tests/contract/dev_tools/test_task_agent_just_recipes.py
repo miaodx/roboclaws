@@ -37,8 +37,8 @@ CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 LIVE_CLAUDE_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
 LIVE_OPENAI_AGENTS_RUNNER = REPO_ROOT / "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
-AGIBOT_MAP_BUILD_CODEX_RUNNER = (
-    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
+AGIBOT_MAP_BUILD_SDK_RUNNER = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_agibot_map_build.py"
 )
 HOUSEHOLD_LIVE_DRIVER = REPO_ROOT / "roboclaws" / "agents" / "drivers" / "household_live.py"
 HOUSEHOLD_AGENT_SERVER_MODULE = "roboclaws.cli.agent_server"
@@ -441,14 +441,12 @@ def test_agent_verify_routes_required_ci_gate_to_verify_module() -> None:
     ]
 
 
-def test_agent_harness_allows_molmo_codex_perf_target() -> None:
+def test_agent_harness_no_longer_exposes_molmo_codex_perf_target() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
 
-    assert "molmo-cleanup-codex-perf" in agent_text
-    assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
-    assert "just molmo::household-world-impl codex-live world-public-labels" in harness_text
-    assert '"skill" "$robot_views"' in harness_text
+    assert "molmo-cleanup-codex-perf" not in agent_text
+    assert "molmo-cleanup-codex-perf" not in harness_text
 
 
 def test_agent_harness_no_longer_advertises_agent_validation() -> None:
@@ -548,37 +546,37 @@ def test_agent_mcp_rejects_legacy_household_dispatch_targets() -> None:
     assert "semantic-map-build)" not in body
 
 
-def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
+def test_surface_prompt_mapping_household_cleanup_sdk_world_labels_default() -> None:
     route = trace_surface_run(
         "surface=household-world",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "preset=cleanup",
     )
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-world-public-labels",
+        "output/household/household-world/cleanup/openai-agents-live-world-public-labels",
     ]
 
 
 def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
     route, plan_trace = trace_surface_run_with_plan(
         "surface=household-world",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "prompt=我渴了，帮我找些解渴的东西",
     )
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/open-ended/codex-world-public-labels",
+        "output/household/household-world/open-ended/openai-agents-live-world-public-labels",
     ]
     assert "我渴了，帮我找些解渴的东西" in route
     assert route[23:25] == ["household-world", "open-ended"]
@@ -647,7 +645,7 @@ def test_surface_launch_rejects_public_profile_alias() -> None:
         resolve_surface_launch(
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "profile=world-public-labels",
             )
@@ -699,7 +697,7 @@ def test_surface_cleanup_prompt_stays_cleanup_intent_when_explicit() -> None:
     plan = resolve_surface_launch(
         (
             "surface=household-world",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "preset=cleanup",
             "prompt=只收拾桌面上的杯子",
         )
@@ -720,7 +718,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     plan = resolve_surface_launch(
         (
             "surface=household-world",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "preset=map-build",
         )
     )
@@ -729,7 +727,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert plan.world == "molmospaces/val_0"
     assert plan.backend == "mujoco"
     assert plan.implementation_backend == "molmospaces_subprocess"
-    assert plan.agent_engine == "codex-cli"
+    assert plan.agent_engine == "openai-agents-sdk"
     assert plan.provider_profile == "codex-router-responses"
     assert plan.intent == "map-build"
     assert plan.preset == "map-build"
@@ -833,33 +831,33 @@ def test_household_checker_flags_are_generated_from_intent_policy() -> None:
     assert "--allow-partial-cleanup" in map_flags
 
 
-def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
-    route = trace_household_cleanup_run("codex")
+def test_prompt_mapping_household_cleanup_sdk_world_labels_default() -> None:
+    route = trace_household_cleanup_run("openai-agents-sdk")
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-world-public-labels",
+        "output/household/household-world/cleanup/openai-agents-live-world-public-labels",
     ]
 
 
-def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
-    route = trace_household_cleanup_run("codex", "smoke")
+def test_prompt_mapping_household_cleanup_sdk_smoke_override() -> None:
+    route = trace_household_cleanup_run("openai-agents-sdk", "smoke")
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "smoke",
         "7",
-        "output/household/household-world/cleanup/codex-smoke",
+        "output/household/household-world/cleanup/openai-agents-live-smoke",
     ]
 
 
-def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
+def test_openai_agents_sdk_cleanup_route_is_active_live_route() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert "openai-agents-live" in molmo_text
@@ -872,7 +870,7 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
     assert "--context-soft-limit-tokens" in molmo_text
     assert "ROBOCLAWS_OPENAI_AGENTS_MODEL ROBOCLAWS_PROVIDER_PROFILE" in molmo_text
     assert "ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_OPENAI_AGENTS_MODEL" in molmo_text
-    assert "openai-agents-live" not in trace_household_cleanup_run("codex")
+    assert "openai-agents-live" in trace_household_cleanup_run("openai-agents-sdk")
 
     plan = resolve_surface_launch(
         (
@@ -915,7 +913,7 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
     "surface", ("molmospace-cleanup", "molmospaces-cleanup", "cleanup-report", "household-cleanup")
 )
 def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> None:
-    stderr = assert_surface_run_fails(f"surface={surface}", "agent_engine=codex-cli")
+    stderr = assert_surface_run_fails(f"surface={surface}", "agent_engine=openai-agents-sdk")
 
     assert f"unsupported surface '{surface}'" in stderr
 
@@ -924,8 +922,8 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
     ("surface_args", "expected"),
     (
         (
-            ("surface=household-world", "agent_engine=codex-live", "preset=cleanup"),
-            "unsupported agent_engine 'codex-live'",
+            ("surface=household-world", "agent_engine=openai-agents-live", "preset=cleanup"),
+            "unsupported agent_engine 'openai-agents-live'",
         ),
         (
             ("surface=household-world", "agent_engine=claude-live", "preset=cleanup"),
@@ -934,7 +932,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
         (
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "evidence_lane=world-public-labels-perf",
             ),
@@ -943,7 +941,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
         (
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "evidence_lane=minimal",
             ),
@@ -952,7 +950,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
         (
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "evidence_lane=visual",
             ),
@@ -961,7 +959,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
         (
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "evidence_lane=camera-raw-fpv",
                 "cleanup_routine=mcp",
@@ -971,7 +969,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
         (
             (
                 "surface=household-world",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "preset=cleanup",
                 "evidence_lane=world-public-labels",
                 "generated_mess_count=5",
@@ -992,7 +990,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     resolved = resolve_surface_launch(
         (
             "surface=household-world",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-public-labels",
@@ -1004,7 +1002,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
         "just",
         "agent::run",
         "household-world.cleanup",
-        "codex-cli",
+        "openai-agents-sdk",
         "smoke",
         "output_dir=output/custom",
         "scene_source=procthor-10k-val",
@@ -1018,12 +1016,12 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert not any(item.startswith("generated_mess_count=") for item in resolved.overrides)
     assert resolved.world == "molmospaces/val_0"
     assert resolved.backend == "mujoco"
-    assert resolved.agent_engine == "codex-cli"
+    assert resolved.agent_engine == "openai-agents-sdk"
     assert resolved.provider_profile == "codex-router-responses"
     assert resolved.evidence_mode == "smoke"
 
     with pytest.raises(LaunchError, match="unsupported surface 'molmospace-cleanup'"):
-        resolve_surface_launch(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
+        resolve_surface_launch(("surface=molmospace-cleanup", "agent_engine=openai-agents-sdk"))
 
 
 def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
@@ -1032,7 +1030,7 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
             "surface=household-world",
             "world=agibot-g2/map-12",
             "backend=agibot-gdk",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-public-labels",
@@ -1043,7 +1041,7 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
         "just",
         "agent::run",
         "household-world.cleanup",
-        "codex-cli",
+        "openai-agents-sdk",
         "smoke",
         "backend=agibot_gdk",
         "generated_mess_count=5",
@@ -1054,8 +1052,8 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
     assert plan.dispatch_target == "household-world.cleanup"
     assert plan.preset == "cleanup"
     assert plan.skill_name == "molmo-realworld-cleanup"
-    assert plan.agent_engine == "codex-cli"
-    assert plan.dispatch_runner == "codex"
+    assert plan.agent_engine == "openai-agents-sdk"
+    assert plan.dispatch_runner == "openai-agents-live"
     assert plan.profile == "smoke"
     assert plan.report is None
     assert plan.world == "agibot-g2/map-12"
@@ -1081,9 +1079,10 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
             )
         )
 
-    assert "expected codex-cli|claude-code|openai-agents-sdk|direct-runner" in exc.value.hint
+    assert "expected direct-runner|openai-agents-sdk" in exc.value.hint
     assert "openclaw-gateway is validation-required" in exc.value.hint
-    assert "direct-runner|openclaw-gateway" not in exc.value.hint
+    assert "codex-cli" not in exc.value.hint
+    assert "claude-code" not in exc.value.hint
 
 
 def test_public_engine_docs_keep_guarded_maintainer_routes_out_of_public_list() -> None:
@@ -1161,7 +1160,7 @@ def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     route, plan_trace = trace_household_cleanup_run_with_plan(
-        "codex",
+        "openai-agents-sdk",
         "camera-grounded-labels",
         "camera_labeler=grounding-dino",
     )
@@ -1169,7 +1168,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert route[:5] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "camera-grounded-labels",
         "7",
     ]
@@ -1180,11 +1179,11 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
         "backend=mujoco",
         "intent=cleanup",
         "preset=cleanup",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
     ]
     assert "provider_profile=codex-router-responses" in plan_trace
     assert "skill=molmo-realworld-cleanup" in plan_trace
-    assert "dispatch_runner=codex" in plan_trace
+    assert "dispatch_runner=openai-agents-live" in plan_trace
     assert "dispatch_target=household-world.cleanup" in plan_trace
     assert "mode=camera-grounded-labels" in plan_trace
     assert "profile=camera-grounded-labels" in plan_trace
@@ -1192,7 +1191,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert "prompt=household_cleanup" in plan_trace
     assert "checker=cleanup_report" in plan_trace
     assert (
-        "target=just agent::run household-world.cleanup codex-cli camera-grounded-labels "
+        "target=just agent::run household-world.cleanup openai-agents-sdk camera-grounded-labels "
         "camera_labeler=grounding-dino scene_source=procthor-10k-val scene_index=0 "
         "map_bundle=assets/maps/molmospaces/procthor-10k-val/0 "
         "backend=molmospaces_subprocess generated_mess_count=5"
@@ -1203,7 +1202,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
     plan = resolve_surface_launch(
         (
             "surface=household-world",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "preset=cleanup",
             "evidence_lane=world-public-labels",
         )
@@ -1220,7 +1219,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         "just",
         "agent::run",
         "household-world.cleanup",
-        "codex-cli",
+        "openai-agents-sdk",
         "world-public-labels",
         "scene_source=procthor-10k-val",
         "scene_index=0",
@@ -1271,12 +1270,12 @@ def test_agent_harness_rejects_retired_targets(target: str) -> None:
 
 
 def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
-    route = trace_household_cleanup_run("codex", "", "output_dir=output/custom")
+    route = trace_household_cleanup_run("openai-agents-sdk", "", "output_dir=output/custom")
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
         "output/custom",
@@ -1296,7 +1295,7 @@ def test_map_build_rejects_public_map_mode_axis() -> None:
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_household_cleanup_run(
-        "codex",
+        "openai-agents-sdk",
         "world-public-labels",
         "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
     )
@@ -1304,10 +1303,10 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     assert route[:10] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-world-public-labels",
+        "output/household/household-world/cleanup/openai-agents-live-world-public-labels",
         "帮我收拾这个房间",
         "5",
         "127.0.0.1",
@@ -1400,14 +1399,14 @@ def test_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
     assert "agibot-g2-cleanup" not in " ".join(route)
 
 
-def test_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
+def test_map_build_sdk_routes_agibot_backend_to_live_runner() -> None:
     route = trace_household_map_build_run(
-        "codex",
+        "openai-agents-sdk",
         "camera-grounded-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
-        "run_dir=output/agibot/map-build-codex/test-run",
-        "policy=codex_agibot_map_build_pilot",
+        "run_dir=output/agibot/map-build-sdk/test-run",
+        "policy=openai_agents_agibot_map_build",
         "camera_labeler=grounding-dino",
         "visual_grounding_timeout_s=12.5",
     )
@@ -1415,12 +1414,12 @@ def test_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
     assert route[:3] == [
         "cmd",
         ".venv/bin/python",
-        "scripts/molmo_cleanup/run_live_codex_agibot_map_build.py",
+        "scripts/molmo_cleanup/run_live_openai_agents_agibot_map_build.py",
     ]
     assert "--repo-root" in route
     assert str(REPO_ROOT) in route
     assert "--run-dir" in route
-    assert "output/agibot/map-build-codex/test-run" in route
+    assert "output/agibot/map-build-sdk/test-run" in route
     assert "--server-arg=--context-json" in route
     assert "--server-arg=tests/fixtures/agibot_map_context.completed.json" in route
     assert "--server-arg=--evidence-lane" in route
@@ -1432,14 +1431,14 @@ def test_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
     assert "--backend" in route
     assert "agibot_gdk" in route
     assert "--policy" in route
-    assert "codex_agibot_map_build_pilot" in route
-    assert str(AGIBOT_MAP_BUILD_CODEX_RUNNER.relative_to(REPO_ROOT)) in route
+    assert "openai_agents_agibot_map_build" in route
+    assert str(AGIBOT_MAP_BUILD_SDK_RUNNER.relative_to(REPO_ROOT)) in route
     assert "molmo::cleanup" not in route
 
 
-def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
+def test_map_build_sdk_routes_molmospaces_backend_to_live_runner() -> None:
     route = trace_household_map_build_run(
-        "codex",
+        "openai-agents-sdk",
         "world-public-labels",
         "backend=molmospaces_subprocess",
     )
@@ -1447,10 +1446,10 @@ def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
     assert route[:7] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/map-build/codex-world-public-labels",
+        "output/household/household-world/map-build/openai-agents-live-world-public-labels",
         "帮我建立这个房间的 Runtime Metric Map",
     ]
     assert route[15] == "on"
@@ -1459,10 +1458,10 @@ def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
     assert route[-1] == "map-build"
 
 
-def test_map_build_codex_rejects_molmospaces_isaac_backend_override() -> None:
+def test_map_build_sdk_rejects_molmospaces_isaac_backend_override() -> None:
     stderr = assert_agent_run_fails(
         "household-world.map-build",
-        "codex-cli",
+        "openai-agents-sdk",
         "world-public-labels",
         "backend=isaaclab_subprocess",
     )
@@ -1475,7 +1474,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
         "surface=household-world",
         "world=b1-map12",
         "backend=isaaclab",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "prompt=inspect the digital twin",
         "evidence_lane=world-public-labels",
     )
@@ -1483,10 +1482,10 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/open-ended/codex-world-public-labels",
+        "output/household/household-world/open-ended/openai-agents-live-world-public-labels",
     ]
     assert route[10] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert route[12] == "on"
@@ -1499,7 +1498,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "world=b1-map12" in plan_trace
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
-    assert "household-world.open-ended codex-cli world-public-labels" in target_trace
+    assert "household-world.open-ended openai-agents-sdk world-public-labels" in target_trace
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in target_trace
     assert "b1_alignment_review=" not in target_trace
     assert (
@@ -1519,7 +1518,7 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "surface=household-world",
         "world=b1-map12",
         "backend=isaaclab",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "prompt=inspect the digital twin",
         "evidence_lane=world-public-labels",
         "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
@@ -1546,7 +1545,7 @@ def test_b1_public_launch_rejects_stale_semantic_projection_artifact_axis() -> N
             "surface=household-world",
             "world=b1-map12",
             "backend=isaaclab",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "prompt=inspect the digital twin",
             "evidence_lane=world-public-labels",
             "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
@@ -1614,7 +1613,7 @@ def test_b1_isaac_route_requires_explicit_robot_consumption_artifacts() -> None:
             binary,
             "agent::run",
             "household-world.open-ended",
-            "codex-cli",
+            "openai-agents-sdk",
             "world-public-labels",
             "world=b1-map12",
             "backend=isaaclab_subprocess",
@@ -1796,15 +1795,18 @@ def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> N
     assert "--real-movement-enabled" in result.stdout
 
 
-def test_agibot_codex_map_build_route_requires_context_json() -> None:
+def test_agibot_sdk_map_build_route_requires_context_json() -> None:
     stderr = assert_household_map_build_run_fails(
-        "codex",
+        "openai-agents-sdk",
         "camera-grounded-labels",
         "backend=agibot_gdk",
         "camera_labeler=grounding-dino",
     )
 
-    assert "backend=agibot_gdk household-world.map-build codex-cli requires context_json" in stderr
+    assert (
+        "backend=agibot_gdk household-world.map-build openai-agents-sdk requires context_json"
+        in stderr
+    )
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
@@ -1870,9 +1872,8 @@ def test_molmo_map_build_strips_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert (
-        'if [[ "$map_build_enabled" == "true" && ( "$driver" == "codex-live" || '
-        '"$driver" == "openai-agents-live" ) ]]; then'
-    ) in text
+        'if [[ "$map_build_enabled" == "true" && "$driver" == "openai-agents-live" ]]; then' in text
+    )
     assert "checker_map_build_args=(--require-runtime-metric-map)" in text
     assert 'elif [[ "$map_build_enabled" == "true" ]]; then' in text
     assert (
@@ -1886,7 +1887,7 @@ def test_molmo_map_build_strips_cleanup_quality_gate() -> None:
 
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_household_cleanup_run(
-        "codex",
+        "openai-agents-sdk",
         "world-public-labels",
         "robot_views=off",
     )
@@ -1894,10 +1895,10 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     assert route[:12] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-world-public-labels",
+        "output/household/household-world/cleanup/openai-agents-live-world-public-labels",
         "帮我收拾这个房间",
         "5",
         "127.0.0.1",
@@ -1981,7 +1982,7 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
 
 def test_household_cleanup_route_passes_operator_messages_path_override() -> None:
     route = trace_household_cleanup_run(
-        "codex",
+        "openai-agents-sdk",
         "world-public-labels",
         "operator_messages_path=output/operator-console/runs/run-a/operator_messages.jsonl",
     )
@@ -1991,7 +1992,7 @@ def test_household_cleanup_route_passes_operator_messages_path_override() -> Non
 
 def test_household_open_ended_prompt_uses_first_class_intent_not_custom_mode() -> None:
     route = trace_household_cleanup_run(
-        "codex",
+        "openai-agents-sdk",
         "world-public-labels",
         "prompt=我渴了，帮我找些解渴的东西",
         "task_intent=open-ended",
@@ -2012,15 +2013,14 @@ def test_household_cleanup_prompt_override_does_not_imply_direct_open_ended_inte
     assert route[-2:] == ["household-world", "cleanup"]
 
 
-def test_household_cleanup_prompt_override_does_not_imply_openclaw_open_ended_intent() -> None:
-    route = trace_household_cleanup_run(
+def test_household_cleanup_prompt_override_does_not_make_openclaw_active() -> None:
+    stderr = assert_household_cleanup_run_fails(
         "openclaw",
         "world-public-labels",
         "prompt=我渴了，帮我找些解渴的东西",
     )
 
-    assert "我渴了，帮我找些解渴的东西" in route
-    assert route[-2:] == ["household-world", "cleanup"]
+    assert "openclaw-gateway is validation-required future abstraction work" in stderr
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
@@ -2478,7 +2478,7 @@ def test_map_build_live_prompt_disables_cleanup_actions() -> None:
 def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     codex_runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
-    agibot_runner_text = AGIBOT_MAP_BUILD_CODEX_RUNNER.read_text(encoding="utf-8")
+    agibot_runner_text = AGIBOT_MAP_BUILD_SDK_RUNNER.read_text(encoding="utf-8")
 
     assert "roboclaws.cli.agent_server household-world.cleanup" in molmo_text
     assert "roboclaws.cli.agent_server household-cleanup" not in molmo_text
@@ -3342,7 +3342,6 @@ def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
 def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
-    agent_text = AGENT_JUST.read_text(encoding="utf-8")
     helper_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
     docker_text = CODING_AGENT_DOCKER.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
@@ -3355,30 +3354,36 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert not re.search(r"^cc\s", code_text, re.MULTILINE)
 
     assert "source scripts/dev/coding_agent_env.sh" in molmo_text
-    assert "roboclaws_codex_provider_args codex_model_args" in molmo_text
-    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in molmo_text
-    assert "scripts/dev/coding_agent_docker.sh ensure" in molmo_text
-    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in molmo_text
-    assert '"--codex-model-arg=$arg"' in molmo_text
-    assert "--codex-provider-summary" in molmo_text
-    assert "XM_LLM_API_KEY" in molmo_text
-    assert "XM_LLM_BASE_URL" in molmo_text
+    assert "roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE codex-router-responses" in (
+        molmo_text
+    )
+    assert "roboclaws_code_agent_model ROBOCLAWS_OPENAI_AGENTS_MODEL" in molmo_text
+    assert "roboclaws_codex_provider_args codex_model_args" not in molmo_text
+    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" not in molmo_text
+    assert "scripts/dev/coding_agent_docker.sh ensure" not in molmo_text
+    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' not in (
+        molmo_text
+    )
+    assert '"--codex-model-arg=$arg"' not in molmo_text
+    assert "--codex-provider-summary" not in molmo_text
+    assert "XM_LLM_API_KEY" not in molmo_text
+    assert "XM_LLM_BASE_URL" not in molmo_text
     assert "XM_LLM_API_KEY" in docker_text
     assert "XM_LLM_BASE_URL" in docker_text
-    assert "MM_API_KEY" in molmo_text
-    assert "MM_BASE_URL" in molmo_text
-    assert "MM_API_KEY" in agent_text
-    assert "MM_BASE_URL" in agent_text
+    assert "MM_API_KEY" not in molmo_text
+    assert "MM_BASE_URL" not in molmo_text
     assert "MM_API_KEY" in docker_text
     assert "MM_BASE_URL" in docker_text
+    assert "MM_API_KEY" in helper_text
+    assert "MM_BASE_URL" in helper_text
     assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in docker_text
     assert "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL" in docker_text
-    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in molmo_text
-    assert "ROBOCLAWS_TIMING_PROXY_BIND_PORT" in molmo_text
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" not in molmo_text
+    assert "ROBOCLAWS_TIMING_PROXY_BIND_PORT" not in molmo_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
-    assert '--claude-bin "$claude_bin"' in molmo_text
+    assert '--claude-bin "$claude_bin"' not in molmo_text
     assert "ANTHROPIC_BASE_URL" in helper_text
     assert "ANTHROPIC_API_KEY" in helper_text
 
@@ -3396,34 +3401,31 @@ def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     assert "no system-provider fallback was used" in code_text
 
 
-def test_molmo_codex_live_is_detached_and_probeable() -> None:
+def test_molmo_live_dispatch_is_sdk_only_and_probeable() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
-    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+    runner_text = LIVE_OPENAI_AGENTS_RUNNER.read_text(encoding="utf-8")
     household_live_text = HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
 
-    assert 'tmux new-session -d -s "$session_name"' in molmo_text
-    assert (
-        'session_suffix="$(basename "$(dirname "$run_root")")-$(basename "$run_root")"'
-        in molmo_text
-    )
-    assert "p${port}-seed-${seed}" in molmo_text
-    assert "run_live_codex.sh" in molmo_text
-    assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" in molmo_text
-    assert "another interactive Codex Molmo cleanup session appears to be active" in molmo_text
+    assert "live_drivers=(openai-agents-live openclaw-live)" in molmo_text
+    assert "codex-live" not in molmo_text
+    assert "claude-live" not in molmo_text
+    assert "run_live_codex.sh" not in molmo_text
+    assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" not in molmo_text
+    assert "scripts/molmo_cleanup/run_live_claude_cleanup.py" not in molmo_text
+    assert "another interactive Codex Molmo cleanup session appears to be active" not in molmo_text
     assert (
         'if [[ "$backend" == "molmospaces_subprocess" && "$interactive_visual_cap" == "1" ]]'
-        in molmo_text
+        not in molmo_text
     )
-    assert "another non-Molmo live cleanup run appears to be active" not in molmo_text
     assert "active MCP servers:" not in molmo_text
     assert "ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS" in molmo_text
-    assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \\" in molmo_text
+    assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS" in molmo_text
     assert "roboclaws.household.visual_backend_slots acquire" in molmo_text
     assert "visual_backend_slot.json" in molmo_text
     assert "refusing to choose another port" in molmo_text
-    assert "tmux_session.txt" in molmo_text
     assert "live_status.json" in molmo_text
-    assert all(item in runner_text for item in ("codex-events.jsonl", "codex-last-message.md"))
+    assert "tmux_session.txt" not in molmo_text
+    assert "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py" in molmo_text
     assert "acquire_household_live_run_lease" in runner_text
     assert "acquire_visual_backend_slot" in household_live_text
     assert "no MolmoSpaces visual backend slot is available" in household_live_text
@@ -3431,8 +3433,7 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text
     assert 'live_lock_backend="${backend//[^A-Za-z0-9_.-]/-}"' in molmo_text
-    assert '--lock-path "$codex_lock_path"' in molmo_text
-    assert "output/molmo/.live-codex.lock" not in molmo_text
+    assert '--lock-path "$openai_agents_lock_path"' in molmo_text
 
 
 def test_map_build_codex_live_passes_task_identity_to_server_and_checker() -> None:
