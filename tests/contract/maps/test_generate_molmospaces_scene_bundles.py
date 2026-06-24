@@ -23,14 +23,14 @@ def test_active_sampler_generation_targets_current_product_scene_set() -> None:
 
     assert tokens == [
         "procthor-10k-val/0",
+        "procthor-10k-val/11",
+        "procthor-10k-val/15",
         "procthor-objaverse-val/0",
         "procthor-objaverse-val/1",
         "procthor-objaverse-val/10",
         "procthor-10k-val/10",
-        "procthor-10k-val/11",
         "procthor-10k-val/12",
         "procthor-10k-val/13",
-        "procthor-10k-val/15",
         "procthor-objaverse-val/4",
         "procthor-objaverse-val/5",
         "procthor-objaverse-val/7",

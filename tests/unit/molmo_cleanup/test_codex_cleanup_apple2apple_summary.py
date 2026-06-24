@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_SUMMARY_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_codex_cleanup_apple2apple_summary.py"
@@ -387,21 +389,37 @@ def _write_run(
         path = run_dir / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("artifact", encoding="utf-8")
-    agent_view = {
-        "cleanup_worklist": {
-            "held_object_id": None if completion_status == "success" else "observed_001",
-            "objects": [
-                {
-                    "object_id": "observed_001",
-                    "category": "Plate",
-                    "state": "placed" if completion_status == "success" else "held",
-                    "cleanup_recommended": completion_status != "success",
-                    "candidate_fixture_id": "anchor_fixture_001",
-                    "last_waypoint_id": "generated_exploration_001",
-                }
-            ],
-        }
+    cleanup_worklist = {
+        "held_object_id": None if completion_status == "success" else "observed_001",
+        "objects": [
+            {
+                "object_id": "observed_001",
+                "category": "Plate",
+                "state": "placed" if completion_status == "success" else "held",
+                "cleanup_recommended": completion_status != "success",
+                "candidate_fixture_id": "anchor_fixture_001",
+                "last_waypoint_id": "generated_exploration_001",
+            }
+        ],
     }
+    agent_view = agent_view_module.build_agent_view(
+        contract="realworld_cleanup_v1",
+        perception_mode="visible_object_detections",
+        detection_exposure_policy="public_runtime_map",
+        structured_detections_available=True,
+        base_metric_map={"schema": "real_robot_map_bundle_v1", "map_bundle": {}},
+        runtime_metric_map={"schema": "runtime_metric_map_v1", "static_map": {}},
+        observed_objects=[],
+        raw_fpv_observations=[],
+        camera_model_policy_evidence={},
+        model_declared_observations=[],
+        model_declared_observation_evidence={},
+        policy_view={},
+        cleanup_worklist=cleanup_worklist,
+        observed_waypoint_ids=["generated_exploration_001"],
+        public_tool_names=[],
+        forbidden_keys=frozenset(),
+    )
     (run_dir / "agent_view.json").write_text(json.dumps(agent_view), encoding="utf-8")
     score = {
         "status": completion_status,

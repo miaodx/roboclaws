@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.realworld_mcp_server import MCP_SERVER_NAME
 
@@ -91,7 +92,7 @@ def _assert_smoke_run_result(run_result: dict[str, Any]) -> None:
     assert run_result["agent_diagnostics"]["semantic_order_errors"] == 0
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
-    assert run_result["agent_view"]["observed_objects"]
+    assert agent_view_module.observed_objects(run_result["agent_view"])
     assert run_result["cleanup_policy_trace"]["loop_style"] == "interleaved_cleanup_loop"
     assert run_result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] is True
     assert run_result["cleanup_policy_trace"]["post_place_observe_complete"] is True
