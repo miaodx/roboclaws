@@ -244,6 +244,39 @@ Each entry should answer:
   - Try now: Yes for audit and test-plan work. Apply behavior changes only as
     narrow fixes with parity tests.
 
+- **Investigate why MapBuild prior did not improve cleanup**
+  - Created: 2026-06-24.
+  - Updated: 2026-06-24.
+  - Status: Parked product-behavior investigation after live A/B.
+  - Why: A product-like `openai-agents-sdk` / `codex-router-responses` /
+    `camera-grounded-labels` / GroundingDINO comparison showed that MapBuild
+    support is wired through and the cleanup run loaded the prior, but cleanup
+    quality did not improve. The base cleanup restored 4/5 generated mess
+    objects (`mess_restoration_rate=0.8`), while the MapBuild-prior cleanup
+    restored 3/5 (`mess_restoration_rate=0.6`). The with-prior run loaded 57
+    object priors and produced more runtime candidates, so the likely issue is
+    not missing plumbing but how stale/visible-only prior evidence affects
+    cleanup target selection, destination choice, or agent prompting.
+  - Next action: Compare base vs prior traces at the semantic decision level:
+    which observed/prior candidates entered the cleanup worklist, which objects
+    were skipped or misplaced, whether prior candidates should require fresh
+    confirmation before cleanup, and whether MapBuild should emit a smaller
+    task-oriented Runtime Map Prior Snapshot instead of the full runtime map.
+    Convert the finding into either a prompt/tool-contract change or a focused
+    regression sample before rerunning a larger matrix.
+  - Evidence:
+    commit `5b027be1` (`fix: fail fast on fake visual grounding sidecars`);
+    `output/ab-mapbuild-cleanup/20260624T120304/map-build/seed-7`;
+    `output/ab-mapbuild-cleanup/20260624T120304/cleanup-base/seed-7`;
+    `output/ab-mapbuild-cleanup/20260624T120304/cleanup-with-prior/seed-7`;
+    `output/ab-mapbuild-cleanup/20260624T120304/cleanup-with-prior/seed-7/run_result.json`;
+    `roboclaws/household/realworld_mcp_server.py`;
+    `roboclaws/maps/`.
+  - Try now: Yes for artifact analysis and one focused fix. Do not treat this
+    as evidence that MapBuild is disconnected; first reproduce from the saved
+    traces and explain why the loaded prior changed or failed to change the
+    cleanup decisions.
+
 - **Physically delete retired coding-agent implementation**
   - Created: 2026-06-24.
   - Updated: 2026-06-24.
