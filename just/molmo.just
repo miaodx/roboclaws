@@ -512,6 +512,22 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     echo "    views    : ${robot_views}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
+    check_visual_grounding_readiness_for_run() {
+      local readiness_run_dir="$1"
+      if [[ "$profile" != "camera-grounded-labels" || "$visual_grounding" == "sim" ]]; then
+        return 0
+      fi
+      local -a readiness_args=(
+        --pipeline "$visual_grounding"
+        --require-real-adapter
+        --output "${readiness_run_dir}/visual_grounding_readiness.json"
+      )
+      if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
+        readiness_args+=(--timeout-s "$visual_grounding_timeout_s")
+      fi
+      .venv/bin/python scripts/visual_grounding/check_visual_grounding_readiness.py \
+        "${readiness_args[@]}"
+    }
     interactive_visual_cap="${ROBOCLAWS_MOLMO_INTERACTIVE_VISUAL_BACKEND_CAP:-1}"
     if [[ "${ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS:-0}" == "1" ]]; then
       interactive_visual_cap="${ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS:-1}"
@@ -531,6 +547,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           run_dir="$run_dir_override"
         fi
         mkdir -p "$run_dir"
+        check_visual_grounding_readiness_for_run "$run_dir"
         if [[ "$backend" == "isaaclab_subprocess" && "$launch_world_id" == "b1-map12" ]]; then
           for b1_run_artifact in \
             b1_robot_consumption_manifest.json \
@@ -836,6 +853,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     for seed in $seeds; do
       run_dir="${run_root}/seed-${seed}"
       mkdir -p "$run_dir"
+      check_visual_grounding_readiness_for_run "$run_dir"
       case "$driver" in
         direct)
           .venv/bin/python -m roboclaws.household.realworld_cleanup \

@@ -22,6 +22,10 @@ from roboclaws.household.visual_grounding import (
 )
 from scripts.visual_grounding import adapters
 from scripts.visual_grounding.adapters import visual_grounding_adapter_catalog
+from scripts.visual_grounding.check_visual_grounding_readiness import (
+    _readiness_request,
+    check_visual_grounding_readiness,
+)
 from scripts.visual_grounding.serve_visual_grounding_service import make_handler
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +53,37 @@ def test_configurable_service_reports_real_adapter_unavailable_by_default() -> N
     assert required["producer_id"] == "grounding-dino"
     assert required["optional_extra"] == "visual-grounding-dino"
     assert "sidecar adapter" in required["setup_hint"]
+
+
+def test_product_readiness_rejects_unavailable_grounding_dino_sidecar() -> None:
+    server = _start_service(pipeline_id="grounding-dino", adapter_mode="auto")
+    try:
+        result = check_visual_grounding_readiness(
+            pipeline_id="grounding-dino",
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            timeout_s=2,
+            require_real_adapter=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result["ok"] is False
+    assert result["reason"] == "adapter_unavailable"
+    assert result["response_status"] == "failed"
+    assert result["stage_statuses"][0]["status"] == "adapter_unavailable"
+
+
+def test_product_readiness_probe_uses_camera_sized_jpeg_frame() -> None:
+    request = _readiness_request("grounding-dino")
+    image_packet = request["image"]
+    image = Image.open(io.BytesIO(base64.b64decode(image_packet["bytes_base64"])))
+
+    assert image_packet["mime_type"] == "image/jpeg"
+    assert image_packet["width"] == 320
+    assert image_packet["height"] == 240
+    assert image.size == (320, 240)
+    assert image.mode == "RGB"
 
 
 def test_configurable_service_rejects_contract_fake_adapter_mode_from_cli() -> None:
@@ -161,6 +196,67 @@ def test_real_mode_dispatches_grounding_dino_adapter(monkeypatch) -> None:
     assert response["pipeline"]["stages"][0]["model_id"] == "fake-real-model"
     assert response["candidates"][0]["category"] == "dish"
     assert response["diagnostics"]["private_truth_included"] is False
+
+
+def test_product_readiness_accepts_real_grounding_dino_sidecar(monkeypatch) -> None:
+    def fake_grounding_dino_response(
+        *,
+        payload: dict[str, Any],
+        pipeline_id: str,
+        latency_ms: int,
+    ) -> dict[str, Any]:
+        assert payload["pipeline_request"]["pipeline_id"] == "grounding-dino"
+        return {
+            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
+            "status": "ok",
+            "pipeline": {
+                "pipeline_id": pipeline_id,
+                "stages": [
+                    {
+                        "stage": "proposer",
+                        "producer_id": "grounding-dino",
+                        "model_id": "fake-real-model",
+                        "status": "ok",
+                        "latency_ms": latency_ms,
+                    }
+                ],
+            },
+            "candidates": [
+                {
+                    "category": "dish",
+                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+                    "confidence": 0.9,
+                }
+            ],
+            "diagnostics": {
+                "schema": "visual_grounding_diagnostics_v1",
+                "diagnostic_mode": "real_grounding_dino",
+                "raw_proposals": [],
+                "rejected_proposals": [],
+                "private_truth_included": False,
+            },
+        }
+
+    monkeypatch.setattr(
+        adapters,
+        "_grounding_dino_real_response",
+        fake_grounding_dino_response,
+    )
+    server = _start_service(pipeline_id="grounding-dino", adapter_mode="real")
+    try:
+        result = check_visual_grounding_readiness(
+            pipeline_id="grounding-dino",
+            base_url=f"http://127.0.0.1:{server.server_port}",
+            timeout_s=2,
+            require_real_adapter=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result["ok"] is True
+    assert result["response_status"] == "ok"
+    assert result["stage_statuses"][0]["model_id"] == "fake-real-model"
 
 
 def test_real_mode_rejects_retired_refiner_pipeline_without_fake_success() -> None:

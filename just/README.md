@@ -194,6 +194,13 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
     --pipeline real-router --adapter-mode real
 ```
 
+The `camera-grounded-labels` product route runs a fail-fast sidecar readiness
+check before starting the simulator or agent. A default `--pipeline
+grounding-dino` service without real adapters is treated as contract-only
+evidence and blocks product runs instead of producing an ambiguous cleanup
+failure. Each run writes `visual_grounding_readiness.json` into its artifact
+directory so a report can prove whether it used a real adapter.
+
 To exercise only the HTTP contract without real model dependencies, start the
 configurable service in its default mode. It should return explicit unavailable
 evidence instead of fake candidates:
