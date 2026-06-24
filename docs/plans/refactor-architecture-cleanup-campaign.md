@@ -104,6 +104,7 @@ Surface metrics:
 | Deepen MolmoSpaces robot-view output owner | 0 | 1 | 0 | 0 | preserved |
 | Split operator-console assertion helpers | 0 | 1 | 0 | 0 | preserved |
 | Deepen MolmoSpaces category rules | 0 | 1 | 0 | 1 | preserved |
+| Move Codex live timing to agent owner | 0 | 1 | 1 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -171,6 +172,13 @@ Checked and parked:
   C901 row in `roboclaws/maps/molmospaces_preparation.py`; Slice 31 replaced
   that branch ladder with ordered category rules and interface-level coverage,
   leaving the ratchet summary at zero Ruff complexity violations.
+- Post-`29e3d316` discovery checked the remaining oversized-module drift and
+  found a bounded duplicate-owner slice in live-run timing: the retired Codex
+  runner still carried local timing and MCP trace helpers while
+  `roboclaws.agents.live_timing` already owned the active live-agent timing
+  interface. Slice 32 moved only that internal timing interpretation into the
+  agent owner and preserved the script path, tested error labels, and output
+  schema.
 
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
@@ -804,6 +812,30 @@ Slice 28 stop.
   Note: the quality ratchet summary reports zero Ruff complexity violations;
   the full quality ratchet still fails on broader oversized-module baseline
   drift.
+
+- 2026-06-25: Moved Codex live-run runner timing calculation, MCP trace timing
+  reads, and first-MCP-request extraction out of
+  `scripts/molmo_cleanup/run_live_codex_cleanup.py` and into the existing
+  agent-layer `roboclaws.agents.live_timing` owner. This preserves the retired
+  Codex runner script and its live timing output schema while reducing the
+  oversized script from 1455 to 1393 lines and removing duplicate timing
+  ownership next to the active OpenAI Agents timing implementation.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_timing_fails_aloud_on_malformed_trace_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_timing_fails_aloud_on_malformed_run_result_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_event_summary_fails_aloud_on_malformed_event_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_provider_transient_failure_is_retryable -q
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_timeline_partitions_runner_and_attribution tests/unit/agents/test_live_runtime.py::test_openai_agents_control_plane_metrics_parse_server_log tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_fails_aloud_on_malformed_mcp_timing_source -q
+  .venv/bin/ruff check roboclaws/agents/live_timing.py scripts/molmo_cleanup/run_live_codex_cleanup.py tests/unit/molmo_cleanup/test_ci_live_reports.py tests/unit/agents/test_live_runtime.py
+  .venv/bin/ruff format --check roboclaws/agents/live_timing.py scripts/molmo_cleanup/run_live_codex_cleanup.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 40
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary still reports zero Ruff complexity
+  violations. The full quality ratchet still fails on broader oversized-module
+  baseline drift, but the Codex runner residual decreased from 1455 to 1393
+  lines.
 
 ## Parked Candidates
 

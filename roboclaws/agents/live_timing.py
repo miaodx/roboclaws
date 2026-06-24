@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from roboclaws.core.json_sources import read_json_value, read_jsonl_objects
+from roboclaws.core.json_sources import read_json_object, read_json_value, read_jsonl_objects
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 
 
@@ -51,6 +51,51 @@ def runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict[
         breakdown["accounting_note"] = (
             "The partitioned runner buckets sum to total wall time. MCP trace timing "
             "runs inside openai_agents_elapsed_s and is reported separately to avoid "
+            "double counting concurrent server work."
+        )
+    return breakdown
+
+
+def codex_runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict[str, Any]:
+    started = _float_or_none(timing.get("started_at_epoch"))
+    codex_start = _float_or_none(timing.get("codex_exec_start_epoch"))
+    codex_end = _float_or_none(timing.get("codex_exec_end_epoch"))
+    checker_start = _float_or_none(timing.get("checker_start_epoch"))
+    checker_end = _float_or_none(timing.get("checker_end_epoch"))
+    server_start = _float_or_none(timing.get("server_start_epoch"))
+    server_ready = _float_or_none(timing.get("server_ready_epoch"))
+    server_finished = _float_or_none(timing.get("server_finished_epoch"))
+    total = round_duration(finished_at - started) if started is not None else None
+
+    segments: dict[str, float] = {}
+    if started is not None and codex_start is not None:
+        segments["pre_codex_setup_s"] = round_duration(codex_start - started)
+    if codex_start is not None and codex_end is not None:
+        segments["codex_exec_elapsed_s"] = round_duration(codex_end - codex_start)
+    if codex_end is not None and server_finished is not None:
+        segments["post_codex_server_wait_s"] = round_duration(server_finished - codex_end)
+    if checker_start is not None and checker_end is not None:
+        segments["checker_elapsed_s"] = round_duration(checker_end - checker_start)
+    if checker_end is not None:
+        segments["final_overhead_s"] = round_duration(finished_at - checker_end)
+    if server_start is not None and server_ready is not None:
+        segments["server_startup_s"] = round_duration(server_ready - server_start)
+
+    partition_keys = (
+        "pre_codex_setup_s",
+        "codex_exec_elapsed_s",
+        "post_codex_server_wait_s",
+        "checker_elapsed_s",
+        "final_overhead_s",
+    )
+    accounted = sum(segments.get(key, 0.0) for key in partition_keys)
+    breakdown: dict[str, Any] = {"total_elapsed_s": total, **segments}
+    if total is not None:
+        breakdown["accounted_elapsed_s"] = round_duration(accounted)
+        breakdown["unaccounted_elapsed_s"] = round_duration(max(0.0, total - accounted))
+        breakdown["accounting_note"] = (
+            "The partitioned runner buckets sum to total wall time. MCP trace timing "
+            "runs inside codex_exec_elapsed_s and is reported separately to avoid "
             "double counting concurrent server work."
         )
     return breakdown
@@ -119,6 +164,23 @@ def mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
         if isinstance(timing, dict):
             return timing
     return runtime_timing_from_trace(_read_jsonl_path(run_dir / "trace.jsonl"))
+
+
+def codex_mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
+    run_result_path = run_dir / "run_result.json"
+    if run_result_path.is_file():
+        run_result = read_json_object(run_result_path, label="Codex live run_result")
+        timing = run_result.get("runtime_timing")
+        if isinstance(timing, dict):
+            return timing
+    return runtime_timing_from_trace(_read_jsonl_path(run_dir / "trace.jsonl", label="Codex live"))
+
+
+def first_mcp_request_epoch(run_dir: Path, *, label: str = "OpenAI Agents live") -> float | None:
+    for event in _read_jsonl_path(run_dir / "trace.jsonl", label=label):
+        if event.get("event") == "request" and not str(event.get("tool", "")).startswith("<"):
+            return _float_or_none(event.get("ts"))
+    return None
 
 
 def mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
@@ -544,10 +606,10 @@ def _parse_compact_metric_detail(
     return parsed, None
 
 
-def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl_path(path: Path, *, label: str = "OpenAI Agents live") -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    return read_jsonl_objects(path, label="OpenAI Agents live")
+    return read_jsonl_objects(path, label=label)
 
 
 def _float_or_none(value: Any) -> float | None:

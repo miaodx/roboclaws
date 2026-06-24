@@ -8,9 +8,9 @@ refactor slices until the stop condition is met.
 
 Current slice:
 
-- MolmoSpaces map-preparation category-rule slice complete. Current quality
-  ratchet summary has no Ruff complexity rows; continue with fresh architecture
-  discovery before touching broader oversized-module baseline drift.
+- Codex live-run timing owner slice complete. Current quality ratchet summary
+  has no Ruff complexity rows; continue with fresh architecture discovery
+  before touching broader oversized-module baseline drift.
 
 Last proven evidence:
 
@@ -111,6 +111,16 @@ Last proven evidence:
   touched-file format check, and `git diff --check` passed. The quality-ratchet
   summary now reports zero Ruff complexity violations; the full ratchet command
   still fails only on oversized-module baseline drift.
+- Post-`29e3d316` discovery found duplicate live-run timing ownership:
+  `scripts/molmo_cleanup/run_live_codex_cleanup.py` still carried local runner
+  timing and MCP trace timing helpers while `roboclaws.agents.live_timing`
+  already owned the active OpenAI Agents timing interface. Slice 32 moved the
+  Codex-specific timing interpretation into that existing agent-layer owner,
+  kept the retired Codex runner script and output schema intact, and reduced
+  `run_live_codex_cleanup.py` from 1455 to 1393 lines. Focused Codex timing
+  tests, active OpenAI Agents timing tests, touched-file Ruff, touched-file
+  format check, ratchet summary, and `git diff --check` passed. The full
+  ratchet still fails only on broader oversized-module baseline drift.
 
 Completed slice batch:
 
@@ -182,6 +192,8 @@ Completed slice batch:
   PLR0915 quality-ratchet rows.
 - Slice 31: deepened MolmoSpaces map-preparation room category rules into an
   ordered table and added interface-level priority/fallback coverage.
+- Slice 32: moved Codex live-run timing calculation and MCP trace timing reads
+  into the existing agent-layer live timing owner.
 
 Next proof:
 
@@ -240,7 +252,7 @@ Parked work:
   `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
   Treat broader oversized-module drift as architecture pressure and prefer
   safe owner-local shrink slices before any baseline refresh.
-- Latest quality-ratchet residual after Slice 31: no current Ruff complexity
+- Latest quality-ratchet residual after Slice 32: no current Ruff complexity
   rows remain. Remaining full-ratchet failures are oversized-module baseline
   drift across household, launch, operator-console, scripts, and large tests;
   select only owner-local shrink slices that delete, merge, canonicalize, or
