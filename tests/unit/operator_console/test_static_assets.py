@@ -416,6 +416,12 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
     css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
 
+    _assert_overview_outputs_html(html)
+    _assert_overview_outputs_app(app)
+    _assert_overview_outputs_css(css)
+
+
+def _assert_overview_outputs_html(html: str) -> None:
     assert 'data-view="overview"' in html
     assert 'data-view="outputs"' in html
     assert 'data-view="artifacts"' not in html
@@ -434,6 +440,10 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="grounding"' in html
     assert 'data-panel="grounding"' not in html.split('class="view-grid mode-overview"', 1)[0]
     assert "topdown-frame" in html
+    assert "prompt-preview-20260616" in html
+
+
+def _assert_overview_outputs_app(app: str) -> None:
     assert "Top-down Scene View" not in app
     assert "FPV(+Grounding)" in app
     assert 'display_source === "visual_grounding_overlay"' in app
@@ -452,7 +462,9 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert "Missing Metric Map artifact" in app
     assert "sourceAssets.runtime_map || sourceAssets.map" in app
     assert 'routeHasView(route, "chase") ? previews.chase : null' in app
-    assert "prompt-preview-20260616" in html
+
+
+def _assert_overview_outputs_css(css: str) -> None:
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase topdown"' in css

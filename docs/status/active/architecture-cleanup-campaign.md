@@ -8,9 +8,9 @@ refactor slices until the stop condition is met.
 
 Current slice:
 
-- MolmoSpaces worker-output owner-local slice complete. Continue with fresh
-  discovery around the remaining current quality-ratchet complexity rows before
-  touching broader oversized-module baseline drift.
+- Operator-console test assertion-helper slice complete. Current quality
+  ratchet has no Ruff complexity rows left; continue with fresh architecture
+  discovery before touching broader oversized-module baseline drift.
 
 Last proven evidence:
 
@@ -100,6 +100,11 @@ Last proven evidence:
   `git diff --check` passed. The quality-ratchet output no longer lists
   `molmospaces_worker_outputs.py`; it still fails on two operator-console test
   helper PLR0915 rows plus broader oversized-module baseline drift.
+- Slice 30 split overlong operator-console scene-sampler readiness and static
+  asset assertion helpers into same-file assertion vocabulary. Focused tests,
+  PLR0915 Ruff, touched-file Ruff, touched-file format check, and
+  `git diff --check` passed. The quality-ratchet output now reports only
+  oversized-module baseline drift and no current Ruff complexity rows.
 
 Completed slice batch:
 
@@ -166,12 +171,15 @@ Completed slice batch:
   instead of scanning capability-profile metadata strings.
 - Slice 29: deepened MolmoSpaces worker robot-view output assembly and
   scene-alignment point collection inside the current worker-output owner.
+- Slice 30: split operator-console scene-sampler readiness and static
+  overview/output UI assertion helpers so tests no longer produce current
+  PLR0915 quality-ratchet rows.
 
 Next proof:
 
 ```bash
 .venv/bin/python scripts/dev/check_python_quality_ratchet.py
-# Expect remaining failures only outside molmospaces_worker_outputs.py.
+# Expect remaining failures to be oversized-module baseline drift only.
 ```
 
 Stop condition:
@@ -224,3 +232,7 @@ Parked work:
   `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
   Treat broader oversized-module drift as architecture pressure and prefer
   safe owner-local shrink slices before any baseline refresh.
+- Latest quality-ratchet residual after Slice 30: no current Ruff complexity
+  rows remain. Remaining failures are oversized-module baseline drift across
+  household, launch, operator-console, scripts, and large tests; select only
+  owner-local shrink slices that delete, merge, or canonicalize a real concept.

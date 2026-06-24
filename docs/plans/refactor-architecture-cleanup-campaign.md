@@ -102,6 +102,7 @@ Surface metrics:
 | Merge visual-grounding runtime parameter sanitizer | 0 | 2 | 2 | 1 | preserved |
 | Move Agibot contract-rehearsal runtime owner | 0 | 1 | 2 | 1 | preserved |
 | Deepen MolmoSpaces robot-view output owner | 0 | 1 | 0 | 0 | preserved |
+| Split operator-console assertion helpers | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -130,8 +131,8 @@ Next clear candidates:
   failed with new complexity rows in
   `scripts/molmo_cleanup/molmospaces_worker_outputs.py` plus two
   operator-console test helpers. Slice 29 removed the MolmoSpaces worker output
-  rows; the next clear shrink candidate is the operator-console test helper
-  pair, if focused owner-local proof stays available.
+  rows. Slice 30 split the operator-console assertion helpers, so the ratchet
+  now reports only oversized-module baseline drift.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
@@ -161,10 +162,11 @@ Checked and parked:
   baseline drift.
 - Fresh 2026-06-25 handoff after `12b66126` found four new current complexity
   rows. Slice 29 removed the two MolmoSpaces worker-output rows. Remaining
-  current complexity rows are
+  current complexity rows were
   `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
   and
-  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
+  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`;
+  Slice 30 removed both rows.
 
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
@@ -754,6 +756,27 @@ Slice 28 stop.
   Note: the quality ratchet still fails on two unrelated operator-console test
   helper PLR0915 rows plus broader oversized-module baseline drift, but no
   longer lists `scripts/molmo_cleanup/molmospaces_worker_outputs.py`.
+
+- 2026-06-25: Split overlong operator-console assertion helpers in
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py` and
+  `tests/unit/operator_console/test_static_assets.py` into same-file
+  assertion vocabulary. This removed the remaining current quality-ratchet
+  Ruff complexity rows while preserving the scene-sampler readiness and static
+  overview/output UI contract assertions.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py::test_scene_sampler_readiness_export_writes_artifacts tests/unit/operator_console/test_static_assets.py::test_static_app_uses_overview_workspace_and_outputs_copy -q
+  .venv/bin/ruff check --select PLR0915 tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/ruff check tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/ruff format --check tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no current Ruff complexity rows remain.
 
 ## Parked Candidates
 
