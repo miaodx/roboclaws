@@ -8,8 +8,8 @@ refactor slices until the stop condition is met.
 
 Current slice:
 
-- Operator-console test assertion-helper slice complete. Current quality
-  ratchet has no Ruff complexity rows left; continue with fresh architecture
+- MolmoSpaces map-preparation category-rule slice complete. Current quality
+  ratchet summary has no Ruff complexity rows; continue with fresh architecture
   discovery before touching broader oversized-module baseline drift.
 
 Last proven evidence:
@@ -105,6 +105,12 @@ Last proven evidence:
   PLR0915 Ruff, touched-file Ruff, touched-file format check, and
   `git diff --check` passed. The quality-ratchet output now reports only
   oversized-module baseline drift and no current Ruff complexity rows.
+- Slice 31 replaced the MolmoSpaces map-preparation semantic category branch
+  ladder with an ordered rule table in the same map-preparation owner. Focused
+  map-preparation contract coverage, direct C901 Ruff, touched-file Ruff,
+  touched-file format check, and `git diff --check` passed. The quality-ratchet
+  summary now reports zero Ruff complexity violations; the full ratchet command
+  still fails only on oversized-module baseline drift.
 
 Completed slice batch:
 
@@ -174,6 +180,8 @@ Completed slice batch:
 - Slice 30: split operator-console scene-sampler readiness and static
   overview/output UI assertion helpers so tests no longer produce current
   PLR0915 quality-ratchet rows.
+- Slice 31: deepened MolmoSpaces map-preparation room category rules into an
+  ordered table and added interface-level priority/fallback coverage.
 
 Next proof:
 
@@ -232,7 +240,8 @@ Parked work:
   `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
   Treat broader oversized-module drift as architecture pressure and prefer
   safe owner-local shrink slices before any baseline refresh.
-- Latest quality-ratchet residual after Slice 30: no current Ruff complexity
-  rows remain. Remaining failures are oversized-module baseline drift across
-  household, launch, operator-console, scripts, and large tests; select only
-  owner-local shrink slices that delete, merge, or canonicalize a real concept.
+- Latest quality-ratchet residual after Slice 31: no current Ruff complexity
+  rows remain. Remaining full-ratchet failures are oversized-module baseline
+  drift across household, launch, operator-console, scripts, and large tests;
+  select only owner-local shrink slices that delete, merge, canonicalize, or
+  clearly deepen a real owner concept.

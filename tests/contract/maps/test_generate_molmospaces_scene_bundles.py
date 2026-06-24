@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.maps.molmospaces_preparation import prepare_molmospaces_base_metric_map
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GENERATOR_PATH = REPO_ROOT / "scripts" / "maps" / "generate_molmospaces_scene_bundles.py"
 
@@ -176,6 +178,31 @@ def test_generation_uses_preparation_evidence_not_agent_view_projection(
     assert metric_map["base_metric_map_contract"]["schema"] == "base_metric_map_v1"
 
 
+def test_molmospaces_room_category_rules_preserve_priority_and_fallback() -> None:
+    metric_map = prepare_molmospaces_base_metric_map(
+        backend_state={
+            "room_outlines": [
+                _room_outline("living_kitchen", "Living kitchen"),
+                _room_outline("bedroom_bath", "Bath suite"),
+                _room_outline("conference_lounge", "Lounge conference"),
+                _room_outline("neutral_area", "North zone"),
+            ],
+        },
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        environment_id="molmospaces-procthor-10k-val-0",
+        map_id="molmospaces-procthor-10k-val-0_base_metric_map",
+    )
+
+    categories = {room["room_id"]: room["category"] for room in metric_map["rooms"]}
+    assert categories == {
+        "living_kitchen": "kitchen",
+        "bedroom_bath": "bedroom",
+        "conference_lounge": "living_room",
+        "neutral_area": "open_area",
+    }
+
+
 def _minimal_metric_map() -> dict[str, object]:
     return {
         "schema": "real_robot_map_bundle_v1",
@@ -219,6 +246,15 @@ def _minimal_metric_map() -> dict[str, object]:
             "map_id": "source_map",
             "map_version": "base-metric-map-v1",
         },
+    }
+
+
+def _room_outline(room_id: str, label: str) -> dict[str, object]:
+    return {
+        "room_id": room_id,
+        "room_label": label,
+        "center": [0.0, 0.0],
+        "half_extents": [1.0, 1.0],
     }
 
 

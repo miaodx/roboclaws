@@ -103,6 +103,7 @@ Surface metrics:
 | Move Agibot contract-rehearsal runtime owner | 0 | 1 | 2 | 1 | preserved |
 | Deepen MolmoSpaces robot-view output owner | 0 | 1 | 0 | 0 | preserved |
 | Split operator-console assertion helpers | 0 | 1 | 0 | 0 | preserved |
+| Deepen MolmoSpaces category rules | 0 | 1 | 0 | 1 | preserved |
 
 Low-value stop signal:
 
@@ -166,7 +167,10 @@ Checked and parked:
   `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
   and
   `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`;
-  Slice 30 removed both rows.
+  Slice 30 removed both rows. A direct summary check then exposed one remaining
+  C901 row in `roboclaws/maps/molmospaces_preparation.py`; Slice 31 replaced
+  that branch ladder with ordered category rules and interface-level coverage,
+  leaving the ratchet summary at zero Ruff complexity violations.
 
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
@@ -777,6 +781,29 @@ Slice 28 stop.
 
   Note: the quality ratchet still fails on broader oversized-module baseline
   drift, but no current Ruff complexity rows remain.
+
+- 2026-06-25: Replaced the MolmoSpaces map-preparation semantic category
+  branch ladder with an ordered rule table owned by
+  `roboclaws.maps.molmospaces_preparation`. This preserves the existing
+  priority order and default category while removing the remaining direct Ruff
+  C901 row. The focused contract test observes categories through
+  `prepare_molmospaces_base_metric_map` instead of coupling to the private
+  helper.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_generate_molmospaces_scene_bundles.py::test_molmospaces_room_category_rules_preserve_priority_and_fallback -q
+  .venv/bin/ruff check --select C901 roboclaws/maps/molmospaces_preparation.py --output-format=concise
+  .venv/bin/ruff check roboclaws/maps/molmospaces_preparation.py tests/contract/maps/test_generate_molmospaces_scene_bundles.py
+  .venv/bin/ruff format --check roboclaws/maps/molmospaces_preparation.py tests/contract/maps/test_generate_molmospaces_scene_bundles.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 25
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary reports zero Ruff complexity violations;
+  the full quality ratchet still fails on broader oversized-module baseline
+  drift.
 
 ## Parked Candidates
 
