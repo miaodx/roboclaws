@@ -222,8 +222,22 @@ just agent::eval execute since=origin/main budget=focused
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 ```
 
-For `pipeline=grounding-dino` visual-grounding runs, start the configurable
-service. Without real sidecar dependencies it returns explicit unavailable
+For product-like `camera_labeler=grounding-dino` runs, start a real sidecar from
+the dedicated visual-grounding environment. This is the route to use before
+claiming cleanup or map-build behavior from GroundingDINO evidence:
+
+```bash
+VISUAL_GROUNDING_DEVICE=auto \
+VISUAL_GROUNDING_TORCH_DTYPE=auto \
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
+VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
+VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
+```
+
+To exercise only the HTTP contract without real model dependencies, start the
+configurable service in its default mode. It should return explicit unavailable
 evidence instead of fake candidates:
 
 ```bash

@@ -313,16 +313,10 @@ only when that fixture provenance is unavailable. Those labels are benchmark
 scoring data only; they are not included in service requests, predictions JSONL,
 MCP responses, or Agent View payloads.
 
-Start the configurable sidecar service for detector routes. Without real
-sidecar dependencies it returns explicit unavailable evidence instead of fake
-candidates:
-
-```bash
-.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline grounding-dino
-```
-
 For real proposer probes, install optional sidecar dependencies and weights
-explicitly into the dedicated sidecar environment, then run:
+explicitly into the dedicated sidecar environment, then run the service in real
+adapter mode. This is the route to use before claiming cleanup or map-build
+behavior from GroundingDINO evidence:
 
 ```bash
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
@@ -355,6 +349,15 @@ VISUAL_GROUNDING_OMDET_MODEL_ID=omlab/omdet-turbo-swin-tiny-hf \
 The sidecar project intentionally does not change the core Roboclaws `.venv/`.
 Use a local PyTorch CUDA index or mirror when needed; keep that machine-local
 and out of committed project metadata.
+
+To exercise only the HTTP contract without real model dependencies, start the
+configurable service in its default mode. It should return explicit unavailable
+evidence instead of fake candidates:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline grounding-dino
+```
+
 Current default: DINO base recall (`IDEA-Research/grounding-dino-base`,
 `box_threshold=0.25`, `text_threshold=0.20`). The older tiny-recall result came
 from category-presence scoring on historical frames; the bbox-aware 2026-05-27
