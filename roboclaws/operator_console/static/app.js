@@ -563,7 +563,7 @@ function renderProviderProfileOptions(route) {
   );
   const providerRoute = selectedProviderRoute(route);
   els.providerProfileHelp.textContent = providerRoute
-    ? `${providerRoute.label}; default model ${providerRoute.default_model_id}.`
+    ? `${providerRoute.provider_profile}; default model ${providerRoute.default_model_id}.`
     : "Provider profiles are resolved through the selected agent engine.";
 }
 
@@ -1263,7 +1263,7 @@ function confirmLaunch() {
   const promptSource = launchPromptText() ? "custom" : "default";
   const interpretation = launchInterpretation(route);
   const providerRows = route.provider_profile
-    ? `<dt>Provider</dt><dd>${escapeHtml(selectedProviderProfile())}</dd>`
+    ? `<dt>Provider</dt><dd>${escapeHtml(selectedProviderLabel(route))}</dd>`
     : "";
   const movementRows = isAgibotRoute(route)
     ? `<dt>Movement</dt><dd>${escapeHtml(
@@ -2285,12 +2285,17 @@ function selectedProviderRoute(route = state.selectedRoute) {
   return route.provider_routes.find((item) => item.provider_profile === providerProfile) || null;
 }
 
+function selectedProviderLabel(route = state.selectedRoute) {
+  const providerRoute = selectedProviderRoute(route);
+  return providerRoute ? providerRoute.label : selectedProviderProfile();
+}
+
 function providerProfileLabel(profile, route = state.selectedRoute) {
   if (!route || !Array.isArray(route.provider_routes)) {
     return profile;
   }
   const providerRoute = route.provider_routes.find((item) => item.provider_profile === profile);
-  return providerRoute ? `${providerRoute.label} (${profile})` : profile;
+  return providerRoute ? providerRoute.label : profile;
 }
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {
