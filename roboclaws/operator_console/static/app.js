@@ -72,6 +72,7 @@ const els = {
   lockStatus: document.getElementById("lock-status"),
   elapsedStatus: document.getElementById("elapsed-status"),
   latestResultButton: document.getElementById("latest-result-button"),
+  backgroundTasksButton: document.getElementById("background-tasks-button"),
   pauseButton: document.getElementById("pause-button"),
   stopButton: document.getElementById("stop-button"),
   emergencyButton: document.getElementById("emergency-button"),
@@ -247,6 +248,9 @@ function bindEvents() {
         refreshRuntimeTasks();
       }
     });
+  });
+  document.querySelectorAll("[data-copy]").forEach((button) => {
+    button.addEventListener("click", () => copyVisualPath(button.dataset.copy || ""));
   });
 }
 
@@ -1950,8 +1954,10 @@ function renderArtifacts(items) {
 function renderBackgroundTasks() {
   const tasks = (state.runtime && state.runtime.tasks) || [];
   const summary = (state.runtime && state.runtime.summary) || {};
+  const activeCount = Number(summary.active || tasks.length || 0);
+  els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== "tasks";
   els.backgroundTaskSummary.textContent =
-    `${summary.active || 0} blocking resource${summary.active === 1 ? "" : "s"} affecting ` +
+    `${activeCount} blocking resource${activeCount === 1 ? "" : "s"} affecting ` +
     `console/UI E2E startup.`;
   els.backgroundTaskList.innerHTML = "";
   if (!tasks.length) {
@@ -2060,6 +2066,7 @@ async function copyText(text) {
 }
 
 function renderViews(assets, route = state.selectedRoute) {
+  state.latestViewAssets = assets || {};
   setImageSlot("fpv", assets.fpv, "Missing run FPV artifact: expected robot_views/*.fpv.png.");
   setImageSlot(
     "map",
@@ -2076,7 +2083,7 @@ function renderViews(assets, route = state.selectedRoute) {
     assets.topdown,
     "Missing run top-down artifact: expected a run-local topdown image."
   );
-  const chaseEmptyText = routeHasOverviewChase(route)
+  const chaseEmptyText = routeHasView(route, "chase")
     ? "Missing run chase artifact: expected robot_views/*.chase.png."
     : "Chase view unavailable for this backend.";
   setImageSlot("chase", assets.chase, chaseEmptyText);
@@ -2090,6 +2097,7 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
     return;
   }
   const previews = route && route.preview_assets ? route.preview_assets : {};
+  state.latestViewAssets = previews;
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
   setImageSlot("map", previews.map, "No base navigation map preview is available.");
   setImageSlot(
@@ -2099,7 +2107,7 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   );
   setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
-  const chaseEmptyText = routeHasOverviewChase(route)
+  const chaseEmptyText = routeHasView(route, "chase")
     ? "Chase preview will appear after a run starts."
     : "Chase view unavailable for this backend.";
   setImageSlot("chase", previews.chase, chaseEmptyText);
@@ -2110,12 +2118,14 @@ function setImageSlot(name, asset, emptyText) {
   if (!slot) {
     return;
   }
+  const label = imageLabel(name, asset);
+  updatePanelTitle(name, label);
+  updateCopyButton(name, asset);
   if (!asset || !asset.path) {
     slot.textContent = emptyText;
     return;
   }
   const src = asset.href || artifactHref(asset.path);
-  const label = imageLabel(name);
   const visualRole = asset.visual_role || name;
   const sourceFamily = asset.artifact_source_family || "";
   slot.innerHTML = `
@@ -2143,16 +2153,45 @@ function setImageSlot(name, asset, emptyText) {
   });
 }
 
-function imageLabel(name) {
+function imageLabel(name, asset = {}) {
+  if (name === "fpv" && asset.display_source === "visual_grounding_overlay") {
+    return "FPV(+Grounding)";
+  }
   const labels = {
     fpv: "FPV",
-    map: "Base Metric Map preview",
-    runtime_map: "Runtime Metric Map preview",
-    topdown: "Top-down Scene View",
+    map: "Base Map",
+    runtime_map: "Runtime Map",
+    topdown: "Top-down",
     grounding: "Grounding",
     chase: "Chase",
   };
   return labels[name] || name;
+}
+
+function updatePanelTitle(name, label) {
+  const title = document.querySelector(`[data-panel-title="${name}"]`);
+  if (title) {
+    title.textContent = label;
+  }
+}
+
+function updateCopyButton(name, asset) {
+  const button = document.querySelector(`[data-copy="${name}"]`);
+  if (!button) {
+    return;
+  }
+  button.disabled = !asset || !asset.path;
+  button.title = asset && asset.path ? asset.path : "No artifact path yet";
+}
+
+async function copyVisualPath(name) {
+  const asset = state.latestViewAssets && state.latestViewAssets[name];
+  if (!asset || !asset.path) {
+    els.eventList.textContent = `${imageLabel(name)} artifact path is not available yet.`;
+    return;
+  }
+  await copyText(asset.path);
+  els.eventList.textContent = `Copied ${imageLabel(name, asset)} path.`;
 }
 
 function openImageDialog({ src, title, path }) {
@@ -2184,11 +2223,8 @@ function renderViewModes(route = state.selectedRoute) {
     return;
   }
   const modes = routeViewModes(route);
-  const hasOverviewChase = routeHasOverviewChase(route, modes);
   const activeView = state.activeView || "overview";
-  visualGrid.className = `view-grid mode-${activeView}${
-    hasOverviewChase ? " has-overview-chase" : " no-overview-chase"
-  }`;
+  visualGrid.className = `view-grid mode-${activeView}`;
 
   document.querySelectorAll(".view-mode").forEach((button) => {
     const enabled = modes.has(button.dataset.view);
@@ -2216,12 +2252,20 @@ function routeViewModes(route) {
   const modes = new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
   modes.add("runtime_map");
   modes.add("topdown");
-  modes.add("tasks");
+  if (backgroundTaskViewAvailable()) {
+    modes.add("tasks");
+  }
   return modes;
 }
 
-function routeHasOverviewChase(route, modes = routeViewModes(route)) {
-  return Boolean(route && route.resource_kind !== "physical_robot" && modes.has("chase"));
+function backgroundTaskViewAvailable() {
+  const tasks = (state.runtime && state.runtime.tasks) || [];
+  const summary = (state.runtime && state.runtime.summary) || {};
+  return Number(summary.active || tasks.length || 0) > 0 || state.activeView === "tasks";
+}
+
+function routeHasView(route, view) {
+  return new Set((route && route.view_modes) || []).has(view);
 }
 
 function isAgibotRoute(route) {
@@ -2251,13 +2295,7 @@ function providerProfileLabel(profile, route = state.selectedRoute) {
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
-    const panels = new Set(["fpv", "map", "runtime_map", "topdown"]);
-    if (routeHasOverviewChase(route, modes)) {
-      panels.add("chase");
-    } else {
-      panels.add("blank-chase");
-    }
-    return panels;
+    return new Set(["fpv", "map", "runtime_map", "topdown"]);
   }
   if (!modes.has(view)) {
     return new Set(["fpv", "map", "runtime_map"]);

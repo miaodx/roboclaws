@@ -533,7 +533,7 @@ pre,
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "fpv map"
-    "chase topdown";
+    "runtime_map topdown";
 }
 
 .mode-overview [data-panel="map"] {
@@ -544,19 +544,12 @@ pre,
   grid-area: fpv;
 }
 
-.mode-overview [data-panel="chase"],
-.mode-overview [data-panel="blank-chase"] {
-  grid-area: chase;
+.mode-overview [data-panel="runtime_map"] {
+  grid-area: runtime_map;
 }
 
 .mode-overview [data-panel="topdown"] {
   grid-area: topdown;
-}
-
-.blank-panel {
-  border-color: transparent;
-  background: transparent;
-  pointer-events: none;
 }
 
 .mode-fpv,
@@ -1051,11 +1044,7 @@ dialog pre {
     grid-template-areas:
       "fpv"
       "map"
-      "chase"
+      "runtime_map"
       "topdown";
-  }
-
-  .blank-panel {
-    min-height: 220px;
   }
 }
