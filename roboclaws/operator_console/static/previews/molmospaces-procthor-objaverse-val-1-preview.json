@@ -1,12 +1,12 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-15T15:48:46Z",
+  "generated_at": "2026-06-24T10:03:00Z",
+  "map_bundle_dir": "assets/maps/molmospaces/procthor-objaverse-val/1",
   "render_resolution": {
     "height": 560,
     "width": 900
   },
   "renderer": "molmospaces_subprocess_mujoco",
-  "room_count": 0,
   "scene_index": 1,
   "scene_source": "procthor-objaverse-val",
   "schema": "operator_console_scene_preview_v1",
@@ -33,17 +33,17 @@
         "schema": "mujoco_fixed_camera_diagnostics_v1",
         "status": "ready",
         "world_position": [
-          9.5135,
-          8.113,
+          8.727344,
+          11.44041,
           2.705
         ],
         "world_xmat_rowmajor": [
-          1.0,
-          0.0,
-          -0.0,
-          -0.0,
-          0.707141,
-          -0.707073,
+          -0.803584,
+          0.420884,
+          -0.420844,
+          -0.595192,
+          -0.568247,
+          0.568192,
           0.0,
           0.707073,
           0.707141
@@ -56,26 +56,29 @@
         "channel_extrema_rgb": [
           [
             0,
-            230
+            241
           ],
           [
             0,
-            227
+            241
           ],
           [
             0,
-            227
+            241
           ]
         ],
+        "edge_fraction_over_16": 0.13675,
+        "edge_fraction_over_8": 0.390062,
         "height": 560,
-        "max_channel_range": 230.0,
-        "max_stddev": 49.916,
+        "max_channel_range": 241.0,
+        "max_stddev": 62.146,
         "mean_rgb": [
-          169.392,
-          189.489,
-          199.716
+          119.437,
+          98.441,
+          74.053
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 2254,
         "visual_status": "reviewable",
         "width": 900
       },
@@ -85,7 +88,7 @@
       "selection_policy": "first_reviewable_public_waypoint_fallback_to_first",
       "selection_status": "first_waypoint_reviewable",
       "view": "chase_camera",
-      "waypoint_id": "generated_exploration_001"
+      "waypoint_id": "room_2_inspection"
     },
     "fpv": {
       "camera": "robot_0/head_camera",
@@ -108,20 +111,20 @@
         "schema": "mujoco_fixed_camera_diagnostics_v1",
         "status": "ready",
         "world_position": [
-          9.5135,
-          9.495816,
-          1.547075
+          9.555017,
+          10.322947,
+          1.52815
         ],
         "world_xmat_rowmajor": [
-          1.0,
-          0.0,
+          -0.803584,
+          0.306224,
+          -0.510373,
+          -0.595192,
+          -0.413441,
+          0.689067,
           -0.0,
-          -0.0,
-          0.247404,
-          -0.968912,
-          -0.0,
-          0.968912,
-          0.247404
+          0.857493,
+          0.514496
         ],
         "zfar": 50.0,
         "znear": 0.001
@@ -129,27 +132,30 @@
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
-            12,
-            241
+            0,
+            183
           ],
           [
-            9,
-            241
+            0,
+            157
           ],
           [
-            9,
-            241
+            0,
+            157
           ]
         ],
+        "edge_fraction_over_16": 0.106313,
+        "edge_fraction_over_8": 0.3685,
         "height": 560,
-        "max_channel_range": 232.0,
-        "max_stddev": 55.055,
+        "max_channel_range": 183.0,
+        "max_stddev": 54.028,
         "mean_rgb": [
-          149.957,
-          148.709,
-          142.59
+          94.946,
+          80.855,
+          64.509
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 1916,
         "visual_status": "reviewable",
         "width": 900
       },
@@ -157,7 +163,7 @@
       "path": "molmospaces-procthor-objaverse-val-1-fpv.png",
       "provenance": "mujoco_robot_head_camera_first_public_waypoint",
       "view": "raw_fpv",
-      "waypoint_id": "generated_exploration_001"
+      "waypoint_id": "room_2_inspection"
     },
     "map": {
       "alignment_status": "source_map_frame_preview",
@@ -165,27 +171,30 @@
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
-            15,
-            246
+            8,
+            254
           ],
           [
-            23,
-            248
+            40,
+            254
           ],
           [
-            11,
-            247
+            30,
+            255
           ]
         ],
+        "edge_fraction_over_16": 0.165,
+        "edge_fraction_over_8": 0.199,
         "height": 560,
-        "max_channel_range": 236.0,
-        "max_stddev": 27.302,
+        "max_channel_range": 246.0,
+        "max_stddev": 25.816,
         "mean_rgb": [
-          229.611,
-          232.091,
-          233.366
+          233.865,
+          241.241,
+          246.324
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 708,
         "visual_status": "reviewable",
         "width": 900
       },
@@ -228,15 +237,18 @@
             241
           ]
         ],
+        "edge_fraction_over_16": 0.355875,
+        "edge_fraction_over_8": 0.528,
         "height": 560,
         "max_channel_range": 241.0,
-        "max_stddev": 67.214,
+        "max_stddev": 67.025,
         "mean_rgb": [
-          116.549,
-          99.645,
-          84.406
+          116.282,
+          99.429,
+          84.266
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 8990,
         "visual_status": "reviewable",
         "width": 900
       },
@@ -263,9 +275,8 @@
       },
       "view": "topdown_scene_render",
       "visual_role": "topdown_scene_render",
-      "waypoint_id": "generated_exploration_001"
+      "waypoint_id": "room_2_inspection"
     }
   },
-  "waypoint_count": 0,
   "world_id": "molmospaces/procthor-objaverse-val/1"
 }

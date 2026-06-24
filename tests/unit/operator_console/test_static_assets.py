@@ -11,6 +11,7 @@ from roboclaws.launch.worlds import (
 )
 
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _assert_contains_all(body: str, snippets: tuple[str, ...]) -> None:
@@ -267,18 +268,13 @@ def _assert_molmospaces_preview_files(preview_dir: Path) -> list[str]:
     molmospaces_preview_files = sorted(
         path.name
         for path in preview_dir.glob("molmospaces-*.png")
-        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
+        if path.name in expected_preview_files
     )
     assert molmospaces_preview_files == expected_preview_files
     return molmospaces_preview_files
 
 
 def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
-    metadata_files = sorted(
-        path.name
-        for path in preview_dir.glob("molmospaces-*-preview.json")
-        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
-    )
     expected_metadata_files = sorted(
         {
             *(
@@ -292,10 +288,16 @@ def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
             ),
         }
     )
+    metadata_files = sorted(
+        path.name
+        for path in preview_dir.glob("molmospaces-*-preview.json")
+        if path.name in expected_metadata_files
+    )
     assert metadata_files == expected_metadata_files
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
+        assert set(preview_by_view) == {"fpv", "map", "chase", "topdown"}
         _assert_preview_png_files_exist(preview_dir, preview_by_view)
         scene_slug = Path(preview_by_view["fpv"]).name.rsplit("-", 1)[0]
         metadata_path = preview_dir / f"{scene_slug}-preview.json"
@@ -319,9 +321,16 @@ def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
 
 
 def _assert_preview_png_files_exist(preview_dir: Path, preview_by_view: dict[str, str]) -> None:
-    for view_name in ("fpv", "map", "chase", "topdown"):
-        path = preview_dir / Path(preview_by_view[view_name]).name
-        assert path.is_file()
+    for view_name, asset_path in preview_by_view.items():
+        if asset_path.startswith("/previews/"):
+            path = preview_dir / Path(asset_path).name
+        elif asset_path.startswith("/asset-previews/maps/"):
+            path = REPO_ROOT / "assets" / "maps" / asset_path.removeprefix(
+                "/asset-previews/maps/"
+            )
+        else:
+            raise AssertionError(f"unsupported preview asset path: {asset_path}")
+        assert path.is_file(), view_name
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 

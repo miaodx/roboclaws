@@ -12,7 +12,7 @@ SCENE_SAMPLER_SELECTION_STRATEGY = (
 )
 
 SOURCE_UI_CANDIDATE_INDICES: dict[str, tuple[int, ...]] = {
-    "procthor-10k-val": (0, 2, 3, 5, 9),
+    "procthor-10k-val": (0, 10, 11, 12, 13, 15),
     "procthor-objaverse-val": (0, 1, 4, 10),
 }
 
@@ -28,6 +28,11 @@ SOURCE_SELECTION_ROOM_COUNTS: dict[str, dict[int, int]] = {
         3: 5,
         5: 4,
         9: 10,
+        10: 4,
+        11: 4,
+        12: 10,
+        13: 4,
+        15: 10,
     },
 }
 

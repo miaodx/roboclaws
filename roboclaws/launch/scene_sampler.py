@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.launch.map_bundles import (
+    SIM_MAP_BUNDLE_ASSET_ROOT,
+    molmospaces_nav2_map_bundle_path,
+)
 from roboclaws.launch.scene_sampler_prefilter import (
     scene_only_prefilter_report as _scene_only_prefilter_report,
 )
@@ -1116,9 +1120,18 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
 def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
     metadata = scanner_metadata(source=source, scene_index=scene_index)
     preview = _ready_row_preview_metadata(source=source, scene_index=scene_index)
+    bundle_counts = _base_metric_map_bundle_counts(source=source, scene_index=scene_index)
     room_ids = _room_ids(preview)
-    room_count = int((metadata or {}).get("room_count") or len(room_ids))
-    waypoint_count = int((metadata or {}).get("waypoint_count") or _waypoint_count(preview))
+    room_count = int(
+        (metadata or {}).get("room_count")
+        or bundle_counts[0]
+        or len(room_ids)
+    )
+    waypoint_count = int(
+        (metadata or {}).get("waypoint_count")
+        or bundle_counts[1]
+        or _waypoint_count(preview)
+    )
     view_statuses = _view_statuses(preview)
     all_views_reviewable = all(
         view_statuses.get(view) == "reviewable" for view in _required_views()
@@ -1311,6 +1324,12 @@ def _preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
 def _ready_row_preview_assets(*, source: str, scene_index: int) -> tuple[tuple[str, str], ...]:
     if uses_legacy_preview_assets(source=source, scene_index=scene_index):
         return _preview_assets(scene_index)
+    static_assets = _static_console_preview_assets(source=source, scene_index=scene_index)
+    if static_assets:
+        return static_assets
+    bundle_preview = _base_metric_map_bundle_preview_asset(source=source, scene_index=scene_index)
+    if bundle_preview and scene_index in source_ui_indices(source):
+        return (("map", bundle_preview),)
     if scene_index in source_ui_indices(source):
         slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
         return tuple((view, f"/previews/{slug}-{view}.png") for view in _required_views())
@@ -1323,6 +1342,49 @@ def _ready_row_preview_assets(*, source: str, scene_index: int) -> tuple[tuple[s
 
 def _required_views() -> tuple[str, ...]:
     return ("fpv", "map", "chase", "topdown")
+
+
+def _static_console_preview_assets(
+    *,
+    source: str,
+    scene_index: int,
+) -> tuple[tuple[str, str], ...]:
+    slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
+    assets = tuple((view, f"/previews/{slug}-{view}.png") for view in _required_views())
+    if all((_PREVIEW_ROOT / Path(path).name).is_file() for _view, path in assets):
+        return assets
+    return ()
+
+
+def _base_metric_map_bundle_counts(*, source: str, scene_index: int) -> tuple[int, int]:
+    bundle_dir = molmospaces_nav2_map_bundle_path(
+        scene_source=source,
+        scene_index=scene_index,
+    )
+    semantics_path = _repo_root() / bundle_dir / "semantics.json"
+    try:
+        semantics = read_json_object(semantics_path, label="Base Metric Map semantics")
+    except (FileNotFoundError, ValueError):
+        return (0, 0)
+    contract = semantics.get("base_metric_map_contract")
+    if not isinstance(contract, dict):
+        return (0, 0)
+    return (
+        int(contract.get("navigation_area_count") or 0),
+        int(contract.get("inspection_waypoint_count") or 0),
+    )
+
+
+def _base_metric_map_bundle_preview_asset(*, source: str, scene_index: int) -> str:
+    bundle_dir = molmospaces_nav2_map_bundle_path(
+        scene_source=source,
+        scene_index=scene_index,
+    )
+    preview_path = _repo_root() / bundle_dir / "preview.png"
+    if not preview_path.is_file():
+        return ""
+    asset_relative = bundle_dir.relative_to(SIM_MAP_BUNDLE_ASSET_ROOT)
+    return f"/asset-previews/maps/{asset_relative.as_posix()}/preview.png"
 
 
 def _family_split(scene_source: str) -> tuple[str, str]:
@@ -1890,10 +1952,8 @@ def _validate_ready_row(row: dict[str, Any], *, label_manifest: dict[str, Any]) 
     if not _labels_for_scene(label_manifest, source=source, scene_index=index):
         raise ValueError(f"{source}/{index} lacks prepared room labels")
     views = {item.get("view"): item.get("path") for item in row.get("preview_assets") or []}
-    for view in _required_views():
-        path = views.get(view)
-        if not path:
-            raise ValueError(f"{source}/{index} lacks {view} preview path")
+    if not views.get("map"):
+        raise ValueError(f"{source}/{index} lacks Base Metric Map preview path")
 
 
 def _validate_no_heuristic_category_provenance(row: dict[str, Any]) -> None:

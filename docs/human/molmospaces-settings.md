@@ -65,17 +65,19 @@ The operator console uses the source-aware MolmoSpaces sampler for its default
 household scene rail. The visible first-slice UI set is intentionally small and
 is selected by a deterministic seeded-random policy that prefers distinct public
 room counts within each source. The current UI set is
+`molmospaces/val_0`, `molmospaces/procthor-10k-val/11`,
+`molmospaces/procthor-10k-val/15`,
 `molmospaces/procthor-objaverse-val/0`,
 `molmospaces/procthor-objaverse-val/1`, and
-`molmospaces/procthor-objaverse-val/10` from
-`scene_source=procthor-objaverse-val`. Existing launch aliases such as
-`molmospaces/val_1`, `val_3`, `val_4`, `val_7`, and `val_9` remain explicitly
-launchable as `procthor-10k-val` aliases, but they are hidden from the default
-console scene rail unless admitted by the sampler.
+`molmospaces/procthor-objaverse-val/10`. `molmospaces/val_0` is the legacy
+alias for `scene_source=procthor-10k-val`, scene index `0`. Existing launch
+aliases such as `molmospaces/val_1`, `val_3`, `val_4`, `val_7`, and `val_9`
+remain explicitly launchable as `procthor-10k-val` aliases, but they are hidden
+from the default console scene rail unless admitted by the sampler.
 
 The eval stress projection is broader than the UI projection. It currently
-admits five prepared `procthor-10k-val` samples
-(`10`, `11`, `12`, `13`, `15`) and ten prepared
+admits six prepared `procthor-10k-val` samples
+(`0`, `10`, `11`, `12`, `13`, `15`) and ten prepared
 `procthor-objaverse-val` samples (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`,
 `13`, `14`). `procthor-10k-val` remains partial until more rows clear scanner
 gates. `ithor` and `holodeck-objaverse-val` are rejected exhausted under the
@@ -84,6 +86,17 @@ step. `ithor` candidate evidence for indices `1..12` and
 `holodeck-objaverse-val` candidate evidence for indices `0..19` fail with
 `fewer_than_three_public_navigation_areas`, so they should not be scanned again
 without new human curation or an intentional gate change.
+
+After any scene-catalog or map-bundle change, run:
+
+```bash
+.venv/bin/python scripts/operator_console/check_scene_catalog_sync.py
+```
+
+If it fails, it prints the exact scene-sampler fixture or preview asset that is
+out of sync. The guard intentionally does not rewrite unrelated household eval
+suites such as cleanup, map-build consumer, or open-ended goals; those move only
+when their own sample contracts change.
 
 The readiness exporter also writes
 `scene_sampler_candidate_profile.json`, a metadata-first worklist for all four

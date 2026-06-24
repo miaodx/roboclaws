@@ -9748,47 +9748,8 @@
         },
         "procthor-10k-val": {
           "blocked_count": 0,
-          "blocked_or_rejected_row_count": 8,
+          "blocked_or_rejected_row_count": 7,
           "blocked_rows": [
-            {
-              "backend": "mujoco",
-              "blocked_reason": "fewer_than_three_public_navigation_areas",
-              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
-              "category_provenance": "prepared_visual_label_manifest",
-              "coverage_score": 0.0,
-              "failure_class": "map_actionability_failure",
-              "generator_version": "2026-06-15.preview-readiness-v1",
-              "lanes": [],
-              "legacy_world_id": "molmospaces/val_0",
-              "preview_assets": [
-                {
-                  "path": "/previews/molmospaces-val_0-fpv.png",
-                  "view": "fpv"
-                },
-                {
-                  "path": "/previews/molmospaces-val_0-map.png",
-                  "view": "map"
-                },
-                {
-                  "path": "/previews/molmospaces-val_0-chase.png",
-                  "view": "chase"
-                },
-                {
-                  "path": "/previews/molmospaces-val_0-topdown.png",
-                  "view": "topdown"
-                }
-              ],
-              "quality_score": 1.0,
-              "readiness_status": "rejected",
-              "room_count": 0,
-              "scene_family": "procthor-10k",
-              "scene_index": 0,
-              "scene_source": "procthor-10k-val",
-              "scene_split": "val",
-              "selected_reason": "fewer_than_three_public_navigation_areas",
-              "waypoint_count": 0,
-              "world_id": "molmospaces/val_0"
-            },
             {
               "backend": "mujoco",
               "blocked_reason": "fewer_than_three_public_navigation_areas",
@@ -10063,11 +10024,12 @@
               "world_id": "molmospaces/val_9"
             }
           ],
-          "needed_count": 5,
-          "partial_gap_count": 5,
-          "ready_count": 5,
-          "rejected_count": 8,
+          "needed_count": 4,
+          "partial_gap_count": 4,
+          "ready_count": 6,
+          "rejected_count": 7,
           "sample_ids": [
+            "scene_sampler.procthor-10k-val.0.map_build",
             "scene_sampler.procthor-10k-val.10.map_build",
             "scene_sampler.procthor-10k-val.11.map_build",
             "scene_sampler.procthor-10k-val.12.map_build",
@@ -10413,27 +10375,29 @@
             "ui": {
               "candidate_indices": [
                 0,
-                2,
-                3,
-                5,
-                9
+                10,
+                11,
+                12,
+                13,
+                15
               ],
               "candidate_room_counts": {
                 "0": 7,
-                "2": 10,
-                "3": 5,
-                "5": 4,
-                "9": 10
+                "10": 4,
+                "11": 4,
+                "12": 10,
+                "13": 4,
+                "15": 10
               },
               "lane": "ui",
               "selected_indices": [
-                2,
-                5,
+                11,
+                15,
                 0
               ],
               "selected_room_counts": [
-                10,
                 4,
+                10,
                 7
               ],
               "selection_seed": "2026-06-16.source-diverse-selection-v1",
@@ -10532,15 +10496,15 @@
         "ui_target_per_scene_source": 3
       },
       "summary": {
-        "blocked_or_rejected_row_count": 262,
+        "blocked_or_rejected_row_count": 261,
         "blocked_row_count": 0,
         "blocked_source_count": 0,
         "complete_source_count": 1,
         "partial_source_count": 1,
-        "ready_sample_count": 15,
-        "rejected_row_count": 262,
+        "ready_sample_count": 16,
+        "rejected_row_count": 261,
         "rejected_source_count": 2,
-        "remaining_sample_count": 25,
+        "remaining_sample_count": 24,
         "source_count": 4,
         "target_sample_count": 40
       }
@@ -10554,6 +10518,7 @@
     "outcome"
   ],
   "sample_ids": [
+    "scene_sampler.procthor-10k-val.0.map_build",
     "scene_sampler.procthor-10k-val.10.map_build",
     "scene_sampler.procthor-10k-val.11.map_build",
     "scene_sampler.procthor-10k-val.12.map_build",
@@ -10571,6 +10536,7 @@
     "scene_sampler.procthor-objaverse-val.14.map_build"
   ],
   "sample_refs": [
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_10_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_11_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_12_map_build.json",

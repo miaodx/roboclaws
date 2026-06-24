@@ -776,6 +776,8 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
 def _assert_registered_scene_preview_assets(registered_previews: set[str]) -> None:
     assert "molmospaces-procthor-objaverse-val-10-map.png" in registered_previews
     assert "molmospaces-procthor-objaverse-val-10-preview.json" in registered_previews
+    assert "molmospaces-procthor-10k-val-11-map.png" in registered_previews
+    assert "molmospaces-procthor-10k-val-11-preview.json" in registered_previews
     assert "b1-map12-map.png" not in registered_previews
     assert "b1-map12-topdown.png" not in registered_previews
     assert "b1-map12-fpv.png" in registered_previews
@@ -790,6 +792,9 @@ def _assert_scene_preview_png_assets(base_url: str) -> None:
         "molmospaces-procthor-objaverse-val-10-map.png",
         "molmospaces-procthor-objaverse-val-10-topdown.png",
         "molmospaces-procthor-objaverse-val-10-chase.png",
+        "molmospaces-procthor-10k-val-11-map.png",
+        "molmospaces-procthor-10k-val-11-topdown.png",
+        "molmospaces-procthor-10k-val-11-chase.png",
         "b1-map12-fpv.png",
         "b1-map12-chase.png",
     ):
