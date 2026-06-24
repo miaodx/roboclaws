@@ -328,9 +328,11 @@ scoring data only; they are not included in service requests, predictions JSONL,
 MCP responses, or Agent View payloads.
 
 For real proposer probes, install optional sidecar dependencies and weights
-explicitly into the dedicated sidecar environment, then run the service in real
-adapter mode. This is the route to use before claiming cleanup or map-build
-behavior from GroundingDINO evidence:
+explicitly into the dedicated sidecar environment. Product
+`camera_labeler=grounding-dino` runs auto-start the local real-router sidecar
+when the default `VISUAL_GROUNDING_BASE_URL` is not already reachable. The
+sidecar defaults to DINO base recall (`IDEA-Research/grounding-dino-base`,
+`box_threshold=0.25`, `text_threshold=0.20`, device and dtype `auto`).
 
 ```bash
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
@@ -343,13 +345,8 @@ print("transformers", transformers.__version__)
 print("ultralytics", ultralytics.__version__)
 PY
 
-VISUAL_GROUNDING_DEVICE=auto \
-VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
+.venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline real-router --adapter-mode real
 
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
   .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
@@ -368,9 +365,10 @@ The `camera-grounded-labels` product route runs a fail-fast readiness check
 against the configured sidecar before starting the simulator or agent. A
 contract-only `--pipeline grounding-dino` service that returns
 `adapter_unavailable` is blocked up front; it should not be used as evidence for
-cleanup or map-build behavior. Each product run records
-`visual_grounding_readiness.json` in its artifact directory with the resolved
-stage status and model id.
+cleanup or map-build behavior. Set
+`ROBOCLAWS_AUTOSTART_VISUAL_GROUNDING_SIDECAR=0` to disable local auto-start.
+Each product run records `visual_grounding_readiness.json` in its artifact
+directory with the resolved stage status and model id.
 
 To exercise only the HTTP contract without real model dependencies, start the
 configurable service in its default mode. It should return explicit unavailable

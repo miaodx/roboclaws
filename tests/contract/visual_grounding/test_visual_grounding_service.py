@@ -259,6 +259,45 @@ def test_product_readiness_accepts_real_grounding_dino_sidecar(monkeypatch) -> N
     assert result["stage_statuses"][0]["model_id"] == "fake-real-model"
 
 
+def test_grounding_dino_real_mode_defaults_to_base_recall(monkeypatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_load_grounding_dino(
+        model_id: str,
+        requested_device: str,
+        requested_dtype: str,
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
+        seen["model_id"] = model_id
+        seen["requested_device"] = requested_device
+        seen["requested_dtype"] = requested_dtype
+        raise adapters.VisualGroundingDeviceError("stop before model inference")
+
+    monkeypatch.delenv("VISUAL_GROUNDING_DINO_MODEL_ID", raising=False)
+    monkeypatch.delenv("VISUAL_GROUNDING_DINO_BOX_THRESHOLD", raising=False)
+    monkeypatch.delenv("VISUAL_GROUNDING_DINO_TEXT_THRESHOLD", raising=False)
+    monkeypatch.delenv("VISUAL_GROUNDING_DEVICE", raising=False)
+    monkeypatch.delenv("VISUAL_GROUNDING_TORCH_DTYPE", raising=False)
+    monkeypatch.setattr(adapters, "_load_grounding_dino", fake_load_grounding_dino)
+
+    response = adapters.visual_grounding_service_response(
+        payload=_request("grounding-dino", image=_jpeg_image_payload()),
+        configured_pipeline_id="grounding-dino",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "failed"
+    assert seen == {
+        "model_id": "IDEA-Research/grounding-dino-base",
+        "requested_device": "auto",
+        "requested_dtype": "auto",
+    }
+    stage = response["pipeline"]["stages"][0]
+    assert stage["model_id"] == "IDEA-Research/grounding-dino-base"
+    assert stage["runtime_parameters"]["box_threshold"] == 0.25
+    assert stage["runtime_parameters"]["text_threshold"] == 0.2
+
+
 def test_real_mode_rejects_retired_refiner_pipeline_without_fake_success() -> None:
     response = adapters.visual_grounding_service_response(
         payload=_request("grounding-dino+mimo-v2.5"),
@@ -308,7 +347,7 @@ def test_real_mode_reports_grounding_dino_device_unavailable(monkeypatch) -> Non
         requested_device: str,
         requested_dtype: str,
     ) -> tuple[Any, Any, Any, dict[str, Any]]:
-        assert model_id == "IDEA-Research/grounding-dino-tiny"
+        assert model_id == "IDEA-Research/grounding-dino-base"
         assert requested_device == "cuda"
         assert requested_dtype == "float16"
         raise adapters.VisualGroundingDeviceError("cuda unavailable")

@@ -271,14 +271,13 @@ http://127.0.0.1:18880/v1/visual-grounding/candidates
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
   uv sync --project sidecars/visual-grounding --extra cuda
 
-VISUAL_GROUNDING_DEVICE=auto \
-VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
+.venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline real-router --adapter-mode real
 ```
+
+默认使用 DINO base recall；只有本机需要临时覆盖模型、阈值、device 或 dtype 时才设置
+`VISUAL_GROUNDING_DINO_*`、`VISUAL_GROUNDING_DEVICE` 或
+`VISUAL_GROUNDING_TORCH_DTYPE`。
 
 如果只是验证 HTTP contract，使用同一个 detector sidecar；缺少真实依赖时它应留下
 missing-sidecar / adapter-unavailable 证据，而不是伪造候选：
