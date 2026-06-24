@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
 from roboclaws.household import agent_view as agent_view_module
+from roboclaws.household import realworld_runtime_map_targets
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -1286,6 +1288,28 @@ def _assert_base_metric_agent_view_observed_object_anchors(
     assert agent_view_module.observed_objects(agent_view)[0]["support_estimate"][
         "fixture_id"
     ].startswith("anchor_fixture_")
+
+
+def test_public_fixture_anchor_allocator_skips_prior_anchor_id_collisions() -> None:
+    anchor_mapping = {
+        **{f"fixture_{index:03d}": f"anchor_fixture_{index:03d}" for index in range(1, 10)},
+        "shelf_01": "anchor_fixture_011",
+    }
+    contract = SimpleNamespace(
+        _runtime_map_anchor_priors=[
+            {"anchor_id": f"anchor_fixture_{index:03d}"} for index in range(1, 17)
+        ],
+        _public_anchor_ids_by_private_fixture_id=anchor_mapping,
+    )
+
+    anchor_id = realworld_runtime_map_targets.public_anchor_id_for_fixture(
+        contract,
+        "bed_01",
+    )
+
+    public_ids = list(anchor_mapping.values())
+    assert anchor_id == "anchor_fixture_017"
+    assert len(public_ids) == len(set(public_ids))
 
 
 def test_target_candidates_force_adaptive_public_reinspection_path() -> None:
