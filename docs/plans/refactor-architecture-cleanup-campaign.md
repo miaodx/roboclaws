@@ -105,6 +105,7 @@ Surface metrics:
 | Split operator-console assertion helpers | 0 | 1 | 0 | 0 | preserved |
 | Deepen MolmoSpaces category rules | 0 | 1 | 0 | 1 | preserved |
 | Move Codex live timing to agent owner | 0 | 1 | 1 | 0 | preserved |
+| Merge operator-console source-error helpers | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -179,6 +180,10 @@ Checked and parked:
   interface. Slice 32 moved only that internal timing interpretation into the
   agent owner and preserved the script path, tested error labels, and output
   schema.
+- Post-`7cd1b445` discovery found one more bounded same-owner merge in
+  `roboclaws.operator_console.interactions`: operator message and resume JSONL
+  source-error formatting used parallel private helpers. Slice 33 merged those
+  helpers while preserving source labels and existing error text.
 
 The campaign is reopened from the quality-ratchet proof surface. Continue with
 the clear current violations above until focused proof passes, the queue is
@@ -836,6 +841,27 @@ Slice 28 stop.
   violations. The full quality ratchet still fails on broader oversized-module
   baseline drift, but the Codex runner residual decreased from 1455 to 1393
   lines.
+
+- 2026-06-25: Merged duplicate operator-message and operator-resume JSONL
+  source-error formatting helpers inside
+  `roboclaws.operator_console.interactions`. The interactions owner still
+  exposes the same `operator_messages` / `operator_resume_requests` source
+  labels and user-facing error messages, while `interactions.py` shrank from
+  895 to 881 lines.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_interactions.py::test_operator_message_state_surfaces_malformed_source_errors tests/unit/operator_console/test_interactions.py::test_operator_message_state_surfaces_non_object_source_errors tests/unit/operator_console/test_interactions.py::test_operator_messages_keep_valid_rows_with_source_errors -q
+  .venv/bin/ruff check roboclaws/operator_console/interactions.py tests/unit/operator_console/test_interactions.py
+  .venv/bin/ruff format --check roboclaws/operator_console/interactions.py tests/unit/operator_console/test_interactions.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 40
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary still reports zero Ruff complexity
+  violations. The full quality ratchet still fails on broader oversized-module
+  baseline drift, but `interactions.py` decreased from 895 to 881 lines.
 
 ## Parked Candidates
 

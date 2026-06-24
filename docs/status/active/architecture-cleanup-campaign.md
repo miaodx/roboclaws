@@ -8,9 +8,9 @@ refactor slices until the stop condition is met.
 
 Current slice:
 
-- Codex live-run timing owner slice complete. Current quality ratchet summary
-  has no Ruff complexity rows; continue with fresh architecture discovery
-  before touching broader oversized-module baseline drift.
+- Operator-console source-error helper merge complete. Current quality ratchet
+  summary has no Ruff complexity rows; continue with fresh architecture
+  discovery before touching broader oversized-module baseline drift.
 
 Last proven evidence:
 
@@ -121,6 +121,14 @@ Last proven evidence:
   tests, active OpenAI Agents timing tests, touched-file Ruff, touched-file
   format check, ratchet summary, and `git diff --check` passed. The full
   ratchet still fails only on broader oversized-module baseline drift.
+- Post-`7cd1b445` discovery found a small same-owner duplicate stack in
+  `roboclaws.operator_console.interactions`: operator message and resume JSONL
+  source errors used parallel formatter helpers. Slice 33 merged that private
+  formatting into one parameterized helper while preserving source labels and
+  user-facing error text. Focused interaction source-error tests, touched-file
+  Ruff, touched-file format check, ratchet summary, and `git diff --check`
+  passed. `interactions.py` shrank from 895 to 881 lines; the full ratchet
+  still fails only on broader oversized-module baseline drift.
 
 Completed slice batch:
 
@@ -194,6 +202,8 @@ Completed slice batch:
   ordered table and added interface-level priority/fallback coverage.
 - Slice 32: moved Codex live-run timing calculation and MCP trace timing reads
   into the existing agent-layer live timing owner.
+- Slice 33: merged duplicate operator-console JSONL source-error formatting in
+  the interactions owner.
 
 Next proof:
 
@@ -252,7 +262,7 @@ Parked work:
   `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
   Treat broader oversized-module drift as architecture pressure and prefer
   safe owner-local shrink slices before any baseline refresh.
-- Latest quality-ratchet residual after Slice 32: no current Ruff complexity
+- Latest quality-ratchet residual after Slice 33: no current Ruff complexity
   rows remain. Remaining full-ratchet failures are oversized-module baseline
   drift across household, launch, operator-console, scripts, and large tests;
   select only owner-local shrink slices that delete, merge, canonicalize, or
