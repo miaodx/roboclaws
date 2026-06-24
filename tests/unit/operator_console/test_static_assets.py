@@ -259,7 +259,7 @@ def _assert_scene_preview_app_wiring(app: str) -> None:
     assert '"runtime_map",' in app
     assert 'data-view-role="${escapeHtml(visualRole)}"' in app
     assert 'data-artifact-source-family="${escapeHtml(sourceFamily)}"' in app
-    assert "No top-down scene preview is available." in app
+    assert "No Top2Down scene preview is available." in app
     assert "state.activeRunId" in app
     assert "Grounding will appear after a camera-grounded run starts." in app
 
@@ -423,11 +423,14 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="blank-chase"' not in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
-    assert ">Base Map<" in html
-    assert ">Runtime Map<" in html
+    assert ">Metric Map<" in html
+    assert ">Base Map<" not in html
+    assert ">Runtime Map<" not in html
     assert ">Semantic Map<" not in html
-    assert ">Top-down<" in html
+    assert ">Top2Down<" in html
+    assert ">Top-down<" not in html
     assert 'data-panel-title="fpv"' in html
+    assert 'data-panel-title="chase"' in html
     assert 'data-panel="grounding"' in html
     assert 'data-panel="grounding"' not in html.split('class="view-grid mode-overview"', 1)[0]
     assert "topdown-frame" in html
@@ -440,21 +443,24 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert "routeHasOverviewChase" not in app
     assert 'resource_kind !== "physical_robot"' not in app
     overview_body = app.split('if (view === "overview") {', 1)[1].split("\n  }", 1)[0]
-    assert 'new Set(["fpv", "map", "runtime_map", "topdown"])' in overview_body
+    assert 'new Set(["fpv", "map", "chase", "topdown"])' in overview_body
     assert '"outputs"' not in overview_body
     assert '"tasks"' not in overview_body
     assert '"grounding"' not in overview_body
-    assert '"chase"' not in overview_body
+    assert '"runtime_map"' not in overview_body
     assert "Missing run chase artifact" in app
+    assert "Missing Metric Map artifact" in app
+    assert "sourceAssets.runtime_map || sourceAssets.map" in app
+    assert 'routeHasView(route, "chase") ? previews.chase : null' in app
     assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
-    assert '"runtime_map topdown"' in css
+    assert '"chase topdown"' in css
     assert "object-position: center center" in css
     assert ".image-panel > .image-frame" in css
     assert "aspect-ratio: auto" in css
-    assert '.mode-overview [data-panel="runtime_map"]' in css
-    assert '.mode-overview [data-panel="chase"]' not in css
+    assert '.mode-overview [data-panel="runtime_map"]' not in css
+    assert '.mode-overview [data-panel="chase"]' in css
     assert '.mode-overview [data-panel="blank-chase"]' not in css
     assert ".blank-panel" not in css
     assert "[hidden]" in css
