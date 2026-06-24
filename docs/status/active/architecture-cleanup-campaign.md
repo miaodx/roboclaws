@@ -8,9 +8,9 @@ refactor slices until the stop condition is met.
 
 Current slice:
 
-- Operator-console source-error helper merge complete. Current quality ratchet
-  summary has no Ruff complexity rows; continue with fresh architecture
-  discovery before touching broader oversized-module baseline drift.
+- PARKED after post-Slice-33 discovery pass 2. Two independent fresh passes
+  found no clear safe autonomous P1/P2 slice after shrink attempts, so the
+  campaign stop condition is met.
 
 Last proven evidence:
 
@@ -129,6 +129,22 @@ Last proven evidence:
   Ruff, touched-file format check, ratchet summary, and `git diff --check`
   passed. `interactions.py` shrank from 895 to 881 lines; the full ratchet
   still fails only on broader oversized-module baseline drift.
+- Post-`60f9fd67` discovery pass 1 checked current ratchet summary, top
+  oversized household/report/operator-console/script owners, stale/public alias
+  hits, checker legacy flags, operator-console state JSON source helpers, and
+  raw-FPV semantic aliasing. No clear safe P1/P2 slice remained after shrink
+  attempts: the hits were public migrations already parked, broad report/test
+  sprawl, legitimate artifact/link ownership, or domain-heavy visual-label
+  aliasing that needs a larger contract.
+- Post-`60f9fd67` discovery pass 2 independently checked the ratchet proof,
+  exact oversized-module failures, small script/module surfaces, repeated
+  private-helper names, text/JSON source readers, live MolmoSpaces aliases, and
+  operator-console JSONL/source helpers. The ratchet summary still reports
+  zero Ruff complexity violations, and the full ratchet still fails only on
+  oversized-module baseline drift. No implementation slice passed the campaign
+  bar: remaining candidates require public command migration, broader
+  test-suite/report restructuring, domain-contract decisions, or would only
+  move lines without deleting, merging, or canonicalizing a real concept.
 
 Completed slice batch:
 
@@ -216,7 +232,9 @@ Stop condition:
 
 - Stop for public contract migration, unavailable proof, external/hardware
   evidence, or two consecutive fresh post-HEAD no-clear-candidate handoffs.
-- Current stop reason: none; campaign is active.
+- Current stop reason: met. Post-Slice-33 discovery passes 1 and 2 found no
+  clear safe P1/P2 autonomous slice after parking public migrations and broad
+  oversized-module restructuring.
 
 No-touch scope:
 
@@ -267,3 +285,14 @@ Parked work:
   drift across household, launch, operator-console, scripts, and large tests;
   select only owner-local shrink slices that delete, merge, canonicalize, or
   clearly deepen a real owner concept.
+- No-clear pass 1 after Slice 33: public MolmoSpaces alias/checker-flag
+  migrations remain parked; `operator_console.state` already centralizes JSON
+  source errors; remaining oversized owners need broader domain contracts or
+  test-suite restructuring rather than a safe autonomous slice.
+- No-clear pass 2 after Slice 33: `run_molmospaces_scene_camera_comparison.py`
+  remains a live recipe wrapper; the small map/preparation scripts still own
+  CLI defaults or output formatting; `operator_console.jsonl_sources` and the
+  merged interaction source-error helper already cover the JSONL/source-error
+  owner; public MolmoSpaces `val_*` aliases remain documented/tested launch
+  surfaces; remaining quality-ratchet failures are oversized-module baseline
+  drift that needs a new owner-specific plan or reviewed baseline decision.

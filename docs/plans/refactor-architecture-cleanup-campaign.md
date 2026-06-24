@@ -1,6 +1,6 @@
 # Refactor: Architecture Cleanup Campaign
 
-**Status:** ACTIVE
+**Status:** PARKED
 **Created:** 2026-06-23
 **Source:** `$intuitive-reduce-entropy` saturation scan,
 `$improve-codebase-architecture` report-only review, `$intuitive-refactor`
@@ -63,6 +63,12 @@ Stop/park criteria:
 - Two consecutive post-HEAD discovery handoffs find no clear safe P1/P2 slice
   after shrink attempts.
 
+Current stop reason:
+
+- Met: post-Slice-33 discovery passes 1 and 2 found no clear safe P1/P2
+  autonomous slice after parking public migrations and broad oversized-module
+  restructuring.
+
 Discovery source:
 
 - Repo entropy saturation scan against current HEAD.
@@ -117,7 +123,7 @@ Discovery cadence:
 - Run a fresh reduce-entropy discovery handoff when the candidate queue is
   exhausted.
 
-Consecutive no-clear-candidate passes: 0
+Consecutive no-clear-candidate passes: 2
 
 ## Candidate Queue
 
@@ -140,7 +146,9 @@ Next clear candidates:
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
 need owner-specific refactors or a reviewed baseline refresh after clear new
-complexity violations are removed.
+complexity violations are removed. Post-Slice-33 discovery passes 1 and 2 found
+no further clear safe P1/P2 autonomous slice, so this campaign is parked by its
+stop condition.
 
 Checked and parked:
 
@@ -184,10 +192,24 @@ Checked and parked:
   `roboclaws.operator_console.interactions`: operator message and resume JSONL
   source-error formatting used parallel private helpers. Slice 33 merged those
   helpers while preserving source labels and existing error text.
+- Post-`60f9fd67` discovery pass 1 checked current ratchet summary, top
+  oversized household/report/operator-console/script owners, stale/public alias
+  hits, checker legacy flags, operator-console state JSON source helpers, and
+  raw-FPV semantic aliasing. It found no clear safe P1/P2 slice after shrink
+  attempts.
+- Post-`60f9fd67` discovery pass 2 independently checked the ratchet proof,
+  exact oversized-module failures, small script/module surfaces, repeated
+  private-helper names, text/JSON source readers, live MolmoSpaces aliases, and
+  operator-console JSONL/source helpers. The ratchet summary still reports
+  zero Ruff complexity violations, and the full ratchet still fails only on
+  oversized-module baseline drift. No implementation slice passed the campaign
+  bar: remaining candidates require public command migration, broader
+  test-suite/report restructuring, domain-contract decisions, or would only
+  move lines without deleting, merging, or canonicalizing a real concept.
 
-The campaign is reopened from the quality-ratchet proof surface. Continue with
-the clear current violations above until focused proof passes, the queue is
-exhausted, or the stop/park criteria apply.
+The campaign is parked from the quality-ratchet proof surface. Reopen only with
+a new accepted owner-specific plan, a public migration decision, or a reviewed
+baseline decision.
 
 The campaign resumed on explicit user instruction after the final verified
 Slice 28 stop.
