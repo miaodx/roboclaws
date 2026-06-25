@@ -38,10 +38,11 @@ vis
 
 # Local agent/model artifacts
 .worktrees/
+.claude/worktrees/
+.mimo-worktrees
 mobileclip_blt.ts
 mobileclip2_b.ts
 yoloe-*.pt
 yolov8*-world.pt
-.mimo-worktrees
 data/
 MUJOCO_LOG.TXT
