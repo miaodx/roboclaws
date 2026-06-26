@@ -44,6 +44,7 @@ from roboclaws.launch.evaluation import (
     household_intent_id_for_checker,
     merge_checker_flags,
 )
+from roboclaws.operator_console.interactions import consume_resume_request_for_runner
 from roboclaws.reports.live_performance import (
     extract_model_call_metrics,
     write_model_call_metrics_jsonl,
@@ -180,6 +181,7 @@ class LiveCodexCleanupRunner:
         self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
         self.run_lease = HouseholdLiveRunLease()
         self.operator_handoff_active = False
+        self._codex_resume_context: dict[str, Any] = {}
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
@@ -322,6 +324,16 @@ class LiveCodexCleanupRunner:
             if container_isolated
             else str(last_message_host_path)
         )
+        self._codex_resume_context = {
+            "env": env,
+            "agent_task_dir": agent_task_dir,
+            "agent_cd": agent_cd,
+            "last_message_host_path": last_message_host_path,
+            "last_message_cli_path": last_message_cli_path,
+            "turn_idle_timeout_s": _codex_turn_idle_timeout_s(
+                getattr(self.args, "codex_turn_idle_timeout_s", None)
+            ),
+        }
         for server_name in (CODEX_CLEANUP_MCP_SERVER_NAME, "roboclaws"):
             subprocess.run(
                 [self.args.codex_bin, "mcp", "remove", server_name],
@@ -350,9 +362,7 @@ class LiveCodexCleanupRunner:
             print(f"==> Codex provider for this run: {self.args.codex_provider_summary}")
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
-        turn_idle_timeout_s = _codex_turn_idle_timeout_s(
-            getattr(self.args, "codex_turn_idle_timeout_s", None)
-        )
+        turn_idle_timeout_s = self._codex_resume_context["turn_idle_timeout_s"]
         prompt = _codex_live_prompt(self.args.kickoff_prompt)
         command = [
             self.args.codex_bin,
@@ -486,7 +496,9 @@ class LiveCodexCleanupRunner:
         assert self.server_proc is not None
         print("==> waiting for operator handoff to finish")
         self._mark_timing("operator_handoff_wait_start")
-        status = self.server_proc.wait()
+        status = self._wait_for_handoff_resume_or_server_exit()
+        if status is None:
+            return self._finish_after_resume()
         self._mark_timing("server_finished")
         self.server_proc = None
 
@@ -515,6 +527,162 @@ class LiveCodexCleanupRunner:
         self._write_status("failed", 1, reason=reason)
         self._write_live_timing("failed", 1, reason=reason)
         return 1
+
+    def _wait_for_handoff_resume_or_server_exit(self) -> int | None:
+        assert self.server_proc is not None
+        while self.server_proc.poll() is None:
+            request = _claim_operator_resume_request(self.args.operator_resume_requests_path)
+            if request:
+                self._run_codex_resume(request)
+                return None
+            time.sleep(0.5)
+        return self.server_proc.wait()
+
+    def _run_codex_resume(self, request: dict[str, Any]) -> None:
+        context = self._codex_resume_context
+        if not context:
+            raise RuntimeError("Codex resume context is unavailable")
+        attempt_index = _next_codex_resume_attempt_index(self.run_dir)
+        prompt = _codex_live_prompt(_resume_prompt(self.args.kickoff_prompt, request))
+        event_path = self.run_dir / f"codex-events.resume-{attempt_index}.jsonl"
+        stderr_path = self.run_dir / f"codex.resume-{attempt_index}.stderr.log"
+        last_message_host_path = context["last_message_host_path"].with_name(
+            f"codex-last-message.resume-{attempt_index}.md"
+        )
+        last_message_cli_path = (
+            f"/workspace/task/codex-last-message.resume-{attempt_index}.md"
+            if str(context["last_message_cli_path"]).startswith("/workspace/")
+            else str(last_message_host_path)
+        )
+        command = [
+            self.args.codex_bin,
+            "exec",
+            "--json",
+            "--output-last-message",
+            last_message_cli_path,
+            *self.args.codex_model_arg,
+            FULL_PERMISSION_ARG,
+            "--cd",
+            context["agent_cd"],
+            prompt,
+        ]
+        self._write_status(
+            "running-codex-resume",
+            reason=OPERATOR_HANDOFF_REASON,
+            resume_available=False,
+            detail=str(request.get("message_id") or ""),
+        )
+        self._append_handoff_resume_attempt(
+            attempt_index=attempt_index,
+            request=request,
+            status="started",
+            event_path=event_path,
+        )
+        status = _run_and_tee(
+            command,
+            cwd=context["agent_task_dir"],
+            stdout_path=event_path,
+            stderr_path=stderr_path,
+            env=context["env"],
+            idle_timeout_s=context["turn_idle_timeout_s"],
+        )
+        if last_message_host_path.is_file():
+            shutil.copyfile(
+                last_message_host_path,
+                self.run_dir / f"codex-last-message.resume-{attempt_index}.md",
+            )
+        self.live_timing["codex_events"] = _combined_codex_event_summary(
+            sorted(self.run_dir.glob("codex-events*.jsonl"))
+        )
+        if status != 0 and not (self.run_dir / "run_result.json").is_file():
+            failure = classify_live_agent_failure(event_path, stderr_path, exit_status=status)
+            self._append_handoff_resume_attempt(
+                attempt_index=attempt_index,
+                request=request,
+                status="failed",
+                event_path=event_path,
+                failure=failure.status_fields(),
+            )
+            raise LiveAgentRunFailure(
+                f"Codex resume turn failed: {failure.reason}",
+                failure,
+            )
+        self._append_handoff_resume_attempt(
+            attempt_index=attempt_index,
+            request=request,
+            status="turn_complete",
+            event_path=event_path,
+        )
+
+    def _finish_after_resume(self) -> int:
+        assert self.server_proc is not None
+        if (self.run_dir / "run_result.json").is_file():
+            status = self.server_proc.wait()
+            self._mark_timing("server_finished")
+            self.server_proc = None
+            if status != 0:
+                reason = f"cleanup MCP server exited with status {status} after Codex resume"
+                self._write_status("failed", 1, reason=reason)
+                self._write_live_timing("failed", 1, reason=reason)
+                return 1
+            self._check_result()
+            source_error = self._write_live_timing("finished", 0)
+            if source_error:
+                self._write_status("failed", 1, reason=source_error)
+                return 1
+            self._write_status("finished", 0)
+            return 0
+        if self.server_proc.poll() is None:
+            self._write_status(
+                "paused",
+                reason=OPERATOR_HANDOFF_REASON,
+                resume_available=True,
+                detail="Codex resume turn ended without done; MCP server remains alive.",
+            )
+            return self._finish_operator_handoff()
+        status = self.server_proc.wait()
+        self._mark_timing("server_finished")
+        self.server_proc = None
+        reason = f"cleanup MCP server exited with status {status} after Codex resume without done"
+        self._write_status("failed", 1, reason=reason)
+        self._write_live_timing("failed", 1, reason=reason)
+        return 1
+
+    def _append_handoff_resume_attempt(
+        self,
+        *,
+        attempt_index: int,
+        request: dict[str, Any],
+        status: str,
+        event_path: Path,
+        failure: dict[str, Any] | None = None,
+    ) -> None:
+        attempts = list(self.live_timing.get("operator_handoff_resume_attempts") or [])
+        row = {
+            "schema": "operator_handoff_resume_attempt_v1",
+            "agent_engine": "codex-cli",
+            "attempt_index": attempt_index,
+            "status": status,
+            "message_id": str(request.get("message_id") or ""),
+            "event_path": str(event_path),
+            "created_at_epoch": time.time(),
+        }
+        if failure:
+            row["failure"] = failure
+        attempts.append(row)
+        self.live_timing["operator_handoff_resume_attempts"] = attempts
+        (self.run_dir / "operator_handoff_resume_attempts.json").write_text(
+            json.dumps(
+                {
+                    "schema": "operator_handoff_resume_attempts_v1",
+                    "attempts": attempts,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
@@ -986,6 +1154,37 @@ def _explicit_operator_handoff_requested(args: argparse.Namespace, last_message_
         "Codex ended without done after an explicit operator handoff request. "
         "The MCP server remains alive for operator-console manual control."
     )
+
+
+def _claim_operator_resume_request(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    result = consume_resume_request_for_runner(path.parent)
+    if not result.get("ok"):
+        raise RuntimeError(str(result.get("error_reason") or "operator resume source error"))
+    requests = result.get("requests")
+    if isinstance(requests, list) and requests:
+        request = requests[0]
+        return request if isinstance(request, dict) else {}
+    return {}
+
+
+def _resume_prompt(original_prompt: str, request: dict[str, Any]) -> str:
+    packet = request.get("resume_request_packet")
+    public_packet = packet if isinstance(packet, dict) else {}
+    return (
+        f"{original_prompt.rstrip()}\n\n"
+        "Paused operator handoff resume for the same live MCP run:\n"
+        "The operator has manually adjusted or inspected the robot and now requests a "
+        "new agent turn. Use current public MCP state, preserve the existing run trace, "
+        "and do not consume queued Steer messages as resume input. Call task-relevant "
+        "MCP tools, then call done only when the public task is complete.\n\n"
+        f"resume_request_packet:\n{json.dumps(public_packet, ensure_ascii=False, sort_keys=True)}\n"
+    )
+
+
+def _next_codex_resume_attempt_index(run_dir: Path) -> int:
+    return 1 + len(list(run_dir.glob("codex-events.resume-*.jsonl")))
 
 
 def _normalized_handoff_text(text: str) -> str:

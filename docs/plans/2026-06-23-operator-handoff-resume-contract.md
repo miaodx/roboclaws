@@ -1,6 +1,6 @@
 ---
 plan_scope: operator-handoff-resume-contract
-status: PREFLIGHT_READY
+status: IMPLEMENTED_AND_LIVE_VALIDATED
 architecture_layer: Thin Runtime / Server Adapter, Agent Engines And Provider Profiles, MCP Capability Contract And Tools
 source:
   - 2026-06-23 operator-console paused handoff steer investigation
@@ -11,6 +11,71 @@ source:
 ---
 
 # Operator Handoff Resume Contract
+
+## Implementation Update: 2026-06-23
+
+Implementation and local/live validation are complete in this worktree for the
+console state/API/UI contract and the runner-owned Codex CLI / OpenAI Agents
+SDK resume paths. Live proof used the default repo `.env` from
+`/home/mi/ws/gogo/roboclaws/.env` as a shell-only provider source; secrets were
+not copied into this worktree or pasted into artifacts.
+
+Evidence:
+
+- `node --check roboclaws/operator_console/static/app.js`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `ruff check roboclaws/operator_console scripts/molmo_cleanup tests/unit/operator_console tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_operator_console.py::test_operator_console_resume_endpoint_records_paused_handoff_request`
+
+Live evidence:
+
+- Codex CLI handoff/resume proof:
+  `output/operator-console/runs/20260623-154952-molmospaces-procthor-objaverse-val-0-mujoco-open-task-codex-cli-world-public-labels/0623_1549/seed-7`
+  - `live_status.json`: `phase=finished`, `exit_status=0`
+  - `operator_resume_requests.jsonl`: queued request claimed by runner
+  - `operator_handoff_resume_attempts.json`: started and `turn_complete`
+    resume attempt for `codex-cli`
+  - `codex-events.resume-1.jsonl`: distinct resumed agent turn
+  - `trace.jsonl`: pre-handoff MCP calls, operator observe, resumed observe,
+    and final `done`
+  - `checker.log`: `molmo-realworld-cleanup ok`
+- OpenAI Agents SDK handoff/resume proof:
+  `output/operator-console/runs/20260623-161108-molmospaces-procthor-objaverse-val-0-mujoco-open-task-openai-agents-sdk-world-public-labels/0623_1611/seed-7`
+  - `live_status.json`: `phase=finished`, `exit_status=0`
+  - `operator_resume_requests.jsonl`: queued request claimed by runner
+  - `operator_handoff_resume_attempts.json`: started and `turn_complete`
+    resume attempt for `openai-agents-sdk`
+  - `trace.jsonl`: pre-handoff MCP calls through `navigate_to_waypoint`,
+    operator observe, resumed observe, and final `done`
+  - `checker.log`: `molmo-realworld-cleanup ok`
+
+The first OpenAI Agents SDK dogfood run also proved resume consumption and
+`done`, but the agent chose `navigate_to_relative_pose`, which triggered an
+unrelated real-robot alignment checker gate. The second SDK proof constrained
+the task to public `navigate_to_waypoint` and is the accepted live validation
+artifact for this plan.
+
+Implemented scope:
+
+- Paused operator handoff is derived as first-class console state.
+- Plain delayed `Steer` is unavailable during paused handoff and remains active
+  only for autonomous runs that can consume MCP `check_operator_messages`.
+- `Resume With Prompt` writes public-only `operator_resume_requests.jsonl`
+  evidence and fails loudly for unsupported routes.
+- Codex CLI and OpenAI Agents SDK routes advertise paused-handoff resume
+  support; Claude Code routes remain classification-only and do not advertise
+  resume.
+- Codex CLI and OpenAI Agents SDK runners poll the resume request artifact
+  during paused handoff and run same-run resume attempts with
+  `operator_handoff_resume_attempts.json` metadata.
+- Live MolmoSpaces operator-console dogfood passed for both Codex CLI and
+  OpenAI Agents SDK: each run paused for operator handoff, accepted manual
+  operator observe, consumed `Resume With Prompt`, made resumed MCP calls, and
+  reached final `done` with checker proof.
+- Live testing exposed and fixed a missing `/api/runs/<run_id>/resume` action
+  parser entry in the console server; the UI button now reaches the existing
+  resume handler and has a focused regression test.
 
 ## Problem
 
@@ -477,4 +542,3 @@ request revision.
 Execute the full plan with `$intuitive-flow` using the preflight contract above.
 
 Shortcut: `flow full plan`
-

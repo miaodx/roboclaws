@@ -96,7 +96,31 @@ fi
 
 if [[ "$update_submodules" == "1" ]]; then
   git -C "$repo_root" submodule sync --recursive
-  git -C "$repo_root" submodule update --init --recursive
+  if [[ "$repo_root" != "$baseline_repo" && -f "$repo_root/.gitmodules" ]]; then
+    while read -r key submodule_path; do
+      submodule_name="${key#submodule.}"
+      submodule_name="${submodule_name%.path}"
+      baseline_submodule="$baseline_repo/$submodule_path"
+      if [[ ! -d "$baseline_submodule" ]]; then
+        continue
+      fi
+      expected_commit="$(
+        git -C "$repo_root" ls-tree HEAD "$submodule_path" | awk '{print $3}'
+      )"
+      if [[ -z "$expected_commit" ]]; then
+        continue
+      fi
+      if git -C "$baseline_submodule" cat-file -e "$expected_commit^{commit}" 2>/dev/null; then
+        git -C "$repo_root" submodule init -- "$submodule_path" >/dev/null
+        git -C "$repo_root" config "submodule.$submodule_name.url" "$baseline_submodule"
+      fi
+    done < <(git -C "$repo_root" config --file .gitmodules --get-regexp '^submodule\..*\.path$')
+  fi
+  if [[ "$repo_root" != "$baseline_repo" ]]; then
+    git -C "$repo_root" -c protocol.file.allow=always submodule update --init --recursive
+  else
+    git -C "$repo_root" submodule update --init --recursive
+  fi
 fi
 
 "$baseline_python" "$repo_root/scripts/dev/check_worktree_readiness.py" --repo-root "$repo_root"

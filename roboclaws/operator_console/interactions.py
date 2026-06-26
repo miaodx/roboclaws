@@ -20,6 +20,7 @@ from roboclaws.operator_console.state import (
 SESSION_SCHEMA = "operator_console_session_v1"
 MESSAGE_SCHEMA = "operator_console_message_v1"
 MESSAGE_LOG = "operator_messages.jsonl"
+RESUME_REQUEST_LOG = "operator_resume_requests.jsonl"
 SESSION_LOG = "sessions.jsonl"
 SESSION_DIR = "sessions"
 NEXT_GOAL_QUEUE = "next_goal_queue.jsonl"
@@ -108,6 +109,10 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     state = derive_operator_state(root, run_dir, route)
     if _is_terminal_state(state):
         raise InteractionError("Robot Run is terminal; use Next Goal instead.")
+    if _is_operator_handoff_paused(state):
+        raise InteractionError(
+            "Robot Run is paused for operator handoff; use Resume With Prompt."
+        )
     if route is None or not route.supports_operator_steer:
         raise InteractionError("Steer Current Run is unavailable for this route.")
     message = _base_message(command_type="steer", run_id=run_id, body=body, status="queued")
@@ -116,6 +121,53 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
         "operator_message_pending": True,
     }
     _preflight_session_source(root, run_state)
+    _append_message(run_dir, message)
+    _record_session_message(root, run_dir, message, run_state=run_state)
+    return message
+
+
+def append_resume_request(root: Path, run_id: str, prompt: str) -> dict[str, Any]:
+    """Record a paused-handoff resume prompt for a route with runner-owned resume."""
+
+    prompt = _clean_text(prompt)
+    if not prompt:
+        raise InteractionError("Resume With Prompt requires prompt text.")
+    run_dir, route, run_state = _run_context(root, run_id, strict=True)
+    state = derive_operator_state(root, run_dir, route)
+    if not _is_operator_handoff_paused(state):
+        raise InteractionError("Resume With Prompt is available only during operator handoff.")
+    if route is None or not route.supports_paused_handoff_resume:
+        raise InteractionError(
+            "Resume With Prompt is unsupported for this route; stop this run or wait for a "
+            "runner-owned resume implementation."
+        )
+    controls = state.get("controls") if isinstance(state.get("controls"), dict) else {}
+    if not bool(controls.get("resume_available")):
+        raise InteractionError(
+            "Resume With Prompt is not available because the paused runner did not expose "
+            "a resumable handoff state."
+        )
+    session = _session_for_run(root, run_dir, run_id, run_state=run_state)
+    resume_packet = _resume_request_packet(state, session, run_id, prompt)
+    message = _base_message(
+        command_type="resume_with_prompt",
+        run_id=run_id,
+        body=prompt,
+        status="queued",
+    )
+    message.update(
+        {
+            "operator_session_id": session["operator_session_id"],
+            "selection_id": _state_selection_id(state),
+            "intent": str(state.get("selected_intent") or ""),
+            "resume_request_packet": resume_packet,
+            "delivery": {
+                "transport": "runner_owned_paused_handoff_resume",
+                "operator_resume_pending": True,
+            },
+        }
+    )
+    _append_jsonl(run_dir / RESUME_REQUEST_LOG, message)
     _append_message(run_dir, message)
     _record_session_message(root, run_dir, message, run_state=run_state)
     return message
@@ -186,18 +238,35 @@ def list_operator_messages(root: Path, run_id: str) -> dict[str, Any]:
     run_dir, route, _run_state = _run_context(root, run_id)
     state = derive_operator_state(root, run_dir, route)
     messages, source_errors = _read_message_rows_with_source_errors(run_dir)
+    resume_requests, resume_source_errors = _read_resume_rows_with_source_errors(run_dir)
     return {
         "run_id": run_id,
         "operator_session_id": _session_id_from_run_state(run_dir),
         "messages": messages,
         "source_errors": source_errors,
         "source_error": bool(source_errors),
+        "resume_requests": resume_requests,
+        "resume_source_errors": resume_source_errors,
+        "resume_source_error": bool(resume_source_errors),
         "operator_message_pending": any(
             item.get("command_type") == "steer" and item.get("status") == "queued"
             for item in messages
         ),
+        "operator_resume_pending": any(
+            item.get("command_type") == "resume_with_prompt" and item.get("status") == "queued"
+            for item in resume_requests
+        ),
         "steer_available": bool(
-            route and route.supports_operator_steer and not _is_terminal_state(state)
+            route
+            and route.supports_operator_steer
+            and not _is_terminal_state(state)
+            and not _is_operator_handoff_paused(state)
+        ),
+        "resume_available": bool(
+            route
+            and route.supports_paused_handoff_resume
+            and _is_operator_handoff_paused(state)
+            and (state.get("controls") or {}).get("resume_available")
         ),
     }
 
@@ -207,19 +276,29 @@ def operator_message_state(root: Path, run_dir: Path) -> dict[str, Any]:
 
     del root
     rows, source_errors = _read_message_rows_with_source_errors(run_dir)
+    resume_rows, resume_source_errors = _read_resume_rows_with_source_errors(run_dir)
     pending_steer = [
         item
         for item in rows
         if item.get("command_type") == "steer" and item.get("status") == "queued"
+    ]
+    pending_resume = [
+        item
+        for item in resume_rows
+        if item.get("command_type") == "resume_with_prompt" and item.get("status") == "queued"
     ]
     return {
         "operator_session_id": _session_id_from_run_state(run_dir),
         "message_count": len(rows),
         "pending_steer_count": len(pending_steer),
         "operator_message_pending": bool(pending_steer),
+        "resume_request_count": len(resume_rows),
+        "pending_resume_count": len(pending_resume),
+        "operator_resume_pending": bool(pending_resume),
+        "latest_resume_request": resume_rows[-1] if resume_rows else {},
         "latest_message": rows[-1] if rows else {},
-        "source_errors": source_errors,
-        "source_error": bool(source_errors),
+        "source_errors": [*source_errors, *resume_source_errors],
+        "source_error": bool(source_errors or resume_source_errors),
     }
 
 
@@ -275,6 +354,53 @@ def check_operator_messages_for_mcp(run_dir: Path, *, max_messages: int = 10) ->
         "instruction": (
             "Treat seen operator messages as public steering hints. Acknowledge by "
             "following the safe checkpoint guidance or explain why a message cannot be applied."
+        ),
+    }
+
+
+def consume_resume_request_for_runner(
+    run_dir: Path, *, max_requests: int = 1
+) -> dict[str, Any]:
+    """Return queued resume requests and mark them claimed by the live runner."""
+
+    wrapper_dir = _wrapper_dir_for_display(run_dir)
+    rows, source_errors = _read_resume_rows_with_source_errors(wrapper_dir)
+    if source_errors:
+        return {
+            "ok": False,
+            "status": "source_error",
+            "error_reason": "operator_resume_source_error",
+            "requests": [],
+            "request_count": 0,
+            "source_errors": source_errors,
+        }
+    selected: list[dict[str, Any]] = []
+    next_rows: list[dict[str, Any]] = []
+    now = _utc_now()
+    for row in rows:
+        if (
+            row.get("command_type") == "resume_with_prompt"
+            and row.get("status") == "queued"
+            and len(selected) < max_requests
+        ):
+            updated = dict(row)
+            updated["status"] = "claimed"
+            updated["claimed_at_epoch"] = now
+            updated["claimed_at"] = _format_epoch(now)
+            selected.append(updated)
+            next_rows.append(updated)
+            continue
+        next_rows.append(row)
+    if selected:
+        _rewrite_jsonl(wrapper_dir / RESUME_REQUEST_LOG, next_rows)
+    return {
+        "ok": True,
+        "status": "claimed" if selected else "empty",
+        "requests": selected,
+        "request_count": len(selected),
+        "operator_resume_pending": any(
+            item.get("command_type") == "resume_with_prompt" and item.get("status") == "queued"
+            for item in next_rows
         ),
     }
 
@@ -354,6 +480,37 @@ def _next_goal_packet(
     return _strip_private_payload(packet)
 
 
+def _resume_request_packet(
+    state: dict[str, Any],
+    session: dict[str, Any],
+    run_id: str,
+    prompt: str,
+) -> dict[str, Any]:
+    artifacts = state.get("artifact_paths") if isinstance(state.get("artifact_paths"), list) else []
+    packet = {
+        "schema": "operator_console_resume_request_packet_v1",
+        "operator_session_id": session["operator_session_id"],
+        "run_id": run_id,
+        "operator_prompt": prompt,
+        "handoff_public_summary": {
+            "status": state.get("status"),
+            "phase": state.get("phase"),
+            "terminal_reason": state.get("terminal_reason"),
+            "latest_action": state.get("latest_action"),
+            "latest_operator_control": state.get("latest_operator_control") or {},
+            "operator_interventions": state.get("operator_interventions") or {},
+            "latest_public_decision_evidence": state.get("latest_public_decision_evidence") or {},
+        },
+        "artifact_scope": _public_artifact_scope(artifacts),
+        "instruction": (
+            "This is an explicit paused-handoff resume request for the same Robot Run. "
+            "Use only public handoff context and current MCP state; do not consume queued "
+            "Steer messages as resume input."
+        ),
+    }
+    return _strip_private_payload(packet)
+
+
 def _public_artifact_scope(artifacts: list[Any]) -> list[dict[str, str]]:
     allowed_labels = {
         "Operator State",
@@ -428,6 +585,14 @@ def _is_terminal_state(state: dict[str, Any]) -> bool:
         return True
     checker = state.get("checker_status")
     return isinstance(checker, dict) and str(checker.get("status") or "").lower() == "passed"
+
+
+def _is_operator_handoff_paused(state: dict[str, Any]) -> bool:
+    return (
+        str(state.get("phase") or "").strip().lower() == "paused"
+        and str(state.get("terminal_reason") or "").strip().lower()
+        == "operator_handoff_requested"
+    )
 
 
 def _parent_result_available(run_dir: Path, state: dict[str, Any]) -> bool:
@@ -544,6 +709,14 @@ def _read_message_rows_with_source_errors(
     return rows, [_message_issue_source_error(issue) for issue in issues]
 
 
+def _read_resume_rows_with_source_errors(
+    run_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    path = run_dir / RESUME_REQUEST_LOG
+    rows, issues = collect_jsonl_objects(path, label="operator resume source")
+    return rows, [_resume_issue_source_error(issue) for issue in issues]
+
+
 def _message_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
     if issue.kind == "read_error":
         message = f"cannot read operator message source: {issue.message}"
@@ -552,6 +725,16 @@ def _message_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
     else:
         message = issue.message
     return _message_source_error(issue.path, message, line_number=issue.line_number)
+
+
+def _resume_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
+    if issue.kind == "read_error":
+        message = f"cannot read operator resume source: {issue.message}"
+    elif issue.kind == "invalid_json":
+        message = f"invalid JSON: {issue.message}"
+    else:
+        message = issue.message
+    return _resume_source_error(issue.path, message, line_number=issue.line_number)
 
 
 def _message_source_error(
@@ -570,8 +753,28 @@ def _message_source_error(
     return payload
 
 
+def _resume_source_error(
+    path: Path,
+    message: str,
+    *,
+    line_number: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source": "operator_resume_requests",
+        "path": str(path),
+        "message": message,
+    }
+    if line_number is not None:
+        payload["line"] = line_number
+    return payload
+
+
 def _rewrite_messages(run_dir: Path, rows: list[dict[str, Any]]) -> None:
     path = _message_log_path(run_dir)
+    _rewrite_jsonl(path, rows)
+
+
+def _rewrite_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as stream:
         for row in rows:

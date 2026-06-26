@@ -150,7 +150,7 @@ run dispatch_target agent_engine mode="" *overrides:
         b1_alignment_artifact|b1_navigation_artifact|map_bundle|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
-        operator_messages_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
+        operator_messages_path|operator_resume_requests_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
         scene_index|scene_source|seed|seeds|map_build|task|timeout_s|world|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
@@ -754,6 +754,10 @@ run dispatch_target agent_engine mode="" *overrides:
           "$resolved_task_intent" "$operator_messages_path" "$b1_alignment_artifact"
           "$b1_navigation_artifact"
         )
+        operator_resume_requests_path="$(get operator_resume_requests_path "")"
+        if [[ -n "$operator_resume_requests_path" ]]; then
+          export ROBOCLAWS_OPERATOR_RESUME_REQUESTS_PATH="$operator_resume_requests_path"
+        fi
         run_dir_override="$(get run_dir "")"
         if [[ -n "$run_dir_override" ]]; then
           molmo_args+=("" "" "" "$run_dir_override")

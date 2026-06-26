@@ -37,6 +37,19 @@ ASSEMBLE_LIVE_PAGES_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "assemble_c
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
 
+class _FakeHandoffServer:
+    def __init__(self, run_result_path: Path) -> None:
+        self.run_result_path = run_result_path
+        self.wait_calls = 0
+
+    def poll(self) -> int | None:
+        return 0 if self.run_result_path.is_file() else None
+
+    def wait(self) -> int:
+        self.wait_calls += 1
+        return 0
+
+
 def _load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
@@ -1107,6 +1120,96 @@ def test_live_codex_explicit_operator_handoff_pauses_without_killing_server(
     assert "MCP server remains alive" in payload["detail"]
 
 
+def test_live_codex_paused_handoff_consumes_resume_request_and_runs_second_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    resume_path = run_dir / "operator_resume_requests.jsonl"
+    resume_path.write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_message_v1",
+                "message_id": "resume-1",
+                "command_type": "resume_with_prompt",
+                "status": "queued",
+                "body": "I moved forward; continue.",
+                "resume_request_packet": {
+                    "schema": "operator_console_resume_request_packet_v1",
+                    "operator_prompt": "I moved forward; continue.",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_model="gpt-5.5",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
+        codex_turn_idle_timeout_s=3.0,
+        kickoff_prompt="handoff",
+        codex_model_arg=[],
+        backend="isaaclab_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="codex_agent",
+        task="handoff",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+        operator_resume_requests_path=resume_path,
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = _FakeHandoffServer(run_dir / "run_result.json")
+    runner._codex_resume_context = {
+        "env": {},
+        "agent_task_dir": agent_dir,
+        "agent_cd": str(agent_dir),
+        "last_message_host_path": agent_dir / "codex-last-message.md",
+        "last_message_cli_path": str(agent_dir / "codex-last-message.md"),
+        "turn_idle_timeout_s": 3.0,
+    }
+    calls: list[list[str]] = []
+
+    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
+        calls.append(command)
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text('{"type":"item.completed"}\n', encoding="utf-8")
+        (run_dir / "run_result.json").write_text(
+            json.dumps({"cleanup_status": "success"}),
+            encoding="utf-8",
+        )
+        return 0
+
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+    monkeypatch.setattr(runner, "_check_result", lambda: None)
+
+    status = runner._finish_operator_handoff()
+
+    assert status == 0
+    assert len(calls) == 1
+    assert "resume_request_packet" in calls[0][-1]
+    request_rows = [
+        json.loads(line) for line in resume_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert request_rows[0]["status"] == "claimed"
+    attempts = json.loads(
+        (run_dir / "operator_handoff_resume_attempts.json").read_text(encoding="utf-8")
+    )
+    assert attempts["attempts"][-1]["agent_engine"] == "codex-cli"
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "finished"
+
+
 def test_live_openai_agents_explicit_operator_handoff_pauses_without_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1159,6 +1262,7 @@ def test_live_openai_agents_explicit_operator_handoff_pauses_without_continuatio
         checker_profile="",
         server_arg=[],
         checker_visual_arg=[],
+        operator_resume_requests_path=None,
     )
     runner = run_sdk.LiveOpenAIAgentsCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -1196,6 +1300,124 @@ def test_live_openai_agents_explicit_operator_handoff_pauses_without_continuatio
     assert runner.live_timing["openai_agents_attempts"][0]["recovery_action"] == (
         "operator_handoff"
     )
+
+
+def test_live_openai_agents_paused_handoff_consumes_resume_request_and_runs_second_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_sdk = _load_module(RUN_OPENAI_AGENTS_PATH, "run_live_openai_agents_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    resume_path = run_dir / "operator_resume_requests.jsonl"
+    resume_path.write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_message_v1",
+                "message_id": "resume-1",
+                "command_type": "resume_with_prompt",
+                "status": "queued",
+                "body": "Continue from the adjusted pose.",
+                "resume_request_packet": {
+                    "schema": "operator_console_resume_request_packet_v1",
+                    "operator_prompt": "Continue from the adjusted pose.",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        server_startup_timeout_s=3.0,
+        provider_profile="codex-router-responses",
+        model="gpt-5.5",
+        max_turns=None,
+        incomplete_turn_continuation_attempts=None,
+        cache_tools_list=True,
+        mcp_client_session_timeout_s=None,
+        agent_sdk_perf_profile="",
+        continuation_mode="",
+        model_thinking_mode="default",
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        model_racing=None,
+        model_racing_arm_count=None,
+        raw_fpv_image_memory=None,
+        raw_fpv_image_memory_retain=None,
+        camera_grounded_history_compaction=None,
+        camera_grounded_history_retain=None,
+        raw_fpv_candidate_budget=None,
+        raw_fpv_repeated_failure_limit=None,
+        done_retry_budget=None,
+        max_observe_per_waypoint=None,
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        kickoff_prompt="handoff",
+        backend="molmospaces_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="openai_agents_agent",
+        task="handoff",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+        checker_profile="",
+        server_arg=[],
+        checker_visual_arg=[],
+        operator_resume_requests_path=resume_path,
+    )
+    runner = run_sdk.LiveOpenAIAgentsCleanupRunner(args)
+    runner.server_proc = _FakeHandoffServer(run_dir / "run_result.json")
+    calls = []
+
+    class FakeRuntime:
+        def run(self, request):
+            calls.append(request)
+            (run_dir / "run_result.json").write_text(
+                json.dumps({"cleanup_status": "success"}),
+                encoding="utf-8",
+            )
+            return SimpleNamespace(
+                phase="agent-turn-complete",
+                exit_status=0,
+                reason="",
+                provider_reason="",
+                retryable=False,
+                resume_available=False,
+                usage={},
+                trace_id="trace-resume",
+                provider_session_id="session-resume",
+                run_result_present=True,
+                started_at_epoch=1.0,
+                finished_at_epoch=2.0,
+            )
+
+    monkeypatch.setattr(run_sdk, "OpenAIAgentsLiveRuntime", FakeRuntime)
+    monkeypatch.setattr(runner, "_check_result", lambda: None)
+
+    status = runner._finish_operator_handoff()
+
+    assert status == 0
+    assert len(calls) == 1
+    assert "resume_request_packet" in calls[0].kickoff_prompt
+    request_rows = [
+        json.loads(line) for line in resume_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert request_rows[0]["status"] == "claimed"
+    attempts = json.loads(
+        (run_dir / "operator_handoff_resume_attempts.json").read_text(encoding="utf-8")
+    )
+    assert attempts["attempts"][-1]["agent_engine"] == "openai-agents-sdk"
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "finished"
 
 
 def test_live_codex_no_done_without_operator_handoff_still_fails(

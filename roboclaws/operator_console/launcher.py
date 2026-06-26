@@ -27,7 +27,11 @@ from roboclaws.launch.environment_setup import (
     RELOCATION_SETUP_OPTIONS,
 )
 from roboclaws.operator_console.history import append_run_history
-from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
+from roboclaws.operator_console.interactions import (
+    MESSAGE_LOG,
+    RESUME_REQUEST_LOG,
+    attach_run_to_session,
+)
 from roboclaws.operator_console.launch_support import (
     DockerMountSourceError,
     apply_env_overrides,
@@ -247,6 +251,10 @@ def start_console_run(
     try:
         if route.supports_operator_steer:
             overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
+        if route.supports_paused_handoff_resume:
+            overrides.setdefault(
+                "operator_resume_requests_path", str(run_dir / RESUME_REQUEST_LOG)
+            )
         selected_intent = request.intent_id or route.intent_id
         launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
         preview = build_prompt_preview(
@@ -527,6 +535,7 @@ def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, 
         "host",
         "port",
         "operator_messages_path",
+        "operator_resume_requests_path",
     }
     for key, value in overrides.items():
         if key not in allowed:

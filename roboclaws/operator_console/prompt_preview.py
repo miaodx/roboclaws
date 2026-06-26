@@ -209,7 +209,12 @@ def _append_missing_launch_defaults(args: list[str], defaults: tuple[str, ...]) 
 
 def _append_prompt_preview_overrides(args: list[str], overrides: dict[str, str]) -> None:
     for key, value in sorted(overrides.items()):
-        if key in {"scenario_setup", "provider_profile"}:
+        if key in {
+            "scenario_setup",
+            "provider_profile",
+            "operator_messages_path",
+            "operator_resume_requests_path",
+        }:
             continue
         if value:
             args.append(f"{key}={value}")

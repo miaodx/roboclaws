@@ -991,6 +991,74 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert launch_request.parent_run_id == run_id
 
 
+def test_operator_console_resume_endpoint_records_paused_handoff_request(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "paused-handoff-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "operator_session_id": "session-test",
+                "selected_intent": "open-ended",
+                "route": route.to_payload(),
+                "phase": "paused",
+                "reason": "operator_handoff_requested",
+                "resume_available": True,
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_dir = tmp_path / "output" / "operator-console" / "sessions"
+    session_dir.mkdir(parents=True)
+    (session_dir / "session-test.json").write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_session_v1",
+                "operator_session_id": "session-test",
+                "created_at_epoch": 1,
+                "created_at": "2026-06-09T00:00:00Z",
+                "active_run_id": run_id,
+                "run_ids": [run_id],
+                "message_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/resume",
+            method="POST",
+            data=json.dumps({"prompt": "Manual control finished; continue."}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["command_type"] == "resume_with_prompt"
+    assert payload["status"] == "queued"
+    assert payload["delivery"]["transport"] == "runner_owned_paused_handoff_resume"
+    assert payload["resume_request_packet"]["schema"] == (
+        "operator_console_resume_request_packet_v1"
+    )
+    rows = (run_dir / "operator_resume_requests.jsonl").read_text(encoding="utf-8")
+    assert "Manual control finished; continue." in rows
+
+
 def _write_running_operator_control_state(tmp_path: Path, route, run_id: str) -> Path:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
