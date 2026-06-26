@@ -24,6 +24,9 @@ ADAPTER_MODE_REAL = "real"
 ADAPTER_MODE_UNAVAILABLE = "unavailable"
 REAL_ROUTER_PIPELINE_ID = "real-router"
 DEFAULT_PIPELINE_ID = "grounding-dino"
+DEFAULT_GROUNDING_DINO_MODEL_ID = "IDEA-Research/grounding-dino-base"
+DEFAULT_GROUNDING_DINO_BOX_THRESHOLD = 0.25
+DEFAULT_GROUNDING_DINO_TEXT_THRESHOLD = 0.20
 ADAPTER_CATALOG_SCHEMA = "visual_grounding_adapter_catalog_v1"
 
 
@@ -53,7 +56,7 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
         producer_id="grounding-dino",
         role="proposer",
         status="adapter_unavailable",
-        model_id="IDEA-Research/grounding-dino-tiny",
+        model_id=DEFAULT_GROUNDING_DINO_MODEL_ID,
         optional_extra="visual-grounding-dino",
         setup_hint=(
             "Run the sidecar adapter with --adapter-mode real after explicitly installing "
@@ -354,7 +357,7 @@ def _grounding_dino_real_response(
             runtime_parameters,
             "box_threshold",
             env_name="VISUAL_GROUNDING_DINO_BOX_THRESHOLD",
-            default=0.35,
+            default=DEFAULT_GROUNDING_DINO_BOX_THRESHOLD,
             minimum=0.0,
             maximum=1.0,
         )
@@ -362,7 +365,7 @@ def _grounding_dino_real_response(
             runtime_parameters,
             "text_threshold",
             env_name="VISUAL_GROUNDING_DINO_TEXT_THRESHOLD",
-            default=0.25,
+            default=DEFAULT_GROUNDING_DINO_TEXT_THRESHOLD,
             minimum=0.0,
             maximum=1.0,
         )

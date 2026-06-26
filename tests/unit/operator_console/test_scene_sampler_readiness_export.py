@@ -121,15 +121,21 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert manifest["selection_policy"]["sources"]["procthor-objaverse-val"]["ui"][
         "selected_indices"
     ] == [10, 0, 1]
-    assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert manifest["selection_policy"]["sources"]["procthor-10k-val"]["ui"][
+        "selected_indices"
+    ] == [11, 15, 0]
+    assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 6
     assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "partial"
     assert projection["scene_sources"]["procthor-objaverse-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-objaverse-val"]["support_status"] == "complete"
     assert projection["scene_sources"]["ithor"]["support_status"] == "rejected"
-    assert projection["summary"]["ready_sample_count"] == 15
-    assert projection["summary"]["remaining_sample_count"] == 25
-    assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 0
+    assert projection["summary"]["ready_sample_count"] == 16
+    assert projection["summary"]["remaining_sample_count"] == 24
+    assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
+    assert readiness["selection_policy"]["sources"]["procthor-10k-val"]["ui"][
+        "selected_room_counts"
+    ] == [4, 10, 7]
     assert readiness["selection_policy"]["sources"]["procthor-objaverse-val"]["ui"][
         "selected_room_counts"
     ] == [5, 4, 7]
@@ -148,8 +154,8 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert candidates["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert candidates["summary"]["source_count"] == 4
     assert "eval_needed_count" in candidates["summary"]
-    assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 0
-    assert candidates["sources"]["procthor-10k-val"]["eval_ready_count"] == 5
+    assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
+    assert candidates["sources"]["procthor-10k-val"]["eval_ready_count"] == 6
     assert candidates["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert candidates["sources"]["ithor"]["eval_ready_count"] == 0
@@ -184,7 +190,7 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
     )
     assert selection["summary"]["source_count"] == 4
     assert "worklist" in selection["summary"]
-    assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
+    assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 4
     assert (
         selection["sources"]["procthor-10k-val"]["selection_capacity_status"]
         == "candidate_range_insufficient"
@@ -254,7 +260,7 @@ def _assert_scanner_artifacts(payloads: dict[str, Any]) -> None:
     assert scanner_admission["probe_mode"] == "no_download_no_backend_no_vlm"
     assert scanner_admission["summary"]["source_count"] == 4
     assert "missing_gate_counts" in scanner_admission["summary"]
-    assert scanner_admission["sources"]["procthor-10k-val"]["summary"]["admitted_count"] == 5
+    assert scanner_admission["sources"]["procthor-10k-val"]["summary"]["admitted_count"] == 6
     assert scanner_admission["sources"]["procthor-objaverse-val"]["summary"]["admitted_count"] == 10
     assert scanner_admission["sources"]["ithor"]["needed_ui_count"] == 3
     assert scanner_execution["schema"] == ("molmospaces_scene_sampler_scanner_execution_plan_v1")
@@ -283,8 +289,8 @@ def _assert_next_flow_summary(next_flow: dict[str, Any], *, result: dict[str, An
     assert next_flow["probe_mode"] == "no_download_no_backend_no_vlm"
     assert next_flow["download_policy"] == "manual_operator_only"
     assert next_flow["summary"]["source_count"] == 4
-    assert next_flow["summary"]["ui_needed_count"] == 9
-    assert next_flow["summary"]["eval_needed_count"] == 25
+    assert next_flow["summary"]["ui_needed_count"] == 6
+    assert next_flow["summary"]["eval_needed_count"] == 24
     assert next_flow["summary"]["next_actions"] == {
         "do_not_scan_without_gate_change": 1,
         "expand_candidate_range": 1,
@@ -315,9 +321,9 @@ def _assert_next_flow_artifact_paths(next_flow: dict[str, Any], *, output_dir: P
 
 
 def _assert_next_flow_source_statuses(next_flow: dict[str, Any]) -> None:
-    assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "not_visible"
-    assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 5
-    assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
+    assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "ready"
+    assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 6
+    assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 4
     assert next_flow["sources"]["procthor-10k-val"]["next_action"] == "expand_candidate_range"
     assert next_flow["sources"]["procthor-objaverse-val"]["ui_status"] == "ready"
     assert next_flow["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
@@ -383,7 +389,7 @@ def _assert_generated_eval(
             encoding="utf-8"
         )
     )
-    assert sample_count == 15
+    assert sample_count == 16
     generated_sample = json.loads(
         (
             output_dir / "generated_eval/samples/scene_sampler/procthor-10k-val_10_map_build.json"
@@ -430,7 +436,7 @@ def test_scene_sampler_readiness_export_fails_missing_eval_completion(tmp_path) 
             "scene_source": "procthor-10k-val",
             "threshold": "eval_complete",
             "reason": "eval_not_complete",
-            "ready_count": 5,
+            "ready_count": 6,
             "target_count": 10,
         }
     ]
@@ -547,7 +553,7 @@ def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     assert code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
-    assert payload["summary"]["eval_projection"]["ready_sample_count"] == 15
+    assert payload["summary"]["eval_projection"]["ready_sample_count"] == 16
     assert payload["threshold_failures"][0]["ready_count"] == 0
 
 

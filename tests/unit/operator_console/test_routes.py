@@ -7,7 +7,7 @@ import pytest
 
 import roboclaws.operator_console.routes as route_registry
 from roboclaws.launch.agent_engines import agent_engine_spec
-from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
+from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS, WORLD_SPECS
 from roboclaws.operator_console.launcher import ConsoleLaunchError, build_launch_argv
 from roboclaws.operator_console.routes import (
     MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS,
@@ -46,7 +46,27 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert "molmospaces/val_6" not in worlds
     assert "molmospaces/val_8" not in worlds
     default_world = MOLMOSPACES_CONSOLE_WORLD_IDS[0]
+    assert default_world == "molmospaces/val_0"
     assert worlds[default_world]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/procthor-10k-val/11"]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/procthor-10k-val/11"]["preview_assets"] == {
+        "fpv": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-fpv.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-fpv.png",
+        },
+        "map": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-map.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-map.png",
+        },
+        "chase": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-chase.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-chase.png",
+        },
+        "topdown": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-topdown.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-topdown.png",
+        },
+    }
     assert worlds["molmospaces/procthor-objaverse-val/10"]["available_backends"] == ["mujoco"]
     assert worlds["molmospaces/procthor-objaverse-val/10"]["preview_assets"] == {
         "fpv": {
@@ -112,6 +132,9 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
     )
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        previews = WORLD_SPECS[world_id].preview_assets
+        assert {view for view, _path in previews} == {"fpv", "map", "chase", "topdown"}
+        assert all(path.startswith("/previews/") for _view, path in previews)
         scene_name = world_id.replace("/", "-")
         metadata_path = preview_root / f"{scene_name}-preview.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -191,6 +214,14 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
         )
         for route in enabled
     } >= {
+        (
+            "molmospaces/val_0",
+            "mujoco",
+            "map-build",
+            "direct-runner",
+            None,
+            "world-public-labels",
+        ),
         (
             "molmospaces/procthor-objaverse-val/0",
             "mujoco",
@@ -303,6 +334,27 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
     assert val10.to_payload()["preview_assets"]["fpv"]["href"] == (
         "/previews/molmospaces-procthor-objaverse-val-10-fpv.png"
     )
+    procthor11 = get_selection(
+        "molmospaces/procthor-10k-val/11::mujoco::map-build::direct-runner::world-public-labels"
+    )
+    assert procthor11.to_payload()["preview_assets"] == {
+        "fpv": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-fpv.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-fpv.png",
+        },
+        "map": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-map.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-map.png",
+        },
+        "chase": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-chase.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-chase.png",
+        },
+        "topdown": {
+            "path": "/previews/molmospaces-procthor-10k-val-11-topdown.png",
+            "href": "/previews/molmospaces-procthor-10k-val-11-topdown.png",
+        },
+    }
 
     argv = build_launch_argv(val10, root=tmp_path, run_id="run-val-10")
     assert "world=molmospaces/procthor-objaverse-val/10" in argv

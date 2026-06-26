@@ -79,7 +79,7 @@ The eval result records blocked provider/runtime conditions separately from
 agent behavior when the selected live route cannot finish.
 
 `scene_sampler_stress` is the static eval projection for source-aware
-MolmoSpaces scene sampling. It currently admits five prepared
+MolmoSpaces scene sampling. It currently admits six prepared
 `procthor-10k-val` map-build samples and ten prepared `procthor-objaverse-val`
 map-build samples; `procthor-10k-val` remains a partial source until more rows
 clear the scanner gates.
@@ -94,6 +94,20 @@ index, readiness status, room/navigation-area count, waypoint count,
 room-category provenance, selected reason, generator version, and
 blocked/rejected projection metadata. The grader is deterministic and must not
 call live providers.
+
+Scene catalog changes are synchronized through a deterministic guard:
+
+```bash
+.venv/bin/python scripts/operator_console/check_scene_catalog_sync.py
+```
+
+Run it after changing MolmoSpaces candidate indices, committed map bundles,
+room-label manifests, preview assets, or scene-sampler admission logic. It
+regenerates the scene-sampler eval suite and samples in a temporary directory,
+diffs them against committed fixtures, and checks that every operator-console
+MolmoSpaces world has the expected preview coverage. It does not rewrite
+`cleanup_capability`, `map_build_consumer`, `open_ended_goals`, or their
+household samples unless the scenario contract for those suites changes too.
 
 Sampler readiness exports include a separate
 `scene_sampler_candidate_profile.json` for metadata-first curation across all

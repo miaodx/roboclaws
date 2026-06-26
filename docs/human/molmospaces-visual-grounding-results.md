@@ -1,6 +1,6 @@
 # Visual Grounding Results
 
-Last updated: 2026-06-18
+Last updated: 2026-06-24
 
 Current status: the active camera-labeling sidecar contract is detector-only
 per ADR-0138. Hosted refiner and direct-producer routes are historical benchmark
@@ -11,13 +11,10 @@ evidence only and are not active camera labelers.
 Use `camera_labeler=grounding-dino` as the default camera labeler for
 `evidence_lane=camera-grounded-labels`.
 
-Recommended real sidecar configuration:
-
-```bash
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20
-```
+Default real sidecar configuration is DINO base recall:
+`IDEA-Research/grounding-dino-base`, `box_threshold=0.25`, and
+`text_threshold=0.20`. Override the `VISUAL_GROUNDING_DINO_*` env vars only for
+local experiments.
 
 Keep `world-public-labels` as the deterministic structured-label baseline for
 CI and smoke work. Keep `yoloe`, `yolo-world`, and `omdet-turbo` as comparison

@@ -65,17 +65,19 @@ The operator console uses the source-aware MolmoSpaces sampler for its default
 household scene rail. The visible first-slice UI set is intentionally small and
 is selected by a deterministic seeded-random policy that prefers distinct public
 room counts within each source. The current UI set is
+`molmospaces/val_0`, `molmospaces/procthor-10k-val/11`,
+`molmospaces/procthor-10k-val/15`,
 `molmospaces/procthor-objaverse-val/0`,
 `molmospaces/procthor-objaverse-val/1`, and
-`molmospaces/procthor-objaverse-val/10` from
-`scene_source=procthor-objaverse-val`. Existing launch aliases such as
-`molmospaces/val_1`, `val_3`, `val_4`, `val_7`, and `val_9` remain explicitly
-launchable as `procthor-10k-val` aliases, but they are hidden from the default
-console scene rail unless admitted by the sampler.
+`molmospaces/procthor-objaverse-val/10`. `molmospaces/val_0` is the legacy
+alias for `scene_source=procthor-10k-val`, scene index `0`. Existing launch
+aliases such as `molmospaces/val_1`, `val_3`, `val_4`, `val_7`, and `val_9`
+remain explicitly launchable as `procthor-10k-val` aliases, but they are hidden
+from the default console scene rail unless admitted by the sampler.
 
 The eval stress projection is broader than the UI projection. It currently
-admits five prepared `procthor-10k-val` samples
-(`10`, `11`, `12`, `13`, `15`) and ten prepared
+admits six prepared `procthor-10k-val` samples
+(`0`, `10`, `11`, `12`, `13`, `15`) and ten prepared
 `procthor-objaverse-val` samples (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`,
 `13`, `14`). `procthor-10k-val` remains partial until more rows clear scanner
 gates. `ithor` and `holodeck-objaverse-val` are rejected exhausted under the
@@ -84,6 +86,17 @@ step. `ithor` candidate evidence for indices `1..12` and
 `holodeck-objaverse-val` candidate evidence for indices `0..19` fail with
 `fewer_than_three_public_navigation_areas`, so they should not be scanned again
 without new human curation or an intentional gate change.
+
+After any scene-catalog or map-bundle change, run:
+
+```bash
+.venv/bin/python scripts/operator_console/check_scene_catalog_sync.py
+```
+
+If it fails, it prints the exact scene-sampler fixture or preview asset that is
+out of sync. The guard intentionally does not rewrite unrelated household eval
+suites such as cleanup, map-build consumer, or open-ended goals; those move only
+when their own sample contracts change.
 
 The readiness exporter also writes
 `scene_sampler_candidate_profile.json`, a metadata-first worklist for all four
@@ -315,9 +328,11 @@ scoring data only; they are not included in service requests, predictions JSONL,
 MCP responses, or Agent View payloads.
 
 For real proposer probes, install optional sidecar dependencies and weights
-explicitly into the dedicated sidecar environment, then run the service in real
-adapter mode. This is the route to use before claiming cleanup or map-build
-behavior from GroundingDINO evidence:
+explicitly into the dedicated sidecar environment. Product
+`camera_labeler=grounding-dino` runs auto-start the local real-router sidecar
+when the default `VISUAL_GROUNDING_BASE_URL` is not already reachable. The
+sidecar defaults to DINO base recall (`IDEA-Research/grounding-dino-base`,
+`box_threshold=0.25`, `text_threshold=0.20`, device and dtype `auto`).
 
 ```bash
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
@@ -330,13 +345,8 @@ print("transformers", transformers.__version__)
 print("ultralytics", ultralytics.__version__)
 PY
 
-VISUAL_GROUNDING_DEVICE=auto \
-VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
+.venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline real-router --adapter-mode real
 
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
   .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
@@ -355,9 +365,10 @@ The `camera-grounded-labels` product route runs a fail-fast readiness check
 against the configured sidecar before starting the simulator or agent. A
 contract-only `--pipeline grounding-dino` service that returns
 `adapter_unavailable` is blocked up front; it should not be used as evidence for
-cleanup or map-build behavior. Each product run records
-`visual_grounding_readiness.json` in its artifact directory with the resolved
-stage status and model id.
+cleanup or map-build behavior. Set
+`ROBOCLAWS_AUTOSTART_VISUAL_GROUNDING_SIDECAR=0` to disable local auto-start.
+Each product run records `visual_grounding_readiness.json` in its artifact
+directory with the resolved stage status and model id.
 
 To exercise only the HTTP contract without real model dependencies, start the
 configurable service in its default mode. It should return explicit unavailable

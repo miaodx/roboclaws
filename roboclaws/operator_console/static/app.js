@@ -115,11 +115,12 @@ async function boot() {
   state.worlds = orderedVisibleWorlds(payload.worlds || []);
   state.readiness = payload.readiness || {};
   state.runtime = payload.runtime || { tasks: [], summary: {} };
-  state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
-    preferredDefaultCombination(combinationsForWorld(state.selectedWorld && state.selectedWorld.id)) ||
+    preferredPreviewCombination(state.combinations) ||
+    preferredDefaultCombination(combinationsForWorld(state.worlds[0] && state.worlds[0].id)) ||
     preferredDefaultCombination(state.combinations) ||
     state.combinations[0];
+  state.selectedWorld = state.worlds[0] || null;
   if (state.selectedRoute) {
     state.selectedWorld =
       state.worlds.find((world) => world.id === state.selectedRoute.world_id) || state.selectedWorld;
@@ -301,6 +302,14 @@ function preferredDefaultCombination(combinations) {
     combinations.find((item) => item.enabled) ||
     combinations[0]
   );
+}
+
+function preferredPreviewCombination(combinations) {
+  return preferredDefaultCombination(combinations.filter(routeHasPreviewAssets));
+}
+
+function routeHasPreviewAssets(route) {
+  return Boolean(route && route.preview_assets && Object.keys(route.preview_assets).length);
 }
 
 function selectedCombinationFromAxes() {
@@ -702,8 +711,6 @@ function renderRouteFields(route) {
   const fieldGroups = new Set(route.field_groups || ["common"]);
 
   els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
-  els.codexFields.hidden = true;
-  els.claudeFields.hidden = true;
   els.isaacFields.hidden = !fieldGroups.has("isaac");
   els.agibotFields.hidden = !fieldGroups.has("agibot");
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
@@ -2066,28 +2073,42 @@ async function copyText(text) {
 }
 
 function renderViews(assets, route = state.selectedRoute) {
-  state.latestViewAssets = assets || {};
-  setImageSlot("fpv", assets.fpv, "Missing run FPV artifact: expected robot_views/*.fpv.png.");
+  const sourceAssets = assets || {};
+  const displayAssets = { ...sourceAssets };
+  setImageSlot(
+    "fpv",
+    displayAssets.fpv,
+    "Missing run FPV artifact: expected robot_views/*.fpv.png."
+  );
+  const metricMapAsset =
+    sourceAssets.runtime_map || sourceAssets.map || routePreviewAsset(route, "map");
+  displayAssets.map = metricMapAsset;
   setImageSlot(
     "map",
-    assets.map,
-    "Missing run map artifact: expected map_bundle/preview.png."
+    metricMapAsset,
+    "Missing Metric Map artifact: expected runtime_metric_map_preview.png or map_bundle/preview.png."
   );
   setImageSlot(
     "runtime_map",
-    assets.runtime_map,
+    sourceAssets.runtime_map,
     "Missing runtime map preview: expected runtime_metric_map_preview.png."
   );
   setImageSlot(
     "topdown",
-    assets.topdown,
-    "Missing run top-down artifact: expected a run-local topdown image."
+    sourceAssets.topdown || routePreviewAsset(route, "topdown"),
+    "Missing run Top2Down artifact: expected a run-local topdown image."
   );
   const chaseEmptyText = routeHasView(route, "chase")
     ? "Missing run chase artifact: expected robot_views/*.chase.png."
     : "Chase view unavailable for this backend.";
-  setImageSlot("chase", assets.chase, chaseEmptyText);
-  setImageSlot("grounding", assets.grounding, "No grounding result yet.");
+  const chaseAsset = routeHasView(route, "chase")
+    ? sourceAssets.chase || routePreviewAsset(route, "chase")
+    : null;
+  displayAssets.topdown = sourceAssets.topdown || routePreviewAsset(route, "topdown");
+  displayAssets.chase = chaseAsset;
+  setImageSlot("chase", displayAssets.chase, chaseEmptyText);
+  setImageSlot("grounding", sourceAssets.grounding, "No grounding result yet.");
+  state.latestViewAssets = displayAssets;
   ensureActiveViewAvailable(route);
   renderViewModes(route);
 }
@@ -2099,18 +2120,18 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   const previews = route && route.preview_assets ? route.preview_assets : {};
   state.latestViewAssets = previews;
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
-  setImageSlot("map", previews.map, "No base navigation map preview is available.");
+  setImageSlot("map", previews.map, "No base Metric Map preview is available.");
   setImageSlot(
     "runtime_map",
     null,
     "Runtime Metric Map preview will appear after a run writes runtime_metric_map.json."
   );
-  setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
+  setImageSlot("topdown", previews.topdown, "No Top2Down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
   const chaseEmptyText = routeHasView(route, "chase")
     ? "Chase preview will appear after a run starts."
     : "Chase view unavailable for this backend.";
-  setImageSlot("chase", previews.chase, chaseEmptyText);
+  setImageSlot("chase", routeHasView(route, "chase") ? previews.chase : null, chaseEmptyText);
 }
 
 function setImageSlot(name, asset, emptyText) {
@@ -2153,15 +2174,20 @@ function setImageSlot(name, asset, emptyText) {
   });
 }
 
+function routePreviewAsset(route, name) {
+  const previews = route && route.preview_assets ? route.preview_assets : {};
+  return previews[name] || null;
+}
+
 function imageLabel(name, asset = {}) {
   if (name === "fpv" && asset.display_source === "visual_grounding_overlay") {
     return "FPV(+Grounding)";
   }
   const labels = {
-    fpv: "FPV",
-    map: "Base Map",
-    runtime_map: "Runtime Map",
-    topdown: "Top-down",
+    fpv: "FPV(+Grounding)",
+    map: "Metric Map",
+    runtime_map: "Metric Map",
+    topdown: "Top2Down",
     grounding: "Grounding",
     chase: "Chase",
   };
@@ -2185,7 +2211,11 @@ function updateCopyButton(name, asset) {
 }
 
 async function copyVisualPath(name) {
-  const asset = state.latestViewAssets && state.latestViewAssets[name];
+  const asset =
+    state.latestViewAssets &&
+    (name === "map"
+      ? state.latestViewAssets.runtime_map || state.latestViewAssets.map
+      : state.latestViewAssets[name]);
   if (!asset || !asset.path) {
     els.eventList.textContent = `${imageLabel(name)} artifact path is not available yet.`;
     return;
@@ -2250,7 +2280,6 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 
 function routeViewModes(route) {
   const modes = new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
-  modes.add("runtime_map");
   modes.add("topdown");
   if (backgroundTaskViewAvailable()) {
     modes.add("tasks");
@@ -2300,10 +2329,10 @@ function providerProfileLabel(profile, route = state.selectedRoute) {
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
-    return new Set(["fpv", "map", "runtime_map", "topdown"]);
+    return new Set(["fpv", "map", "chase", "topdown"]);
   }
   if (!modes.has(view)) {
-    return new Set(["fpv", "map", "runtime_map"]);
+    return new Set(["fpv", "map", "chase"]);
   }
   if (view === "outputs") {
     return new Set(["outputs"]);

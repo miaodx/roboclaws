@@ -533,7 +533,7 @@ pre,
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "fpv map"
-    "runtime_map topdown";
+    "chase topdown";
 }
 
 .mode-overview [data-panel="map"] {
@@ -544,8 +544,8 @@ pre,
   grid-area: fpv;
 }
 
-.mode-overview [data-panel="runtime_map"] {
-  grid-area: runtime_map;
+.mode-overview [data-panel="chase"] {
+  grid-area: chase;
 }
 
 .mode-overview [data-panel="topdown"] {
@@ -1044,7 +1044,7 @@ dialog pre {
     grid-template-areas:
       "fpv"
       "map"
-      "runtime_map"
+      "chase"
       "topdown";
   }
 }
