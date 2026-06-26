@@ -79,6 +79,7 @@ class ConsoleLaunchSelection:
     gates: tuple[RouteGate, ...] = ()
     supports_prompt: bool = True
     supports_operator_steer: bool = False
+    supports_paused_handoff_resume: bool = False
     supports_relative_navigation_control: bool = False
     pause_supported: bool = False
     emergency_stop_required: bool = False
@@ -191,6 +192,7 @@ class ConsoleLaunchSelection:
             "resource_kind": backend.resource_kind,
             "supports_prompt": self.supports_prompt,
             "supports_operator_steer": self.supports_operator_steer,
+            "supports_paused_handoff_resume": self.supports_paused_handoff_resume,
             "supports_relative_navigation_control": self.supports_relative_navigation_control,
             "pause_supported": self.pause_supported,
             "emergency_stop_required": self.emergency_stop_required,
@@ -397,6 +399,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
+            supports_paused_handoff_resume=True,
             supports_relative_navigation_control=True,
         ),
         *_lane_selections(
@@ -415,6 +418,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
+            supports_paused_handoff_resume=True,
             supports_relative_navigation_control=True,
         ),
     )
@@ -435,6 +439,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     gates=common_gates,
                     default_overrides=("seed=7",),
                     supports_operator_steer=True,
+                    supports_paused_handoff_resume=True,
                     supports_relative_navigation_control=True,
                 )
             )
@@ -461,6 +466,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     gates=common_gates,
                     default_overrides=("seed=7",),
                     supports_operator_steer=True,
+                    supports_paused_handoff_resume=True,
                     supports_relative_navigation_control=True,
                 )
             )
@@ -487,6 +493,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 gates=common_gates,
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
+                supports_paused_handoff_resume=True,
                 supports_relative_navigation_control=True,
             )
         )
@@ -501,6 +508,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 gates=common_gates,
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
+                supports_paused_handoff_resume=True,
                 supports_relative_navigation_control=True,
             )
         )
@@ -629,6 +637,8 @@ def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection
                         gates=_common_gates(),
                         default_overrides=("seed=7",),
                         supports_operator_steer=True,
+                        supports_paused_handoff_resume=agent_engine_id
+                        in {"codex-cli", "openai-agents-sdk"},
                     )
                 )
     return tuple(rows)
@@ -650,6 +660,7 @@ def _selection(
     gates: tuple[RouteGate, ...] = (),
     supports_prompt: bool = True,
     supports_operator_steer: bool = False,
+    supports_paused_handoff_resume: bool = False,
     supports_relative_navigation_control: bool = False,
     pause_supported: bool = False,
     emergency_stop_required: bool = False,
@@ -676,6 +687,7 @@ def _selection(
         gates=gates,
         supports_prompt=supports_prompt,
         supports_operator_steer=supports_operator_steer,
+        supports_paused_handoff_resume=supports_paused_handoff_resume,
         supports_relative_navigation_control=supports_relative_navigation_control,
         pause_supported=pause_supported,
         emergency_stop_required=emergency_stop_required,
@@ -699,6 +711,7 @@ def _lane_selections(
     gates: tuple[RouteGate, ...] = (),
     supports_prompt: bool = True,
     supports_operator_steer: bool = False,
+    supports_paused_handoff_resume: bool = False,
     supports_relative_navigation_control: bool = False,
     pause_supported: bool = False,
     emergency_stop_required: bool = False,
@@ -727,6 +740,7 @@ def _lane_selections(
                 gates=gates,
                 supports_prompt=supports_prompt,
                 supports_operator_steer=supports_operator_steer,
+                supports_paused_handoff_resume=supports_paused_handoff_resume,
                 supports_relative_navigation_control=supports_relative_navigation_control,
                 pause_supported=pause_supported,
                 emergency_stop_required=emergency_stop_required,

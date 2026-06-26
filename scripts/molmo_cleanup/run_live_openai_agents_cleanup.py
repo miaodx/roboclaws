@@ -56,6 +56,7 @@ from roboclaws.launch.evaluation import (
     household_intent_id_for_checker,
     merge_checker_flags,
 )
+from roboclaws.operator_console.interactions import consume_resume_request_for_runner
 from roboclaws.reports.live_performance import (
     extract_model_call_metrics,
     write_model_call_metrics_jsonl,
@@ -770,7 +771,9 @@ class LiveOpenAIAgentsCleanupRunner:
         assert self.server_proc is not None
         print("==> waiting for operator handoff to finish")
         self._mark_timing("operator_handoff_wait_start")
-        status = self.server_proc.wait()
+        status = self._wait_for_handoff_resume_or_server_exit()
+        if status is None:
+            return self._finish_after_resume()
         self._mark_timing("server_finished")
         self._finish_server_log_tee()
         self.server_proc = None
@@ -797,6 +800,148 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("failed", 1, reason=reason)
         self._write_live_timing("failed", 1, reason=reason)
         return 1
+
+    def _wait_for_handoff_resume_or_server_exit(self) -> int | None:
+        assert self.server_proc is not None
+        while self.server_proc.poll() is None:
+            request = _claim_operator_resume_request(self.args.operator_resume_requests_path)
+            if request:
+                self._run_sdk_resume(request)
+                return None
+            time.sleep(0.5)
+        return self.server_proc.wait()
+
+    def _run_sdk_resume(self, request: dict[str, Any]) -> None:
+        attempt_index = _next_sdk_resume_attempt_index(self.run_dir)
+        prompt = _resume_prompt(self.initial_kickoff_prompt, request)
+        self._write_status(
+            "running-openai-agents-resume",
+            reason=OPERATOR_HANDOFF_REASON,
+            resume_available=False,
+            detail=str(request.get("message_id") or ""),
+        )
+        self._append_handoff_resume_attempt(
+            attempt_index=attempt_index,
+            request=request,
+            status="started",
+        )
+        result = OpenAIAgentsLiveRuntime().run(
+            self._sdk_request(prompt=prompt, attempt_index=attempt_index)
+        )
+        attempt_summary = _sdk_attempt_summary(result, attempt_index=attempt_index)
+        attempt_summary["recovery_action"] = "operator_handoff_resume"
+        attempt_summary["recovery_reason"] = OPERATOR_HANDOFF_REASON
+        attempts = list(self.live_timing.get("openai_agents_attempts") or [])
+        attempts.append(attempt_summary)
+        self.live_timing["openai_agents_attempts"] = attempts
+        self.live_timing["openai_agents"] = {
+            "phase": result.phase,
+            "exit_status": result.exit_status,
+            "reason": result.reason,
+            "provider_reason": result.provider_reason,
+            "retryable": result.retryable,
+            "resume_available": result.resume_available,
+            "usage": dict(result.usage),
+            "trace_id": result.trace_id,
+            "provider_session_id": result.provider_session_id,
+        }
+        if result.exit_status not in {0, None} and not (self.run_dir / "run_result.json").is_file():
+            failure = _failure_from_sdk_result(
+                result,
+                run_dir=self.run_dir,
+                timing=self.live_timing,
+                profile=self.agent_sdk_perf_profile,
+            )
+            self._append_handoff_resume_attempt(
+                attempt_index=attempt_index,
+                request=request,
+                status="failed",
+                failure=failure.status_fields(),
+            )
+            raise LiveAgentRunFailure(
+                f"OpenAI Agents SDK resume failed: {failure.reason}",
+                failure,
+            )
+        self._append_handoff_resume_attempt(
+            attempt_index=attempt_index,
+            request=request,
+            status="turn_complete",
+        )
+
+    def _finish_after_resume(self) -> int:
+        assert self.server_proc is not None
+        if (self.run_dir / "run_result.json").is_file():
+            status = self.server_proc.wait()
+            self._mark_timing("server_finished")
+            self._finish_server_log_tee()
+            self.server_proc = None
+            if status != 0:
+                reason = (
+                    f"cleanup MCP server exited with status {status} after "
+                    "OpenAI Agents SDK resume"
+                )
+                self._write_status("failed", 1, reason=reason)
+                self._write_live_timing("failed", 1, reason=reason)
+                return 1
+            self._check_result()
+            self._write_live_timing("finished", 0)
+            self._write_status("finished", 0)
+            return 0
+        if self.server_proc.poll() is None:
+            self._write_status(
+                "paused",
+                reason=OPERATOR_HANDOFF_REASON,
+                resume_available=True,
+                detail=(
+                    "OpenAI Agents SDK resume turn ended without done; MCP server remains alive."
+                ),
+            )
+            return self._finish_operator_handoff()
+        status = self.server_proc.wait()
+        self._mark_timing("server_finished")
+        self._finish_server_log_tee()
+        self.server_proc = None
+        reason = (
+            f"cleanup MCP server exited with status {status} after OpenAI Agents SDK "
+            "resume without done"
+        )
+        self._write_status("failed", 1, reason=reason)
+        self._write_live_timing("failed", 1, reason=reason)
+        return 1
+
+    def _append_handoff_resume_attempt(
+        self,
+        *,
+        attempt_index: int,
+        request: dict[str, Any],
+        status: str,
+        failure: dict[str, Any] | None = None,
+    ) -> None:
+        attempts = list(self.live_timing.get("operator_handoff_resume_attempts") or [])
+        row = {
+            "schema": "operator_handoff_resume_attempt_v1",
+            "agent_engine": "openai-agents-sdk",
+            "attempt_index": attempt_index,
+            "status": status,
+            "message_id": str(request.get("message_id") or ""),
+            "created_at_epoch": time.time(),
+        }
+        if failure:
+            row["failure"] = failure
+        attempts.append(row)
+        self.live_timing["operator_handoff_resume_attempts"] = attempts
+        (self.run_dir / "operator_handoff_resume_attempts.json").write_text(
+            json.dumps(
+                {
+                    "schema": "operator_handoff_resume_attempts_v1",
+                    "attempts": attempts,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
@@ -1189,6 +1334,37 @@ def _explicit_operator_handoff_requested(args: argparse.Namespace) -> str:
         "OpenAI Agents SDK ended without done after an explicit operator handoff request. "
         "The MCP server remains alive for operator-console manual control."
     )
+
+
+def _claim_operator_resume_request(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    result = consume_resume_request_for_runner(path.parent)
+    if not result.get("ok"):
+        raise RuntimeError(str(result.get("error_reason") or "operator resume source error"))
+    requests = result.get("requests")
+    if isinstance(requests, list) and requests:
+        request = requests[0]
+        return request if isinstance(request, dict) else {}
+    return {}
+
+
+def _resume_prompt(original_prompt: str, request: dict[str, Any]) -> str:
+    packet = request.get("resume_request_packet")
+    public_packet = packet if isinstance(packet, dict) else {}
+    return (
+        f"{original_prompt.rstrip()}\n\n"
+        "Paused operator handoff resume for the same live MCP run:\n"
+        "The operator has manually adjusted or inspected the robot and now requests a "
+        "new agent turn. Use current public MCP state, preserve the existing run trace, "
+        "and do not consume queued Steer messages as resume input. Call task-relevant "
+        "MCP tools, then call done only when the public task is complete.\n\n"
+        f"resume_request_packet:\n{json.dumps(public_packet, ensure_ascii=False, sort_keys=True)}\n"
+    )
+
+
+def _next_sdk_resume_attempt_index(run_dir: Path) -> int:
+    return 1 + len(list(run_dir.glob("openai-agents-events.resume-*.jsonl")))
 
 
 def _normalized_handoff_text(text: str) -> str:

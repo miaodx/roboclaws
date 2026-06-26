@@ -586,6 +586,14 @@ function renderOperatorInput(route) {
     els.promptHelp.textContent = "Steer writes an auditable active-run message for supported routes.";
     return;
   }
+  if (mode === "resume") {
+    els.promptLabel.textContent = "Resume With Prompt";
+    els.taskPrompt.disabled = false;
+    els.taskPrompt.placeholder = "Describe the manual adjustment and what the agent should do next.";
+    els.promptHelp.textContent =
+      "Resume records a public paused-handoff request for the runner-owned continuation path.";
+    return;
+  }
   state.operatorMode = "goal";
   renderOperatorInput(route);
 }
@@ -1029,13 +1037,21 @@ function renderStartAction(route, readiness) {
     els.startHelp.textContent = steerHelp(controls);
     return;
   }
+  if (mode === "resume") {
+    const controls = (state.activeState && state.activeState.controls) || {};
+    const enabled = Boolean(state.activeRunId && controls.resume_available);
+    els.startButton.textContent = "Resume With Prompt";
+    els.startButton.disabled = !enabled;
+    els.startHelp.textContent = resumeHelp(controls);
+    return;
+  }
   if (state.activeRunId) {
     const terminal = isRunTerminal();
     els.startButton.textContent = terminal ? "Start Next Goal" : "Run Attached";
     els.startButton.disabled = !terminal || !route.supports_prompt;
     els.startHelp.textContent = terminal
       ? "Start a linked Next Goal from this terminal parent run."
-      : `Watching active run ${state.activeRunId}. Use Steer.`;
+      : activeRunHelp((state.activeState && state.activeState.controls) || {});
     return;
   }
   const attachableRun = readiness.attachable_run || null;
@@ -1070,14 +1086,46 @@ function steerHelp(controls) {
   if (controls.steer_available) {
     return "Message will be written to operator_messages.jsonl for the active run.";
   }
+  if (controls.operator_handoff_paused) {
+    return "Steer is unavailable during paused operator handoff. Use Resume With Prompt.";
+  }
   return controls.supports_operator_steer
     ? "Steer is unavailable after this run is terminal. Use Goal for Next Goal."
     : "This route does not expose active-run steering.";
 }
 
+function resumeHelp(controls) {
+  if (!state.activeRunId) {
+    return "Attach a paused handoff run before resuming.";
+  }
+  if (controls.resume_available) {
+    return "Resume request will be written to operator_resume_requests.jsonl.";
+  }
+  if (controls.operator_handoff_paused && controls.supports_paused_handoff_resume) {
+    return "Paused handoff is not currently resumable from the live runner state.";
+  }
+  if (controls.operator_handoff_paused) {
+    return "This route has no runner-owned paused-handoff resume implementation.";
+  }
+  return "Resume With Prompt is available only during paused operator handoff.";
+}
+
+function activeRunHelp(controls) {
+  if (controls.operator_handoff_paused) {
+    return controls.resume_available
+      ? `Paused handoff in ${state.activeRunId}. Use Resume With Prompt after manual control.`
+      : `Paused handoff in ${state.activeRunId}. Resume is blocked for this route.`;
+  }
+  return `Watching active run ${state.activeRunId}. Use Steer.`;
+}
+
 function handleStartAction() {
   if (state.operatorMode === "steer") {
     sendOperatorMessage();
+    return;
+  }
+  if (state.operatorMode === "resume") {
+    confirmResume();
     return;
   }
   if (state.activeRunId && isRunTerminal()) {
@@ -1094,6 +1142,28 @@ function handleStartAction() {
     return;
   }
   confirmLaunch();
+}
+
+function confirmResume() {
+  const prompt = els.taskPrompt.value.trim();
+  if (!prompt) {
+    els.startHelp.textContent = "Enter a resume prompt before continuing the handoff.";
+    return;
+  }
+  const summary = `
+    <dl class="state-list">
+      <dt>Run</dt><dd>${escapeHtml(state.activeRunId || "")}</dd>
+      <dt>Resume</dt><dd>public operator prompt</dd>
+      <dt>Queued Steer</dt><dd>not consumed as resume input</dd>
+      <dt>Continuation</dt><dd>runner-owned same-run handoff resume</dd>
+    </dl>
+  `;
+  confirmAction({
+    title: "Resume Run",
+    cta: "Resume Run",
+    bodyHtml: summary,
+    onConfirm: sendResumeRequest,
+  });
 }
 
 function attachExistingRun(run) {
@@ -1688,7 +1758,13 @@ function manualControlStatusText(payload, controls, available) {
     return "This route does not expose relative navigation control.";
   }
   if (!available) {
+    if (controls.operator_handoff_paused) {
+      return "Manual control is unavailable for this paused handoff route.";
+    }
     return "Manual control is unavailable after this run reaches a terminal state.";
+  }
+  if (controls.operator_handoff_paused) {
+    return "Paused handoff: manual control is available before resume.";
   }
   return "Ready. Operator moves are recorded as assisted interventions.";
 }
@@ -1715,11 +1791,30 @@ function formatSigned(value) {
 }
 
 function renderOperatorMode(payload = state.activeState || {}) {
+  const controls = payload.controls || {};
+  if (controls.operator_handoff_paused && state.operatorMode === "steer") {
+    state.operatorMode = controls.resume_available ? "resume" : "goal";
+  }
   document.querySelectorAll(".operator-mode").forEach((button) => {
-    button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
+    const mode = button.dataset.operatorMode;
+    if (mode === "steer") {
+      button.disabled = Boolean(state.activeRunId && !controls.steer_available);
+    } else if (mode === "resume") {
+      button.hidden = !state.activeRunId || !controls.operator_handoff_paused;
+      button.disabled = !controls.resume_available;
+    } else {
+      button.disabled = false;
+    }
+    button.classList.toggle("active", mode === state.operatorMode);
   });
   const messages = payload.operator_messages || {};
-  if (messages.operator_message_pending) {
+  if (messages.operator_resume_pending) {
+    els.startHelp.textContent = `${
+      messages.pending_resume_count || 1
+    } resume request(s) waiting for runner continuation.`;
+  } else if (controls.operator_handoff_paused && !controls.resume_available) {
+    els.startHelp.textContent = resumeHelp(controls);
+  } else if (messages.operator_message_pending && !controls.operator_handoff_paused) {
     els.startHelp.textContent = `${
       messages.pending_steer_count || 1
     } steer message(s) waiting for agent checkpoint.`;
@@ -1742,6 +1837,33 @@ async function sendOperatorMessage() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ body: text }),
   });
+  if (result.error) {
+    els.startHelp.textContent = result.error;
+    return;
+  }
+  els.taskPrompt.value = "";
+  els.promptCount.textContent = "0 / 2000";
+  els.startHelp.textContent = operatorMessageResultText(result);
+  pollState();
+}
+
+async function sendResumeRequest() {
+  if (!state.activeRunId) {
+    return;
+  }
+  const text = els.taskPrompt.value.trim();
+  if (!text) {
+    els.startHelp.textContent = "Enter a resume prompt before continuing the handoff.";
+    return;
+  }
+  const result = await fetchJson(
+    `/api/runs/${encodeURIComponent(state.activeRunId)}/resume`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: text }),
+    }
+  );
   if (result.error) {
     els.startHelp.textContent = result.error;
     return;
@@ -1815,6 +1937,9 @@ function operatorMessageResultText(result) {
   }
   if (result.command_type === "steer") {
     return `Steer message ${result.status || "queued"}; waiting for check_operator_messages.`;
+  }
+  if (result.command_type === "resume_with_prompt") {
+    return `Resume request ${result.status || "queued"}; waiting for runner continuation.`;
   }
   return "Operator message recorded.";
 }

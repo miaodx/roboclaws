@@ -219,6 +219,22 @@ def test_launcher_passes_operator_message_path_for_steer_routes(tmp_path: Path) 
     assert f"operator_messages_path={path}" in argv
 
 
+def test_launcher_passes_operator_resume_request_path_for_resumable_routes(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    path = tmp_path / "operator_resume_requests.jsonl"
+
+    argv = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={"operator_resume_requests_path": str(path)},
+    )
+
+    assert f"operator_resume_requests_path={path}" in argv
+
+
 def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     seen_lock_owner = ""

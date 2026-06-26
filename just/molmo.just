@@ -656,6 +656,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         if [[ -n "$operator_messages_path" ]]; then
           server_args+=(--operator-messages-path "$operator_messages_path")
         fi
+        operator_resume_requests_path="${ROBOCLAWS_OPERATOR_RESUME_REQUESTS_PATH:-}"
         live_lock_backend="${backend//[^A-Za-z0-9_.-]/-}"
         codex_lock_path="output/molmo/live-locks/${live_lock_backend}.codex.lock"
         claude_lock_path="output/molmo/live-locks/${live_lock_backend}.claude.lock"
@@ -727,6 +728,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --profile "$profile"
             --checker-profile "$implementation_evidence_lane"
           )
+          if [[ -n "$operator_resume_requests_path" ]]; then
+            runner_args+=(--operator-resume-requests-path "$operator_resume_requests_path")
+          fi
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
           done
@@ -877,6 +881,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --profile "$profile"
             --checker-profile "$implementation_evidence_lane"
           )
+          if [[ -n "$operator_resume_requests_path" ]]; then
+            runner_args+=(--operator-resume-requests-path "$operator_resume_requests_path")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-}" ]]; then
             runner_args+=(--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS}")
           fi

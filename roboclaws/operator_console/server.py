@@ -22,6 +22,7 @@ from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
     InteractionError,
     append_next_goal_request,
+    append_resume_request,
     append_steer_message,
     create_operator_session,
     get_operator_session,
@@ -297,6 +298,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         handlers = {
             "messages": self._serve_steer_message,
             "next-goal": self._serve_next_goal,
+            "resume": self._serve_resume,
             "control": self._serve_control_post,
             "pause": self._serve_pause_post,
             "stop": self._serve_stop_post,
@@ -513,6 +515,16 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             _try_autostart_follow_up(self.repo_root, run_id, follow_up)
         self._json(follow_up, status=201)
 
+    def _serve_resume(self, run_id: str, payload: dict[str, object]) -> None:
+        self._json(
+            append_resume_request(
+                self.repo_root,
+                run_id,
+                str(payload.get("prompt") or payload.get("body") or ""),
+            ),
+            status=201,
+        )
+
     def _serve_pause_post(self, run_id: str, payload: dict[str, object]) -> None:
         del payload
         self._serve_pause_get(run_id)
@@ -622,7 +634,15 @@ def _parse_run_action_path(path: str) -> tuple[str, str] | None:
     if not path.startswith(prefix):
         return None
     remainder = path.removeprefix(prefix)
-    for action in ("emergency-stop", "next-goal", "messages", "control", "pause", "stop"):
+    for action in (
+        "emergency-stop",
+        "next-goal",
+        "messages",
+        "resume",
+        "control",
+        "pause",
+        "stop",
+    ):
         suffix = f"/{action}"
         if remainder.endswith(suffix):
             return unquote(remainder[: -len(suffix)]), action

@@ -203,5 +203,6 @@ def add_household_cleanup_live_runner_args(
     parser.add_argument("--min-generated-mess-count", required=True)
     parser.add_argument("--profile", required=True)
     parser.add_argument("--checker-profile", default="")
+    parser.add_argument("--operator-resume-requests-path", type=Path, default=None)
     parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--checker-visual-arg", action="append", default=[])

@@ -8,9 +8,11 @@ import pytest
 from roboclaws.operator_console.interactions import (
     InteractionError,
     append_next_goal_request,
+    append_resume_request,
     append_steer_message,
     attach_run_to_session,
     check_operator_messages_for_mcp,
+    consume_resume_request_for_runner,
     get_operator_session,
     list_operator_messages,
     operator_message_state,
@@ -226,6 +228,55 @@ def test_active_steer_is_seen_only_by_check_operator_messages(tmp_path: Path) ->
     assert seen["messages"][0]["body"] == "Observe the desk again"
     assert after["operator_message_pending"] is False
     assert after["messages"][0]["status"] == "seen"
+
+
+def test_paused_handoff_rejects_delayed_steer_and_records_resume_request(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="paused")
+    state = json.loads((run_dir / "operator_state.json").read_text(encoding="utf-8"))
+    state["reason"] = "operator_handoff_requested"
+    state["resume_available"] = True
+    (run_dir / "operator_state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="paused for operator handoff"):
+        append_steer_message(tmp_path, "run-a", "Observe the kitchen")
+
+    request = append_resume_request(tmp_path, "run-a", "I moved forward; continue the task")
+    listed = list_operator_messages(tmp_path, "run-a")
+    claimed = consume_resume_request_for_runner(run_dir)
+    after = list_operator_messages(tmp_path, "run-a")
+
+    assert request["command_type"] == "resume_with_prompt"
+    assert request["status"] == "queued"
+    assert request["resume_request_packet"]["schema"] == "operator_console_resume_request_packet_v1"
+    assert "private_target_truth" not in json.dumps(request, ensure_ascii=False)
+    assert not (run_dir / "continue_queue.jsonl").exists()
+    assert listed["operator_resume_pending"] is True
+    assert listed["steer_available"] is False
+    assert listed["resume_available"] is True
+    assert claimed["request_count"] == 1
+    assert claimed["requests"][0]["status"] == "claimed"
+    assert after["operator_resume_pending"] is False
+
+
+def test_paused_handoff_resume_fails_loudly_for_unsupported_route(tmp_path: Path) -> None:
+    run_dir = _write_run(
+        tmp_path,
+        selection_id=(
+            "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::"
+            "world-public-labels"
+        ),
+        phase="paused",
+    )
+    state = json.loads((run_dir / "operator_state.json").read_text(encoding="utf-8"))
+    state["reason"] = "operator_handoff_requested"
+    (run_dir / "operator_state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="unsupported for this route"):
+        append_resume_request(tmp_path, "run-a", "Continue")
+
+    assert not (run_dir / "operator_resume_requests.jsonl").exists()
 
 
 def test_operator_message_state_surfaces_malformed_source_errors(tmp_path: Path) -> None:
