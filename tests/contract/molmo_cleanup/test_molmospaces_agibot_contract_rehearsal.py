@@ -78,21 +78,17 @@ def _assert_contract_rehearsal_artifacts(run_dir: Path) -> None:
         assert (run_dir / relpath).is_file(), relpath
 
 
-def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
-    tmp_path: Path,
-) -> None:
-    sys.modules.pop("agibot_gdk", None)
-
-    result = run_molmospaces_agibot_contract_rehearsal(run_dir=tmp_path / "run")
-
-    run_dir = tmp_path / "run"
+def _read_contract_rehearsal_outputs(run_dir: Path) -> tuple[dict, dict, str, str]:
     run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
     runtime_export = json.loads(
         (run_dir / "runtime" / "runtime_export.json").read_text(encoding="utf-8")
     )
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     serialized = json.dumps(run_result, sort_keys=True)
+    return run_result, runtime_export, report_text, serialized
 
+
+def _assert_fixture_contract_rehearsal_identity(result: dict, run_result: dict) -> None:
     assert result["confidence_layer"] == CONFIDENCE_LAYER
     assert run_result["report_title"] == CONFIDENCE_LAYER
     assert run_result["evidence_lane"] == "world-public-labels"
@@ -108,6 +104,37 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     assert run_result["molmospaces_scene"]["runtime"] == RUNTIME_FIXTURE
     assert run_result["molmospaces_scene"]["scene_source"] == "deterministic_fixture_projection"
     assert run_result["molmospaces_scene"]["scenario_id"] == "molmo-cleanup-default-7"
+
+
+def _assert_no_active_gdk_navigation_claim(run_result: dict) -> None:
+    assert run_result["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
+    assert run_result["agibot_sdk_runner"]["real_movement_enabled"] is False
+    assert run_result["agibot_sdk_runner"].get("primitive_provenance", "") != (
+        "agibot_gdk_normal_navi"
+    )
+    assert run_result["primitive_provenance"] != "agibot_gdk_normal_navi"
+    assert run_result["molmospaces_agibot_contract_rehearsal"][
+        "navigation_primitive_provenance"
+    ] != "agibot_gdk_normal_navi"
+    assert not any(
+        item.get("tool_response", {}).get("primitive_provenance") == "agibot_gdk_normal_navi"
+        for item in run_result["agibot_sdk_runner"]["subphase_reports"]
+    )
+
+
+def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
+    tmp_path: Path,
+) -> None:
+    sys.modules.pop("agibot_gdk", None)
+
+    result = run_molmospaces_agibot_contract_rehearsal(run_dir=tmp_path / "run")
+
+    run_dir = tmp_path / "run"
+    run_result, runtime_export, report_text, serialized = _read_contract_rehearsal_outputs(
+        run_dir
+    )
+
+    _assert_fixture_contract_rehearsal_identity(result, run_result)
     assert runtime_export["simulated"] is True
     assert runtime_export["physical_robot"] is False
     assert runtime_export["observation"]["ok"] is True
@@ -146,6 +173,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     assert "source_agibot_map" not in serialized
     assert "current_agibot_map" not in serialized
     assert "agibot_gdk_normal_navi" not in report_text
+    _assert_no_active_gdk_navigation_claim(run_result)
     assert "agibot_gdk" not in sys.modules
 
 
@@ -177,7 +205,7 @@ def test_molmospaces_agibot_contract_rehearsal_cli_runs_without_gdk(
     assert Path(summary["report"]).is_file()
     assert run_result["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
     assert run_result["execution_backend"] == EXECUTION_BACKEND
-    assert "agibot_gdk_normal_navi" not in json.dumps(run_result, sort_keys=True)
+    _assert_no_active_gdk_navigation_claim(run_result)
 
 
 def test_molmospaces_agibot_backend_records_old_map_as_reference_only(
@@ -235,7 +263,6 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
         (run_dir / "runtime" / "cleanup_actions.json").read_text(encoding="utf-8")
     )
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
-    serialized = json.dumps(run_result, sort_keys=True)
 
     assert result["report_title"] == CLEANUP_ACTION_CONFIDENCE_LAYER
     assert run_result["rehearsal_mode"] == REHEARSAL_MODE_CLEANUP_ACTIONS
@@ -270,8 +297,8 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     assert CLEANUP_ACTION_CONFIDENCE_LAYER in report_text
     assert "api_semantic" in report_text
     assert "No semantic cleanup actions recorded" not in report_text
-    assert "agibot_gdk_normal_navi" not in serialized
     assert "agibot_gdk_normal_navi" not in report_text
+    _assert_no_active_gdk_navigation_claim(run_result)
 
 
 def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_map(

@@ -2,14 +2,15 @@
 
 Source gate: `docs/plans/refactor-architecture-cleanup-campaign.md`
 
-Latest user intent: autonomous architecture cleanup campaign with high
-autonomy; continue through verified commit slices until a stop gate or two
-post-HEAD discovery handoffs find no clear safe P1/P2 slice.
+Latest user intent: finish the current verified slice group, then stop the
+architecture cleanup campaign. No fresh discovery pass should run until the
+user explicitly resumes the campaign.
 
 Current slice:
 
-- Delete the Pages prune script wrapper and migrate CI to the package module
-  CLI, then run a fresh discovery handoff after commit.
+- Agibot contract-rehearsal runtime owner move complete. Campaign stopped by
+  user request after committing this slice; remaining quality-ratchet output is
+  broader oversized-module baseline drift in other owners.
 
 Last proven evidence:
 
@@ -25,6 +26,68 @@ Last proven evidence:
   --help` printed CLI help; stale wrapper path search returns only the
   intentional removal guard; ruff passed on touched files; and `git diff
   --check` passed.
+- Post-`90e2c0d8` discovery checked current script wrappers, current package
+  micro-modules, active docs/tests/recipes, and stale names from previous
+  slices. No clear safe P1/P2 slice remained after shrink attempts.
+- Post-`9c70b796` discovery repeated the high-noise summary, stale-token scan,
+  tiny wrapper scan, active script path scan, and previous stale-owner checks.
+  It found no new material safe slice.
+- Report-only architecture review artifact:
+  `/tmp/architecture-review-20260623_095651.html`.
+- Fresh post-HEAD discovery after `39846ccb` found a current false-confidence
+  candidate: `.venv/bin/python scripts/dev/check_python_quality_ratchet.py`
+  fails on current source. The first safe vertical slice moved
+  provider-registry command dispatch behind private helpers; focused provider
+  catalog tests, Ruff, and `git diff --check` passed, and the quality-ratchet
+  output no longer lists `roboclaws/agents/provider_registry.py`.
+- The second safe vertical slice moved cleanup MCP server initialization setup
+  into same-owner helpers and deleted shallow one-call/no-call helpers; focused
+  MCP contract tests, Ruff, and `git diff --check` passed, and the
+  quality-ratchet output no longer lists
+  `RealWorldMolmoCleanupMCPServer.__init__` or
+  `roboclaws/household/realworld_mcp_server.py` module-size growth.
+- The third safe vertical slice simplified
+  `LiveOpenAIAgentsCleanupRunner._run_sdk_agent` status writing without adding
+  helper surface or growing the file; focused live-runtime tests, Ruff, and
+  `git diff --check` passed, and the quality-ratchet output no longer lists
+  that method.
+- The fourth safe vertical slice moved repeated Agibot contract-test artifact
+  reads and identity assertions into same-file helpers. Focused PLR0915 Ruff,
+  focused contract tests, touched-file Ruff, and `git diff --check` passed;
+  the quality-ratchet output no longer lists the two overlong Agibot contract
+  tests and now reports only broader oversized-module baseline drift.
+- The fifth safe vertical slice moved live-agent timing breakdown, MCP trace
+  timing, control-plane metrics, timeline construction, and compact metric
+  grouping from the Molmo cleanup launcher script to the agent-layer
+  `roboclaws.agents.live_timing` owner. Focused timing tests, touched-file
+  Ruff, and `git diff --check` passed; the quality-ratchet output no longer
+  lists `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`.
+- The sixth safe vertical slice moved Agibot operator localization,
+  run-enablement, bounded-local-nudge, and human-takeover-stop gate logic from
+  the SDK subprocess adapter into the household operator-gates owner. Focused
+  SDK runner source tests, focused physical Agibot contract tests, touched-file
+  Ruff, and `git diff --check` passed; the quality-ratchet output no longer
+  lists `roboclaws/household/agibot_sdk_runner.py` or
+  `tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+- Fresh post-`4bb038bc` discovery found a shrinkable duplicate-owner candidate
+  in visual grounding: both the sidecar adapter and benchmark runner sanitized
+  runtime parameters locally while the request/response contract owner existed
+  in `roboclaws.household.visual_grounding`. The safe vertical slice merged
+  sanitizer ownership into that contract module and migrated both callers.
+  Focused visual-grounding unit/contract tests, touched-file Ruff, and
+  `git diff --check` passed; the quality-ratchet output no longer lists
+  `scripts/visual_grounding/adapters.py` or
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py`.
+- The final slice for this campaign group moved Agibot simulated runtime
+  envelope builders, stage JSON/HTML artifact writing, and relative-path
+  formatting into `roboclaws.household.agibot_contract_rehearsal_runtime`.
+  `agibot_contract_rehearsal.py` now delegates those runtime shapes, and
+  `agibot_contract_rehearsal_stages.py` calls the canonical writer instead of
+  carrying a second local copy. The focused Agibot rehearsal tests passed;
+  touched-file Ruff and `git diff --check` passed. The quality-ratchet output
+  no longer lists `roboclaws/household/agibot_contract_rehearsal.py` or
+  `roboclaws/household/agibot_contract_rehearsal_stages.py`; it still fails on
+  unrelated oversized-module drift listed under parked work.
 
 Completed slice batch:
 
@@ -71,21 +134,37 @@ Completed slice batch:
   preserving the public dev benchmark command.
 - Slice 20: deleted the Pages prune script wrapper and migrated CI to the
   `roboclaws.devtools.pages_site` module CLI.
+- Slice 21: deepened provider-registry CLI dispatch so `_main(...)` is no
+  longer the command formatting owner.
+- Slice 22: deepened cleanup MCP server initialization while reducing the
+  module size below its previous line count.
+- Slice 23: simplified OpenAI Agents runner status-loop control flow without
+  changing the public live-runner script.
+- Slice 24: extracted test-local Agibot artifact-read and run-identity helpers
+  so two contract tests no longer exceed the PLR0915 quality-ratchet threshold.
+- Slice 25: moved reusable OpenAI Agents live timing interpretation out of the
+  Molmo cleanup launcher script and into the agent runtime layer.
+- Slice 26: moved Agibot operator safety-gate interpretation out of the SDK
+  subprocess adapter and into the household operator-gates owner.
+- Slice 27: merged visual-grounding runtime-parameter sanitization into the
+  visual-grounding contract owner and removed two duplicate private helpers.
+- Slice 28: moved Agibot simulated runtime envelopes, stage artifact writing,
+  and relative-path formatting into the Agibot contract-rehearsal runtime
+  owner, and updated contract tests to assert active GDK navigation claims
+  instead of scanning capability-profile metadata strings.
 
 Next proof:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_pages_site_prune.py
-python -m roboclaws.devtools.pages_site --help
-rg -n "scripts/reports/prune_pages_site.py|prune_pages_site.py" README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md docs/human docs/agents docs/ai just scripts tests roboclaws .github pyproject.toml
-.venv/bin/ruff check roboclaws/devtools/pages_site.py tests/contract/reports/test_pages_site_prune.py
-git diff --check
+# Campaign stopped by user request after Slice 28.
+# On resume, run fresh post-HEAD discovery before selecting the next slice.
 ```
 
 Stop condition:
 
 - Stop for public contract migration, unavailable proof, external/hardware
   evidence, or two consecutive fresh post-HEAD no-clear-candidate handoffs.
+- Current stop reason: user requested stopping after the current slice group.
 
 No-touch scope:
 
@@ -111,3 +190,16 @@ Parked work:
   used by `just/molmo.just` and covered by a CLI contract test. Removing it
   safely would need a separate recipe/test migration around a simulator-heavy
   surface.
+- No-clear pass 1 parked `scripts/maps/check_bundle.py`,
+  `scripts/maps/export_agibot_map_bundle.py`, and
+  `scripts/molmo_cleanup/prepare_molmospaces_room.py` because they still own
+  real CLI argument/default behavior instead of pure pass-through wrapper
+  behavior.
+- Remaining current quality-ratchet queue: broader oversized-module baseline
+  drift across Agibot, Molmo, visual-grounding, and test files. Treat as
+  architecture pressure and try safe owner-local shrink slices before
+  considering a baseline refresh.
+- Latest quality-ratchet residual after Slice 28: failures remain in
+  `agibot_map_build_mcp_server.py`, `realworld_contract.py`, several
+  `scripts/molmo_cleanup/*` files, and large contract/unit tests. These are
+  outside the final Agibot runtime-owner slice.

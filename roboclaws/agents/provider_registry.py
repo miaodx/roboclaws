@@ -996,6 +996,47 @@ def _provider_route_for_cli(parser: argparse.ArgumentParser, route_id: str) -> P
     raise AssertionError("argparse parser.error should exit")
 
 
+def _route_id_required_error(command: str) -> str:
+    if command in {"model-id", "provider-model-id"}:
+        return "model_id is required"
+    return "route_id is required"
+
+
+def _print_model_cli(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    if args.command == "model-id":
+        try:
+            print(_model_command_text(args.route_id))
+        except KeyError as exc:
+            parser.error(f"unknown model {exc.args[0]!r}; use a catalog model id or alias")
+        return 0
+
+    if not args.agent_engine:
+        parser.error("model_id is required")
+    try:
+        model = resolve_route_model(args.route_id, args.agent_engine)
+    except KeyError as exc:
+        parser.error(
+            f"unknown provider/model id {exc.args[0]!r}; use a provider route and catalog model"
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(model.model_id)
+    return 0
+
+
+def _print_route_cli(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    route: ProviderRouteSpec,
+) -> int:
+    if args.command == "supports-engine":
+        if not args.agent_engine:
+            parser.error("agent_engine is required")
+        return _supports_engine_exit_code(route, args.agent_engine)
+    _print_provider_route_command(parser, args.command, route)
+    return 0
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _build_registry_parser()
     args = parser.parse_args(argv)
@@ -1005,37 +1046,12 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     if not args.route_id:
-        parser.error(
-            "model_id is required"
-            if args.command in {"model-id", "provider-model-id"}
-            else "route_id is required"
-        )
-    if args.command == "model-id":
-        try:
-            print(_model_command_text(args.route_id))
-        except KeyError as exc:
-            parser.error(f"unknown model {exc.args[0]!r}; use a catalog model id or alias")
-        return 0
-    if args.command == "provider-model-id":
-        if not args.agent_engine:
-            parser.error("model_id is required")
-        try:
-            model = resolve_route_model(args.route_id, args.agent_engine)
-        except KeyError as exc:
-            parser.error(
-                f"unknown provider/model id {exc.args[0]!r}; use a provider route and catalog model"
-            )
-        except ValueError as exc:
-            parser.error(str(exc))
-        print(model.model_id)
-        return 0
+        parser.error(_route_id_required_error(args.command))
+    if args.command in {"model-id", "provider-model-id"}:
+        return _print_model_cli(parser, args)
+
     route = _provider_route_for_cli(parser, args.route_id)
-    if args.command == "supports-engine":
-        if not args.agent_engine:
-            parser.error("agent_engine is required")
-        return _supports_engine_exit_code(route, args.agent_engine)
-    _print_provider_route_command(parser, args.command, route)
-    return 0
+    return _print_route_cli(parser, args, route)
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised through shell helpers.

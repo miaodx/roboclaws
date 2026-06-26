@@ -189,7 +189,11 @@ class RealWorldMolmoCleanupMCPServer:
         self.port = int(port)
         self.policy = policy
         self.task_surface = task_surface
-        self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
+        self.agent_driven = (
+            policy in AGENT_POLICIES or policy.endswith("_agent")
+            if agent_driven is None
+            else agent_driven
+        )
         self.policy_uses_private_truth = False
         self.goal_contract = goal_contract or _goal_contract_from_env()
         self.task_intent = household_runtime_intent(self.goal_contract, task_intent)
@@ -243,6 +247,12 @@ class RealWorldMolmoCleanupMCPServer:
         if self.record_robot_views and not self.base_contract.supports_robot_views():
             raise ValueError("record_robot_views requires a backend with write_robot_views")
 
+        self._init_runtime_state()
+        self._init_public_artifacts()
+        self._init_fastmcp(host)
+        self._write_initialized_event()
+
+    def _init_runtime_state(self) -> None:
         self.trace_path = self.run_dir / "trace.jsonl"
         self.run_result_path = self.run_dir / "run_result.json"
         self.done_event = threading.Event()
@@ -256,6 +266,7 @@ class RealWorldMolmoCleanupMCPServer:
         self._closed = False
         self._done_result: dict[str, Any] | None = None
 
+    def _init_public_artifacts(self) -> None:
         self._before_snapshot = self._write_snapshot(
             "before.png", title="Before real-world cleanup"
         )
@@ -266,18 +277,22 @@ class RealWorldMolmoCleanupMCPServer:
             )
         copy_nav2_map_bundle_snapshot(source_bundle_dir=self.map_bundle_dir, run_dir=self.run_dir)
         self._write_live_public_artifacts(trigger="server_initialized")
+
+    def _init_fastmcp(self, host: str) -> None:
         self._mcp = FastMCP("roboclaws", host=host, port=self.port)
         register_realworld_mcp_tools(self)
+
+    def _write_initialized_event(self) -> None:
         self.write_runtime_event(
             "molmo_realworld_cleanup_mcp_initialized",
             contract=REALWORLD_CONTRACT,
-            policy=policy,
+            policy=self.policy,
             agent_driven=self.agent_driven,
             task_intent=self.task_intent,
             goal_contract=self.goal_contract.to_payload() if self.goal_contract is not None else {},
             perception_mode=self.perception_mode,
             evidence_lane=self.evidence_lane,
-            visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
+            visual_grounding_pipeline_id=self.contract.visual_grounding_pipeline_id,
             agent_sdk_camera_grounded_composite_tools=(
                 self.agent_sdk_camera_grounded_composite_tools
             ),
@@ -581,7 +596,9 @@ class RealWorldMolmoCleanupMCPServer:
         fpv_path = image_artifacts.get("fpv") or raw.get("fpv_image")
         if not fpv_path:
             return response
-        resolved = _resolve_artifact_path(self.run_dir, str(fpv_path))
+        resolved = Path(str(fpv_path))
+        if not resolved.is_absolute():
+            resolved = self.run_dir / resolved
         if not resolved.is_file():
             return response
         state_text = json.dumps(
@@ -685,7 +702,9 @@ class RealWorldMolmoCleanupMCPServer:
             tool,
             request,
             response,
-            object_id_transform=self._internal_object_id,
+            object_id_transform=lambda handle: (
+                self.contract._internal_object_id(handle) if handle is not None else None
+            ),
         )
         if capture is None:
             return
@@ -699,14 +718,6 @@ class RealWorldMolmoCleanupMCPServer:
         raise ValueError(
             f"unsupported robot_view_capture_policy '{self.robot_view_capture_policy}'"
         )
-
-    def _internal_object_id(self, handle: str | None) -> str | None:
-        if handle is None:
-            return None
-        return self.contract._internal_object_id(handle)
-
-    def _internal_fixture_id(self, fixture_id: str | None) -> str | None:
-        return self.contract.internal_fixture_id_for_public_reference(fixture_id)
 
     def _record_robot_view(
         self,
@@ -734,7 +745,9 @@ class RealWorldMolmoCleanupMCPServer:
                 action=action,
                 label_suffix=label_suffix,
                 focus_object_id=focus_object_id,
-                focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
+                focus_receptacle_id=self.contract.internal_fixture_id_for_public_reference(
+                    focus_receptacle_id
+                ),
                 semantic_phase=semantic_phase,
                 action_evidence=action_evidence,
                 camera_yaw_offset_deg=camera_yaw_offset_deg,
@@ -1170,20 +1183,6 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
-def _live_report_asset_src(path: Any, run_dir: Path | None) -> str:
-    candidate = Path(path)
-    if run_dir is not None:
-        try:
-            return candidate.relative_to(run_dir).as_posix()
-        except ValueError:
-            pass
-    return candidate.as_posix()
-
-
-def _default_agent_driven(policy: str) -> bool:
-    return policy in AGENT_POLICIES or policy.endswith("_agent")
-
-
 def _public_acceptance_config_from_backend(
     base_contract: CleanupBackendSession | None,
 ) -> dict[str, int]:
@@ -1197,11 +1196,6 @@ def _public_acceptance_config_from_backend(
     if requested_run_size <= 0:
         return {}
     return {"requested_run_size": requested_run_size}
-
-
-def _resolve_artifact_path(run_dir: Path, value: str) -> Path:
-    path = Path(value)
-    return path if path.is_absolute() else run_dir / path
 
 
 def _goal_contract_from_env() -> GoalContract | None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,7 +16,6 @@ from roboclaws.household.agibot_contract_rehearsal import (
     _agent_view_with_runtime_observation,
     _agibot_shaped_metric_map,
     _agibot_shaped_static_fixture_projection,
-    _blocked_manipulation,
     _empty_cleanup_actions_result,
     _first_waypoint_id_from_sequence,
     _load_json,
@@ -29,11 +27,23 @@ from roboclaws.household.agibot_contract_rehearsal import (
     _run_cleanup_action_rehearsal,
     _run_result,
     _runtime_export,
-    _simulated_navigation,
-    _simulated_observation,
     _write_preflight_artifacts,
     _write_snapshot,
-    _write_stage_artifact,
+)
+from roboclaws.household.agibot_contract_rehearsal_runtime import (
+    blocked_manipulation as _blocked_manipulation,
+)
+from roboclaws.household.agibot_contract_rehearsal_runtime import (
+    simulated_navigation as _simulated_navigation,
+)
+from roboclaws.household.agibot_contract_rehearsal_runtime import (
+    simulated_observation as _simulated_observation,
+)
+from roboclaws.household.agibot_contract_rehearsal_runtime import (
+    write_json as _write_json,
+)
+from roboclaws.household.agibot_contract_rehearsal_runtime import (
+    write_stage_artifact as _write_stage_artifact,
 )
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.cleanup_primitive_evidence import (
@@ -786,8 +796,3 @@ def _build_and_write_rehearsal_result(
     )
     _write_json(run_dir / "run_result.json", run_result)
     return run_result
-
-
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
