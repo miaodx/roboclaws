@@ -161,9 +161,7 @@ def _read_physical_pilot_artifacts(run_dir: Path) -> tuple[str, dict, dict, dict
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     persisted = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
     public_agent_view_artifact = json.loads(
-        (run_dir / "subphases" / "01-agent-view" / "agent_view.json").read_text(
-            encoding="utf-8"
-        )
+        (run_dir / "subphases" / "01-agent-view" / "agent_view.json").read_text(encoding="utf-8")
     )
     vendor_agent_view_artifact = json.loads(
         (run_dir / "subphases" / "01-agent-view" / "vendor_agent_view.json").read_text(

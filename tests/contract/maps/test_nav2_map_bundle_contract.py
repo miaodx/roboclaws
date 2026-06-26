@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
@@ -59,6 +60,25 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
     assert route.ok is True
     assert route.navigation_backend == SIM_COSTMAP_PLANNER
     assert route.path_length_m > 0
+
+
+def test_nav2_bundle_preview_uses_canonical_map_visual_role(tmp_path: Path) -> None:
+    agent_view = _agent_view()
+    bundle_dir = tmp_path / "base-navigation-map-bundle"
+
+    snapshot = write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+
+    preview_path = bundle_dir / snapshot["artifact_paths"]["preview_png"]
+    image = Image.open(preview_path).convert("RGB")
+    extrema = image.getextrema()
+
+    assert image.size == (900, 560)
+    assert min(channel[1] - channel[0] for channel in extrema) > 80
+    assert snapshot["artifact_paths"]["preview_png"] == "preview.png"
 
 
 def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) -> None:

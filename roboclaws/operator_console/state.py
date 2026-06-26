@@ -9,6 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.maps.preview import (
+    BASE_MAP_SOURCE_FAMILY,
+    BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+    RUNTIME_MAP_SOURCE_FAMILY,
+    RUNTIME_METRIC_MAP_PREVIEW_ROLE,
+    SCENE_RENDER_SOURCE_FAMILY,
+    TOPDOWN_SCENE_RENDER_ROLE,
+)
 from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.process_status import pid_is_active
@@ -643,6 +651,7 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
+        ("Runtime Metric Map Preview", "runtime_metric_map_preview.png", "image"),
         ("B1 Robot Consumption", "b1_robot_consumption_manifest.json", "json"),
         ("Runtime Map Prior", "runtime_map_prior_snapshot.json", "json"),
         ("Runtime Map Prior Targets", "runtime_map_prior_targets.json", "json"),
@@ -679,6 +688,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
         "chase": ("*.chase*.png", "*.chase*.jpg", "*chase*.png", "*chase*.jpg"),
         "map": ("map_bundle/preview.png",),
+        "runtime_map": ("runtime_metric_map_preview.png",),
         "topdown": (
             "*topdown*.png",
             "*topdown*.jpg",
@@ -716,6 +726,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
             "path": str(path),
             "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
+            **_view_asset_role_metadata(key),
         }
     if "grounding" in output:
         output["fpv"] = {
@@ -723,6 +734,25 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
             "display_source": "visual_grounding_overlay",
         }
     return output
+
+
+def _view_asset_role_metadata(key: str) -> dict[str, str]:
+    if key == "map":
+        return {
+            "visual_role": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+            "artifact_source_family": BASE_MAP_SOURCE_FAMILY,
+        }
+    if key == "runtime_map":
+        return {
+            "visual_role": RUNTIME_METRIC_MAP_PREVIEW_ROLE,
+            "artifact_source_family": RUNTIME_MAP_SOURCE_FAMILY,
+        }
+    if key == "topdown":
+        return {
+            "visual_role": TOPDOWN_SCENE_RENDER_ROLE,
+            "artifact_source_family": SCENE_RENDER_SOURCE_FAMILY,
+        }
+    return {"visual_role": key, "artifact_source_family": "run_view_artifact"}
 
 
 def _artifact_href(root: Path, path: Path) -> str:
@@ -801,10 +831,7 @@ def _control_terminal_state(phase: str, status: str, terminal_reason: str) -> bo
 
 
 def _operator_handoff_paused(phase: str, terminal_reason: str) -> bool:
-    return (
-        phase.lower() == "paused"
-        and terminal_reason.lower() == "operator_handoff_requested"
-    )
+    return phase.lower() == "paused" and terminal_reason.lower() == "operator_handoff_requested"
 
 
 def _is_provider_transient_reason(reason: str) -> bool:
