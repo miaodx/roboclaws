@@ -1,6 +1,6 @@
 # Refactor: Architecture Cleanup Campaign
 
-**Status:** STOPPED_BY_USER
+**Status:** PARKED
 **Created:** 2026-06-23
 **Source:** `$intuitive-reduce-entropy` saturation scan,
 `$improve-codebase-architecture` report-only review, `$intuitive-refactor`
@@ -63,6 +63,12 @@ Stop/park criteria:
 - Two consecutive post-HEAD discovery handoffs find no clear safe P1/P2 slice
   after shrink attempts.
 
+Current stop reason:
+
+- Met: post-Slice-33 discovery passes 1 and 2 found no clear safe P1/P2
+  autonomous slice after parking public migrations and broad oversized-module
+  restructuring.
+
 Discovery source:
 
 - Repo entropy saturation scan against current HEAD.
@@ -101,6 +107,11 @@ Surface metrics:
 | Move Agibot operator gates to household owner | 0 | 1 | 1 | 1 | preserved |
 | Merge visual-grounding runtime parameter sanitizer | 0 | 2 | 2 | 1 | preserved |
 | Move Agibot contract-rehearsal runtime owner | 0 | 1 | 2 | 1 | preserved |
+| Deepen MolmoSpaces robot-view output owner | 0 | 1 | 0 | 0 | preserved |
+| Split operator-console assertion helpers | 0 | 1 | 0 | 0 | preserved |
+| Deepen MolmoSpaces category rules | 0 | 1 | 0 | 1 | preserved |
+| Move Codex live timing to agent owner | 0 | 1 | 1 | 0 | preserved |
+| Merge operator-console source-error helpers | 0 | 1 | 0 | 0 | preserved |
 
 Low-value stop signal:
 
@@ -112,7 +123,7 @@ Discovery cadence:
 - Run a fresh reduce-entropy discovery handoff when the candidate queue is
   exhausted.
 
-Consecutive no-clear-candidate passes: 0
+Consecutive no-clear-candidate passes: 2
 
 ## Candidate Queue
 
@@ -124,16 +135,20 @@ public module CLI.
 
 Next clear candidates:
 
-- Stopped by user request after the Agibot contract-rehearsal runtime-owner
-  slice. Do not select another candidate until the user explicitly resumes.
-  On resume, run a fresh post-HEAD discovery handoff first. Remaining
-  quality-ratchet output is broader oversized-module baseline drift and needs
-  owner-local shrink candidates rather than a blind baseline refresh.
+- Fresh post-HEAD discovery on 2026-06-25 found a current false-confidence
+  candidate: `.venv/bin/python scripts/dev/check_python_quality_ratchet.py`
+  failed with new complexity rows in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` plus two
+  operator-console test helpers. Slice 29 removed the MolmoSpaces worker output
+  rows. Slice 30 split the operator-console assertion helpers, so the ratchet
+  now reports only oversized-module baseline drift.
 
 Broader oversized-module growth remains architecture pressure, not one
 autonomous slice: several touched modules grew beyond the recorded baseline and
 need owner-specific refactors or a reviewed baseline refresh after clear new
-complexity violations are removed.
+complexity violations are removed. Post-Slice-33 discovery passes 1 and 2 found
+no further clear safe P1/P2 autonomous slice, so this campaign is parked by its
+stop condition.
 
 Checked and parked:
 
@@ -156,13 +171,48 @@ Checked and parked:
   source. Medium-risk handling split this into safe internal slices for each
   new complexity violation before considering broader oversized-module
   baseline drift.
+- Fresh 2026-06-25 handoff after `12b66126` found four new current complexity
+  rows. Slice 29 removed the two MolmoSpaces worker-output rows. Remaining
+  current complexity rows were
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
+  and
+  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`;
+  Slice 30 removed both rows. A direct summary check then exposed one remaining
+  C901 row in `roboclaws/maps/molmospaces_preparation.py`; Slice 31 replaced
+  that branch ladder with ordered category rules and interface-level coverage,
+  leaving the ratchet summary at zero Ruff complexity violations.
+- Post-`29e3d316` discovery checked the remaining oversized-module drift and
+  found a bounded duplicate-owner slice in live-run timing: the retired Codex
+  runner still carried local timing and MCP trace helpers while
+  `roboclaws.agents.live_timing` already owned the active live-agent timing
+  interface. Slice 32 moved only that internal timing interpretation into the
+  agent owner and preserved the script path, tested error labels, and output
+  schema.
+- Post-`7cd1b445` discovery found one more bounded same-owner merge in
+  `roboclaws.operator_console.interactions`: operator message and resume JSONL
+  source-error formatting used parallel private helpers. Slice 33 merged those
+  helpers while preserving source labels and existing error text.
+- Post-`60f9fd67` discovery pass 1 checked current ratchet summary, top
+  oversized household/report/operator-console/script owners, stale/public alias
+  hits, checker legacy flags, operator-console state JSON source helpers, and
+  raw-FPV semantic aliasing. It found no clear safe P1/P2 slice after shrink
+  attempts.
+- Post-`60f9fd67` discovery pass 2 independently checked the ratchet proof,
+  exact oversized-module failures, small script/module surfaces, repeated
+  private-helper names, text/JSON source readers, live MolmoSpaces aliases, and
+  operator-console JSONL/source helpers. The ratchet summary still reports
+  zero Ruff complexity violations, and the full ratchet still fails only on
+  oversized-module baseline drift. No implementation slice passed the campaign
+  bar: remaining candidates require public command migration, broader
+  test-suite/report restructuring, domain-contract decisions, or would only
+  move lines without deleting, merging, or canonicalizing a real concept.
 
-The campaign is reopened from the quality-ratchet proof surface. Continue with
-the clear current violations above until focused proof passes, the queue is
-exhausted, or the stop/park criteria apply.
+The campaign is parked from the quality-ratchet proof surface. Reopen only with
+a new accepted owner-specific plan, a public migration decision, or a reviewed
+baseline decision.
 
-The campaign is stopped at the user's request after the final verified Slice
-28. Resume only on explicit user instruction.
+The campaign resumed on explicit user instruction after the final verified
+Slice 28 stop.
 
 ## Completed Slices
 
@@ -724,6 +774,116 @@ The campaign is stopped at the user's request after the final verified Slice
   drift, but no longer lists
   `roboclaws/household/agibot_contract_rehearsal.py` or
   `roboclaws/household/agibot_contract_rehearsal_stages.py`.
+
+- 2026-06-25: Deepened
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` by moving robot-view
+  artifact path naming and scene-alignment point collection behind same-owner
+  private helpers. This removed the current quality-ratchet complexity rows
+  for `write_robot_views` and `_scene_points` while preserving the worker
+  command interface and robot-view output schema.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_worker_robot_views_uses_robot_head_camera_for_fpv tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_worker_robot_views_keeps_backend_local_fallback_without_pose -q
+  .venv/bin/ruff check scripts/molmo_cleanup/molmospaces_worker_outputs.py
+  .venv/bin/ruff format --check scripts/molmo_cleanup/molmospaces_worker_outputs.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on two unrelated operator-console test
+  helper PLR0915 rows plus broader oversized-module baseline drift, but no
+  longer lists `scripts/molmo_cleanup/molmospaces_worker_outputs.py`.
+
+- 2026-06-25: Split overlong operator-console assertion helpers in
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py` and
+  `tests/unit/operator_console/test_static_assets.py` into same-file
+  assertion vocabulary. This removed the remaining current quality-ratchet
+  Ruff complexity rows while preserving the scene-sampler readiness and static
+  overview/output UI contract assertions.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py::test_scene_sampler_readiness_export_writes_artifacts tests/unit/operator_console/test_static_assets.py::test_static_app_uses_overview_workspace_and_outputs_copy -q
+  .venv/bin/ruff check --select PLR0915 tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/ruff check tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/ruff format --check tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_static_assets.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py
+  git diff --check
+  ```
+
+  Note: the quality ratchet still fails on broader oversized-module baseline
+  drift, but no current Ruff complexity rows remain.
+
+- 2026-06-25: Replaced the MolmoSpaces map-preparation semantic category
+  branch ladder with an ordered rule table owned by
+  `roboclaws.maps.molmospaces_preparation`. This preserves the existing
+  priority order and default category while removing the remaining direct Ruff
+  C901 row. The focused contract test observes categories through
+  `prepare_molmospaces_base_metric_map` instead of coupling to the private
+  helper.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_generate_molmospaces_scene_bundles.py::test_molmospaces_room_category_rules_preserve_priority_and_fallback -q
+  .venv/bin/ruff check --select C901 roboclaws/maps/molmospaces_preparation.py --output-format=concise
+  .venv/bin/ruff check roboclaws/maps/molmospaces_preparation.py tests/contract/maps/test_generate_molmospaces_scene_bundles.py
+  .venv/bin/ruff format --check roboclaws/maps/molmospaces_preparation.py tests/contract/maps/test_generate_molmospaces_scene_bundles.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 25
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary reports zero Ruff complexity violations;
+  the full quality ratchet still fails on broader oversized-module baseline
+  drift.
+
+- 2026-06-25: Moved Codex live-run runner timing calculation, MCP trace timing
+  reads, and first-MCP-request extraction out of
+  `scripts/molmo_cleanup/run_live_codex_cleanup.py` and into the existing
+  agent-layer `roboclaws.agents.live_timing` owner. This preserves the retired
+  Codex runner script and its live timing output schema while reducing the
+  oversized script from 1455 to 1393 lines and removing duplicate timing
+  ownership next to the active OpenAI Agents timing implementation.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_timing_fails_aloud_on_malformed_trace_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_timing_fails_aloud_on_malformed_run_result_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_event_summary_fails_aloud_on_malformed_event_source tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_codex_provider_transient_failure_is_retryable -q
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_timeline_partitions_runner_and_attribution tests/unit/agents/test_live_runtime.py::test_openai_agents_control_plane_metrics_parse_server_log tests/unit/agents/test_live_runtime.py::test_openai_agents_live_timing_fails_aloud_on_malformed_mcp_timing_source -q
+  .venv/bin/ruff check roboclaws/agents/live_timing.py scripts/molmo_cleanup/run_live_codex_cleanup.py tests/unit/molmo_cleanup/test_ci_live_reports.py tests/unit/agents/test_live_runtime.py
+  .venv/bin/ruff format --check roboclaws/agents/live_timing.py scripts/molmo_cleanup/run_live_codex_cleanup.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 40
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary still reports zero Ruff complexity
+  violations. The full quality ratchet still fails on broader oversized-module
+  baseline drift, but the Codex runner residual decreased from 1455 to 1393
+  lines.
+
+- 2026-06-25: Merged duplicate operator-message and operator-resume JSONL
+  source-error formatting helpers inside
+  `roboclaws.operator_console.interactions`. The interactions owner still
+  exposes the same `operator_messages` / `operator_resume_requests` source
+  labels and user-facing error messages, while `interactions.py` shrank from
+  895 to 881 lines.
+
+  Proof:
+
+  ```bash
+  ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_interactions.py::test_operator_message_state_surfaces_malformed_source_errors tests/unit/operator_console/test_interactions.py::test_operator_message_state_surfaces_non_object_source_errors tests/unit/operator_console/test_interactions.py::test_operator_messages_keep_valid_rows_with_source_errors -q
+  .venv/bin/ruff check roboclaws/operator_console/interactions.py tests/unit/operator_console/test_interactions.py
+  .venv/bin/ruff format --check roboclaws/operator_console/interactions.py tests/unit/operator_console/test_interactions.py
+  .venv/bin/python scripts/dev/check_python_quality_ratchet.py --summary --top 40
+  git diff --check
+  ```
+
+  Note: the quality ratchet summary still reports zero Ruff complexity
+  violations. The full quality ratchet still fails on broader oversized-module
+  baseline drift, but `interactions.py` decreased from 895 to 881 lines.
 
 ## Parked Candidates
 

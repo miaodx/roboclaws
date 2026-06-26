@@ -113,6 +113,13 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     candidate_profile = payloads["candidate_profile"]
     scene_prefilter = payloads["scene_prefilter"]
 
+    _assert_manifest_and_projection(manifest, projection)
+    _assert_readiness_and_availability(readiness, availability)
+    _assert_candidate_readiness(candidates)
+    _assert_candidate_profile_and_prefilter(candidate_profile, scene_prefilter)
+
+
+def _assert_manifest_and_projection(manifest: dict[str, Any], projection: dict[str, Any]) -> None:
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert manifest["selection_policy"]["selection_seed"] == (
@@ -131,6 +138,12 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert projection["scene_sources"]["ithor"]["support_status"] == "rejected"
     assert projection["summary"]["ready_sample_count"] == 16
     assert projection["summary"]["remaining_sample_count"] == 24
+
+
+def _assert_readiness_and_availability(
+    readiness: dict[str, Any],
+    availability: dict[str, Any],
+) -> None:
     assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert readiness["selection_policy"]["sources"]["procthor-10k-val"]["ui"][
@@ -151,6 +164,9 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
         "",
         "environment_blocked",
     }
+
+
+def _assert_candidate_readiness(candidates: dict[str, Any]) -> None:
     assert candidates["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert candidates["summary"]["source_count"] == 4
     assert "eval_needed_count" in candidates["summary"]
@@ -159,6 +175,12 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert candidates["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert candidates["sources"]["ithor"]["eval_ready_count"] == 0
+
+
+def _assert_candidate_profile_and_prefilter(
+    candidate_profile: dict[str, Any],
+    scene_prefilter: dict[str, Any],
+) -> None:
     assert candidate_profile["schema"] == "molmospaces_scene_sampler_candidate_profile_v1"
     assert candidate_profile["summary"]["source_count"] == 4
     assert candidate_profile["summary"]["metadata_worklist_source_count"] == 3

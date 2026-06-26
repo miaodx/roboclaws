@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_cleanup_result.py"
 
@@ -133,11 +135,24 @@ def _scene_index_run_result() -> dict[str, object]:
     return {
         "scenario_id": scenario_id,
         "isaac_runtime": {"scenario_source": "isaac_scene_index"},
-        "agent_view": {
-            "metric_map": metric_map,
-            "runtime_metric_map": runtime_map,
-            "static_fixture_projection": {"rooms": []},
-        },
+        "agent_view": agent_view_module.build_agent_view(
+            contract="realworld_cleanup_v1",
+            perception_mode="visible_object_detections",
+            detection_exposure_policy="public_runtime_map",
+            structured_detections_available=True,
+            base_metric_map=metric_map,
+            runtime_metric_map=runtime_map,
+            observed_objects=[],
+            raw_fpv_observations=[],
+            camera_model_policy_evidence={},
+            model_declared_observations=[],
+            model_declared_observation_evidence={},
+            policy_view={},
+            cleanup_worklist={},
+            observed_waypoint_ids=[],
+            public_tool_names=[],
+            forbidden_keys=frozenset(),
+        ),
         "runtime_metric_map": runtime_map,
         "nav2_map_bundle": {
             "schema": "nav2_map_bundle_snapshot_v1",

@@ -27,6 +27,12 @@ from roboclaws.agents.drivers.household_live import (
     without_full_cleanup_checker_gates,
 )
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
+from roboclaws.agents.live_timing import codex_mcp_trace_timing as _mcp_trace_timing
+from roboclaws.agents.live_timing import (
+    codex_runner_timing_breakdown as _runner_timing_breakdown,
+)
+from roboclaws.agents.live_timing import first_mcp_request_epoch as _first_mcp_request_epoch
+from roboclaws.agents.live_timing import round_duration as _round_duration
 from roboclaws.agents.provider_timing_proxy import (
     PROVIDER_TIMING_PROXY_UPSTREAM_ENV,
     ProviderTimingProxyHandle,
@@ -36,7 +42,6 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
-from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import household_intent_from_args as _household_intent
 from roboclaws.household.task_intent import household_task_name_from_args as _household_run_id
 from roboclaws.launch.evaluation import (
@@ -779,7 +784,7 @@ class LiveCodexCleanupRunner:
         source_error = ""
         try:
             payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
-            first_request = _first_mcp_request_epoch(self.run_dir)
+            first_request = _first_mcp_request_epoch(self.run_dir, label="Codex live")
             if first_request is not None:
                 payload["time_to_first_mcp_request_s"] = _round_duration(
                     first_request - self.started_at_epoch
@@ -988,69 +993,6 @@ def _terminate_process_group(proc: subprocess.Popen[bytes]) -> None:
         except OSError:
             proc.kill()
         proc.wait(timeout=10)
-
-
-def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict[str, Any]:
-    started = _float_or_none(timing.get("started_at_epoch"))
-    codex_start = _float_or_none(timing.get("codex_exec_start_epoch"))
-    codex_end = _float_or_none(timing.get("codex_exec_end_epoch"))
-    checker_start = _float_or_none(timing.get("checker_start_epoch"))
-    checker_end = _float_or_none(timing.get("checker_end_epoch"))
-    server_start = _float_or_none(timing.get("server_start_epoch"))
-    server_ready = _float_or_none(timing.get("server_ready_epoch"))
-    server_finished = _float_or_none(timing.get("server_finished_epoch"))
-    total = _round_duration(finished_at - started) if started is not None else None
-
-    segments: dict[str, float] = {}
-    if started is not None and codex_start is not None:
-        segments["pre_codex_setup_s"] = _round_duration(codex_start - started)
-    if codex_start is not None and codex_end is not None:
-        segments["codex_exec_elapsed_s"] = _round_duration(codex_end - codex_start)
-    if codex_end is not None and server_finished is not None:
-        segments["post_codex_server_wait_s"] = _round_duration(server_finished - codex_end)
-    if checker_start is not None and checker_end is not None:
-        segments["checker_elapsed_s"] = _round_duration(checker_end - checker_start)
-    if checker_end is not None:
-        segments["final_overhead_s"] = _round_duration(finished_at - checker_end)
-    if server_start is not None and server_ready is not None:
-        segments["server_startup_s"] = _round_duration(server_ready - server_start)
-
-    partition_keys = (
-        "pre_codex_setup_s",
-        "codex_exec_elapsed_s",
-        "post_codex_server_wait_s",
-        "checker_elapsed_s",
-        "final_overhead_s",
-    )
-    accounted = sum(segments.get(key, 0.0) for key in partition_keys)
-    breakdown: dict[str, Any] = {"total_elapsed_s": total, **segments}
-    if total is not None:
-        breakdown["accounted_elapsed_s"] = _round_duration(accounted)
-        breakdown["unaccounted_elapsed_s"] = _round_duration(max(0.0, total - accounted))
-        breakdown["accounting_note"] = (
-            "The partitioned runner buckets sum to total wall time. MCP trace timing "
-            "runs inside codex_exec_elapsed_s and is reported separately to avoid "
-            "double counting concurrent server work."
-        )
-    return breakdown
-
-
-def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
-    run_result_path = run_dir / "run_result.json"
-    if run_result_path.is_file():
-        run_result = read_json_object(run_result_path, label="Codex live run_result")
-        timing = run_result.get("runtime_timing")
-        if isinstance(timing, dict):
-            return timing
-    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
-    return runtime_timing_from_trace(trace_events)
-
-
-def _first_mcp_request_epoch(run_dir: Path) -> float | None:
-    for event in _read_jsonl_path(run_dir / "trace.jsonl"):
-        if event.get("event") == "request" and not str(event.get("tool", "")).startswith("<"):
-            return _float_or_none(event.get("ts"))
-    return None
 
 
 def _codex_event_summary(path: Path) -> dict[str, Any]:
@@ -1340,10 +1282,6 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _round_duration(value: float) -> float:
-    return round(max(0.0, value), 3)
 
 
 def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO], *, on_chunk=None) -> None:

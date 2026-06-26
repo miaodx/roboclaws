@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from roboclaws.household import agent_view as agent_view_module
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILDER = (
     REPO_ROOT / "scripts" / "visual_grounding" / "build_visual_grounding_corpus_from_cleanup_run.py"
@@ -20,41 +22,67 @@ BBOX_BUILDER = (
 )
 
 
+def _agent_view_fixture(
+    *,
+    fixtures: list[dict[str, object]],
+    raw_fpv_observations: list[dict[str, object]],
+) -> dict[str, object]:
+    runtime_metric_map = {
+        "schema": "runtime_metric_map_v1",
+        "static_map": {
+            "fixtures": fixtures,
+        },
+    }
+    return agent_view_module.build_agent_view(
+        contract="realworld_cleanup_v1",
+        perception_mode="raw_fpv_only",
+        detection_exposure_policy="raw_fpv",
+        structured_detections_available=False,
+        base_metric_map={"schema": "real_robot_map_bundle_v1", "map_bundle": {}},
+        runtime_metric_map=runtime_metric_map,
+        observed_objects=[],
+        raw_fpv_observations=raw_fpv_observations,
+        camera_model_policy_evidence={},
+        model_declared_observations=[],
+        model_declared_observation_evidence={},
+        policy_view={},
+        cleanup_worklist={},
+        observed_waypoint_ids=[],
+        public_tool_names=[],
+        forbidden_keys=frozenset(),
+    )
+
+
 def test_builder_creates_path_backed_corpus_from_cleanup_run(tmp_path: Path) -> None:
     run_dir = tmp_path / "seed-7"
     image_dir = run_dir / "robot_views"
     image_dir.mkdir(parents=True)
     Image.new("RGB", (16, 12), (240, 240, 240)).save(image_dir / "0001_raw_fpv_001.fpv.png")
+    fixtures = [
+        {
+            "fixture_id": "sink_01",
+            "room_id": "room_2",
+            "category": "Sink",
+            "name": "Sink",
+            "affordances": ["place_inside"],
+            "pose": {"x": 1, "y": 2},
+        }
+    ]
+    observations = [
+        {
+            "observation_id": "raw_fpv_001",
+            "waypoint_id": "room_2_scan_1",
+            "room_id": "room_2",
+            "artifact_status": "recorded",
+            "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
+        }
+    ]
     run_result = {
         "scenario_id": "scenario-seed-7",
-        "agent_view": {
-            "static_fixture_projection": {
-                "rooms": [
-                    {
-                        "room_id": "room_2",
-                        "fixtures": [
-                            {
-                                "fixture_id": "sink_01",
-                                "room_id": "room_2",
-                                "category": "Sink",
-                                "name": "Sink",
-                                "affordances": ["place_inside"],
-                                "pose": {"x": 1, "y": 2},
-                            }
-                        ],
-                    }
-                ]
-            },
-            "raw_fpv_observations": [
-                {
-                    "observation_id": "raw_fpv_001",
-                    "waypoint_id": "room_2_scan_1",
-                    "room_id": "room_2",
-                    "artifact_status": "recorded",
-                    "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
-                }
-            ],
-        },
+        "agent_view": _agent_view_fixture(
+            fixtures=fixtures,
+            raw_fpv_observations=observations,
+        ),
         "private_evaluation": {
             "generated_mess_set": ["plate_abc_1_0_2", "remotecontrol_def_1_0_3"],
             "object_results": [
@@ -120,47 +148,37 @@ def test_builder_prefers_mess_placement_fixture_room_over_object_id_suffix(
     image_dir.mkdir(parents=True)
     Image.new("RGB", (16, 12), (240, 240, 240)).save(image_dir / "0001_raw_fpv_001.fpv.png")
     object_id = "remotecontrol_def_1_0_3"
+    fixtures = [
+        {
+            "fixture_id": "sink_01",
+            "room_id": "room_2",
+            "category": "Sink",
+            "name": "Sink",
+            "affordances": ["place_inside"],
+        },
+        {
+            "fixture_id": "shelf_03",
+            "room_id": "room_3",
+            "category": "Shelf",
+            "name": "Shelf",
+            "affordances": ["place"],
+        },
+    ]
+    observations = [
+        {
+            "observation_id": "raw_fpv_001",
+            "waypoint_id": "room_2_scan_1",
+            "room_id": "room_2",
+            "artifact_status": "recorded",
+            "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
+        }
+    ]
     run_result = {
         "scenario_id": "scenario-seed-7",
-        "agent_view": {
-            "static_fixture_projection": {
-                "rooms": [
-                    {
-                        "room_id": "room_2",
-                        "fixtures": [
-                            {
-                                "fixture_id": "sink_01",
-                                "room_id": "room_2",
-                                "category": "Sink",
-                                "name": "Sink",
-                                "affordances": ["place_inside"],
-                            }
-                        ],
-                    },
-                    {
-                        "room_id": "room_3",
-                        "fixtures": [
-                            {
-                                "fixture_id": "shelf_03",
-                                "room_id": "room_3",
-                                "category": "Shelf",
-                                "name": "Shelf",
-                                "affordances": ["place"],
-                            }
-                        ],
-                    },
-                ]
-            },
-            "raw_fpv_observations": [
-                {
-                    "observation_id": "raw_fpv_001",
-                    "waypoint_id": "room_2_scan_1",
-                    "room_id": "room_2",
-                    "artifact_status": "recorded",
-                    "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
-                }
-            ],
-        },
+        "agent_view": _agent_view_fixture(
+            fixtures=fixtures,
+            raw_fpv_observations=observations,
+        ),
         "mess_placement_diagnostics": [
             {
                 "object_id": object_id,
@@ -536,27 +554,21 @@ def _write_raw_fpv_run(
             }
         )
     fixture_id = f"fixture_{room_id}"
+    fixtures = [
+        {
+            "fixture_id": fixture_id,
+            "room_id": room_id,
+            "category": "Table",
+            "name": "Table",
+            "affordances": ["place_on"],
+        }
+    ]
     run_result = {
         "scenario_id": scenario_id,
-        "agent_view": {
-            "static_fixture_projection": {
-                "rooms": [
-                    {
-                        "room_id": room_id,
-                        "fixtures": [
-                            {
-                                "fixture_id": fixture_id,
-                                "room_id": room_id,
-                                "category": "Table",
-                                "name": "Table",
-                                "affordances": ["place_on"],
-                            }
-                        ],
-                    }
-                ]
-            },
-            "raw_fpv_observations": observations,
-        },
+        "agent_view": _agent_view_fixture(
+            fixtures=fixtures,
+            raw_fpv_observations=observations,
+        ),
         "mess_placement_diagnostics": [
             {
                 "object_id": object_id,

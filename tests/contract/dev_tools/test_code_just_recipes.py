@@ -179,7 +179,7 @@ def test_live_agent_routes_prepare_selected_model_for_mcp_server() -> None:
 
     assert "roboclaws_code_agent_prepare_mcp_env" not in code_text
     selected_model_snippet = (
-        'codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL '
+        'openai_agents_model="$(roboclaws_code_agent_model ROBOCLAWS_OPENAI_AGENTS_MODEL '
         'ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"'
     )
     assert selected_model_snippet in agent_text or selected_model_snippet in molmo_text
@@ -215,30 +215,21 @@ def test_retired_photo_task_facade_rejects_ai2thor_surface() -> None:
         raise AssertionError("retired ai2thor photo route resolved successfully")
 
 
-def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
-    """Molmo Codex reports should be runnable without a manual prompt paste."""
+def test_molmo_openai_agents_live_owns_server_and_runs_prompted_agent() -> None:
+    """Molmo live reports should route through the active OpenAI Agents SDK runner."""
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "scripts/dev/coding_agent_docker.sh ensure" in text
-    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in text
     assert 'skill_name="molmo-realworld-cleanup"' in text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in text
-    assert "wait_for_mcp_ready" in text
-    assert 'tmux new-session -d -s "$session_name"' in text
-    assert '"exec"' in runner_text
-    assert '"--json"' in runner_text
-    assert '"--output-last-message"' in runner_text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE" in runner_text
-    assert 'env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")' in (runner_text)
-    expected_agent_cd = (
-        'agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)'
-    )
-    assert expected_agent_cd in runner_text
-    assert "*self.args.codex_model_arg" in runner_text
-    assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
-    assert '"--cd"' in runner_text
+    assert "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py" in text
+    assert "roboclaws_assert_openai_agents_network_allowed" in text
+    assert "roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE" in text
+    assert "roboclaws_code_agent_model ROBOCLAWS_OPENAI_AGENTS_MODEL" in text
+    assert '--provider-profile "$openai_agents_profile"' in text
+    assert '--model "$openai_agents_model"' in text
+    assert '--kickoff-prompt "$kickoff_prompt"' in text
     assert "roboclaws.agents.prompts.household_cleanup" in text
+    assert "scripts/dev/coding_agent_docker.sh ensure" not in text
+    assert 'tmux new-session -d -s "$session_name"' not in text
 
 
 def test_molmo_codex_live_copies_task_skill_into_docker_workspace() -> None:

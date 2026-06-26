@@ -126,7 +126,7 @@ def _assert_cleanup_result_contract(
         phases = [step["phase"] for step in item["steps"]]
         assert phases[:3] == list(CANONICAL_BASE_CLEANUP_PHASES)
         assert phases[-1] in {*PLACE_CLEANUP_PHASES, CLOSE_RECEPTACLE_PHASE}
-    assert run_result["agent_view"]["observed_objects"]
+    assert agent_view_module.observed_objects(run_result["agent_view"])
     assert "generated_mess_set" not in run_result["agent_view"]
     assert "acceptable_destination_sets" not in run_result["agent_view"]
     assert "planner_object_id" not in json.dumps(run_result["agent_view"])
@@ -341,8 +341,8 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
 
     assert result["perception_mode"] == RAW_FPV_ONLY_MODE
     assert result["cleanup_status"] == "success"
-    assert result["agent_view"]["observed_objects"]
-    assert result["agent_view"]["raw_fpv_observations"]
+    assert agent_view_module.observed_objects(result["agent_view"])
+    assert agent_view_module.raw_fpv_observations(result["agent_view"])
     assert result["model_declared_observations"]
     evidence = result["model_declared_observation_evidence"]
     assert evidence["observation_count"] >= 7
@@ -370,7 +370,7 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
     assert result["perception_mode"] == CAMERA_MODEL_POLICY_MODE
     assert result["policy"] == CAMERA_MODEL_POLICY_NAME
     assert result["cleanup_status"] == "success"
-    assert result["agent_view"]["observed_objects"]
+    assert agent_view_module.observed_objects(result["agent_view"])
     assert result["raw_fpv_observations"]
     assert result["camera_model_policy_evidence"]["enabled"] is True
     assert result["camera_model_policy_evidence"]["candidate_count"] >= 1
@@ -423,7 +423,7 @@ def _assert_isaac_fake_cleanup_result(
     assert result["primitive_provenance"] == "isaac_semantic_pose"
     assert result["manipulation_evidence"]["isaac_semantic_pose_edits"] is True
     assert result["manipulation_evidence"]["planner_backed"] is False
-    assert result["agent_view"]["observed_objects"]
+    assert agent_view_module.observed_objects(result["agent_view"])
     assert result["semantic_substeps"]
     assert result["score"]["semantic_acceptability"]["accepted_count"] >= 1
     assert run_result["isaac_runtime"]["runtime"]["runtime_mode"] == "fake"
