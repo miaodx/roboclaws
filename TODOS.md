@@ -244,4 +244,34 @@ Each entry should answer:
   - Try now: Yes for audit and test-plan work. Apply behavior changes only as
     narrow fixes with parity tests.
 
+- **Physically delete retired coding-agent implementation**
+  - Created: 2026-06-24.
+  - Updated: 2026-06-24.
+  - Status: Parked removal cleanup after SDK-only live-agent routing.
+  - Why: The SDK-only migration removed Codex CLI and Claude Code from current
+    public/operator/eval launch surfaces, but the lower-level coding-agent
+    Docker tooling, Codex/Claude runner scripts, and supporting tests remain as
+    manual-debug or historical surfaces. Keeping those sources around continues
+    maintenance drag and makes the code reduction look smaller than the
+    architectural retirement.
+  - Next action: Decide whether manual debugging support is still worth
+    preserving. If not, delete the retired implementation files and migrate or
+    remove callers/tests that still reference them.
+  - Evidence:
+    `Dockerfile.coding-agents`;
+    `scripts/dev/coding_agent_docker.sh`;
+    `scripts/dev/coding_agent_env.sh`;
+    `scripts/dev/coding_agent_toolchain.env`;
+    `scripts/molmo_cleanup/run_live_codex_cleanup.py`;
+    `scripts/molmo_cleanup/run_live_claude_cleanup.py`;
+    `scripts/molmo_cleanup/run_live_codex_agibot_map_build.py`;
+    `just/code.just`;
+    `tests/contract/dev_tools/test_code_just_recipes.py`;
+    `tests/contract/dev_tools/test_coding_agent_env_helpers.py`;
+    `tests/unit/molmo_cleanup/test_ci_live_reports.py`;
+    `tests/unit/molmo_cleanup/test_live_codex_agibot_map_build.py`.
+  - Try now: Yes for a deletion plan or focused removal PR. Do not remove
+    OpenClaw or the `codex-router-responses` SDK provider profile as part of
+    this cleanup.
+
 _If this list empties, next work should come from a new plan or issue._

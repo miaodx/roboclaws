@@ -619,7 +619,14 @@ def public_anchor_id_for_fixture(contract: RuntimeMapTargetContract, fixture_id:
     anchor_id = contract._public_anchor_ids_by_private_fixture_id.get(fixture_id)
     if anchor_id:
         return anchor_id
-    anchor_id = f"anchor_fixture_{len(contract._public_anchor_ids_by_private_fixture_id) + 1:03d}"
+    used_anchor_ids = set(contract._public_anchor_ids_by_private_fixture_id.values())
+    used_anchor_ids.update(
+        str(anchor.get("anchor_id") or "") for anchor in contract._runtime_map_anchor_priors
+    )
+    index = len(contract._public_anchor_ids_by_private_fixture_id) + 1
+    while f"anchor_fixture_{index:03d}" in used_anchor_ids:
+        index += 1
+    anchor_id = f"anchor_fixture_{index:03d}"
     contract._public_anchor_ids_by_private_fixture_id[fixture_id] = anchor_id
     return anchor_id
 

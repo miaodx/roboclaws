@@ -351,6 +351,14 @@ The sidecar project intentionally does not change the core Roboclaws `.venv/`.
 Use a local PyTorch CUDA index or mirror when needed; keep that machine-local
 and out of committed project metadata.
 
+The `camera-grounded-labels` product route runs a fail-fast readiness check
+against the configured sidecar before starting the simulator or agent. A
+contract-only `--pipeline grounding-dino` service that returns
+`adapter_unavailable` is blocked up front; it should not be used as evidence for
+cleanup or map-build behavior. Each product run records
+`visual_grounding_readiness.json` in its artifact directory with the resolved
+stage status and model id.
+
 To exercise only the HTTP contract without real model dependencies, start the
 configurable service in its default mode. It should return explicit unavailable
 evidence instead of fake candidates:
