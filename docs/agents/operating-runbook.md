@@ -27,6 +27,24 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
   uv sync --extra dev
 ```
 
+## Worktree Setup Hooks
+
+This checkout uses project hooks from `.githooks/`; `core.hooksPath` should
+point there. Install or repair it with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`.githooks/post-checkout` auto-creates a worktree-local `.venv/`, a
+`.venv-visual-grounding/`, copies gitignored local config such as `.env`, and
+symlinks `.venv-isaaclab/` from the main checkout when it already exists.
+
+Submodules under `vendors/` are mostly reference/vendor inputs. Inspect the main
+checkout or `git submodule status --recursive` first; initialize a submodule in
+the current worktree only when you need to modify it, run isolated verification,
+or prove the exact checkout.
+
 ## Provider Keys And Network Guard
 
 Local sessions keep provider keys in the repo-local `.env` file, which is
