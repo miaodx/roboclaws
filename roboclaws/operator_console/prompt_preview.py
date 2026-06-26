@@ -12,11 +12,6 @@ from roboclaws.agents.prompts.household_cleanup import (
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 
-CODEX_RUNNER_WRAPPER_SUMMARY = (
-    "Codex CLI receives an additional live-route wrapper that blocks coding/developer "
-    "tools, planning/resource helpers, and provider-prefixed MCP names before this "
-    "household kickoff prompt."
-)
 AGIBOT_MAP_BUILD_WRAPPER_SUMMARY = (
     "Agibot map-build adds a live-route wrapper that restricts the agent to public "
     "metric_map, navigate_to_waypoint, observe, and done behavior."
@@ -269,8 +264,6 @@ def _truthy(value: str | None) -> bool:
 
 def _wrapper_notes(route: ConsoleLaunchSelection) -> list[str]:
     notes: list[str] = []
-    if route.agent_engine_id == "codex-cli":
-        notes.append(CODEX_RUNNER_WRAPPER_SUMMARY)
     if route.world_id == "agibot-g2/map-12" and route.intent_id == "map-build":
         notes.append(AGIBOT_MAP_BUILD_WRAPPER_SUMMARY)
     return notes

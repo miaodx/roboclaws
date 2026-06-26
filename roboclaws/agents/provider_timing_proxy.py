@@ -1,4 +1,4 @@
-"""Redacted provider HTTP timing proxy for live coding-agent runs."""
+"""Redacted provider HTTP timing proxy for live-agent runs."""
 
 from __future__ import annotations
 

@@ -18,28 +18,29 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
 )
 
 
-def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) -> None:
+def test_runtime_inventory_lists_eval_harness_sdk_live_row(tmp_path: Path) -> None:
     row_dir = (
         tmp_path
         / "output"
         / "eval-harness"
         / "focused"
         / "rows"
-        / "codex-cleanup-camera-raw-fpv-live-product"
+        / "openai-agents-sdk-cleanup-camera-raw-fpv-live-product"
     )
     run_dir = row_dir / "run" / "0615_1225" / "seed-7"
     run_dir.mkdir(parents=True)
     (run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex", "started_at_epoch": 1.0}),
+        json.dumps({"phase": "running-sdk", "started_at_epoch": 1.0}),
         encoding="utf-8",
     )
     (run_dir / "tmux_session.txt").write_text(
-        "roboclaws-molmo-codex-0615_1225-run-p18788-seed-7\n",
+        "roboclaws-molmo-openai-agents-sdk-0615_1225-run-p18788-seed-7\n",
         encoding="utf-8",
     )
     (run_dir / "visual_backend_slot.json").write_text(
@@ -59,7 +60,7 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
     manifest = {
         "rows": [
             {
-                "row_id": "codex-cleanup-camera-raw-fpv-live-product",
+                "row_id": "openai-agents-sdk-cleanup-camera-raw-fpv-live-product",
                 "row_kind": "live_agent_eval",
                 "row_dir": str(row_dir),
                 "status": "ran",
@@ -69,7 +70,7 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
                     "backend": "mujoco",
                     "intent": "cleanup",
                     "preset": "cleanup",
-                    "agent_engine": "codex-cli",
+                    "agent_engine": "openai-agents-sdk",
                     "evidence_lane": "camera-raw-fpv",
                 },
             }
@@ -85,12 +86,14 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
     task = next(
         item
         for item in payload["tasks"]
-        if item["id"] == "eval-row:codex-cleanup-camera-raw-fpv-live-product"
+        if item["id"] == "eval-row:openai-agents-sdk-cleanup-camera-raw-fpv-live-product"
     )
     assert task["owner"] == "eval-harness"
     assert task["status"] == "running"
-    assert task["row_id"] == "codex-cleanup-camera-raw-fpv-live-product"
-    assert task["route_id"] == "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-raw-fpv"
+    assert task["row_id"] == "openai-agents-sdk-cleanup-camera-raw-fpv-live-product"
+    assert task["route_id"] == (
+        "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
     assert any(resource["kind"] == "tmux_session" for resource in task["resources"])
     assert any(resource["kind"] == "visual_slot" for resource in task["resources"])
     assert not any(action["label"] == "Attach" for action in task["actions"])
@@ -245,7 +248,7 @@ def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None
     active_run_dir = active_row_dir / "run" / "0615_1225" / "seed-7"
     active_run_dir.mkdir(parents=True)
     (active_run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (active_run_dir / "visual_backend_slot.json").write_text(
@@ -279,7 +282,7 @@ def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None
                             "backend": "mujoco",
                             "intent": "cleanup",
                             "preset": "cleanup",
-                            "agent_engine": "codex-cli",
+                            "agent_engine": "openai-agents-sdk",
                             "evidence_lane": "world-public-labels",
                         },
                     },
@@ -294,7 +297,7 @@ def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None
                             "backend": "mujoco",
                             "intent": "cleanup",
                             "preset": "cleanup",
-                            "agent_engine": "codex-cli",
+                            "agent_engine": "openai-agents-sdk",
                             "evidence_lane": "world-public-labels",
                         },
                     },
@@ -338,7 +341,7 @@ def test_runtime_inventory_surfaces_invalid_nested_runtime_json_resources(
                             "backend": "mujoco",
                             "intent": "cleanup",
                             "preset": "cleanup",
-                            "agent_engine": "codex-cli",
+                            "agent_engine": "openai-agents-sdk",
                             "evidence_lane": "world-public-labels",
                         },
                     }
@@ -381,10 +384,13 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(
     run_dir = row_dir / "run" / "0615_1225" / "seed-7"
     run_dir.mkdir(parents=True)
     (run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
-    (run_dir / "tmux_session.txt").write_text("roboclaws-molmo-codex-dead\n", encoding="utf-8")
+    (run_dir / "tmux_session.txt").write_text(
+        "roboclaws-molmo-openai-agents-sdk-dead\n",
+        encoding="utf-8",
+    )
     (run_dir / "server.pid").write_text("99999999\n", encoding="utf-8")
     (run_dir / "visual_backend_slot.json").write_text(
         json.dumps({"slot_id": 1, "pid": 99999999, "port": free_tcp_port}),
@@ -404,7 +410,7 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(
                             "backend": "mujoco",
                             "intent": "cleanup",
                             "preset": "cleanup",
-                            "agent_engine": "codex-cli",
+                            "agent_engine": "openai-agents-sdk",
                             "evidence_lane": "world-public-labels",
                         },
                     }
@@ -426,7 +432,7 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(
 
 
 def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "operator-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -456,12 +462,12 @@ def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: 
 
 
 def test_readiness_names_background_eval_owner_before_start(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "codex-cleanup-live"
     run_dir = row_dir / "run" / "0615_1225" / "seed-7"
     run_dir.mkdir(parents=True)
     (run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (run_dir / "visual_backend_slot.json").write_text(
@@ -482,7 +488,7 @@ def test_readiness_names_background_eval_owner_before_start(tmp_path: Path) -> N
                             "backend": "mujoco",
                             "intent": "cleanup",
                             "preset": "cleanup",
-                            "agent_engine": "codex-cli",
+                            "agent_engine": "openai-agents-sdk",
                             "evidence_lane": "world-public-labels",
                         },
                     }

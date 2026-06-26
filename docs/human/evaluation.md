@@ -67,7 +67,7 @@ as blocked identity/preflight packets so provider-backed work is not launched
 by accident. Use `live_execution=run` only when you intend to run the selected
 live provider route. The live bridge calls the public `run::surface` product
 route, pins an eval-owned `run_dir`, discovers timestamped product artifacts
-when needed, and waits for detached Codex CLI cleanup artifacts before grading:
+when needed, and grades the SDK product artifacts written under that run dir:
 
 ```bash
 just agent::eval suite=cleanup_capability budget=smoke \
@@ -75,11 +75,8 @@ just agent::eval suite=cleanup_capability budget=smoke \
   live_execution=run live_timeout_s=120
 ```
 
-For Codex CLI live evals, the eval runner passes a fixed product `run_dir`
-through the public `run::surface` route and waits for detached live artifacts
-before grading. The eval result still records blocked provider/runtime
-conditions separately from agent behavior when the selected live route cannot
-finish.
+The eval result records blocked provider/runtime conditions separately from
+agent behavior when the selected live route cannot finish.
 
 `scene_sampler_stress` is the static eval projection for source-aware
 MolmoSpaces scene sampling. It currently admits five prepared

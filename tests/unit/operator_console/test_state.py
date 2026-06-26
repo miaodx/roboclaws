@@ -12,16 +12,14 @@ from roboclaws.operator_console.state import (
     resolve_display_run_dir,
 )
 
-MUJOCO_CLAUDE_CLEANUP = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::claude-code::world-public-labels"
+MUJOCO_SDK_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
 )
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_SDK_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::openai-agents-sdk::"
+    "world-public-labels"
 )
-MUJOCO_CODEX_MAP_BUILD = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
-)
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 
 
 def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) -> None:
@@ -31,7 +29,7 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
@@ -73,7 +71,7 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
     )
     (run_dir / "report.html").write_text("<html></html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["status"] == "passed"
     assert state["latest_action"] == "pick"
@@ -90,7 +88,7 @@ def test_state_surfaces_malformed_operator_state_source_error(tmp_path: Path) ->
     run_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text("{not-json", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["run_id"] == "broken-wrapper"
     assert state["phase"] == "failed"
@@ -122,7 +120,7 @@ def test_state_surfaces_malformed_nested_live_status_and_run_result(
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -132,7 +130,7 @@ def test_state_surfaces_malformed_nested_live_status_and_run_result(
     (attempt_dir / "live_status.json").write_text("{bad-live-status", encoding="utf-8")
     (attempt_dir / "run_result.json").write_text('["not", "object"]', encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["display_run_id"] == "0619_1200/seed-7"
     assert state["phase"] == "failed"
@@ -155,7 +153,7 @@ def test_state_surfaces_malformed_trace_source_error(tmp_path: Path) -> None:
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -163,7 +161,7 @@ def test_state_surfaces_malformed_trace_source_error(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -171,7 +169,7 @@ def test_state_surfaces_malformed_trace_source_error(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["phase"] == "failed"
     assert state["status"] == "failed"
@@ -194,7 +192,7 @@ def test_state_camera_summary_uses_validated_trace_rows(tmp_path: Path) -> None:
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -202,7 +200,7 @@ def test_state_camera_summary_uses_validated_trace_rows(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -221,7 +219,7 @@ def test_state_camera_summary_uses_validated_trace_rows(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["phase"] == "failed"
     assert state["terminal_reason"] == "operator state source error: Trace"
@@ -239,7 +237,7 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
@@ -247,11 +245,11 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
         ),
         encoding="utf-8",
     )
-    (run_dir / "console-launch.log").write_text("detached\n", encoding="utf-8")
+    (run_dir / "console-launch.log").write_text("foreground sdk\n", encoding="utf-8")
     (attempt_dir / "live_status.json").write_text(
         json.dumps(
             {
-                "phase": "running-codex",
+                "phase": "running-sdk",
                 "started_at_epoch": 2.0,
             }
         ),
@@ -261,16 +259,16 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
         json.dumps({"tool": "observe", "ok": True, "observation_summary": "plate visible"}) + "\n",
         encoding="utf-8",
     )
-    (attempt_dir / "driver.log").write_text("==> Codex turn 2/9\n", encoding="utf-8")
+    (attempt_dir / "driver.log").write_text("==> OpenAI Agents SDK turn 2/9\n", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert resolve_display_run_dir(run_dir) == attempt_dir.resolve()
     assert state["run_id"] == "wrapper-run"
     assert state["display_run_id"] == "0608_1807/seed-7"
     assert state["run_dir"] == str(run_dir.resolve())
     assert state["display_run_dir"] == str(attempt_dir.resolve())
-    assert state["phase"] == "running-codex"
+    assert state["phase"] == "running-sdk"
     assert state["latest_action"] == "observe"
     assert state["latest_public_decision_evidence"]["observation_summary"] == "plate visible"
     assert any(
@@ -288,7 +286,7 @@ def test_state_exposes_wrapper_level_runtime_prior_artifacts(tmp_path: Path) -> 
         json.dumps(
             {
                 "run_id": "b1-wrapper-run",
-                "route": get_selection(B1_CODEX_OPEN_TASK).to_payload(),
+                "route": get_selection(B1_OPENAI_AGENTS_OPEN_TASK).to_payload(),
                 "phase": "starting",
                 "backend_lock": "b1_isaaclab",
                 "started_at_epoch": 1.0,
@@ -309,11 +307,11 @@ def test_state_exposes_wrapper_level_runtime_prior_artifacts(tmp_path: Path) -> 
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(B1_CODEX_OPEN_TASK))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(B1_OPENAI_AGENTS_OPEN_TASK))
 
     labels = {item["label"] for item in state["artifact_paths"]}
     assert "B1 Robot Consumption" in labels
@@ -336,7 +334,7 @@ def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatc
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
@@ -347,7 +345,7 @@ def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatc
     (attempt_dir / "live_status.json").write_text(
         json.dumps(
             {
-                "phase": "running-codex",
+                "phase": "running-sdk",
                 "started_at_epoch": 2.0,
                 "visual_backend_slot": {"pid": dead_pid, "held": True},
             }
@@ -357,7 +355,7 @@ def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatc
     (attempt_dir / "driver.log").write_text("==> Codex turn 1/1\n", encoding="utf-8")
     monkeypatch.setattr("roboclaws.operator_console.state.pid_is_active", lambda pid: False)
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["phase"] == "failed"
     assert state["status"] == "failed"
@@ -378,7 +376,7 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
@@ -387,7 +385,7 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex", "started_at_epoch": 2.0}),
+        json.dumps({"phase": "running-sdk", "started_at_epoch": 2.0}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -421,9 +419,9 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
-    assert state["status"] == "running-codex"
+    assert state["status"] == "running-sdk"
     assert state["latest_action"] == "navigate_to_waypoint"
     assert (
         state["latest_public_decision_evidence"]["observation_summary"]
@@ -450,7 +448,7 @@ def test_state_surfaces_malformed_agent_event_source_error(tmp_path: Path) -> No
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -458,7 +456,7 @@ def test_state_surfaces_malformed_agent_event_source_error(tmp_path: Path) -> No
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -480,7 +478,7 @@ def test_state_surfaces_malformed_agent_event_source_error(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["phase"] == "failed"
     assert state["status"] == "failed"
@@ -501,7 +499,7 @@ def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> Non
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CLAUDE_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -509,7 +507,7 @@ def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-claude"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -551,9 +549,9 @@ def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CLAUDE_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
-    assert state["status"] == "running-claude"
+    assert state["status"] == "running-sdk"
     assert (
         state["latest_public_decision_evidence"]["decision"]
         == "I will sweep every waypoint before cleanup."
@@ -572,7 +570,7 @@ def test_state_pairs_split_request_response_tool_trace_for_latest_tool(
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -580,7 +578,7 @@ def test_state_pairs_split_request_response_tool_trace_for_latest_tool(
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -610,7 +608,7 @@ def test_state_pairs_split_request_response_tool_trace_for_latest_tool(
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["latest_tool_call"] == {
         "name": "navigate_to_waypoint",
@@ -631,7 +629,7 @@ def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -639,7 +637,7 @@ def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -669,7 +667,7 @@ def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["latest_action"] == "observe"
     assert (
@@ -688,7 +686,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -696,7 +694,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (attempt_dir / "trace.jsonl").write_text(
@@ -725,7 +723,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["camera_state"]["active"] is True
     assert state["camera_state"]["summary"] == "yaw 0 deg, pitch -10 deg (active)"
@@ -743,7 +741,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
             + "\n"
         )
 
-    reset_state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    reset_state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert reset_state["camera_state"]["active"] is False
     assert reset_state["camera_state"]["summary"] == "yaw 0 deg, pitch 0 deg (neutral)"
@@ -762,7 +760,7 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -805,7 +803,7 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["latest_view_assets"]["map"]["path"] == str(bundle_preview.resolve())
     assert state["latest_view_assets"]["map"]["visual_role"] == "base_metric_map_preview"
@@ -837,7 +835,7 @@ def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_MAP_BUILD).to_payload(),
+                "route": get_selection(MUJOCO_SDK_MAP_BUILD).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -847,7 +845,7 @@ def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
     semantic_map = run_dir / "semantic_map.png"
     semantic_map.write_bytes(b"semantic map")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_MAP_BUILD))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_MAP_BUILD))
 
     assert "map" not in state["latest_view_assets"]
     assert "topdown" not in state["latest_view_assets"]
@@ -862,7 +860,7 @@ def test_state_does_not_synthesize_topdown_from_pose_trace(
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -887,7 +885,7 @@ def test_state_does_not_synthesize_topdown_from_pose_trace(
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert "topdown" not in state["latest_view_assets"]
 
@@ -904,7 +902,7 @@ def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -921,7 +919,7 @@ def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
     os.utime(first_overlay, (2, 2))
     os.utime(latest_overlay, (3, 3))
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["latest_view_assets"]["grounding"]["path"] == str(latest_overlay.resolve())
     assert state["latest_view_assets"]["fpv"]["path"] == str(latest_overlay.resolve())
@@ -940,7 +938,7 @@ def test_state_does_not_promote_report_bbox_images_as_grounding_overlay(
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -954,7 +952,7 @@ def test_state_does_not_promote_report_bbox_images_as_grounding_overlay(
     os.utime(raw_fpv, (1, 1))
     os.utime(report_bbox, (3, 3))
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["latest_view_assets"]["fpv"]["path"] == str(raw_fpv.resolve())
     assert "display_source" not in state["latest_view_assets"]["fpv"]
@@ -969,7 +967,7 @@ def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -990,7 +988,7 @@ def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["phase"] == "failed"
     assert state["status"] == "provider_transient_failed"
@@ -1006,7 +1004,7 @@ def test_state_treats_cleanup_status_success_as_passed(tmp_path: Path) -> None:
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -1033,7 +1031,7 @@ def test_state_treats_cleanup_status_success_as_passed(tmp_path: Path) -> None:
     )
     (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["status"] == "passed"
     assert state["checker_status"]["status"] == "passed"
@@ -1045,7 +1043,7 @@ def test_state_treats_open_ended_cleanup_score_failure_as_advisory(
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0611_1232" / "seed-7"
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
         json.dumps(
@@ -1096,7 +1094,7 @@ def test_state_keeps_cleanup_score_failure_authoritative_for_cleanup(
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0611_1232" / "seed-7"
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_SDK_CLEANUP)
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
         json.dumps(
@@ -1148,7 +1146,7 @@ def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -1178,7 +1176,7 @@ def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -
     (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
     (attempt_dir / "checker.log").write_text("checker failed\n", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["status"] == "failed"
     assert state["checker_status"]["status"] == "failed"
@@ -1196,7 +1194,7 @@ def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -
 def test_state_allows_stop_to_release_lock_for_failed_terminal_run(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0609_1025" / "seed-7"
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_SDK_CLEANUP)
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
         json.dumps(
@@ -1243,7 +1241,7 @@ def test_state_keeps_manual_control_available_for_paused_handoff_attempt(
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0617_1126" / "seed-7"
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
         json.dumps(
@@ -1301,7 +1299,7 @@ def test_state_reports_blocked_resume_for_paused_handoff_without_runner_support(
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0617_1126" / "seed-7"
     route = get_selection(
-        "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
+        "agibot-g2/map-12::agibot-gdk::map-build::openai-agents-sdk::camera-grounded-labels"
     )
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
@@ -1346,7 +1344,7 @@ def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing
         json.dumps(
             {
                 "run_id": "wrapper-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -1367,7 +1365,7 @@ def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing
         encoding="utf-8",
     )
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
     assert state["checker_status"]["status"] == "failed"
     assert state["checker_status"]["message"] == (
@@ -1383,7 +1381,7 @@ def test_state_surfaces_openai_agents_artifacts(tmp_path: Path) -> None:
         json.dumps(
             {
                 "run_id": "sdk-run",
-                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "route": get_selection(MUJOCO_SDK_CLEANUP).to_payload(),
                 "phase": "starting",
                 "backend_lock": "molmospaces_mujoco",
             }
@@ -1391,15 +1389,15 @@ def test_state_surfaces_openai_agents_artifacts(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-openai-agents"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     (run_dir / "openai-agents-events.jsonl").write_text('{"event":"result"}\n', encoding="utf-8")
     (run_dir / "openai-agents-trace.json").write_text('{"trace_id":"trace_1"}\n', encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_SDK_CLEANUP))
 
-    assert state["status"] == "running-openai-agents"
+    assert state["status"] == "running-sdk"
     labels = {item["label"] for item in state["artifact_paths"]}
     assert "OpenAI Agents Events" in labels
     assert "OpenAI Agents Trace" in labels

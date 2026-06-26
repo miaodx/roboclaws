@@ -1,4 +1,4 @@
-"""Safe launcher for operator-console coding-agent routes."""
+"""Safe launcher for operator-console SDK/direct routes."""
 
 from __future__ import annotations
 
@@ -126,10 +126,8 @@ def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str,
 
 def provider_key_present(route: ConsoleLaunchSelection, env: dict[str, str] | None = None) -> bool:
     env_map = os.environ if env is None else env
-    if route.agent_engine_id == "claude-code":
-        return _claude_provider_status(env_map)["ok"]
-    if route.agent_engine_id in {"codex-cli", "openai-agents-sdk"}:
-        return _codex_provider_status(env_map)["ok"]
+    if route.agent_engine_id == "openai-agents-sdk":
+        return _openai_agents_provider_status(env_map)["ok"]
     return False
 
 
@@ -596,20 +594,10 @@ def _normalized_launch_overrides(
 
 
 def _provider_status(route: ConsoleLaunchSelection, env_map: dict[str, str]) -> dict[str, Any]:
-    if route.agent_engine_id == "codex-cli":
-        return _with_evidence_lane_compatibility(
-            route,
-            _codex_provider_status(env_map),
-        )
     if route.agent_engine_id == "openai-agents-sdk":
         return _with_evidence_lane_compatibility(
             route,
             _openai_agents_provider_status(env_map),
-        )
-    if route.agent_engine_id == "claude-code":
-        return _with_evidence_lane_compatibility(
-            route,
-            _claude_provider_status(env_map),
         )
     return {
         "agent_engine": route.agent_engine_id,
@@ -650,28 +638,6 @@ def _with_evidence_lane_compatibility(
     if not compatibility.allowed:
         enriched["capability_blocker"] = compatibility.reason
     return enriched
-
-
-def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
-    provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile("claude-code")
-    model = env_map.get("ROBOCLAWS_CLAUDE_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
-    return provider_readiness(
-        agent_engine="claude-code",
-        provider_profile=provider,
-        model=model,
-        env=env_map,
-    )
-
-
-def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
-    provider = env_map.get("ROBOCLAWS_PROVIDER_PROFILE") or default_provider_profile("codex-cli")
-    model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
-    return provider_readiness(
-        agent_engine="codex-cli",
-        provider_profile=provider,
-        model=model,
-        env=env_map,
-    )
 
 
 def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:

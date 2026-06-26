@@ -207,8 +207,9 @@ injection, report/checker metadata, and direct/MCP-smoke evidence. Full real
 proposer benchmarking remains a later hard gate. The configurable sidecar has
 an explicit `--adapter-mode real` path for proposer probes, but operators must
 install model dependencies and weights deliberately in the sidecar environment
-before using it. Live Codex is a useful best-effort confidence check for that
-slice, but direct and MCP-smoke fake HTTP runs are the hard gates.
+before using it. OpenAI Agents SDK live runs are useful best-effort confidence
+checks for that slice, but direct and MCP-smoke fake HTTP runs are the hard
+gates.
 
 Hosted multimodal routes are not active visual-grounding sidecar dependencies.
 Reintroduce any hosted refiner or direct-producer route only through a fresh
@@ -369,7 +370,7 @@ first-wave matrix sweeps the tiny checkpoint with threshold variants instead.
 The active sidecar contract is detector-only. Hosted refiner and direct-producer
 probes that previously used chat-completions endpoints are parked historical
 routes, not current setup steps. Generic model provider keys may still be used
-by supported coding-agent routes; they are not visual-grounding camera labelers.
+by supported SDK live-agent routes; they are not visual-grounding camera labelers.
 
 List the sidecar adapter slots without starting the server:
 
@@ -420,7 +421,7 @@ the current source of truth before claiming a run supports a setting.
 |------------|--------------------|--------------|---------------------|-------|
 | `python -m roboclaws.household.realworld_cleanup` | yes | yes | yes | Deterministic cleanup demo and checker path. The example path is only a thin wrapper. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | yes | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
-| `python -m roboclaws.cli.agent_server household-world.cleanup` | yes | yes | yes | Direct coding-agent server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
+| `python -m roboclaws.cli.agent_server household-world.cleanup` | yes | yes | yes | Direct live-agent server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Internals use `declare_visual_candidates` and `navigate_to_visual_candidate` for camera evidence to handle registration. |
 
 ## Command Taxonomy
@@ -430,7 +431,7 @@ Use the public launch catalog for operator-facing runs:
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=<engine> evidence_lane=<lane>
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="find something useful to drink"
 ```
 
 Use `agent::run` and lower `molmo::*` recipes only for maintainer debugging or
@@ -444,8 +445,7 @@ just agent::run household-world.cleanup <agent-engine-or-private-driver> <eviden
 |------|--------|---------|
 | Driver | `direct` | Deterministic Python cleanup loop; no MCP server and no live LLM agent. |
 | Driver | `mcp-smoke` | Deterministic script through ADR-0003 MCP tools; drives the same tool-call path but does not launch Codex or Claude. |
-| Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
-| Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
+| Driver | `openai-agents-live` | Private implementation driver for `agent_engine=openai-agents-sdk`. |
 | Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
 | Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation permission. |
 | Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
@@ -476,71 +476,48 @@ Convenience report recipes:
 | `just molmo::review-report` | `direct world-public-labels` | Canonical human review/status report. |
 | `just molmo::mcp-smoke-report` | `mcp-smoke world-public-labels` | Real visual MCP smoke without a live external agent. |
 | `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
-| `just molmo::codex-report` | `codex-live world-public-labels` | Live Codex agent report. |
-| `just molmo::claude-report` | `claude-live world-public-labels` | Live Claude Code agent report. |
 
-The `driver=`, `profile=`, `codex-live`, and `claude-live` tokens above are
+The `driver=` and `profile=` tokens above are
 private implementation-runner vocabulary. Prefer `agent_engine=...`,
 `provider_profile=...`, and `evidence_lane=...` in new docs, plans, and user
 runbooks.
 
-For live Codex / Claude reports, repo-local `.env` keys are honored the same
-way as the direct navigation demos. Normal users configure keys only; command
-shape controls behavior.
+For live SDK reports, repo-local `.env` keys are honored the same way as the
+direct navigation demos. Normal users configure keys only; command shape
+controls behavior.
 
 ```bash
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
-XM_LLM_ANTHROPIC_BASE_URL=https://api.llm.mioffice.cn/anthropic  # optional
 XM_LLM_API_KEY=...
-MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```
 
-Codex repo workflows default to `codex-router-responses` and require `CODEX_BASE_URL` plus
-`CODEX_API_KEY` (`gpt-5.5`, Responses API). They do not fall back to mimo-mify-responses when
-`XM_LLM_API_KEY` is present. To use mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
+SDK repo workflows default to `codex-router-responses` and require
+`CODEX_BASE_URL` plus `CODEX_API_KEY` (`gpt-5.5`, Responses API). They do not
+fall back to `mimo-mify-responses` when `XM_LLM_API_KEY` is present. To use
+`mimo-mify-responses`, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
 explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
-API, and web search disabled. Claude Code prefers MiMo when
-`MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present, then mimo-mify-responses
-Anthropic when `XM_LLM_API_KEY` is present. Bare system CLIs are outside the
-supported path unless a human explicitly asks for a debugging run. Before a
-long Codex visual cleanup run, use:
+API, and web search disabled. Retired `codex-cli` and `claude-code` engines are
+not current public live-agent recipes. Guarded maintainer routes stay outside
+normal hosted/current run guidance until their validation proof is green.
 
 ```bash
-just code::codex-provider-smoke
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
 ```
 
-Local public live-agent recipes support Codex and Claude Code only through the
-pinned coding-agent Docker toolchain and repo-local `.env`. Hosted CI does not
-support Codex. Guarded maintainer routes stay outside normal hosted/current run
-guidance until their validation proof is green. Use the same key set when
-comparing Kimi/MiMo results across machines:
-
-```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-tp-anthropic evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
-```
-
-Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
-Docker-backed Codex runs use repo-local `.env` credentials; host `~/.codex`
-auth/config is not copied into repo workflows.
-
-`codex-live` is detached by default. `just molmo::codex-report` starts a tmux
-session that owns the cleanup MCP server, `codex exec`, logs, checker, and
-artifacts, then returns with status/attach/tail commands. Probe it without
-attaching:
+Probe a live SDK run without attaching:
 
 ```bash
 just molmo::status
-just molmo::status output/molmo/codex-report/<stamp>/seed-7
+just molmo::status output/household/household-world/open-ended/openai-agents-live-world-public-labels/seed-7
 ```
 
-The status probe reports tmux liveness, elapsed time, MCP tool progress,
-`run_result.json` / `report.html` readiness, and the latest Codex message if
-the CLI has written one. Interactive/operator MolmoSpaces visual cleanup remains
-single-instance by default because each visual run owns a MuJoCo-backed
-MolmoSpaces backend. If an interactive Codex tmux session is active or the
-requested MCP port is busy, the launcher fails instead of silently starting
-another simulator on a different port.
+The status probe reports elapsed time, MCP tool progress, and
+`run_result.json` / `report.html` readiness. Interactive/operator MolmoSpaces
+visual cleanup remains single-instance by default because each visual run owns a
+MuJoCo-backed MolmoSpaces backend. If the requested MCP port is busy, the
+launcher fails instead of silently starting another simulator on a different
+port.
 
 Eval-harness runs may select multiple visual cleanup rows:
 
@@ -550,9 +527,9 @@ just agent::eval execute \
 ```
 
 The harness records relevant rows and reports local runtime blockers honestly.
-Live Codex Molmo cleanup remains single-session by launcher policy; if one row
-is active, later live Codex rows are blocked rather than moved to a hidden port
-or silently replaced by a cheaper substitute.
+Live SDK Molmo cleanup remains single-session by launcher policy; if one row is
+active, later live rows are blocked rather than moved to a hidden port or
+silently replaced by a cheaper substitute.
 
 ## Report Shapes
 

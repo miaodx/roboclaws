@@ -52,13 +52,9 @@ const els = {
   portInput: document.getElementById("port-input"),
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
-  codexFields: document.getElementById("codex-fields"),
-  claudeFields: document.getElementById("claude-fields"),
   isaacFields: document.getElementById("isaac-fields"),
   agibotFields: document.getElementById("agibot-fields"),
   agibotGateFields: document.getElementById("agibot-gate-fields"),
-  codexProviderInput: document.getElementById("codex-provider-input"),
-  claudeProviderInput: document.getElementById("claude-provider-input"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
   b1AlignmentArtifactInput: document.getElementById("b1-alignment-artifact-input"),
@@ -175,8 +171,6 @@ function bindEvents() {
     els.isaacSceneInput,
     els.b1AlignmentArtifactInput,
     els.b1NavigationArtifactInput,
-    els.codexProviderInput,
-    els.claudeProviderInput,
     els.portInput,
     els.backendInput,
     els.agentEngineInput,
@@ -1506,12 +1500,7 @@ function launchOverrides(route = state.selectedRoute) {
 }
 
 function launchEnvOverrides(route = state.selectedRoute) {
-  if (route.agent_engine_id === "codex-cli" || route.agent_engine_id === "openai-agents-sdk") {
-    return {
-      ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
-    };
-  }
-  if (route.agent_engine_id === "claude-code") {
+  if (route.agent_engine_id === "openai-agents-sdk") {
     return {
       ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
     };
@@ -2240,14 +2229,6 @@ function isAgibotRoute(route) {
   return Boolean(route && (route.backend_id === "agibot-gdk" || groups.has("agibot_gates")));
 }
 
-function selectedCodexProvider() {
-  return selectedProviderProfile() || els.codexProviderInput.value || "codex-router-responses";
-}
-
-function selectedClaudeProvider() {
-  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-tp-anthropic";
-}
-
 function selectedProviderProfile() {
   return (els.providerProfileInput && els.providerProfileInput.value) || "";
 }
@@ -2266,13 +2247,6 @@ function providerProfileLabel(profile, route = state.selectedRoute) {
   }
   const providerRoute = route.provider_routes.find((item) => item.provider_profile === profile);
   return providerRoute ? `${providerRoute.label} (${profile})` : profile;
-}
-
-function selectedClaudeProviderLabel() {
-  const option = Array.from(els.claudeProviderInput.options).find(
-    (item) => item.value === selectedClaudeProvider()
-  );
-  return option ? option.textContent : selectedClaudeProvider();
 }
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {

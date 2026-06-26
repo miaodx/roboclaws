@@ -19,7 +19,7 @@
       "isaaclab_subprocess",
       "agibot_gdk"
     ],
-    "notes": "Selected rows may require household world, manipulation, episode, visual-grounding, live coding-agent, Agent SDK, eval-suite, or simulator runtime support depending on matched signals."
+    "notes": "Selected rows may require household world, manipulation, episode, visual-grounding, OpenAI Agents SDK live-agent, eval-suite, or simulator runtime support depending on matched signals."
   },
   "scripts": [
     {

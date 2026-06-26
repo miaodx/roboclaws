@@ -1,4 +1,4 @@
-"""Provider-neutral contract for live coding-agent runtime turns."""
+"""Provider-neutral contract for live-agent runtime turns."""
 
 from __future__ import annotations
 
@@ -167,7 +167,7 @@ class LiveAgentResult:
 
 
 class LiveAgentRuntime(Protocol):
-    """Runtime interface for one live coding-agent turn."""
+    """Runtime interface for one live-agent turn."""
 
     runtime_name: str
 

@@ -10,7 +10,6 @@ VERIFY_JUST = JUST_DIR / "verify.just"
 HARNESS_JUST = JUST_DIR / "harness.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 PRE_COMMIT_HOOK = REPO_ROOT / ".githooks" / "pre-commit"
-LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 ROOT_MOLMO_SCRIPT_COMPAT_SHIMS = (
     "check_molmo_planner_manipulation_probe.py",
@@ -179,7 +178,6 @@ def test_harness_exposes_named_execution_rigs() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^molmo-cleanup-codex-perf \*overrides:",
         r"^molmo-realworld-cleanup seeds=\"1 2 3\"",
         r"^molmo-realworld-agent-mcp seeds=\"1\"",
         r"^molmo-realworld-agent-dogfood-kit seed=\"7\"",
@@ -212,11 +210,13 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
         r"^camera-raw-fpv-report seed=\"7\"",
-        r"^codex-report seed=\"7\"",
-        r"^claude-report seed=\"7\"",
+        r"^openclaw-smoke-report seed=\"7\"",
+        r"^openclaw-report seed=\"7\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
+    assert "codex-report" not in text
+    assert "claude-report" not in text
 
 
 def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
@@ -227,21 +227,21 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
         "just molmo::household-world-impl direct world-public-labels",
         "just molmo::household-world-impl mcp-smoke world-public-labels",
         "just molmo::household-world-impl direct camera-raw-fpv",
-        'just molmo::household-world-impl codex-live "{{profile}}"',
-        'just molmo::household-world-impl claude-live "{{profile}}"',
+        'just molmo::household-world-impl openclaw-live "{{profile}}"',
     )
     for call in expected_calls:
         assert call in text
 
     assert "just molmo::cleanup" not in text
     assert "agent-report" not in text
+    assert "codex-live" not in text
+    assert "claude-live" not in text
     assert "openclaw_agent" in text
     assert "realworld_contract_smoke_agent" in text
 
 
-def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
+def test_molmo_axis_runner_distinguishes_smoke_from_current_live_agents() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     for expected in (
         'driver="${driver#driver=}"',
@@ -250,18 +250,19 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         "--evidence-lane",
         "--expect-profile",
         "mcp-smoke/openclaw-smoke for deterministic substitutes",
-        "scripts/dev/coding_agent_docker.sh ensure",
-        'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"',
-        '--claude-bin "$claude_bin"',
         'SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup"',
         "just chat::run",
         'bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"',
-        'roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"',
+        (
+            'roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK Molmo cleanup '
+            'live report"'
+        ),
     ):
         assert expected in text
 
-    assert '"add",\n                CODEX_CLEANUP_MCP_SERVER_NAME,' in runner_text
-    assert 'CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"' in runner_text
+    assert "source scripts/dev/coding_agent_env.sh" in text
+    assert "scripts/dev/coding_agent_docker.sh ensure" not in text
+    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' not in text
 
 
 def test_molmo_visual_reports_require_robot_timeline_and_real_robot_checks() -> None:

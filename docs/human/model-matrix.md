@@ -16,8 +16,6 @@ route summary.
 
 | Agent engine | Default provider profile | Default model | Current status |
 | --- | --- | --- | --- |
-| `codex-cli` | `codex-router-responses` | `gpt-5.5` | Healthy default route for structured and camera-label lanes. |
-| `claude-code` | `mimo-tp-anthropic` | `mimo-v2.5` | Healthy when the repo-local key is configured. |
 | `openai-agents-sdk` | `codex-router-responses` | `gpt-5.5` | Preferred product route for map-build and OpenAI Agents SDK live evals when provider capacity is healthy. |
 | `direct-runner` | none | none | Deterministic contract/eval baseline; no model route and not a live robot agent. |
 
@@ -25,11 +23,10 @@ Useful explicit profiles:
 
 | Provider profile | Wire API | Default model | Notes |
 | --- | --- | --- | --- |
-| `mimo-mify-responses` | Responses | `xiaomi/mimo-v2.5` | Codex route is degraded in current verdicts; use only when explicitly selected. |
-| `minimax-responses` | Responses | `MiniMax-M3` | Healthy for OpenAI Agents SDK structured cleanup; blocked for Codex MCP cleanup today. |
+| `mimo-mify-responses` | Responses | `xiaomi/mimo-v2.5` | Explicit OpenAI Agents SDK route. |
+| `minimax-responses` | Responses | `MiniMax-M3` | Explicit OpenAI Agents SDK route. |
 | `kimi-openai-chat` | OpenAI Chat | `kimi-k2.7-code` | Experimental OpenAI Agents SDK route. Keep the canonical model id; Kimi accepts arbitrary K2.7 suffixes and echoes them. |
 | `mimo-inside-openai-chat` | OpenAI Chat | `mimo-1000` | On-demand benchmark/text route, not a product cleanup default. |
-| `mimo-mify-anthropic` | Anthropic-compatible | `xiaomi/mimo-v2.5` | Explicit Claude Code route via the internal aggregator. |
 
 ## Route Rules
 

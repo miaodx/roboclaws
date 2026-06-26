@@ -14,7 +14,7 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 
 
 def _b1_required_overrides(tmp_path: Path) -> dict[str, str]:
@@ -31,7 +31,7 @@ def _b1_required_overrides(tmp_path: Path) -> dict[str, str]:
 def test_state_marks_dead_wrapper_launch_without_live_artifacts_failed(
     tmp_path: Path, monkeypatch
 ) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     run_dir.mkdir(parents=True)
     _write_operator_state(
@@ -61,7 +61,7 @@ def test_state_marks_dead_wrapper_launch_without_live_artifacts_failed(
 
 
 def test_readiness_does_not_block_on_zombie_wrapper_lock(tmp_path: Path, monkeypatch) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     run_id = "zombie-wrapper-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     run_dir.mkdir(parents=True)

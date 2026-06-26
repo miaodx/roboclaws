@@ -16,7 +16,6 @@ AI agents should also read these docs when they need human-facing context.
 
 - [MolmoSpaces settings](molmospaces-settings.md)
 - [Local runtime reference](local-runtime.md)
-- [Direct coding-agent household MCP driver](coding-agent-nav-server.md)
 - [Model matrix](model-matrix.md)
 - [Model route verdicts](model-route-verdicts.yaml)
 - [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)

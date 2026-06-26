@@ -137,17 +137,6 @@ def test_eval_harness_row_fails_aloud_for_non_object_eval_results_json(
     assert "eval_results.json source must contain a JSON object" in row["eval_results_error"]
 
 
-def test_eval_harness_live_status_source_reports_malformed_json(tmp_path: Path) -> None:
-    live_status = tmp_path / "live_status.json"
-    live_status.write_text("{not json", encoding="utf-8")
-
-    status, source_error = runner._load_live_status_source(live_status)
-
-    assert status == {}
-    assert "live_status source must contain valid JSON object" in source_error
-    assert str(live_status) in source_error
-
-
 def test_eval_harness_exit_fails_for_failed_eval_outcome() -> None:
     manifest = {
         "rows": [

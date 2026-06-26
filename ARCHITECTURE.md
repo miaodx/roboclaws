@@ -65,15 +65,19 @@ Harness recipes
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
-  (`agent_engine=codex-cli`, `claude-code`, or `openai-agents-sdk`) from the
+  (`agent_engine=openai-agents-sdk` for live agents, or `direct-runner` for
+  deterministic proof) from the
   model/key route (`provider_profile=codex-router-responses`,
-  `mimo-mify-responses`, `mimo-tp-anthropic`, and related profiles).
+  `mimo-mify-responses`, `minimax-responses`, and related profiles).
+  Retired live engines `codex-cli` and `claude-code` are rejected by current
+  launch validation rather than preserved as compatibility aliases.
   `direct-runner` is the deterministic contract/eval baseline, not a live robot
   agent runtime.
   Validation-required maintainer engines stay outside the normal public engine
   list until their separate proof gates are green. The active stabilization
-  focus is coding-agent routes and the OpenAI Agents SDK route; higher-level
-  agent frameworks are later clients after those lower routes are stable.
+  focus is the OpenAI Agents SDK live route plus deterministic direct-runner
+  proof; higher-level agent frameworks are later clients after those lower
+  routes are stable.
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Capability Contract And Tools** are the stable public robot interface:
@@ -125,7 +129,7 @@ Key pieces:
 - `roboclaws/maps/` owns reusable navigation map artifacts, projections, and
   Runtime Map Prior Snapshot conversion.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
-  capability surface for coding agents and future higher-level MCP clients.
+  capability surface for SDK live agents and future higher-level MCP clients.
 - `roboclaws/cli/household_agent_server.py` and
   `roboclaws/cli/agibot_map_build_agent_server.py` are thin server adapters
   that assemble live household MCP server processes behind
@@ -138,7 +142,7 @@ Key pieces:
   public household Agent View v2 artifact. The vendor runner at
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` stays SDK-local.
 - `roboclaws/operator_console/` provides the standalone local agent operator
-  console. It exposes explicit coding-agent route metadata, per-backend locks,
+  console. It exposes explicit SDK/direct route metadata, per-backend locks,
   route gates, normalized live operator state, redacted raw-log access, and
   links to existing run artifacts. It starts catalog-approved runs and surfaces
   state; it does not own robot task strategy.
@@ -175,7 +179,7 @@ Examples:
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels scenario_setup=relocate-cleanup-related-objects seed=7
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
 ```
@@ -211,7 +215,7 @@ and Molmo-specific profile names are historical/report-only terms, not the
 canonical task layer or active compatibility contract.
 
 `just console::run` starts a standalone local operator console for supported
-coding-agent household routes. The console does not expose arbitrary shell
+SDK/direct household routes. The console does not expose arbitrary shell
 commands: world, backend, intent, agent engine, provider profile, evidence lane,
 and scenario setup all resolve through the public launch catalog.
 
@@ -272,7 +276,7 @@ Going forward:
 - Add a new backend runtime in `roboclaws/launch/backends.py` as a reusable
   adapter boundary; implementation backend ids stay private metadata.
 - Add a new agent engine in `roboclaws/launch/agent_engines.py`. For live
-  coding agents, shared launcher and status semantics should flow through
+  agent engines, shared launcher and status semantics should flow through
   `roboclaws/agents/live_runtime.py`, with task-specific kickoff text in
   `roboclaws/agents/prompts/`.
 - Add or revise thin server adapters only for transport and lifecycle concerns:
@@ -300,13 +304,12 @@ Every serious run should produce reviewable evidence:
   household Agent View artifacts use `schema=agent_view_v2` with task,
   capabilities, Base Metric Map, Runtime Metric Map, active perception,
   policy, readiness, and privacy sections.
-- `model_call_metrics.jsonl` for sanitized per-call model-work rows when a
-  live Agent SDK, Codex CLI, or Claude Code route exposes compatible usage or
-  timing telemetry.
+- `model_call_metrics.jsonl` for sanitized per-call model-work rows when the
+  live OpenAI Agents SDK route exposes compatible usage or timing telemetry.
 - `provider_request_metrics.jsonl` for opt-in, redacted provider HTTP timing
-  rows from live Codex CLI or Claude Code runs when
-  `ROBOCLAWS_PROVIDER_TIMING_PROXY=1` is enabled. These rows are transport
-  timing evidence, not provider-internal model compute time.
+  rows from maintainer/debug routes when `ROBOCLAWS_PROVIDER_TIMING_PROXY=1` is
+  enabled. These rows are transport timing evidence, not provider-internal model
+  compute time.
 - `roboclaws_report_performance_metrics_v1` packets, usually produced by the
   report-performance extractor, for maintainer comparisons of quality,
   call-count work, model work, normalized-estimate availability, and residual

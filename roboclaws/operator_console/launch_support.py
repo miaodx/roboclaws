@@ -24,12 +24,8 @@ def validate_env_overrides(
     *,
     error_type: type[ValueError] = ValueError,
 ) -> None:
-    if env_overrides and route.agent_engine_id not in {
-        "codex-cli",
-        "claude-code",
-        "openai-agents-sdk",
-    }:
-        raise error_type("provider overrides are only supported for coding-agent routes")
+    if env_overrides and route.agent_engine_id != "openai-agents-sdk":
+        raise error_type("provider overrides are only supported for OpenAI Agents SDK routes")
     for key, value in env_overrides.items():
         _validate_env_override(route, key, value, error_type=error_type)
 
@@ -95,7 +91,7 @@ def _validate_env_override(
         _validate_provider_override(
             route,
             value,
-            {"codex-cli", "claude-code", "openai-agents-sdk"},
+            {"openai-agents-sdk"},
             provider_label="provider profile",
             error_type=error_type,
         )

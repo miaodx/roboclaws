@@ -3,7 +3,7 @@
 
 This script is intentionally narrower than Roboclaws product gates: it verifies
 that provider endpoints accept a minimal request and return a response. It does
-not start simulators, MCP servers, or coding-agent runtimes.
+not start simulators, MCP servers, or live-agent runtimes.
 """
 
 from __future__ import annotations
@@ -143,7 +143,8 @@ def build_provider_probes(
             base_url=os.environ.get("KIMI_OPENAI_BASE_URL", "https://api.kimi.com/coding/v1"),
             max_tokens=chat_max_tokens,
             provider_note=(
-                "Kimi coding requires a coding-agent User-Agent. Kimi K2.7 Code "
+                "Kimi coding requires a Claude-Code-compatible User-Agent header. "
+                "Kimi K2.7 Code "
                 "is thinking-only; this probe omits the old explicit thinking body "
                 "and omits temperature because the provider pins model-specific values."
             ),

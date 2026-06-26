@@ -5,9 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from roboclaws.agents.provider_registry import (
-    ROUTE_BLOCKED,
     ROUTE_CAP_UNKNOWN,
-    ROUTE_DEGRADED,
     ROUTE_EXPERIMENTAL,
     ROUTE_HEALTHY,
     ROUTE_PROVISIONAL,
@@ -84,11 +82,10 @@ def test_catalog_returns_openclaw_model_identifier() -> None:
     assert openclaw_model_id("kimi-k2-5") == "anthropic_kimi/k2p5"
 
 
-def test_registry_marks_mify_codex_degraded_but_supported() -> None:
+def test_registry_marks_mify_responses_sdk_only() -> None:
     route = provider_route_spec("mimo-mify-responses")
 
-    assert "codex-cli" in route.supported_engines
-    assert route.status_for_engine("codex-cli") == ROUTE_DEGRADED
+    assert route.supported_engines == ("openai-agents-sdk",)
     assert route.wire_api == "responses"
     assert route.default_model_id == "xiaomi/mimo-v2.5"
 
@@ -221,7 +218,7 @@ def test_mify_anthropic_route_rejects_conflicting_base_url_envs() -> None:
     assert "XM_LLM_BASE_URL derives 'https://api.llm.example/anthropic'" in str(exc_info.value)
 
 
-def test_mify_anthropic_readiness_rejects_conflicting_base_url_envs() -> None:
+def test_mify_anthropic_readiness_reports_retired_claude_engine() -> None:
     readiness = provider_readiness(
         agent_engine="claude-code",
         provider_profile="mimo-mify-anthropic",
@@ -234,9 +231,8 @@ def test_mify_anthropic_readiness_rejects_conflicting_base_url_envs() -> None:
 
     assert readiness["ok"] is False
     assert readiness["missing_env"] == []
-    assert "conflicting provider route base_url for mimo-mify-anthropic" in readiness["message"]
-    assert "XM_LLM_ANTHROPIC_BASE_URL='https://anthropic.example'" in readiness["message"]
-    assert "XM_LLM_BASE_URL derives 'https://api.llm.example/anthropic'" in readiness["message"]
+    assert readiness["route_status"] == "retired"
+    assert "unsupported agent_engine 'claude-code'" in readiness["message"]
 
 
 def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None:
@@ -246,29 +242,29 @@ def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None
     assert model.supports_image_input is True
     assert route.default_model_id == "MiniMax-M3"
     assert route.default_use is True
-    assert route.status_for_engine("codex-cli") == ROUTE_BLOCKED
+    assert route.supported_engines == ("openai-agents-sdk",)
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_HEALTHY
-    assert route_capabilities_for_engine(route, "codex-cli")["image_transport"] == (
+    assert route_capabilities_for_engine(route, "openai-agents-sdk")["image_transport"] == (
         ROUTE_CAP_UNKNOWN
     )
-    assert "unsupported calls" in route.status_note
+    assert route.status_note == "OpenAI Agents SDK structured cleanup works."
 
 
 def test_provider_readiness_reports_status_and_missing_env() -> None:
     readiness = provider_readiness(
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="mimo-mify-responses",
         env={},
     )
 
     assert readiness["provider"] == "mimo-mify-responses"
-    assert readiness["route_status"] == ROUTE_DEGRADED
+    assert readiness["route_status"] == ROUTE_PROVISIONAL
     assert readiness["missing_env"] == ["XM_LLM_API_KEY"]
 
 
 def test_provider_readiness_rejects_unknown_model_override() -> None:
     readiness = provider_readiness(
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="codex-router-responses",
         model="not-in-provider-catalog",
         env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
@@ -318,7 +314,7 @@ def test_provider_route_model_rejects_same_family_wrong_route_model() -> None:
 
 def test_provider_readiness_rejects_unknown_provider_profile() -> None:
     readiness = provider_readiness(
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="not-a-provider-route",
         env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
     )
@@ -327,7 +323,7 @@ def test_provider_readiness_rejects_unknown_provider_profile() -> None:
     assert readiness["provider_profile"] == "not-a-provider-route"
     assert readiness["missing_env"] == []
     assert "provider_profile 'not-a-provider-route' is unknown" in readiness["message"]
-    assert "agent_engine 'codex-cli'" in readiness["message"]
+    assert "agent_engine 'openai-agents-sdk'" in readiness["message"]
 
 
 def test_openai_agents_runtime_settings_reject_unknown_model_override() -> None:

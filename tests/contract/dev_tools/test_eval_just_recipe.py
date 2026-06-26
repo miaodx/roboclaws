@@ -15,7 +15,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
         "suite=smoke_regression",
         "budget=smoke",
         "stamp=trace",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "provider_profile=codex-router-responses",
         "live_execution=run",
         "live_timeout_s=30",
@@ -24,7 +24,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
     assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
     assert "suite=smoke_regression" in trace
     assert "budget=smoke" in trace
-    assert "agent_engine=codex-cli" in trace
+    assert "agent_engine=openai-agents-sdk" in trace
     assert "provider_profile=codex-router-responses" in trace
     assert "live_execution=run" in trace
     assert "live_timeout_s=30" in trace
@@ -96,7 +96,7 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
     route, plan_trace = _trace_surface_run_with_plan(
         "surface=household-world",
         "preset=cleanup",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
         "provider_profile=codex-router-responses",
         "evidence_lane=world-public-labels",
         "seed=7",
@@ -108,13 +108,13 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
     assert route[:5] == [
         "just",
         "molmo::household-world-impl",
-        "codex-live",
+        "openai-agents-live",
         "smoke",
         "7",
     ]
     assert route[-1] == "/tmp/roboclaws-eval-surface-test/seed-7"
     assert (
-        "target=just agent::run household-world.cleanup codex-cli smoke "
+        "target=just agent::run household-world.cleanup openai-agents-sdk smoke "
         "seed=7 output_dir=/tmp/roboclaws-eval-surface-test "
         "run_dir=/tmp/roboclaws-eval-surface-test/seed-7"
     ) in " ".join(plan_trace)
