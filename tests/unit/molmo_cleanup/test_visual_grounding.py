@@ -12,6 +12,7 @@ from roboclaws.household.visual_grounding import (
     HttpVisualGroundingClient,
     VisualGroundingClientConfig,
     VisualGroundingContractError,
+    safe_runtime_parameters,
     validate_visual_grounding_response,
     visual_grounding_client_from_env,
     visual_grounding_request,
@@ -241,6 +242,26 @@ def test_visual_grounding_request_rejects_static_fixture_projection_field() -> N
         HttpVisualGroundingClient(
             VisualGroundingClientConfig(pipeline_id="grounding-dino")
         ).request_candidates(request)
+
+
+def test_safe_runtime_parameters_keeps_only_json_scalar_knobs() -> None:
+    marker = object()
+
+    assert safe_runtime_parameters(
+        {
+            "box_threshold": 0.25,
+            "": "drop-empty-key",
+            "labels": ["cup", 3, None, marker, {"drop": True}],
+            "metadata": {"drop": True},
+            "enabled": True,
+            "device": None,
+        }
+    ) == {
+        "box_threshold": 0.25,
+        "labels": ["cup", 3, None],
+        "enabled": True,
+        "device": None,
+    }
 
 
 def test_visual_grounding_request_rejects_private_public_map_hints() -> None:

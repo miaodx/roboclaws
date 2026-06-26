@@ -15,6 +15,7 @@ from PIL import Image
 
 from roboclaws.household.visual_grounding import (
     VISUAL_GROUNDING_RESPONSE_SCHEMA,
+    safe_runtime_parameters,
     validate_visual_grounding_response,
 )
 
@@ -1139,27 +1140,8 @@ def _request_runtime_parameters(payload: dict[str, Any], producer_id: str) -> di
     item = pipeline_request.get("proposer") or {}
     if str(item.get("producer_id") or "") == producer_id:
         params = item.get("runtime_parameters") or item.get("knobs") or {}
-        return _safe_runtime_parameters(params)
+        return safe_runtime_parameters(params)
     return {}
-
-
-def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        return {}
-    safe: dict[str, Any] = {}
-    for key, item in value.items():
-        key_text = str(key)
-        if not key_text:
-            continue
-        if isinstance(item, (str, int, float, bool)) or item is None:
-            safe[key_text] = item
-        elif isinstance(item, list):
-            safe[key_text] = [
-                child
-                for child in item
-                if isinstance(child, (str, int, float, bool)) or child is None
-            ]
-    return safe
 
 
 def _runtime_float_param(

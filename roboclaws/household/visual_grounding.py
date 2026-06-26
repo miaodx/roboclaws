@@ -255,6 +255,25 @@ def visual_grounding_request(
     return request
 
 
+def safe_runtime_parameters(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    for key, item in value.items():
+        key_text = str(key)
+        if not key_text:
+            continue
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            safe[key_text] = item
+        elif isinstance(item, list):
+            safe[key_text] = [
+                child
+                for child in item
+                if isinstance(child, (str, int, float, bool)) or child is None
+            ]
+    return safe
+
+
 def image_payload_for_raw_observation(
     raw_observation: dict[str, Any],
     *,

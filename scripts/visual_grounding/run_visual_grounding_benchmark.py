@@ -30,6 +30,7 @@ from roboclaws.household.visual_grounding import (  # noqa: E402
     VisualGroundingClientConfig,
     VisualGroundingContractError,
     pipeline_summary_from_response,
+    safe_runtime_parameters,
     validate_visual_grounding_response,
     visual_grounding_failure_response,
     visual_grounding_request,
@@ -261,7 +262,7 @@ def _normalize_benchmark_row(row: Any, *, source: Path) -> dict[str, Any]:
     if not pipeline_id:
         raise SystemExit(f"benchmark matrix row missing pipeline_id: {row}")
     _reject_retired_fake_pipeline(pipeline_id)
-    runtime_parameters = _safe_runtime_parameters(
+    runtime_parameters = safe_runtime_parameters(
         row.get("runtime_parameters") or row.get("knobs") or {}
     )
     model_family = str(
@@ -290,22 +291,6 @@ def _normalize_benchmark_row(row: Any, *, source: Path) -> dict[str, Any]:
 def _pipeline_family(pipeline_id: str) -> str:
     first = pipeline_id.split("+", maxsplit=1)[0]
     return first.removesuffix("-direct")
-
-
-def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        return {}
-    safe: dict[str, Any] = {}
-    for key, item in value.items():
-        if isinstance(item, (str, int, float, bool)) or item is None:
-            safe[str(key)] = item
-        elif isinstance(item, list):
-            safe[str(key)] = [
-                child
-                for child in item
-                if isinstance(child, (str, int, float, bool)) or child is None
-            ]
-    return safe
 
 
 def _positive_seconds(value: Any) -> float:
