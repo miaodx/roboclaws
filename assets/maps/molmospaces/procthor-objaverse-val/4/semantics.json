@@ -1,9 +1,9 @@
 {
-  "base_navigation_map_contract": {
+  "base_metric_map_contract": {
     "consumer_scope": "sim_real_robot_and_digital_twin",
     "inspection_waypoint_count": 4,
     "navigation_area_count": 4,
-    "schema": "base_navigation_map_v1",
+    "schema": "base_metric_map_v1",
     "semantic_label_count": 4,
     "waypoint_generation_policy": "base_navigation_area_centroid_clearance_v1"
   },
@@ -102,8 +102,8 @@
       "yaw": 0.0
     }
   ],
-  "map_id": "molmospaces-procthor-objaverse-val-4_base_navigation_map",
-  "map_version": "base-navigation-map-v1",
+  "map_id": "molmospaces-procthor-objaverse-val-4_base_metric_map",
+  "map_version": "base-metric-map-v1",
   "provenance": {
     "contains_movable_objects": false,
     "contains_private_scoring_truth": false,

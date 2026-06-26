@@ -276,7 +276,7 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
 
     run_dir = tmp_path / "run"
     agent_view = run_result["agent_view"]
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     bundle = run_result["nav2_map_bundle"]
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     subphase_result = json.loads(
@@ -332,7 +332,7 @@ def test_physical_agibot_pilot_report_uses_default_robot_map_12_artifact(
     )
 
     run_dir = tmp_path / "run"
-    metric_map = agent_view_module.base_navigation_map(run_result["agent_view"])
+    metric_map = agent_view_module.base_metric_map(run_result["agent_view"])
     bundle = run_result["nav2_map_bundle"]
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
 

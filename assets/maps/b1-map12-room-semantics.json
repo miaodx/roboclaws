@@ -8,7 +8,7 @@
     "allows_pending_review_labels": true,
     "notes": [
       "This file is the reviewed room-label reference for B1 / Map 12.",
-      "Map12 navigation geometry must come from a validated Base Navigation Map or an explicit semantic projection artifact, not from this room-label reference.",
+      "Map12 navigation geometry must come from a validated Base Metric Map or an explicit semantic projection artifact, not from this room-label reference.",
       "Rows with review_status=needs_review are display-label candidates only and must not be promoted into verified room semantics."
     ]
   },

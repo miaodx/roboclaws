@@ -86,7 +86,7 @@ RUNTIME_FIXTURE = "fixture"
 RUNTIME_MOLMOSPACES_SUBPROCESS = "molmospaces-subprocess"
 REHEARSAL_MODE_CONTRACT = "contract"
 REHEARSAL_MODE_CLEANUP_ACTIONS = "cleanup-actions"
-PRE_HARDWARE_CONFIDENCE_LAYER = "Agibot MolmoSpaces Base Navigation Map Pre-Hardware Rehearsal"
+PRE_HARDWARE_CONFIDENCE_LAYER = "Agibot MolmoSpaces Base Metric Map Pre-Hardware Rehearsal"
 
 
 def run_molmospaces_agibot_contract_rehearsal(
@@ -153,7 +153,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     visual_grounding_timeout_s: float | None = None,
     map_bundle_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Run the Agibot/MolmoSpaces local rehearsal as a robot-like Base Navigation Map flow."""
+    """Run the Agibot/MolmoSpaces local rehearsal as a robot-like Base Metric Map flow."""
 
     intent = intent_helpers.normalize_household_intent(intent)
     if runtime not in {RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS}:
@@ -298,7 +298,7 @@ def _prehardware_metadata_overrides(
         "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
         "confidence_layer_summary": (
             "Runs the shared MolmoSpaces cleanup harness as an Agibot-shaped "
-            "pre-hardware rehearsal: Base Navigation Map first, generated exploration "
+            "pre-hardware rehearsal: Base Metric Map first, generated exploration "
             "candidates, online observations, Runtime Metric Map output, and "
             "RAW_FPV/camera-grounded-labels perception evidence. It is simulated and not "
             "Agibot GDK hardware proof."
@@ -314,7 +314,7 @@ def _prehardware_metadata_overrides(
         "mcp_server": "roboclaws_household_agibot_molmospaces_prehardware",
         **task_identity,
         "agibot_molmospaces_prehardware_rehearsal": {
-            "schema": "agibot_molmospaces_base_navigation_map_prehardware_rehearsal_v1",
+            "schema": "agibot_molmospaces_base_metric_map_prehardware_rehearsal_v1",
             **task_identity,
             "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
             "runtime": runtime,
@@ -329,7 +329,7 @@ def _prehardware_metadata_overrides(
                 else "MolmoSpaces subprocess runtime supplies local simulator camera evidence."
             ),
             "visual_grounding_pipeline_id": visual_grounding,
-            "base_navigation_map_start": True,
+            "base_metric_map_start": True,
             "online_map_build": True,
             "cleanup_actions_included": intent == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
             "cleanup_actions_disabled": cleanup_actions_disabled,
@@ -346,7 +346,7 @@ def _prehardware_metadata_overrides(
             },
             "acceptance_gates": [
                 "runtime_metric_map.json exists",
-                "metric_map.base_navigation_map.enabled=true",
+                "metric_map.base_metric_map.enabled=true",
                 "generated exploration candidates are visited or reported unvisited",
                 "agent view does not contain private truth",
                 "RAW_FPV/camera-grounded-labels observations create public runtime evidence",
@@ -382,9 +382,9 @@ def _write_prehardware_runtime_export(
     runtime_metric_map = result.get("runtime_metric_map") or agent_view_module.runtime_metric_map(
         agent_view
     )
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     payload = {
-        "schema": "agibot_molmospaces_base_navigation_map_prehardware_runtime_export_v1",
+        "schema": "agibot_molmospaces_base_metric_map_prehardware_runtime_export_v1",
         **task_identity,
         "task_prompt": task_prompt,
         "runtime": runtime,
@@ -392,7 +392,7 @@ def _write_prehardware_runtime_export(
         "evidence_lane": profile,
         "camera_labeler": camera_labeler or "",
         "visual_grounding_pipeline_id": visual_grounding,
-        "base_navigation_map_start": True,
+        "base_metric_map_start": True,
         "online_map_build": True,
         "cleanup_actions_included": task_identity["task_intent"]
         == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
@@ -406,8 +406,8 @@ def _write_prehardware_runtime_export(
         "agibot_map_reference": _relpath(agibot_map_reference_path, run_dir),
         "runtime_metric_map_summary": {
             "schema": runtime_metric_map.get("schema", ""),
-            "base_navigation_map_enabled": bool(
-                (metric_map.get("base_navigation_map") or {}).get("enabled")
+            "base_metric_map_enabled": bool(
+                (metric_map.get("base_metric_map") or {}).get("enabled")
             ),
             "source_map_mutated": runtime_metric_map.get("source_map_mutated"),
             "observed_object_count": len(runtime_metric_map.get("observed_objects") or []),
@@ -860,7 +860,7 @@ def _agibot_shaped_agent_view(
         perception_mode=perception_mode,
         detection_exposure_policy="agibot_shaped_molmospaces_sim_policy_camera",
         structured_detections_available=structured_detections_available,
-        base_navigation_map=metric_map,
+        base_metric_map=metric_map,
         runtime_metric_map=runtime_metric_map,
         observed_objects=observed_objects,
         raw_fpv_observations=raw_fpv_observations,
@@ -877,7 +877,7 @@ def _agibot_shaped_agent_view(
             "schema": "realworld_cleanup_policy_view_v1",
             "policy_observation_camera": "molmospaces_sim_policy_camera",
             "allowed_inputs": [
-                "base_navigation_map",
+                "base_metric_map",
                 "runtime_metric_map",
                 "raw_fpv_observations",
                 "navigation_status",

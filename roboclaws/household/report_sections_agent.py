@@ -16,7 +16,7 @@ def agent_view_section(run_result: dict[str, Any]) -> str:
     agent_view = run_result.get("agent_view") or {}
     if not isinstance(agent_view, dict) or not agent_view:
         return ""
-    metric_map = _base_navigation_map(agent_view)
+    metric_map = _base_metric_map(agent_view)
     runtime_metric_map = run_result.get("runtime_metric_map") or _runtime_metric_map(agent_view)
     observed = _observed_objects(agent_view)
     raw_observations = _raw_fpv_observations(agent_view)
@@ -767,9 +767,9 @@ def _is_agent_view_v2(payload: Any) -> bool:
     )
 
 
-def _base_navigation_map(agent_view: Any) -> dict[str, Any]:
+def _base_metric_map(agent_view: Any) -> dict[str, Any]:
     if _is_agent_view_v2(agent_view):
-        return agent_view_module.base_navigation_map(agent_view)
+        return agent_view_module.base_metric_map(agent_view)
     return dict(agent_view.get("metric_map") or {}) if isinstance(agent_view, dict) else {}
 
 

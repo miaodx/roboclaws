@@ -619,8 +619,11 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
         if item["freshness"] == "prior"
     ]
     assert result["runtime_metric_map_prior"]["loaded"] is True
+    assert result["runtime_metric_map_prior"]["source_provided"] is True
     assert result["runtime_metric_map_prior"]["source"] == str(prior_path)
     assert result["runtime_metric_map_prior"]["observed_object_count"] == 1
+    assert result["runtime_metric_map_prior"]["object_prior_count"] == 1
+    assert result["runtime_metric_map_prior"]["anchor_prior_count"] >= 1
     assert {item["object_id"] for item in prior_rows} == {"plastic_bottle_table_1"}
     assert all(item["actionability"] == "needs_confirm" for item in prior_rows)
     assert all(item["state"] == "prior" for item in prior_rows)
@@ -670,7 +673,7 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
     semantics = {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": "test-b1-map12",
-        "map_id": "test-b1-map12_base_navigation_map",
+        "map_id": "test-b1-map12_base_metric_map",
         "frame_ids": {"map": "map", "base": "base_link", "camera": "camera"},
         "spatial_contract": source_frame_spatial_contract(frame_id="map"),
         "display_frame": None,

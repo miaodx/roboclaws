@@ -264,7 +264,7 @@ class AgibotMapBuildMCPServer:
             perception_mode=self.perception_mode,
             detection_exposure_policy=self.evidence_lane,
             structured_detections_available=False,
-            base_navigation_map=metric_map,
+            base_metric_map=metric_map,
             runtime_metric_map=runtime_metric_map,
             observed_objects=[],
             raw_fpv_observations=raw_observations,
@@ -283,7 +283,7 @@ class AgibotMapBuildMCPServer:
                 "schema": "realworld_cleanup_policy_view_v1",
                 "policy_observation_camera": "head_color",
                 "allowed_inputs": [
-                    "base_navigation_map",
+                    "base_metric_map",
                     "runtime_metric_map",
                     "raw_fpv_observations",
                     "navigation_status",

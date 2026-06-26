@@ -161,7 +161,7 @@
     },
     "map": {
       "alignment_status": "source_map_frame_preview",
-      "artifact_source_family": "base_navigation_map_bundle",
+      "artifact_source_family": "base_metric_map_bundle",
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
@@ -191,8 +191,8 @@
       },
       "path": "molmospaces-val_3-map.png",
       "provenance": "map_bundle_preview_png",
-      "view": "base_navigation_map_preview",
-      "visual_role": "base_navigation_map_preview"
+      "view": "base_metric_map_preview",
+      "visual_role": "base_metric_map_preview"
     },
     "topdown": {
       "alignment_status": "mujoco_scene_rendered",

@@ -158,9 +158,9 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     assert metadata["views"]["chase"]["camera_diagnostics"]["camera_name"] == (
         "robot_0/camera_follower"
     )
-    assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
-    assert metadata["views"]["map"]["visual_role"] == "base_navigation_map_preview"
-    assert metadata["views"]["map"]["artifact_source_family"] == "base_navigation_map_bundle"
+    assert metadata["views"]["map"]["view"] == "base_metric_map_preview"
+    assert metadata["views"]["map"]["visual_role"] == "base_metric_map_preview"
+    assert metadata["views"]["map"]["artifact_source_family"] == "base_metric_map_bundle"
     assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
     assert "scene_alignment" not in metadata["views"]["map"]
     assert "semantic_projection" not in metadata["views"]["map"]

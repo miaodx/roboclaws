@@ -54,7 +54,7 @@ class BaseWaypointBuilderConfig:
 
 
 class BaseWaypointBuilder:
-    """Build sparse area-inspection waypoints from Base Navigation Map fields only."""
+    """Build sparse area-inspection waypoints from Base Metric Map fields only."""
 
     def __init__(self, *, grid: OccupancyGrid, config: BaseWaypointBuilderConfig) -> None:
         if not config.frame_id:

@@ -65,9 +65,11 @@ Harness recipes
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
-  (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  or `direct-runner`) from the model/key route (`provider_profile=codex-router-responses`,
+  (`agent_engine=codex-cli`, `claude-code`, or `openai-agents-sdk`) from the
+  model/key route (`provider_profile=codex-router-responses`,
   `mimo-mify-responses`, `mimo-tp-anthropic`, and related profiles).
+  `direct-runner` is the deterministic contract/eval baseline, not a live robot
+  agent runtime.
   Validation-required maintainer engines stay outside the normal public engine
   list until their separate proof gates are green. The active stabilization
   focus is coding-agent routes and the OpenAI Agents SDK route; higher-level
@@ -171,7 +173,7 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels scenario_setup=relocate-cleanup-related-objects seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
@@ -193,7 +195,7 @@ invalid for world-label and raw-FPV lanes. The `smoke` token remains a cheap
 synthetic preset, not an evidence lane.
 
 Cleanup lanes do not select online/offline map behavior. The default
-start-of-run map context is the Base Navigation Map: occupancy geometry,
+start-of-run map context is the Base Metric Map: occupancy geometry,
 generated exploration candidates, and public room-category hints when
 available. Use `runtime_map_prior=...` to consume a raw runtime map or canonical
 Runtime Map Prior Snapshot prior. Historical `minimal` / `rich` map
@@ -296,7 +298,7 @@ Every serious run should produce reviewable evidence:
 - `trace.jsonl` for tool calls and state transitions.
 - `agent_view.json` / `run_result.json` for public agent-facing state. Current
   household Agent View artifacts use `schema=agent_view_v2` with task,
-  capabilities, Base Navigation Map, Runtime Metric Map, active perception,
+  capabilities, Base Metric Map, Runtime Metric Map, active perception,
   policy, readiness, and privacy sections.
 - `model_call_metrics.jsonl` for sanitized per-call model-work rows when a
   live Agent SDK, Codex CLI, or Claude Code route exposes compatible usage or

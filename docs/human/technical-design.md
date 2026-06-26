@@ -38,7 +38,7 @@ trace, runtime map or report artifacts, and a human-readable `report.html`.
 
 ## Household World Direction
 
-The household stack starts from a Base Navigation Map: occupancy/free-space
+The household stack starts from a Base Metric Map: occupancy/free-space
 context, generated exploration candidates, and public room-category hints when
 available. Map-build and observations enrich that context into a Runtime Metric
 Map. Downstream runs can consume either raw `runtime_metric_map.json` or the
@@ -100,7 +100,7 @@ remain lower-level execution mechanics.
 
 The first eval command shape is `just agent::eval ...`. Eval samples must reuse
 the current household surfaces, MCP tools, public/private evidence split, and
-Base Navigation Map / Runtime Metric Map contracts instead of introducing a
+Base Metric Map / Runtime Metric Map contracts instead of introducing a
 parallel task taxonomy.
 
 ## Current Non-Goals

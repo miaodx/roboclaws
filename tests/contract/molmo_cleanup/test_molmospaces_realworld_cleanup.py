@@ -137,7 +137,7 @@ def _assert_cleanup_result_contract(
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
     assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
     assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(PREBUILT_BUNDLE)
-    assert agent_view_module.base_navigation_map(run_result["agent_view"])["map_bundle"][
+    assert agent_view_module.base_metric_map(run_result["agent_view"])["map_bundle"][
         "environment_id"
     ] == ("molmospaces-procthor-10k-val-0")
     assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
@@ -216,7 +216,7 @@ def test_realworld_cleanup_product_gate_rejects_legacy_agibot_robot_map_9_bundle
         bundle_dir=bundle_dir,
     )
 
-    with pytest.raises(ValueError, match="invalid Base Navigation Map v1 bundle"):
+    with pytest.raises(ValueError, match="invalid Base Metric Map v1 bundle"):
         demo.run_realworld_cleanup(
             output_dir=tmp_path / "run",
             seed=7,
@@ -231,7 +231,7 @@ def test_agibot_semantic_actions_rehearsal_uses_legacy_rich_bundle_and_is_not_pr
     _require_robot_map_9_artifact()
     rehearsal = _load_agibot_semantic_actions_module()
 
-    with pytest.raises(ValueError, match="invalid Base Navigation Map v1 bundle"):
+    with pytest.raises(ValueError, match="invalid Base Metric Map v1 bundle"):
         rehearsal.run_agibot_robot_map_9_semantic_actions(
             run_dir=tmp_path / "run",
             context_json=ROBOT_MAP_9_CONTEXT,
@@ -262,7 +262,7 @@ def test_realworld_cleanup_live_bundle_gate_rejects_invalid_bundle(tmp_path: Pat
             map_bundle_dir=invalid_bundle,
         )
     except ValueError as exc:
-        assert "invalid Base Navigation Map v1 bundle" in str(exc)
+        assert "invalid Base Metric Map v1 bundle" in str(exc)
     else:  # pragma: no cover - assertion branch
         raise AssertionError("expected invalid selected bundle to fail before cleanup")
 

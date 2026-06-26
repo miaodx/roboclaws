@@ -905,7 +905,7 @@ def _scanner_category_provenance(smoke: dict[str, Any]) -> str:
     if not isinstance(runtime_map, dict):
         return "unavailable"
     rooms = [room for room in runtime_map.get("rooms") or [] if isinstance(room, dict)]
-    if any(room.get("public_room_source") == "base_navigation_map" for room in rooms):
+    if any(room.get("public_room_source") == "base_metric_map" for room in rooms):
         return "source_metadata"
     hints = [
         hint for hint in runtime_map.get("room_category_hints") or [] if isinstance(hint, dict)

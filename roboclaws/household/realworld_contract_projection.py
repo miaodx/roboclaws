@@ -137,8 +137,8 @@ def _metric_map(
         raise AssertionError("product runtime metric_map requires a canonical map bundle")
     source = copy.deepcopy(contract._bundle_metric_map_template)
     frame_id = str(source.get("frame_id") or "map")
-    map_id = str(source.get("map_id") or f"{contract.scenario.scenario_id}_base_navigation_map")
-    map_version = str(source.get("map_version") or "base-navigation-map-v1")
+    map_id = str(source.get("map_id") or f"{contract.scenario.scenario_id}_base_metric_map")
+    map_version = str(source.get("map_version") or "base-metric-map-v1")
     metric_map = {
         "ok": True,
         "tool": "metric_map",
@@ -186,22 +186,22 @@ def _metric_map(
             contract._generated_inspection_waypoints.values(),
             contract,
         ),
-        "base_navigation_map": {
+        "base_metric_map": {
             "enabled": True,
-            "source": _base_navigation_map_source(contract),
+            "source": _base_metric_map_source(contract),
             "generated_candidate_count": len(contract._public_waypoints),
             "source_rooms_hidden": False,
             "source_room_labels_visible": bool(contract._public_rooms),
             "source_fixtures_hidden": True,
             "source_inspection_waypoints_hidden": False,
             "public_contract_note": (
-                "Base Navigation Map exposes occupancy geometry, artifact-authored "
+                "Base Metric Map exposes occupancy geometry, artifact-authored "
                 "inspection waypoints, and public room labels, not authored fixture "
                 "tables or movable-object semantics."
             ),
         },
         "public_contract_note": (
-            "Base Navigation Map projection: public room labels and artifact-authored "
+            "Base Metric Map projection: public room labels and artifact-authored "
             "inspection waypoints are visible. Static fixture tables, movable-object "
             "inventory, and private scoring truth are hidden; Runtime Metric Map "
             "observations enrich the run."
@@ -230,7 +230,7 @@ def _static_fixture_projection(
         rooms=[],
         generated_exploration_candidate_count=len(contract._public_waypoints),
         public_contract_note=(
-            "Base Navigation Map intentionally hides authored fixture tables. "
+            "Base Metric Map intentionally hides authored fixture tables. "
             "Public room labels live on metric_map.rooms and room_category_hints. "
             "Runtime observed handles and map update candidates must come from "
             "public observations, not source-map semantics."
@@ -351,7 +351,7 @@ def _current_pose_source(contract: Any) -> str:
     return str(waypoint.get("waypoint_source") or "inspection_waypoint")
 
 
-def _base_navigation_map_source(contract: Any) -> str:
+def _base_metric_map_source(contract: Any) -> str:
     if getattr(contract, "_bundle_metric_map_template", None) is not None:
         return "map_artifact_inspection_waypoints"
     return "synthetic_map_projection"
@@ -385,7 +385,7 @@ def _fixtures_from_runtime_scenario(
     *,
     waypoints: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Build internal runtime fixture handles without adding them to Base Navigation Map."""
+    """Build internal runtime fixture handles without adding them to Base Metric Map."""
 
     waypoint_by_room: dict[str, str] = {}
     fallback_waypoint_id = _first_waypoint_id(waypoints)
@@ -520,7 +520,7 @@ def _public_room_hint_payload(room: dict[str, Any]) -> dict[str, Any]:
         "category": str(room.get("category") or _room_category_from_label(room_label, room_id)),
         "polygon": polygon,
         "map_center": map_center,
-        "public_room_source": "base_navigation_map",
+        "public_room_source": "base_metric_map",
     }
     payload = normalize_spatial_room(
         payload,
@@ -561,7 +561,7 @@ def _room_category_hints_from_public_rooms(
             "classification_status": "map_prior",
             "confidence": 0.8,
             "aliases": [room_id, room_label],
-            "producer_type": "base_navigation_map",
+            "producer_type": "base_metric_map",
         }
         _assert_no_forbidden_agent_view_keys(hint)
         hints.append(hint)
@@ -856,7 +856,7 @@ def _public_base_waypoints_from_artifact(
         waypoint["room_id"] = room_id
         waypoint["room_label"] = room_label
         waypoint.setdefault("label", f"Inspection waypoint {index}")
-        waypoint.setdefault("purpose", "base_navigation_map_exploration")
+        waypoint.setdefault("purpose", "base_metric_map_exploration")
         waypoint.setdefault("waypoint_source", "map_artifact_inspection_waypoint")
         waypoint.setdefault("coverage_estimate", round(1.0 / max(len(source_waypoints), 1), 6))
         waypoint.pop("fixture_ids", None)

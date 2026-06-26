@@ -40,7 +40,7 @@ contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
 the `surface=planner-proof` confidence route.
 
 The sim household map surface simplification is implemented. Current sim
-reports and operator-console map slots distinguish the Base Navigation Map
+reports and operator-console map slots distinguish the Base Metric Map
 preview from Runtime Metric Map evidence, keep Runtime Map Prior Snapshot
 as a prior wrapper, and no longer publish generated `semantic_map.png` /
 `map_overlay.json` previews as current map proof.
@@ -60,8 +60,8 @@ raw/source-map aligned previews.
 The B1 / Map 12 digital-twin map input contract now has accepted geometry
 alignment, preview-grade residual-backed robot pose/render proof, and
 agent-visible runtime-prior capability exposure. Product and operator-preview
-routes first generate the strict shared Base Navigation Map from
-`assets/maps/b1-map12-base-navigation-labels.json` plus the vendor Agibot Nav2
+routes first generate the strict shared Base Metric Map from
+`assets/maps/b1-map12-base-metric-labels.json` plus the vendor Agibot Nav2
 map, then add explicit alignment/navigation proof through a thin sidecar before
 passing map context to lower-level consumers. The sidecar does not read
 `navigation_memory.json`, generate rooms/waypoints, or accept a separate
@@ -75,10 +75,10 @@ projection and public navigation extensions are follow-ups in
 `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 The cross-environment map/waypoint source-of-truth flow is implemented.
 Simulator, real robot, and Digital Twin product map paths now share strict Base
-Navigation Map v1 validation and canonical area-based base waypoints.
+Metric Map v1 validation and canonical area-based base waypoints.
 MolmoSpaces product bundle generation is split away from Agent View/runtime
 projection, the active sampler bundle set validates as fixture-free Base
-Navigation Map v1, product runtime copies selected source bundles into run
+Metric Map v1, product runtime copies selected source bundles into run
 artifacts instead of authoring snapshots from Agent View, runtime cleanup
 observes objects from generated sim bundles, and legacy rich Agent View bundle
 exports plus no-bundle synthetic map projection paths have been removed. The
@@ -103,14 +103,14 @@ thin review/runtime contract is
 ## Next Action
 
 Review the implemented cross-environment map/waypoint source-of-truth cleanup
-and keep any remaining follow-up limited to strict Base Navigation Map bundle
+and keep any remaining follow-up limited to strict Base Metric Map bundle
 validation or current runtime-map consumers.
 
 ## Current Blocker
 
 No current human blocker for the implemented cross-environment map/waypoint
 source-of-truth plan. Product runtime, smoke helpers, and current tests now fail
-loudly without a selected Base Navigation Map bundle as intended.
+loudly without a selected Base Metric Map bundle as intended.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
@@ -146,7 +146,7 @@ called healthy.
 - Implemented household map/launch/open-ended plan:
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`
 - Active launch contract ADR:
-  `docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md`
+  `docs/adr/0136-use-base-metric-map-and-first-class-household-launch-contracts.md`
 - Active detector-only sidecar ADR:
   `docs/adr/0138-use-detector-only-visual-grounding-sidecar.md`
 - Implemented cross-environment semantic map parity plan:

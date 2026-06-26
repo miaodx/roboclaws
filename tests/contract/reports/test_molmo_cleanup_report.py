@@ -936,8 +936,8 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
-            "source_provenance": "molmospaces_base_navigation_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_metric_map",
+            "source_provenance": "molmospaces_base_metric_map",
             "source_schema": "nav2_cleanup_semantics_v1",
             "source_bundle_root": "assets/maps/molmospaces-procthor-val-0-7",
             "artifact_paths": {
@@ -1001,13 +1001,12 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
 
     html = report_path.read_text(encoding="utf-8")
     assert (
-        "Base Navigation Map Preview "
-        "<span>Nav2 Map Bundle / Agibot-shaped static map contract</span>"
+        "Base Metric Map Preview <span>Nav2 Map Bundle / Agibot-shaped static map contract</span>"
     ) in html
     assert "What it proves" in html
     assert "What it does not prove" in html
     assert "Agibot-shaped base navigation map preview" in html
-    assert "molmospaces_base_navigation_map" in html
+    assert "molmospaces_base_metric_map" in html
     assert "not a real Agibot GDK map" in html
     assert 'src="map_bundle/preview.png"' in html
     assert "semantic_map.png" not in html
@@ -1068,8 +1067,8 @@ def test_cleanup_report_does_not_generate_schematic_preview_when_occupancy_frame
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
-            "source_provenance": "molmospaces_base_navigation_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_metric_map",
+            "source_provenance": "molmospaces_base_metric_map",
             "artifact_paths": {
                 "map_yaml": "map_bundle/map.yaml",
                 "occupancy_image": "map_bundle/map.pgm",

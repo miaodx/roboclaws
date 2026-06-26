@@ -13,10 +13,10 @@ from roboclaws.maps.bundle_validation import (
     parse_map_yaml as parse_map_yaml,
 )
 from roboclaws.maps.bundle_validation import (
-    validate_base_navigation_map_v1_payload,
+    validate_base_metric_map_v1_payload,
     validate_nav2_map_bundle_payload,
 )
-from roboclaws.maps.preview import render_base_navigation_map_bundle_preview
+from roboclaws.maps.preview import render_base_metric_map_bundle_preview
 from roboclaws.maps.rasterize import (
     occupancy_grid_from_metric_map,
     write_pgm,
@@ -113,7 +113,7 @@ def metric_map_bundle_metadata(
         "environment_id": environment_id,
         "map_id": map_id,
         "map_version": map_version,
-        "source_provenance": "molmospaces_base_navigation_map",
+        "source_provenance": "molmospaces_base_metric_map",
         "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
         "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
         "artifact_paths": _bundle_relative_paths(artifact_root=artifact_root),
@@ -153,10 +153,10 @@ def copy_nav2_map_bundle_snapshot(
     source_bundle_dir: Path,
     run_dir: Path,
 ) -> dict[str, Any]:
-    """Copy a validated Base Navigation Map bundle into a run-local snapshot."""
+    """Copy a validated Base Metric Map bundle into a run-local snapshot."""
     source_bundle_dir = Path(source_bundle_dir)
-    validation = validate_base_navigation_map_v1_bundle(source_bundle_dir)
-    validation.raise_for_errors(label="Base Navigation Map v1 bundle")
+    validation = validate_base_metric_map_v1_bundle(source_bundle_dir)
+    validation.raise_for_errors(label="Base Metric Map v1 bundle")
 
     bundle_dir = Path(run_dir) / "map_bundle"
     for key, relative in _bundle_local_paths().items():
@@ -192,12 +192,12 @@ def write_nav2_map_bundle(
     costmaps_dir.mkdir(parents=True, exist_ok=True)
 
     map_id = str(metric_map.get("map_id") or "realworld_cleanup_navigation_map")
-    map_version = str(metric_map.get("map_version") or "base-navigation-map-v1")
+    map_version = str(metric_map.get("map_version") or "base-metric-map-v1")
     environment_id = str(
         (metric_map.get("map_bundle") or {}).get("environment_id")
         if isinstance(metric_map.get("map_bundle"), dict)
         else ""
-    ) or map_id.removesuffix("_base_navigation_map")
+    ) or map_id.removesuffix("_base_metric_map")
     metadata = (
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
     )
@@ -245,7 +245,7 @@ def write_nav2_map_bundle(
         "environment_id": environment_id,
         "map_id": map_id,
         "map_version": map_version,
-        "source_provenance": "molmospaces_base_navigation_map",
+        "source_provenance": "molmospaces_base_metric_map",
         "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
         "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
         "parameter_hash": parameter_hash,
@@ -291,8 +291,8 @@ def _existing_bundle_snapshot(
 ) -> dict[str, Any]:
     semantics = _read_bundle_semantics(bundle_dir)
     environment_id = str(semantics.get("environment_id") or bundle_dir.name)
-    map_id = str(semantics.get("map_id") or f"{environment_id}_base_navigation_map")
-    map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
+    map_id = str(semantics.get("map_id") or f"{environment_id}_base_metric_map")
+    map_version = str(semantics.get("map_version") or "base-metric-map-v1")
     metadata = metric_map_bundle_metadata(
         environment_id=environment_id,
         map_id=map_id,
@@ -341,9 +341,9 @@ def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
     return MapBundleValidation(bundle_dir, errors, warnings, metadata)
 
 
-def validate_base_navigation_map_v1_bundle(bundle_dir: Path) -> MapBundleValidation:
+def validate_base_metric_map_v1_bundle(bundle_dir: Path) -> MapBundleValidation:
     bundle_dir = Path(bundle_dir)
-    errors, warnings, metadata = validate_base_navigation_map_v1_payload(
+    errors, warnings, metadata = validate_base_metric_map_v1_payload(
         bundle_dir,
         paths=_bundle_local_paths(),
         default_resolution_m=DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
@@ -581,13 +581,13 @@ def _semantics_payload(
         "inspection_waypoints": metric_map.get("inspection_waypoints") or [],
         "driveable_ways": metric_map.get("driveable_ways") or [],
         "provenance": {
-            "source": "molmospaces_base_navigation_map",
+            "source": "molmospaces_base_metric_map",
             "contains_runtime_observations": False,
             "contains_private_scoring_truth": False,
         },
     }
-    if isinstance(metric_map.get("base_navigation_map_contract"), dict):
-        payload["base_navigation_map_contract"] = dict(metric_map["base_navigation_map_contract"])
+    if isinstance(metric_map.get("base_metric_map_contract"), dict):
+        payload["base_metric_map_contract"] = dict(metric_map["base_metric_map_contract"])
     if isinstance(metric_map.get("provenance"), dict):
         payload["provenance"] = {
             **payload["provenance"],
@@ -597,9 +597,9 @@ def _semantics_payload(
 
 
 def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | None = None) -> Path:
-    """Render preview.png in the canonical Base Navigation Map review style."""
+    """Render preview.png in the canonical Base Metric Map review style."""
 
-    result = render_base_navigation_map_bundle_preview(
+    result = render_base_metric_map_bundle_preview(
         Path(bundle_dir),
         output_path=output_path,
     )

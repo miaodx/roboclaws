@@ -359,7 +359,7 @@
     "source_of_truth": "operator_reviewed_map12_navigation_area_labels"
   },
   "review_status": "accepted",
-  "schema": "b1_map12_base_navigation_labels_v1",
+  "schema": "b1_map12_base_metric_labels_v1",
   "source_image": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/occupancy.pgm",
   "source_map_frame_id": "map",
   "source_map_mutated": false,

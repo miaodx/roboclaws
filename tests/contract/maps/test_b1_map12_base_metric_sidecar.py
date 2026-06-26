@@ -16,18 +16,18 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
 )
-from scripts.maps.augment_b1_map12_base_navigation_map import (
-    B1_MAP12_BASE_NAVIGATION_SIDECAR_SCHEMA,
+from scripts.maps.augment_b1_map12_base_metric_map import (
+    B1_MAP12_BASE_METRIC_SIDECAR_SCHEMA,
     B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
-    augment_base_navigation_map_bundle,
+    augment_base_metric_map_bundle,
 )
-from scripts.maps.build_b1_map12_base_navigation_map import build_base_navigation_map_bundle
+from scripts.maps.build_b1_map12_base_metric_map import build_base_metric_map_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
-BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
+BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-metric-labels.json"
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 REMOVED_AUTHORED_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
@@ -58,28 +58,28 @@ def test_checked_in_room_semantics_reference_is_dt_label_only() -> None:
     )
 
 
-def test_base_navigation_sidecar_augments_existing_bundle_without_generating_map_context(
+def test_base_metric_sidecar_augments_existing_bundle_without_generating_map_context(
     tmp_path: Path,
 ) -> None:
-    base_dir = _base_navigation_map(tmp_path)
+    base_dir = _base_metric_map(tmp_path)
 
-    result = augment_base_navigation_map_bundle(
+    result = augment_base_metric_map_bundle(
         base_map_bundle=base_dir,
         output_dir=tmp_path / "runtime",
         allow_blocked_proof=True,
     )
     output_dir = Path(result["output_dir"])
     semantics = _read_json(output_dir / "semantics.json")
-    sidecar = _read_json(output_dir / "b1_base_navigation_sidecar.json")
+    sidecar = _read_json(output_dir / "b1_base_metric_sidecar.json")
     manifest = _read_json(output_dir / "b1_robot_consumption_manifest.json")
     proof = semantics["digital_twin_capabilities"]["robot_consumption_proof"]
     render_proof = semantics["digital_twin_capabilities"]["render_observation_proof"]
     room_proof = semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
 
-    assert result["schema"] == B1_MAP12_BASE_NAVIGATION_SIDECAR_SCHEMA
+    assert result["schema"] == B1_MAP12_BASE_METRIC_SIDECAR_SCHEMA
     assert result["status"] == "augmented"
     assert validate_nav2_map_bundle(output_dir).ok
-    assert semantics["base_navigation_map_contract"]["consumer_scope"] == (
+    assert semantics["base_metric_map_contract"]["consumer_scope"] == (
         "real_robot_and_digital_twin"
     )
     assert len(semantics["rooms"]) == 8
@@ -91,34 +91,34 @@ def test_base_navigation_sidecar_augments_existing_bundle_without_generating_map
     assert proof["robot_navigation_supported"] is False
     assert render_proof["status"] == "blocked_missing_verified_same_pose_render_evidence"
     assert render_proof["default_visual_route"]["scene_id"] == "B1_floor2_slow"
-    assert room_proof["status"] == "base_navigation_map_semantics_only"
+    assert room_proof["status"] == "base_metric_map_semantics_only"
     assert room_proof["room_semantics_supported"] is True
     assert room_proof["object_projection_status"] == "blocked_until_object_semantic_anchors"
     assert manifest["schema"] == B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA
     assert manifest["status"] == "blocked"
     assert manifest["capabilities"]["room_semantics"] is True
     assert manifest["capabilities"]["robot_navigation"] is False
-    assert manifest["semantics"]["source"] == "base_navigation_map"
+    assert manifest["semantics"]["source"] == "base_metric_map"
     assert manifest["semantics"]["semantic_label_count"] == 8
     assert manifest["policy"]["does_not_use_navigation_memory_as_waypoint_source"] is True
     assert sidecar["policy"]["does_not_generate_rooms_or_waypoints"] is True
     assert sidecar["policy"]["does_not_read_navigation_memory"] is True
 
 
-def test_base_navigation_sidecar_requires_explicit_robot_consumption_proof(
+def test_base_metric_sidecar_requires_explicit_robot_consumption_proof(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="requires explicit --alignment-artifact"):
-        augment_base_navigation_map_bundle(
-            base_map_bundle=_base_navigation_map(tmp_path),
+        augment_base_metric_map_bundle(
+            base_map_bundle=_base_metric_map(tmp_path),
             output_dir=tmp_path / "runtime",
         )
 
 
-def test_base_navigation_sidecar_materializes_verified_robot_consumption_proof(
+def test_base_metric_sidecar_materializes_verified_robot_consumption_proof(
     tmp_path: Path,
 ) -> None:
-    base_dir = _base_navigation_map(tmp_path)
+    base_dir = _base_metric_map(tmp_path)
     alignment_path = tmp_path / "alignment_residuals.json"
     navigation_path = tmp_path / "navigation_smoke.json"
     alignment_path.write_text(json.dumps(_verified_alignment_artifact()), encoding="utf-8")
@@ -127,7 +127,7 @@ def test_base_navigation_sidecar_materializes_verified_robot_consumption_proof(
         encoding="utf-8",
     )
 
-    result = augment_base_navigation_map_bundle(
+    result = augment_base_metric_map_bundle(
         base_map_bundle=base_dir,
         alignment_artifact_path=alignment_path,
         navigation_artifact_path=navigation_path,
@@ -135,7 +135,7 @@ def test_base_navigation_sidecar_materializes_verified_robot_consumption_proof(
     )
     output_dir = Path(result["output_dir"])
     semantics = _read_json(output_dir / "semantics.json")
-    sidecar = _read_json(output_dir / "b1_base_navigation_sidecar.json")
+    sidecar = _read_json(output_dir / "b1_base_metric_sidecar.json")
     manifest = _read_json(output_dir / "b1_robot_consumption_manifest.json")
     proof = semantics["digital_twin_capabilities"]["robot_consumption_proof"]
     render_proof = semantics["digital_twin_capabilities"]["render_observation_proof"]
@@ -169,10 +169,10 @@ def test_base_navigation_sidecar_materializes_verified_robot_consumption_proof(
     assert manifest["blocked_capabilities"][0]["capability"] == "object_semantics"
 
 
-def test_base_navigation_sidecar_exports_canonical_runtime_map_prior_snapshot(
+def test_base_metric_sidecar_exports_canonical_runtime_map_prior_snapshot(
     tmp_path: Path,
 ) -> None:
-    base_dir = _base_navigation_map(tmp_path)
+    base_dir = _base_metric_map(tmp_path)
     alignment_path = tmp_path / "alignment_residuals.json"
     navigation_path = tmp_path / "navigation_smoke.json"
     alignment_path.write_text(json.dumps(_verified_alignment_artifact()), encoding="utf-8")
@@ -180,7 +180,7 @@ def test_base_navigation_sidecar_exports_canonical_runtime_map_prior_snapshot(
         json.dumps(_navigation_artifact(tmp_path, alignment_path=alignment_path)),
         encoding="utf-8",
     )
-    result = augment_base_navigation_map_bundle(
+    result = augment_base_metric_map_bundle(
         base_map_bundle=base_dir,
         alignment_artifact_path=alignment_path,
         navigation_artifact_path=navigation_path,
@@ -257,7 +257,7 @@ def test_base_navigation_sidecar_exports_canonical_runtime_map_prior_snapshot(
         ),
     ],
 )
-def test_base_navigation_sidecar_rejects_bad_robot_consumption_proof_sources(
+def test_base_metric_sidecar_rejects_bad_robot_consumption_proof_sources(
     tmp_path: Path,
     artifact_kind: str,
     source_text: str,
@@ -276,15 +276,15 @@ def test_base_navigation_sidecar_rejects_bad_robot_consumption_proof_sources(
         navigation_path.write_text(source_text, encoding="utf-8")
 
     with pytest.raises(ValueError, match=expected_error):
-        augment_base_navigation_map_bundle(
-            base_map_bundle=_base_navigation_map(tmp_path),
+        augment_base_metric_map_bundle(
+            base_map_bundle=_base_metric_map(tmp_path),
             alignment_artifact_path=alignment_path,
             navigation_artifact_path=navigation_path,
             output_dir=tmp_path / "runtime",
         )
 
 
-def test_base_navigation_sidecar_rejects_navigation_alignment_mismatch(
+def test_base_metric_sidecar_rejects_navigation_alignment_mismatch(
     tmp_path: Path,
 ) -> None:
     alignment_path = tmp_path / "alignment_residuals.json"
@@ -297,20 +297,20 @@ def test_base_navigation_sidecar_rejects_navigation_alignment_mismatch(
     )
 
     with pytest.raises(ValueError, match="navigation artifact alignment_artifact must match"):
-        augment_base_navigation_map_bundle(
-            base_map_bundle=_base_navigation_map(tmp_path),
+        augment_base_metric_map_bundle(
+            base_map_bundle=_base_metric_map(tmp_path),
             alignment_artifact_path=alignment_path,
             navigation_artifact_path=navigation_path,
             output_dir=tmp_path / "runtime",
         )
 
 
-def _base_navigation_map(tmp_path: Path) -> Path:
-    result = build_base_navigation_map_bundle(
+def _base_metric_map(tmp_path: Path) -> Path:
+    result = build_base_metric_map_bundle(
         map_bundle=MAP12_BUNDLE,
         labels_path=BASE_LABELS,
         room_semantics_path=ROOM_SEMANTICS,
-        output_dir=tmp_path / "base-navigation-map",
+        output_dir=tmp_path / "base-metric-map",
     )
     return Path(result["output_dir"])
 

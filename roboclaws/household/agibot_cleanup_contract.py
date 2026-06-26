@@ -319,7 +319,7 @@ class AgibotCleanupMCPContract:
             perception_mode=self.perception_mode,
             detection_exposure_policy="agibot_g2_policy_camera",
             structured_detections_available=False,
-            base_navigation_map=metric_map,
+            base_metric_map=metric_map,
             runtime_metric_map=runtime_metric_map,
             observed_objects=[],
             raw_fpv_observations=[dict(item) for item in self._raw_fpv_observations],
@@ -463,7 +463,7 @@ class AgibotCleanupMCPContract:
             "schema": "realworld_cleanup_policy_view_v1",
             "policy_observation_camera": "head_color",
             "allowed_inputs": [
-                "base_navigation_map",
+                "base_metric_map",
                 "runtime_metric_map",
                 "raw_fpv_observations",
                 "navigation_status",

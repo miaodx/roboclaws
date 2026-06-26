@@ -150,13 +150,13 @@ class _RelativePoseBackend(_PoseRecordingBackend):
         }
 
 
-def test_realworld_contract_defaults_to_base_navigation_map() -> None:
+def test_realworld_contract_defaults_to_base_metric_map() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     static_fixture_projection = contract.static_fixture_projection()
 
-    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["base_metric_map"]["enabled"] is True
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert static_fixture_projection["rooms"] == []
@@ -886,7 +886,7 @@ def _policy_trace_agent_view(inspection_waypoints: list[dict]) -> dict:
         perception_mode="visible_object_detections",
         detection_exposure_policy="world_labels",
         structured_detections_available=True,
-        base_navigation_map={"inspection_waypoints": inspection_waypoints},
+        base_metric_map={"inspection_waypoints": inspection_waypoints},
         runtime_metric_map={"schema": RUNTIME_METRIC_MAP_SCHEMA},
         observed_objects=[],
         raw_fpv_observations=[],
@@ -1166,7 +1166,7 @@ def test_relative_pose_navigation_strips_private_backend_pose_fields() -> None:
     assert "target_receptacle_id" not in str(response)
 
 
-def test_base_navigation_map_hides_authored_semantics_and_uses_generated_candidates() -> None:
+def test_base_metric_map_hides_authored_semantics_and_uses_generated_candidates() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
     )
@@ -1177,12 +1177,12 @@ def test_base_navigation_map_hides_authored_semantics_and_uses_generated_candida
     agent_view = contract.agent_view_payload()
     runtime_map = agent_view_module.runtime_metric_map(agent_view)
 
-    _assert_base_navigation_static_map_privacy(metric_map, static_fixture_projection, waypoint)
+    _assert_base_metric_static_map_privacy(metric_map, static_fixture_projection, waypoint)
     assert navigation["ok"] is True
     assert observation["visible_object_detections"]
-    _assert_base_navigation_runtime_map_candidates(runtime_map, waypoint)
-    _assert_base_navigation_runtime_map_public_anchors(runtime_map, waypoint)
-    _assert_base_navigation_agent_view_observed_object_anchors(agent_view, runtime_map)
+    _assert_base_metric_runtime_map_candidates(runtime_map, waypoint)
+    _assert_base_metric_runtime_map_public_anchors(runtime_map, waypoint)
+    _assert_base_metric_agent_view_observed_object_anchors(agent_view, runtime_map)
     _assert_no_forbidden_keys(agent_view)
 
 
@@ -1202,12 +1202,12 @@ def _first_detection_waypoint(
     return waypoint, navigation, observation
 
 
-def _assert_base_navigation_static_map_privacy(
+def _assert_base_metric_static_map_privacy(
     metric_map: dict,
     static_fixture_projection: dict,
     waypoint: dict,
 ) -> None:
-    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["base_metric_map"]["enabled"] is True
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert metric_map["room_category_hints"]
@@ -1222,7 +1222,7 @@ def _assert_base_navigation_static_map_privacy(
     assert "candidate_provenance" not in waypoint
 
 
-def _assert_base_navigation_runtime_map_candidates(runtime_map: dict, waypoint: dict) -> None:
+def _assert_base_metric_runtime_map_candidates(runtime_map: dict, waypoint: dict) -> None:
     assert runtime_map["static_map"]["rooms"]
     assert all(room["room_label"] for room in runtime_map["static_map"]["rooms"])
     assert runtime_map["static_map"]["fixtures"] == []
@@ -1256,7 +1256,7 @@ def _assert_base_navigation_runtime_map_candidates(runtime_map: dict, waypoint: 
     assert target_search["private_truth_included"] is False
 
 
-def _assert_base_navigation_runtime_map_public_anchors(runtime_map: dict, waypoint: dict) -> None:
+def _assert_base_metric_runtime_map_public_anchors(runtime_map: dict, waypoint: dict) -> None:
     assert runtime_map["public_semantic_anchors"]
     waypoint_anchor = next(
         item
@@ -1277,7 +1277,7 @@ def _assert_base_navigation_runtime_map_public_anchors(runtime_map: dict, waypoi
     assert fixture_anchor["source_observation_id"]
 
 
-def _assert_base_navigation_agent_view_observed_object_anchors(
+def _assert_base_metric_agent_view_observed_object_anchors(
     agent_view: dict,
     runtime_map: dict,
 ) -> None:
@@ -1422,7 +1422,7 @@ def test_target_query_recovery_not_found_includes_public_search_budget() -> None
     _assert_no_forbidden_keys(resolution)
 
 
-def test_base_navigation_runtime_map_current_anchor_overrides_same_id_prior_anchor() -> None:
+def test_base_metric_runtime_map_current_anchor_overrides_same_id_prior_anchor() -> None:
     seed_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
     )
@@ -1466,7 +1466,7 @@ def test_base_navigation_runtime_map_current_anchor_overrides_same_id_prior_anch
     _assert_no_forbidden_keys(runtime_map)
 
 
-def test_base_navigation_map_keeps_public_waypoint_after_receptacle_navigation() -> None:
+def test_base_metric_map_keeps_public_waypoint_after_receptacle_navigation() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
     )
@@ -1493,7 +1493,7 @@ def test_base_navigation_map_keeps_public_waypoint_after_receptacle_navigation()
     }
 
 
-def test_base_navigation_map_observe_marks_placed_object_non_actionable() -> None:
+def test_base_metric_map_observe_marks_placed_object_non_actionable() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
     )
@@ -1548,11 +1548,11 @@ def test_base_navigation_map_observe_marks_placed_object_non_actionable() -> Non
     assert duplicate_pick["error_reason"] == "already_handled"
 
 
-def test_base_navigation_map_done_uses_generated_candidate_coverage() -> None:
+def test_base_metric_map_done_uses_generated_candidate_coverage() -> None:
     contract = _contract(
         CleanupBackendSession(
             CleanupScenario(
-                scenario_id="base-navigation-map-done-gate-test",
+                scenario_id="base-metric-map-done-gate-test",
                 task="build base navigation map",
                 seed=7,
                 objects=(),
@@ -1561,7 +1561,7 @@ def test_base_navigation_map_done_uses_generated_candidate_coverage() -> None:
                     CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
                 ),
                 private_manifest=PrivateScoringManifest(
-                    scenario_id="base-navigation-map-done-gate-test",
+                    scenario_id="base-metric-map-done-gate-test",
                     targets=(),
                     success_threshold=0,
                 ),
@@ -2576,7 +2576,7 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     recovery = declared["raw_fpv_candidate_recovery"]
     assert recovery["schema"] == "raw_fpv_visual_candidate_recovery_v1"
     assert recovery["required_tool"] == "navigate_to_visual_candidate"
-    assert recovery["base_navigation_map_target_fixture_rule"] == "omit_target_fixture_id"
+    assert recovery["base_metric_map_target_fixture_rule"] == "omit_target_fixture_id"
     assert (
         recovery["valid_example"]["source_observation_id"]
         == (observation["raw_fpv_observation"]["observation_id"])
@@ -2636,7 +2636,7 @@ def test_minimal_raw_fpv_navigate_validation_returns_schema_recovery() -> None:
     assert response["candidate_error"]["field"] == "image_region"
     recovery = response["raw_fpv_candidate_recovery"]
     assert recovery["required_next_action"] == "retry_navigate_to_visual_candidate"
-    assert recovery["base_navigation_map_target_fixture_rule"] == "omit_target_fixture_id"
+    assert recovery["base_metric_map_target_fixture_rule"] == "omit_target_fixture_id"
     assert "target_fixture_id" not in recovery["valid_example"]
     assert "bbox_normalized" in recovery["invalid_fields_to_avoid"]
     assert 'target_fixture_id="None"' in recovery["invalid_fields_to_avoid"]
@@ -2654,11 +2654,11 @@ def test_minimal_raw_fpv_navigate_validation_returns_schema_recovery() -> None:
     assert invented_target["error_reason"] == "invalid_visual_candidate"
     assert invented_target["candidate_error"]["field"] == "target_fixture_id"
     assert (
-        "must be omitted in Base Navigation Map RAW_FPV"
+        "must be omitted in Base Metric Map RAW_FPV"
         in (invented_target["candidate_error"]["reason"])
     )
     assert (
-        invented_target["raw_fpv_candidate_recovery"]["base_navigation_map_target_fixture_rule"]
+        invented_target["raw_fpv_candidate_recovery"]["base_metric_map_target_fixture_rule"]
         == "omit_target_fixture_id"
     )
     _assert_no_forbidden_keys(invented_target)

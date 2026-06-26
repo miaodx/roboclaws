@@ -13,26 +13,26 @@ from roboclaws.maps.spatial_contract import (
     source_frame_spatial_contract,
 )
 
-BASE_NAVIGATION_MAP_CONTRACT_SCHEMA = "base_navigation_map_v1"
-MOLMOSPACES_BASE_NAVIGATION_PREPARATION_SCHEMA = "molmospaces_base_navigation_map_preparation_v1"
+BASE_METRIC_MAP_CONTRACT_SCHEMA = "base_metric_map_v1"
+MOLMOSPACES_BASE_METRIC_PREPARATION_SCHEMA = "molmospaces_base_metric_map_preparation_v1"
 
 
-def prepare_molmospaces_base_navigation_map(
+def prepare_molmospaces_base_metric_map(
     *,
     backend_state: dict[str, Any],
     scene_source: str,
     scene_index: int,
     environment_id: str,
     map_id: str,
-    map_version: str = "base-navigation-map-v1",
+    map_version: str = "base-metric-map-v1",
     source_path: Path | str | None = None,
 ) -> dict[str, Any]:
-    """Prepare a strict fixture-free Base Navigation Map from simulator source evidence."""
+    """Prepare a strict fixture-free Base Metric Map from simulator source evidence."""
 
     frame_id = "map"
     rooms = _navigation_areas_from_backend_state(backend_state, frame_id=frame_id)
     metric_map = {
-        "schema": MOLMOSPACES_BASE_NAVIGATION_PREPARATION_SCHEMA,
+        "schema": MOLMOSPACES_BASE_METRIC_PREPARATION_SCHEMA,
         "frame_id": frame_id,
         "map_id": map_id,
         "map_version": map_version,
@@ -51,8 +51,8 @@ def prepare_molmospaces_base_navigation_map(
         "driveable_ways": [
             {"from_room_id": room["room_id"], "to_room_id": room["room_id"]} for room in rooms
         ],
-        "base_navigation_map_contract": {
-            "schema": BASE_NAVIGATION_MAP_CONTRACT_SCHEMA,
+        "base_metric_map_contract": {
+            "schema": BASE_METRIC_MAP_CONTRACT_SCHEMA,
             "navigation_area_count": len(rooms),
             "semantic_label_count": len(rooms),
             "inspection_waypoint_count": 0,
@@ -82,8 +82,8 @@ def prepare_molmospaces_base_navigation_map(
         ),
     ).build(rooms)
     metric_map["inspection_waypoints"] = waypoints
-    metric_map["base_navigation_map_contract"] = {
-        **metric_map["base_navigation_map_contract"],
+    metric_map["base_metric_map_contract"] = {
+        **metric_map["base_metric_map_contract"],
         "inspection_waypoint_count": len(waypoints),
     }
     return metric_map
@@ -207,7 +207,7 @@ def _semantic_category_from_label(label: str, *, room_id: str, room_type: str) -
     return "open_area"
 
 
-def base_navigation_spatial_contract(frame_id: str = "map") -> dict[str, Any]:
+def base_metric_spatial_contract(frame_id: str = "map") -> dict[str, Any]:
     return source_frame_spatial_contract(
         frame_id=frame_id,
         alignment_status=ALIGNMENT_STATUS_NATIVE,

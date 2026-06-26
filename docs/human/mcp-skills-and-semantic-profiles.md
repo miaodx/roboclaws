@@ -254,7 +254,7 @@ physical proof exists.
   map-artifact paths may derive this from a Nav2-shaped map bundle;
   Agibot-backed runs derive it from an SDK-exported agent view generated from
   operator-authored map context.
-- `metric_map` is the current map-reading path. The Base Navigation Map exposes
+- `metric_map` is the current map-reading path. The Base Metric Map exposes
   occupancy/free-space context, generated candidates, and public room-category
   hints when available; Runtime Metric Map evidence adds observed anchors and
   target candidates during a run. Historical `static_fixture_projection` artifacts may

@@ -60,7 +60,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "map-build": TaskIntentSpec(
         intent_id="map-build",
         surface_ids=("household-world",),
-        supported_dispatch_runners=("direct", "codex"),
+        supported_dispatch_runners=("direct", "codex", "openai-agents-live"),
         dispatch_target="household-world.map-build",
         prompt_id="map_build",
         checker_id="runtime_metric_map",

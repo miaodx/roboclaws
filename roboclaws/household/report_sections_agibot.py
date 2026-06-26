@@ -20,7 +20,7 @@ def molmospaces_agibot_rehearsal_section(
         return ""
     scene = run_result.get("molmospaces_scene") or {}
     agent_view = run_result.get("agent_view") or {}
-    metric_map = agent_view_module.base_navigation_map(agent_view) if agent_view else {}
+    metric_map = agent_view_module.base_metric_map(agent_view) if agent_view else {}
     static_fixtures = agent_view_module.static_map_fixtures(agent_view) if agent_view else []
     rooms = metric_map.get("rooms") or []
     waypoints = metric_map.get("inspection_waypoints") or []

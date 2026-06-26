@@ -13,7 +13,7 @@ from roboclaws.maps.bundle import (
     RUNTIME_COSTMAP_GAPS,
     copy_nav2_map_bundle_snapshot,
     metric_map_bundle_metadata,
-    validate_base_navigation_map_v1_bundle,
+    validate_base_metric_map_v1_bundle,
 )
 
 DEFAULT_MAP_ASSET_ROOT = Path("assets") / "maps"
@@ -40,10 +40,10 @@ def selected_nav2_map_bundle_dir(
     if not raw.is_absolute() and len(raw.parts) == 1:
         candidates.append(asset_root / raw)
     bundle_dir = next((candidate for candidate in candidates if candidate.exists()), candidates[-1])
-    validation = validate_base_navigation_map_v1_bundle(bundle_dir)
+    validation = validate_base_metric_map_v1_bundle(bundle_dir)
     if not validation.ok:
         raise ValueError(
-            f"invalid Base Navigation Map v1 bundle {bundle_dir}: {'; '.join(validation.errors)}"
+            f"invalid Base Metric Map v1 bundle {bundle_dir}: {'; '.join(validation.errors)}"
         )
     return bundle_dir
 
@@ -58,7 +58,7 @@ def attach_nav2_map_bundle_snapshot(
     if source_bundle_dir is None:
         raise ValueError(
             "source_bundle_dir is required to attach a product Nav2 map bundle snapshot; "
-            "select or generate a canonical Base Navigation Map bundle before launch"
+            "select or generate a canonical Base Metric Map bundle before launch"
         )
     snapshot = copy_nav2_map_bundle_snapshot(
         source_bundle_dir=Path(source_bundle_dir),

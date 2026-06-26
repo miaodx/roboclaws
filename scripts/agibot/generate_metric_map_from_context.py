@@ -122,8 +122,8 @@ def _validate_context_mode(
     waypoints: list[dict[str, Any]],
     errors: list[str],
 ) -> None:
-    if _base_navigation_map_context(context):
-        _validate_base_navigation_map_context(context, errors)
+    if _base_metric_map_context(context):
+        _validate_base_metric_map_context(context, errors)
         return
     if not rooms:
         errors.append("rooms must contain at least one room")
@@ -134,7 +134,7 @@ def _validate_context_mode(
         errors.append("inspection_waypoints must contain at least one waypoint")
 
 
-def _validate_base_navigation_map_context(context: dict[str, Any], errors: list[str]) -> None:
+def _validate_base_metric_map_context(context: dict[str, Any], errors: list[str]) -> None:
     if not _list(_dict(context.get("safety_bounds")).get("polygon")):
         errors.append(
             "base navigation map context safety_bounds.polygon must contain at least one point"
@@ -208,10 +208,10 @@ def metric_map_from_context(
     frame_id = str(context.get("frame_id") or "map")
     bounds = _coordinate_bounds(context)
     robot_pose = _robot_pose(context, frame_id=frame_id)
-    base_navigation_map = _base_navigation_map_context(context)
+    base_metric_map = _base_metric_map_context(context)
     generated_candidates = generated_exploration_candidates(context)
     waypoints = (
-        generated_candidates if base_navigation_map else _list(context.get("inspection_waypoints"))
+        generated_candidates if base_metric_map else _list(context.get("inspection_waypoints"))
     )
     rooms = [_room_payload(room) for room in _list(context.get("rooms"))]
     return {
@@ -231,9 +231,7 @@ def metric_map_from_context(
         "occupancy_grid_artifact": None,
         "map_preview_artifact": semantic_preview_artifact,
         "rooms": rooms,
-        "room_category_hints": (
-            _room_category_hints(rooms, waypoints) if base_navigation_map else []
-        ),
+        "room_category_hints": (_room_category_hints(rooms, waypoints) if base_metric_map else []),
         "driveable_ways": _list(context.get("driveable_ways")),
         "robot_pose": robot_pose,
         "inspection_waypoints": [_waypoint_payload(item, frame_id=frame_id) for item in waypoints],
@@ -243,7 +241,7 @@ def metric_map_from_context(
                     _waypoint_payload(item, frame_id=frame_id) for item in generated_candidates
                 ],
                 "safety_bounds": _public_safety_bounds(context),
-                "base_navigation_map": {
+                "base_metric_map": {
                     "enabled": True,
                     "source": "public_occupancy_free_space",
                     "generated_candidate_count": len(generated_candidates),
@@ -252,21 +250,21 @@ def metric_map_from_context(
                     "source_fixtures_hidden": True,
                     "source_inspection_waypoints_hidden": True,
                     "public_contract_note": (
-                        "Base Navigation Map projection exposes operator safety bounds and "
+                        "Base Metric Map projection exposes operator safety bounds and "
                         "generated exploration candidates plus public room labels when "
                         "available, not authored fixture semantics."
                     ),
                 },
             }
-            if base_navigation_map
+            if base_metric_map
             else {}
         ),
         "public_contract_note": (
             "Metric map projection contains backend-agnostic public rooms, fixtures, "
             "and operator-recorded waypoints. Runtime movable objects and private "
             "scoring truth are not encoded."
-            if not base_navigation_map
-            else "Base Navigation Map projection contains backend-agnostic safety bounds, "
+            if not base_metric_map
+            else "Base Metric Map projection contains backend-agnostic safety bounds, "
             "generated exploration candidates, and public room labels when available. "
             "Runtime movable objects, private "
             "scoring truth, and Agibot backend internals are not encoded."
@@ -275,18 +273,18 @@ def metric_map_from_context(
 
 
 def static_fixture_projection_from_context(context: dict[str, Any]) -> dict[str, Any]:
-    if _base_navigation_map_context(context):
+    if _base_metric_map_context(context):
         return {
             "ok": True,
             "tool": "static_fixture_projection",
             "status": "ok",
             "contract": REALWORLD_CONTRACT,
             "schema": STATIC_FIXTURE_PROJECTION_SCHEMA,
-            "static_fixture_projection_mode": "base_navigation_map_no_fixtures",
+            "static_fixture_projection_mode": "base_metric_map_no_fixtures",
             "contains_runtime_observations": False,
             "generated_exploration_candidate_count": len(generated_exploration_candidates(context)),
             "public_contract_note": (
-                "Base Navigation Map contexts may expose public room labels but do not "
+                "Base Metric Map contexts may expose public room labels but do not "
                 "require hand-authored fixture semantics. Runtime observations may add "
                 "public anchors later."
             ),
@@ -417,7 +415,7 @@ def _room_category_hints(
                 "affordances": ["navigate", "observe"],
                 "classification_status": "map_prior",
                 "confidence": 0.8,
-                "producer_type": "agibot_base_navigation_map_context",
+                "producer_type": "agibot_base_metric_map_context",
             }
         )
     return hints
@@ -458,7 +456,7 @@ def _robot_pose(context: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
     if _number_or_none(pose.get("x")) is None or _number_or_none(pose.get("y")) is None:
         waypoints = (
             generated_exploration_candidates(context)
-            if _base_navigation_map_context(context)
+            if _base_metric_map_context(context)
             else _list(context.get("inspection_waypoints"))
         )
         waypoint = waypoints[0]
@@ -471,7 +469,7 @@ def _robot_pose(context: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
         "room_id": str(pose.get("room_id") or ""),
         "waypoint_id": str(pose.get("waypoint_id") or ""),
         "pose_source": "generated_exploration_candidate"
-        if _base_navigation_map_context(context)
+        if _base_metric_map_context(context)
         else "operator_recorded_pose",
     }
 
@@ -589,7 +587,7 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
                 "room_label": room_label,
                 "fixture_id": str(source.get("fixture_id") or ""),
                 "label": str(source.get("label") or f"Generated exploration candidate {index}"),
-                "purpose": "base_navigation_map_exploration",
+                "purpose": "base_metric_map_exploration",
                 "waypoint_source": "generated_exploration_candidate",
                 "visited": bool(source.get("visited", False)),
                 "reachability_status": str(source.get("reachability_status") or "unverified"),
@@ -610,7 +608,7 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
     return generated
 
 
-def _base_navigation_map_context(context: dict[str, Any]) -> bool:
+def _base_metric_map_context(context: dict[str, Any]) -> bool:
     return not _list(context.get("fixtures")) and not _list(context.get("inspection_waypoints"))
 
 

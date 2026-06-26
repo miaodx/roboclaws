@@ -13,7 +13,7 @@ from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import (
     static_landmarks_from_fixture_projection,
-    validate_base_navigation_map_v1_bundle,
+    validate_base_metric_map_v1_bundle,
     validate_nav2_map_bundle,
     write_nav2_map_bundle,
 )
@@ -33,7 +33,7 @@ def _repo_python() -> str:
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
     agent_view = _agent_view()
-    bundle_dir = tmp_path / "base-navigation-map-bundle"
+    bundle_dir = tmp_path / "base-metric-map-bundle"
 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
@@ -64,7 +64,7 @@ def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: 
 
 def test_nav2_bundle_preview_uses_canonical_map_visual_role(tmp_path: Path) -> None:
     agent_view = _agent_view()
-    bundle_dir = tmp_path / "base-navigation-map-bundle"
+    bundle_dir = tmp_path / "base-metric-map-bundle"
 
     snapshot = write_nav2_map_bundle(
         bundle_dir,
@@ -100,36 +100,36 @@ def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) ->
     assert any("private cleanup truth" in error for error in validation.errors)
 
 
-def test_base_navigation_map_v1_validation_accepts_b1_bundle(tmp_path: Path) -> None:
-    from scripts.maps.build_b1_map12_base_navigation_map import (
+def test_base_metric_map_v1_validation_accepts_b1_bundle(tmp_path: Path) -> None:
+    from scripts.maps.build_b1_map12_base_metric_map import (
         DEFAULT_LABELS,
         DEFAULT_MAP_BUNDLE,
         DEFAULT_ROOM_SEMANTICS,
-        build_base_navigation_map_bundle,
+        build_base_metric_map_bundle,
     )
 
-    output_dir = tmp_path / "base-navigation-map"
-    build_base_navigation_map_bundle(
+    output_dir = tmp_path / "base-metric-map"
+    build_base_metric_map_bundle(
         map_bundle=DEFAULT_MAP_BUNDLE,
         labels_path=DEFAULT_LABELS,
         room_semantics_path=DEFAULT_ROOM_SEMANTICS,
         output_dir=output_dir,
     )
 
-    validation = validate_base_navigation_map_v1_bundle(output_dir)
+    validation = validate_base_metric_map_v1_bundle(output_dir)
 
     assert validation.ok, validation.as_dict()
-    assert validation.metadata["base_navigation_map_schema"] == "base_navigation_map_v1"
-    assert validation.metadata["base_navigation_map_v1_ready"] is True
+    assert validation.metadata["base_metric_map_schema"] == "base_metric_map_v1"
+    assert validation.metadata["base_metric_map_v1_ready"] is True
     assert validation.metadata["waypoint_count"] == 5
 
 
-def test_base_navigation_map_v1_validation_accepts_canonical_molmospaces_bundle() -> None:
-    validation = validate_base_navigation_map_v1_bundle(CANONICAL_SCENE_BUNDLE)
+def test_base_metric_map_v1_validation_accepts_canonical_molmospaces_bundle() -> None:
+    validation = validate_base_metric_map_v1_bundle(CANONICAL_SCENE_BUNDLE)
 
     assert validation.ok, validation.as_dict()
-    assert validation.metadata["base_navigation_map_schema"] == "base_navigation_map_v1"
-    assert validation.metadata["base_navigation_map_v1_ready"] is True
+    assert validation.metadata["base_metric_map_schema"] == "base_metric_map_v1"
+    assert validation.metadata["base_metric_map_v1_ready"] is True
     assert validation.metadata["static_landmark_count"] == 0
     assert validation.metadata["waypoint_count"] > 0
 
@@ -147,7 +147,7 @@ def test_base_navigation_map_v1_validation_accepts_canonical_molmospaces_bundle(
         ),
         (
             lambda semantics: semantics.update({"inspection_waypoints": []}),
-            "Base Navigation Map v1 must contain base inspection waypoints",
+            "Base Metric Map v1 must contain base inspection waypoints",
         ),
         (
             lambda semantics: semantics["inspection_waypoints"][0].update(
@@ -163,18 +163,18 @@ def test_base_navigation_map_v1_validation_accepts_canonical_molmospaces_bundle(
         ),
     ),
 )
-def test_base_navigation_map_v1_validation_rejects_contract_violations(
+def test_base_metric_map_v1_validation_rejects_contract_violations(
     tmp_path: Path,
     mutator,
     expected_error: str,
 ) -> None:
-    bundle_dir = _b1_base_navigation_bundle(tmp_path)
+    bundle_dir = _b1_base_metric_bundle(tmp_path)
     semantics_path = bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
     mutator(semantics)
     semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
-    validation = validate_base_navigation_map_v1_bundle(bundle_dir)
+    validation = validate_base_metric_map_v1_bundle(bundle_dir)
 
     assert validation.ok is False
     assert any(expected_error in error for error in validation.errors), validation.as_dict()
@@ -356,7 +356,7 @@ def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) ->
     )
 
     assert result.returncode == 1
-    assert "base-navigation-map-v1-bundle invalid" in result.stderr
+    assert "base-metric-map-v1-bundle invalid" in result.stderr
     assert "missing required artifact: map.yaml" in result.stderr
     assert "Traceback" not in result.stderr
 
@@ -487,13 +487,13 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert waypoints[0]["x"] == source_waypoints[0]["x"]
     assert waypoints[0]["y"] == source_waypoints[0]["y"]
     assert "fixture_ids" not in waypoints[0]
-    assert metric_map["base_navigation_map"]["source"] == "map_artifact_inspection_waypoints"
+    assert metric_map["base_metric_map"]["source"] == "map_artifact_inspection_waypoints"
     assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
     assert navigation["route_validation"]["ok"] is True
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
-def test_realworld_contract_observes_objects_from_selected_base_navigation_bundle() -> None:
+def test_realworld_contract_observes_objects_from_selected_base_metric_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_bundle_dir=CANONICAL_SCENE_BUNDLE,
@@ -532,16 +532,16 @@ def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
     raise AssertionError("expected at least one visible object detection")
 
 
-def _b1_base_navigation_bundle(tmp_path: Path) -> Path:
-    from scripts.maps.build_b1_map12_base_navigation_map import (
+def _b1_base_metric_bundle(tmp_path: Path) -> Path:
+    from scripts.maps.build_b1_map12_base_metric_map import (
         DEFAULT_LABELS,
         DEFAULT_MAP_BUNDLE,
         DEFAULT_ROOM_SEMANTICS,
-        build_base_navigation_map_bundle,
+        build_base_metric_map_bundle,
     )
 
-    output_dir = tmp_path / "base-navigation-map"
-    build_base_navigation_map_bundle(
+    output_dir = tmp_path / "base-metric-map"
+    build_base_metric_map_bundle(
         map_bundle=DEFAULT_MAP_BUNDLE,
         labels_path=DEFAULT_LABELS,
         room_semantics_path=DEFAULT_ROOM_SEMANTICS,
@@ -615,8 +615,8 @@ def _wide_room_only_agent_view() -> dict:
         "metric_map": {
             "schema": "real_robot_map_bundle_v1",
             "frame_id": "map",
-            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
-            "map_version": "base-navigation-map-v1",
+            "map_id": "molmospaces-procthor-val-0-7_base_metric_map",
+            "map_version": "base-metric-map-v1",
             "resolution_m": 0.05,
             "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
             "width": 240,

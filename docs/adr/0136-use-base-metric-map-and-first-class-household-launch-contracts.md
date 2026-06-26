@@ -1,4 +1,4 @@
-# ADR-0136: Use Base Navigation Map And First-Class Household Launch Contracts
+# ADR-0136: Use Base Metric Map And First-Class Household Launch Contracts
 
 Status: Accepted
 
@@ -27,7 +27,7 @@ to private/static truth for the default agent-facing surface.
 
 ## Decision
 
-Use `Base Navigation Map` as the current start-of-run map contract. It may
+Use `Base Metric Map` as the current start-of-run map contract. It may
 include occupancy/free-space geometry, frame metadata, current robot pose,
 generated safe exploration or inspection candidates, and public room-category
 hints. It must not expose private relocation/scoring truth, static movable
@@ -42,7 +42,7 @@ online observations produce public semantic anchors, observed objects, target
 candidates, target actionability, and generated inspection candidates.
 
 Remove `static_fixture_projection()` from active MCP tools after prompts and tests migrate
-to Base Navigation Map plus Runtime Metric Map target discovery. Historical
+to Base Metric Map plus Runtime Metric Map target discovery. Historical
 reports may still read old `static_fixture_projection` artifacts for display.
 
 Use `evidence_lane` only for what the agent sees, and `camera_labeler` only for
@@ -84,7 +84,7 @@ reloads. Legacy route IDs are read-only history display only.
 - The implementation plan is
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`.
 - Current docs, prompts, tests, route code, MCP setup, and checker/report
-  expectations should converge on Base Navigation Map and Runtime Metric Map.
+  expectations should converge on Base Metric Map and Runtime Metric Map.
 - Public room-category hints are allowed as search priors; full static fixture
   inventory remains hidden by default.
 - Historical artifacts can remain readable, but compatibility readers must not

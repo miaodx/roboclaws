@@ -74,11 +74,11 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     assert (output_dir / "semantic_preview.png").is_file()
 
 
-def test_generate_metric_map_from_base_navigation_agibot_context(tmp_path: Path) -> None:
-    generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_base_navigation_context")
-    context_path = tmp_path / "agibot_map_context.base_navigation.json"
+def test_generate_metric_map_from_base_metric_agibot_context(tmp_path: Path) -> None:
+    generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_base_metric_context")
+    context_path = tmp_path / "agibot_map_context.base_metric.json"
     output_dir = tmp_path / "generated"
-    context_path.write_text(json.dumps(_base_navigation_map_context()), encoding="utf-8")
+    context_path.write_text(json.dumps(_base_metric_map_context()), encoding="utf-8")
 
     generator.main([str(context_path), "--output-dir", str(output_dir)])
 
@@ -94,24 +94,23 @@ def test_generate_metric_map_from_base_navigation_agibot_context(tmp_path: Path)
     assert "mode" not in metric_map
     assert metric_map["rooms"][0]["room_label"] == "Open office"
     assert metric_map["room_category_hints"][0]["room_label"] == "Open office"
-    assert metric_map["base_navigation_map"]["source_rooms_hidden"] is False
-    assert metric_map["base_navigation_map"]["source_room_labels_visible"] is True
-    assert metric_map["base_navigation_map"]["source_fixtures_hidden"] is True
-    assert metric_map["base_navigation_map"]["generated_candidate_count"] == 3
+    assert metric_map["base_metric_map"]["source_rooms_hidden"] is False
+    assert metric_map["base_metric_map"]["source_room_labels_visible"] is True
+    assert metric_map["base_metric_map"]["source_fixtures_hidden"] is True
+    assert metric_map["base_metric_map"]["generated_candidate_count"] == 3
     assert metric_map["safety_bounds"]["polygon"]
     assert len(metric_map["inspection_waypoints"]) == 3
     assert len(metric_map["generated_exploration_candidates"]) == 3
     assert first_waypoint["waypoint_id"] == "generated_exploration_001"
     assert first_waypoint["waypoint_source"] == "generated_exploration_candidate"
-    assert first_waypoint["purpose"] == "base_navigation_map_exploration"
+    assert first_waypoint["purpose"] == "base_metric_map_exploration"
     assert first_waypoint["reachability_status"] == "verified"
     assert first_waypoint["candidate_provenance"]["source"] == "public_free_space_sample"
     assert first_waypoint["room_label"] == "Open office"
     assert "verification" not in first_waypoint
     assert "mode" not in static_fixture_projection
     assert (
-        static_fixture_projection["static_fixture_projection_mode"]
-        == "base_navigation_map_no_fixtures"
+        static_fixture_projection["static_fixture_projection_mode"] == "base_metric_map_no_fixtures"
     )
     assert static_fixture_projection["rooms"] == []
     assert "agibot_gdk" not in payload_text
@@ -408,12 +407,12 @@ def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> N
     assert navigate_result["tool_response"]["primitive_provenance"] == "blocked_capability"
 
 
-def test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates(
+def test_vendor_sdk_runner_exports_base_metric_context_generated_candidates(
     tmp_path: Path,
 ) -> None:
     _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.minimal.json"
-    context_path.write_text(json.dumps(_base_navigation_map_context()), encoding="utf-8")
+    context_path.write_text(json.dumps(_base_metric_map_context()), encoding="utf-8")
     root = tmp_path / "sdk-runner"
     agent_view_dir = root / "01-agent-view"
     navigate_dir = root / "03-navigate"
@@ -444,14 +443,14 @@ def test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates(
     waypoint = metric_map["inspection_waypoints"][0]
 
     assert agent_view.get("schema") != agent_view_module.AGENT_VIEW_SCHEMA
-    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["base_metric_map"]["enabled"] is True
     assert metric_map["rooms"][0]["room_label"] == "Open office"
     assert metric_map["room_category_hints"][0]["room_label"] == "Open office"
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert waypoint["room_label"] == "Open office"
     assert waypoint["reachability_status"] == "verified"
     assert static_fixture_projection["static_fixture_projection_mode"] == (
-        "base_navigation_map_no_fixtures"
+        "base_metric_map_no_fixtures"
     )
     assert run_result["summary"]["generated_exploration_candidates"] == 3
     assert run_result["privacy_check"]["ok"] is True
@@ -949,7 +948,7 @@ def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
 
 
-def _base_navigation_map_context() -> dict:
+def _base_metric_map_context() -> dict:
     return {
         "schema": "agibot_gdk_map_context_authoring_v1",
         "environment_id": "agibot-minimal-office",

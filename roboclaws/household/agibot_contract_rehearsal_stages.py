@@ -292,7 +292,7 @@ def _prepare_rehearsal_preflight(
     )
     preflight_agent_view = _load_json(preflight["agent_view"])
     waypoint_sequence = _load_json(preflight["waypoint_sequence"])
-    metric_map = agent_view_module.base_navigation_map(preflight_agent_view)
+    metric_map = agent_view_module.base_metric_map(preflight_agent_view)
     static_fixture_projection = _load_json(preflight["static_fixture_projection"])
     subphase_reports = [
         _agent_view_stage_report(
