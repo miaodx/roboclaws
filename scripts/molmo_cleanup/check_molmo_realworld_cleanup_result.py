@@ -50,6 +50,11 @@ from roboclaws.household.realworld_contract import (
 from roboclaws.household.realworld_contract import (
     RUNTIME_METRIC_MAP_SCHEMA as RUNTIME_METRIC_MAP_SCHEMA,
 )
+from roboclaws.household.realworld_runtime_map_targets import (
+    LOCALIZATION_STATUS_VIEWPOINT_ONLY,
+    POSE_ROLE_BEST_VIEW_POSE,
+    POSE_ROLE_INSPECTION_WAYPOINT,
+)
 from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.household.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
@@ -122,6 +127,8 @@ def _result_assert_options(overrides: dict[str, Any]) -> _ResultOptions:
             "min_semantic_accepted_count": None,
             "min_sweep_coverage": None,
             "min_adjust_camera_count": 0,
+            "expect_map_build_scan_profile": None,
+            "min_map_build_body_turn_count": 0,
             "min_generated_target_inspection_candidates": 0,
             "require_planner_proof_min_steps": None,
             "require_bound_planner_cleanup_objects": None,
@@ -175,6 +182,16 @@ def _add_evidence_checker_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=0,
         help="Require at least this many adjust_camera tool requests for adaptive proof runs.",
+    )
+    parser.add_argument(
+        "--expect-map-build-scan-profile",
+        help="Require the map-build scan profile id, normally fixture-focused.",
+    )
+    parser.add_argument(
+        "--min-map-build-body-turn-count",
+        type=int,
+        default=0,
+        help="Require at least this many navigate_to_relative_pose requests for map-build scans.",
     )
     parser.add_argument(
         "--min-generated-target-inspection-candidates",
@@ -339,6 +356,8 @@ def main() -> None:
             min_semantic_accepted_count=args.min_semantic_accepted_count,
             min_sweep_coverage=args.min_sweep_coverage,
             min_adjust_camera_count=args.min_adjust_camera_count,
+            expect_map_build_scan_profile=args.expect_map_build_scan_profile,
+            min_map_build_body_turn_count=args.min_map_build_body_turn_count,
             min_generated_target_inspection_candidates=(
                 args.min_generated_target_inspection_candidates
             ),
@@ -528,10 +547,11 @@ def _assert_agent_view_and_runtime_map(
     if opts["require_base_metric_map"]:
         _assert_base_metric_map(data, agent_view)
     if opts["require_runtime_metric_map"]:
-        _assert_runtime_metric_map(
-            data.get("runtime_metric_map") or _agent_view_runtime_metric_map(agent_view),
-            agent_view=agent_view,
+        runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
+            agent_view
         )
+        _assert_runtime_metric_map(runtime_metric_map, agent_view=agent_view)
+        _assert_runtime_metric_map_quality(runtime_metric_map)
     if opts["require_goal_contract"]:
         _assert_goal_contract(data, base)
     if opts["require_completion_claim"]:
@@ -549,6 +569,11 @@ def _assert_agent_view_and_runtime_map(
             assert data.get("policy") == "map_build_baseline", data
             assert (data.get("map_build") or {}).get("snapshot_artifact"), data
             assert len((data.get("map_build") or {}).get("camera_schedule") or []) >= 1, data
+            _assert_map_build_scan_profile(
+                data,
+                expected_profile=opts["expect_map_build_scan_profile"],
+                min_body_turn_count=opts["min_map_build_body_turn_count"],
+            )
     if map_build:
         _assert_map_build_did_not_clean(data)
     trace_path = _resolve_path(base, data["artifacts"]["trace"])
@@ -954,6 +979,119 @@ def _assert_map_build_did_not_clean(data: dict[str, Any]) -> None:
     assert not called, (called, data)
 
 
+def _assert_runtime_metric_map_quality(runtime_metric_map: dict[str, Any]) -> None:
+    anchors = [
+        item
+        for item in runtime_metric_map.get("public_semantic_anchors") or []
+        if isinstance(item, dict)
+    ]
+    _assert_no_duplicate_current_run_fixture_anchor_viewpoints(anchors)
+    for anchor in anchors:
+        _assert_runtime_map_pose_contract(anchor, item_kind="public_semantic_anchor")
+    for candidate in runtime_metric_map.get("target_candidates") or []:
+        if isinstance(candidate, dict):
+            _assert_runtime_map_pose_contract(candidate, item_kind="target_candidate")
+    for observed in runtime_metric_map.get("observed_objects") or []:
+        if isinstance(observed, dict):
+            _assert_rgb_only_item_does_not_claim_object_pose(
+                observed,
+                item_kind="observed_object",
+            )
+
+
+def _assert_no_duplicate_current_run_fixture_anchor_viewpoints(
+    anchors: list[dict[str, Any]],
+) -> None:
+    groups: dict[tuple[str, str, str, str, str], list[str]] = {}
+    for anchor in anchors:
+        if str(anchor.get("freshness") or "") != "current_run":
+            continue
+        if str(anchor.get("anchor_type") or "") not in {"fixture", "surface", "receptacle"}:
+            continue
+        key = _runtime_anchor_viewpoint_key(anchor)
+        groups.setdefault(key, []).append(str(anchor.get("anchor_id") or ""))
+    duplicates = {key: ids for key, ids in groups.items() if len(set(ids)) > 1}
+    assert not duplicates, {
+        "duplicate_fixture_anchor_viewpoints": duplicates,
+        "hint": (
+            "Current-run RGB/map-build fixture anchors must cluster same category, "
+            "waypoint, observation, and viewpoint instead of exposing duplicate "
+            "independent anchors."
+        ),
+    }
+
+
+def _runtime_anchor_viewpoint_key(anchor: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    pose = anchor.get("pose") if isinstance(anchor.get("pose"), dict) else {}
+    pose_key = ",".join(str(round(_float_or_zero(pose.get(key)), 4)) for key in ("x", "y", "yaw"))
+    return (
+        str(anchor.get("category") or ""),
+        str(anchor.get("room_id") or ""),
+        str(anchor.get("waypoint_id") or ""),
+        pose_key,
+        str(anchor.get("source_observation_id") or ""),
+    )
+
+
+def _assert_runtime_map_pose_contract(item: dict[str, Any], *, item_kind: str) -> None:
+    if item.get("pose") is not None:
+        assert item.get("pose_source"), {item_kind: item, "missing": "pose_source"}
+        assert item.get("pose_role"), {item_kind: item, "missing": "pose_role"}
+        assert item.get("localization_status"), {
+            item_kind: item,
+            "missing": "localization_status",
+        }
+    producer_type = str(item.get("producer_type") or "")
+    if (
+        producer_type
+        in {
+            "external_visual_grounding_service",
+            "visible_detection",
+            "visible_object_detections",
+            "simulated_camera_model",
+            "simulated_camera_model_policy",
+        }
+        and item.get("pose") is not None
+    ):
+        assert item.get("localization_status") == LOCALIZATION_STATUS_VIEWPOINT_ONLY, item
+        if item.get("pose_role"):
+            assert item.get("pose_role") in {
+                POSE_ROLE_BEST_VIEW_POSE,
+                POSE_ROLE_INSPECTION_WAYPOINT,
+            }, item
+    _assert_rgb_only_item_does_not_claim_object_pose(item, item_kind=item_kind)
+
+
+def _assert_rgb_only_item_does_not_claim_object_pose(
+    item: dict[str, Any],
+    *,
+    item_kind: str,
+) -> None:
+    producer_type = str(item.get("producer_type") or "")
+    producer_id = str(item.get("producer_id") or "")
+    if producer_type in {
+        "external_visual_grounding_service",
+        "visible_detection",
+        "visible_object_detections",
+        "simulated_camera_model",
+        "simulated_camera_model_policy",
+    } or producer_id in {"grounding-dino", "yoloe", "yolo-world", "omdet-turbo"}:
+        assert "object_pose" not in item, {
+            item_kind: item,
+            "reason": (
+                "RGB-only current-run map evidence may expose waypoint/viewpoint "
+                "pose but not target object map-frame pose."
+            ),
+        }
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _assert_adaptive_inspection_thresholds(
     data: dict[str, Any],
     *,
@@ -977,6 +1115,35 @@ def _assert_adaptive_inspection_thresholds(
         "actual_generated_target_inspection_candidates": generated_count,
         "min_generated_target_inspection_candidates": (min_generated_target_inspection_candidates),
         "runtime_metric_map": runtime_metric_map,
+    }
+
+
+def _assert_map_build_scan_profile(
+    data: dict[str, Any],
+    *,
+    expected_profile: str | None,
+    min_body_turn_count: int,
+) -> None:
+    map_build = data.get("map_build") if isinstance(data.get("map_build"), dict) else {}
+    scan_profile = (
+        map_build.get("scan_profile") if isinstance(map_build.get("scan_profile"), dict) else {}
+    )
+    profile_id = str(
+        map_build.get("scan_profile_id") or scan_profile.get("profile") or "fixture-focused"
+    )
+    if expected_profile:
+        assert profile_id == expected_profile, {
+            "actual_map_build_scan_profile": profile_id,
+            "expected_map_build_scan_profile": expected_profile,
+            "map_build": map_build,
+        }
+    counts = data.get("tool_event_counts") or {}
+    body_turn_count = int(counts.get("navigate_to_relative_pose:request") or 0)
+    assert body_turn_count >= min_body_turn_count, {
+        "actual_map_build_body_turn_count": body_turn_count,
+        "min_map_build_body_turn_count": min_body_turn_count,
+        "tool_event_counts": counts,
+        "map_build": map_build,
     }
 
 

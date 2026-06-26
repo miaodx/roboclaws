@@ -546,6 +546,7 @@ def detection_for_object_at_location(
 
 def objects_visible_from_waypoint(contract: Any, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:
     waypoint = contract._private_waypoint_for_public_waypoint(waypoint)
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
     locations = contract.backend.object_locations()
     fixture_ids = set(waypoint.get("fixture_ids") or [])
     visible = []
@@ -558,8 +559,22 @@ def objects_visible_from_waypoint(contract: Any, waypoint: dict[str, Any]) -> li
             continue
         if fixture_ids and location_id not in fixture_ids:
             continue
+        if not fixture_ids and _fixture_best_view_waypoint_id(contract, location_id) != waypoint_id:
+            continue
         visible.append((obj, str(location_id)))
     return visible
+
+
+def _fixture_best_view_waypoint_id(contract: Any, fixture_id: str) -> str:
+    preferred = getattr(contract, "_preferred_waypoint_for_fixture", None)
+    if callable(preferred):
+        return str(preferred(fixture_id) or "")
+    fixture = contract._fixtures.get(fixture_id) or {}
+    return str(
+        fixture.get("preferred_inspection_waypoint_id")
+        or fixture.get("preferred_manipulation_waypoint_id")
+        or ""
+    )
 
 
 def objects_visible_from_room(contract: Any, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:

@@ -7,6 +7,10 @@ import importlib.util
 import json
 from pathlib import Path
 
+from roboclaws.evals.map_build_reports import (
+    discover_eval_results_paths,
+    write_map_build_matrix_report,
+)
 from roboclaws.evals.regression import promote_regression_from_cli_overrides
 from roboclaws.evals.runner import DEFAULT_OUTPUT_ROOT, run_eval_suite
 
@@ -31,6 +35,13 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             parser.exit(2, f"error: {exc}\n")
         print(json.dumps(promotion, sort_keys=True))
+        return 0
+    if args.overrides and args.overrides[0] in {"map-build-report", "map_build_report"}:
+        try:
+            report = _run_map_build_report(_parse_key_value_args(args.overrides[1:]))
+        except ValueError as exc:
+            parser.exit(2, f"error: {exc}\n")
+        print(json.dumps(report, sort_keys=True))
         return 0
     try:
         run = _run_eval_from_overrides(_parse_key_value_args(args.overrides))
@@ -68,6 +79,20 @@ def _run_eval_harness(mode: str, overrides: dict[str, str]) -> int:
     return _load_eval_harness_runner().main(argv)
 
 
+def _run_map_build_report(overrides: dict[str, str]) -> dict[str, str]:
+    values = dict(overrides)
+    raw_eval_results = values.pop("eval_results", "")
+    output_dir = Path(values.pop("output_dir", "output/evals/map-build-matrix-report"))
+    if values:
+        keys = ", ".join(sorted(values))
+        raise ValueError(f"unsupported map-build-report override(s): {keys}")
+    eval_results_paths = discover_eval_results_paths(raw_eval_results)
+    return write_map_build_matrix_report(
+        eval_results_paths=eval_results_paths,
+        output_dir=output_dir,
+    )
+
+
 def _load_eval_harness_runner():
     spec = importlib.util.spec_from_file_location(
         "roboclaws_eval_harness_runner",
@@ -91,6 +116,7 @@ def _run_eval_from_overrides(overrides: dict[str, str]):
     model = values.pop("model", None)
     live_execution = values.pop("live_execution", "blocked")
     live_timeout_s = _optional_float(values.pop("live_timeout_s", None))
+    regrade_source = _optional_path(values.pop("regrade_source", None))
     if values:
         keys = ", ".join(sorted(values))
         raise ValueError(f"unsupported eval override(s): {keys}")
@@ -104,6 +130,7 @@ def _run_eval_from_overrides(overrides: dict[str, str]):
         model=model,
         live_execution=live_execution,
         live_timeout_s=live_timeout_s,
+        regrade_source=regrade_source,
     )
 
 
@@ -135,3 +162,9 @@ def _optional_float(value: str | None) -> float | None:
     if value in {None, ""}:
         return None
     return float(value)
+
+
+def _optional_path(value: str | None) -> Path | None:
+    if value in {None, ""}:
+        return None
+    return Path(str(value))

@@ -1,0 +1,65 @@
+{
+  "schema": "roboclaws_eval_sample_v1",
+  "sample_id": "open_ended.stable_anchor_no_prior_seed7",
+  "version": "2026-06-24",
+  "surface": "household-world",
+  "intent": "open-ended",
+  "preset": "not_applicable",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "evidence_lane": "world-public-labels",
+  "camera_labeler": "not_applicable",
+  "scenario_setup": "baseline",
+  "seed": 7,
+  "prompt": "find the fridge and report where it is",
+  "goal_contract_hash": "unavailable",
+  "allowed_agent_engines": [
+    "direct-runner",
+    "openai-agents-sdk"
+  ],
+  "provider_profiles": [
+    "not_applicable",
+    "codex-router-responses",
+    "mimo-inside-openai-chat",
+    "kimi-openai-chat",
+    "minimax-responses"
+  ],
+  "trial_count": 1,
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "open_ended"
+  ],
+  "private_goal_reference": {
+    "schema": "household_eval_private_goal_reference_v1",
+    "private_truth_scope": "grader_only",
+    "open_ended_category": "stable_anchor_search",
+    "expected_goal_outcome": "stable_anchor_reported",
+    "public_evidence_basis": {
+      "waypoint_id": "room_2_inspection",
+      "source": "runtime_metric_map.public_semantic_anchors"
+    }
+  },
+  "grader_config": {
+    "open_ended_category": "stable_anchor_search",
+    "expected_goal_outcome": "stable_anchor_reported",
+    "semantic_satisfaction_authoritative": false,
+    "success_predicate": {
+      "predicate_id": "waypoint_or_area_visited",
+      "authoritative": true,
+      "waypoint_id": "room_2_inspection"
+    },
+    "tags": [
+      "map-build-consumer",
+      "no-prior",
+      "stable-anchor"
+    ]
+  },
+  "launch_overrides": {
+    "agent_engine": "direct-runner",
+    "evidence_lane": "world-public-labels",
+    "seed": 7,
+    "scenario_setup": "baseline"
+  }
+}

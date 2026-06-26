@@ -979,6 +979,69 @@ def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_desti
     _assert_no_forbidden_keys(runtime_map)
 
 
+def test_map_build_fixture_anchors_keep_best_view_waypoint_binding() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        evidence_lane="world-public-labels",
+    )
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.adjust_camera(yaw_delta_deg=15)
+        contract.observe()
+
+    runtime_map = agent_view_module.runtime_metric_map(contract.agent_view_payload())
+    fixture_waypoints = {
+        item["category"]: item["waypoint_id"]
+        for item in runtime_map["public_semantic_anchors"]
+        if item.get("anchor_type") in {"fixture", "surface", "receptacle"}
+    }
+
+    assert fixture_waypoints["kitchen sink"] == "room_2_inspection"
+    assert fixture_waypoints["fridge"] == "room_2_inspection"
+    assert fixture_waypoints["sofa"] == "room_3_inspection"
+    assert fixture_waypoints["desk"] == "room_4_inspection"
+    assert fixture_waypoints["laundry hamper"] in {
+        "room_6_inspection",
+        "room_7_inspection",
+        "room_8_inspection",
+    }
+    assert len(set(fixture_waypoints.values())) >= 4
+    _assert_no_forbidden_keys(runtime_map)
+
+
+def test_runtime_metric_map_promotes_only_observed_fixture_viewpoints() -> None:
+    contract = _contract(
+        CleanupBackendSession(_empty_cleanup_scenario("map-build-empty-observation-test")),
+        evidence_lane="world-public-labels",
+    )
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        assert observation["visible_object_detections"] == []
+
+    runtime_map = agent_view_module.runtime_metric_map(contract.agent_view_payload())
+    fixture_anchors = [
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item.get("anchor_type") in {"fixture", "surface", "receptacle"}
+    ]
+
+    assert runtime_map["observed_objects"] == []
+    assert fixture_anchors
+    assert all(anchor["source_observation_id"] for anchor in fixture_anchors)
+    assert all(
+        anchor["waypoint_id"] in contract._observed_waypoint_ids for anchor in fixture_anchors
+    )
+    assert all(
+        anchor["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+        for anchor in fixture_anchors
+    )
+    assert all("object_pose" not in anchor for anchor in fixture_anchors)
+    _assert_no_forbidden_keys(runtime_map)
+
+
 def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> None:
     sweep_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -1475,19 +1538,104 @@ def test_base_metric_runtime_map_current_anchor_overrides_same_id_prior_anchor()
     )
     _first_non_empty_observation(contract)
     runtime_map = contract.agent_view_payload()["runtime_metric_map"]
-    matching = [
+    stale_matches = [
         item
         for item in runtime_map["public_semantic_anchors"]
         if item["anchor_id"] == seed_anchor["anchor_id"]
     ]
+    current_matches = [
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["category"] == seed_anchor["category"] and item["freshness"] == "current_run"
+    ]
+
+    assert stale_matches == []
+    assert current_matches
+    assert all(item["waypoint_id"] != "stale_prior_waypoint" for item in current_matches)
+    assert all(item["pose"] != {"x": 999.0, "y": 999.0, "yaw": 0.0} for item in current_matches)
+    assert all(item["promotion_status"] == "run_local" for item in current_matches)
+    _assert_no_forbidden_keys(runtime_map)
+
+
+def test_runtime_map_prior_anchor_keeps_snapshot_waypoint_without_current_evidence() -> None:
+    prior_anchor_id = "anchor_fixture_099"
+    prior_snapshot = {
+        "public_semantic_anchors": [
+            {
+                "anchor_id": prior_anchor_id,
+                "anchor_type": "receptacle",
+                "category": "Fridge",
+                "label": "Fridge",
+                "room_id": "room_8",
+                "waypoint_id": "room_8_inspection",
+                "pose": {"x": 10.7, "y": 3.2, "yaw": 0.0},
+                "pose_source": "inspection_waypoint",
+                "pose_role": "best_view_pose",
+                "localization_status": "viewpoint_only",
+                "affordances": ["observe", "place", "open", "place_inside", "close"],
+                "producer_type": "visible_detection",
+                "producer_id": "visible_detection",
+                "confidence": 0.68,
+                "freshness": "current_run",
+                "actionability": "actionable",
+                "source_observation_id": "waypoint_observation:room_8_inspection",
+                "promotion_status": "run_local",
+                "evidence": {
+                    "type": "support_estimate",
+                    "supporting_observed_object_ids": [],
+                },
+            }
+        ]
+    }
+
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        runtime_map_prior=prior_snapshot,
+    )
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    matching = [
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_id"] == prior_anchor_id
+    ]
+    resolution = contract.resolve_target_query("Fridge")
 
     assert len(matching) == 1
     anchor = matching[0]
-    assert anchor["freshness"] == "current_run"
-    assert anchor["promotion_status"] == "run_local"
-    assert anchor["waypoint_id"] != "stale_prior_waypoint"
-    assert anchor["pose"] != {"x": 999.0, "y": 999.0, "yaw": 0.0}
+    assert anchor["freshness"] == "prior"
+    assert anchor["promotion_status"] == "prior_runtime_snapshot"
+    assert anchor["waypoint_id"] == "room_8_inspection"
+    assert anchor["room_id"] == "room_8"
+    assert anchor["pose"] == {"x": 10.7, "y": 3.2, "yaw": 0.0}
+    assert resolution["best_match"]["anchor_id"] == prior_anchor_id
+    assert resolution["best_match"]["waypoint_id"] == "room_8_inspection"
+
+    contract.navigate_to_waypoint("room_2_inspection")
+    contract.observe()
+    post_observe_map = contract.agent_view_payload()["runtime_metric_map"]
+    post_observe_anchor = next(
+        item
+        for item in post_observe_map["public_semantic_anchors"]
+        if item["anchor_id"] == prior_anchor_id
+    )
+    post_observe_resolution = contract.resolve_target_query("Fridge")
+
+    assert post_observe_anchor["freshness"] == "prior"
+    assert post_observe_anchor["waypoint_id"] == "room_8_inspection"
+    fresh_fridge_anchors = [
+        item
+        for item in post_observe_map["public_semantic_anchors"]
+        if str(item.get("label") or item.get("category") or "").lower() == "fridge"
+        and item["freshness"] == "current_run"
+    ]
+    assert fresh_fridge_anchors
+    assert all(item["anchor_id"] != prior_anchor_id for item in fresh_fridge_anchors)
+    assert post_observe_resolution["best_match"]["anchor_id"] in {
+        prior_anchor_id,
+        *(item["anchor_id"] for item in fresh_fridge_anchors),
+    }
     _assert_no_forbidden_keys(runtime_map)
+    _assert_no_forbidden_keys(post_observe_map)
 
 
 def test_base_metric_map_keeps_public_waypoint_after_receptacle_navigation() -> None:
@@ -2898,6 +3046,66 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
     _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(candidate_response)
     _assert_no_forbidden_keys(agent_view)
+
+
+def test_runtime_metric_map_clusters_same_view_fixture_anchors_and_keeps_view_pose_prior() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        contract.declare_visual_candidates(observation["raw_fpv_observation"]["observation_id"])
+
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    fixture_anchors = [
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] in {"fixture", "surface", "receptacle"}
+    ]
+    duplicate_keys: dict[tuple[str, str, str, tuple[float, float, float], str], list[str]] = {}
+    for anchor in fixture_anchors:
+        pose = anchor["pose"]
+        key = (
+            anchor["category"],
+            anchor["room_id"],
+            anchor["waypoint_id"],
+            (pose["x"], pose["y"], pose["yaw"]),
+            anchor["source_observation_id"],
+        )
+        duplicate_keys.setdefault(key, []).append(anchor["anchor_id"])
+        assert anchor["pose_source"] == "inspection_waypoint"
+        assert anchor["pose_role"] == "best_view_pose"
+        assert anchor["localization_status"] == "viewpoint_only"
+        assert "object_pose" not in anchor
+    assert not {key: ids for key, ids in duplicate_keys.items() if len(set(ids)) > 1}
+
+    observed_objects = runtime_map["observed_objects"]
+    assert observed_objects
+    assert any(
+        str(item.get("candidate_fixture_id", "")).startswith("anchor_fixture_")
+        for item in observed_objects
+    )
+    for observed in observed_objects:
+        assert "object_pose" not in observed
+
+    anchor_candidates = [
+        item
+        for item in runtime_map["target_candidates"]
+        if item["candidate_type"] == "public_semantic_anchor"
+        and item["anchor_type"] in {"fixture", "surface", "receptacle"}
+    ]
+    assert anchor_candidates
+    assert any(item["verified_navigation"] is True for item in anchor_candidates)
+    for candidate in anchor_candidates:
+        assert candidate["pose_source"] == "inspection_waypoint"
+        assert candidate["pose_role"] == "best_view_pose"
+        assert candidate["localization_status"] == "viewpoint_only"
+        assert candidate["waypoint_id"]
+        assert "object_pose" not in candidate
+    _assert_no_forbidden_keys(runtime_map)
 
 
 def test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels() -> None:

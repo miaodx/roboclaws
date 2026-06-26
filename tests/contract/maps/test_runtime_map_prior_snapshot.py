@@ -92,6 +92,11 @@ def test_agibot_navigation_memory_converts_to_runtime_prior_snapshot_shape() -> 
     assert fridge["anchor_type"] == "receptacle"
     assert fridge["reachability_status"] == "costmap_disagrees"
     assert fridge["actionability"] == "costmap_disagrees"
+    assert fridge["pose_source"] == "agibot_navigation_memory_nav_goal"
+    assert fridge["pose_role"] == "nav_goal"
+    assert fridge["localization_status"] == "target_pose_verified"
+    assert fridge["object_pose_source"] == "agibot_navigation_memory_pose"
+    assert fridge["object_pose"]
     assert fridge["materialization"]["waypoint"]["costmap_value"] == 0
 
     bottle = anchors["plastic_bottle_table_1"]
@@ -126,6 +131,11 @@ def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
         assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
         assert snapshot["contract"]["private_truth_included"] is False
         assert snapshot["contract"]["source_map_mutated"] is False
+        for anchor in snapshot["public_semantic_anchors"]:
+            if anchor.get("pose"):
+                assert anchor.get("pose_source"), anchor
+                assert anchor.get("pose_role"), anchor
+                assert anchor.get("localization_status"), anchor
         materialized = materialize_runtime_prior_targets(snapshot)
         assert materialized["schema"] == "runtime_map_prior_materialized_targets_v1"
         assert materialized["inspection_waypoints"]

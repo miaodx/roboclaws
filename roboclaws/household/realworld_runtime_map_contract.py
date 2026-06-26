@@ -299,6 +299,7 @@ def runtime_observed_object_payload(
         "producer_id": producer_id,
         "confidence": confidence,
         "freshness": str(detection.get("freshness") or "current_run"),
+        "localization_status": "viewpoint_only",
         "actionability": actionability,
         "actionability_status": candidate_actionability,
         "candidate_state": candidate_state(candidate_input),

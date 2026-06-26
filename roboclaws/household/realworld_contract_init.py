@@ -134,6 +134,7 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
         )
     )
     target._public_anchor_ids_by_private_fixture_id = {}
+    target._fixture_observations_by_fixture_id = {}
     target._generated_inspection_waypoints = {}
     realworld_runtime_map_targets.seed_public_fixture_anchor_ids_from_prior_anchors(target)
     target._camera_yaw_offset_deg = 0.0

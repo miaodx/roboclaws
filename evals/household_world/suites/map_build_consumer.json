@@ -1,17 +1,21 @@
 {
   "schema": "roboclaws_eval_suite_v1",
   "suite_id": "household_world.map_build_consumer",
-  "version": "2026-06-15",
+  "version": "2026-06-24",
   "capability": "household_world",
   "sample_ids": [
-    "map_build.baseline_seed7",
-    "cleanup.consume_map_seed7",
-    "open_ended.drink_seed7"
+    "map_build.fixture_focused_seed7",
+    "open_ended.stable_anchor_no_prior_seed7",
+    "open_ended.stable_anchor_fixture_focused_prior_seed7",
+    "cleanup.consumer_no_prior_seed7",
+    "cleanup.consumer_fixture_focused_prior_seed7"
   ],
   "sample_refs": [
-    "evals/household_world/samples/map_build/baseline_seed7.json",
-    "evals/household_world/samples/cleanup/consume_map_seed7.json",
-    "evals/household_world/samples/open_ended/drink_seed7.json"
+    "evals/household_world/samples/map_build/fixture_focused_seed7.json",
+    "evals/household_world/samples/open_ended/stable_anchor_no_prior_seed7.json",
+    "evals/household_world/samples/open_ended/stable_anchor_fixture_focused_prior_seed7.json",
+    "evals/household_world/samples/cleanup/consumer_no_prior_seed7.json",
+    "evals/household_world/samples/cleanup/consumer_fixture_focused_prior_seed7.json"
   ],
   "required_graders": [
     "artifacts",
@@ -25,8 +29,26 @@
     "trajectory_policy_violation_count": 0
   },
   "metadata": {
-    "runner_scope": "direct-runner-contract-baseline-and-openai-agents-live",
+    "runner_scope": "direct-runner-no-prior-denominator-and-openai-agents-live-model-matrix",
     "live_provider_required": false,
-    "runtime_map_prior_flow": "map_build.baseline_seed7 -> cleanup.consume_map_seed7"
+    "runtime_map_prior_flow": "map_build.fixture_focused_seed7 -> open-ended and cleanup consumer comparisons",
+    "comparison_artifact": "aggregate.comparison",
+    "comparison_variants": [
+      "no_prior",
+      "fixture_focused_prior"
+    ],
+    "model_matrix_provider_profiles": [
+      "codex-router-responses",
+      "mimo-inside-openai-chat",
+      "kimi-openai-chat",
+      "minimax-responses"
+    ],
+    "parallel_execution": {
+      "parallel_group_id": "map_build_consumer_2026_06_24",
+      "provider_cell_count": 4,
+      "default_local_concurrency_width": 1,
+      "concurrency_policy": "serial_by_default_for_single_molmospaces_visual_backend_slot",
+      "isolation_contract": "one eval trial run_dir per provider/profile cell; shared runtime priors are read-only; raise ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS explicitly before parallel live MolmoSpaces cells"
+    }
   }
 }

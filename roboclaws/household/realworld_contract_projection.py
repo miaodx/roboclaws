@@ -387,13 +387,8 @@ def _fixtures_from_runtime_scenario(
 ) -> dict[str, dict[str, Any]]:
     """Build internal runtime fixture handles without adding them to Base Metric Map."""
 
-    waypoint_by_room: dict[str, str] = {}
+    waypoint_by_room: dict[str, str] = _runtime_scenario_waypoint_by_room(waypoints)
     fallback_waypoint_id = _first_waypoint_id(waypoints)
-    for waypoint in waypoints:
-        room_id = str(waypoint.get("room_id") or "")
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        if room_id and waypoint_id:
-            waypoint_by_room.setdefault(room_id, waypoint_id)
     fixtures: dict[str, dict[str, Any]] = {}
     for receptacle in scenario.receptacles:
         fixture_id = str(receptacle.receptacle_id)
@@ -415,6 +410,48 @@ def _fixtures_from_runtime_scenario(
             "public_fixture_source": "runtime_observation_backend",
         }
     return fixtures
+
+
+def _runtime_scenario_waypoint_by_room(
+    waypoints: list[dict[str, Any]],
+) -> dict[str, str]:
+    waypoint_by_room: dict[str, str] = {}
+    public_rooms_by_category: dict[str, list[str]] = defaultdict(list)
+    public_rooms_by_label: dict[str, list[str]] = defaultdict(list)
+    for waypoint in waypoints:
+        room_id = str(waypoint.get("room_id") or "")
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if not room_id or not waypoint_id:
+            continue
+        waypoint_by_room.setdefault(room_id, waypoint_id)
+        label = str(waypoint.get("room_label") or waypoint.get("label") or room_id)
+        public_rooms_by_category[_room_category_from_label(label, room_id)].append(waypoint_id)
+        public_rooms_by_label[_room_id(label)].append(waypoint_id)
+    for scenario_room, public_room, waypoint_index in (
+        ("kitchen", "kitchen", 0),
+        ("living_area", "living_room", 0),
+        ("work_area", "living_room", 1),
+        ("bedroom", "bedroom", 0),
+        ("bathroom", "bathroom", 0),
+    ):
+        waypoint_id = _available_waypoint_id(
+            waypoint_index,
+            public_rooms_by_category.get(public_room, []),
+            public_rooms_by_label.get(public_room, []),
+        )
+        if waypoint_id:
+            waypoint_by_room.setdefault(scenario_room, waypoint_id)
+    return waypoint_by_room
+
+
+def _available_waypoint_id(index: int, *groups: list[str]) -> str:
+    for group in groups:
+        if len(group) > index and group[index]:
+            return group[index]
+        for waypoint_id in group:
+            if waypoint_id:
+                return waypoint_id
+    return ""
 
 
 def _attach_runtime_fixture_ids_to_rooms(

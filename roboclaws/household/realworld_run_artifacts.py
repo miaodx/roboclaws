@@ -23,6 +23,7 @@ from roboclaws.household.manipulation_provenance import (
     isaac_semantic_pose_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
+from roboclaws.household.map_build_scan_profile import MapBuildScanProfile
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.planner_cleanup_bridge import planner_cleanup_bridge_evidence
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
@@ -82,7 +83,7 @@ class RealWorldRunArtifactInputs:
     selected_bundle_dir: Path | None
     planner_proof_evidence: dict[str, Any] | None
     use_planner_proof_for_cleanup_primitives: bool
-    map_build_camera_schedule: tuple[dict[str, float], ...]
+    map_build_scan_profile: MapBuildScanProfile
     run_metadata_overrides: dict[str, Any] | None = None
 
 
@@ -455,11 +456,23 @@ def _map_build_payload(
     inputs: RealWorldRunArtifactInputs,
     artifacts: _RunArtifactPaths,
 ) -> dict[str, Any]:
+    scan_profile = inputs.map_build_scan_profile.to_payload()
     return {
         "enabled": inputs.map_build,
-        "camera_schedule": (list(inputs.map_build_camera_schedule) if inputs.map_build else []),
+        "scan_profile": scan_profile,
+        "scan_profile_id": scan_profile["profile"],
+        "camera_schedule": scan_profile["camera_schedule"] if inputs.map_build else [],
+        "body_turn_yaw_delta_deg": (
+            scan_profile["body_turn_yaw_delta_deg"] if inputs.map_build else 0.0
+        ),
+        "body_turn_count_per_waypoint": (
+            scan_profile["body_turn_count_per_waypoint"] if inputs.map_build else 0
+        ),
+        "uses_robot_body_turns": bool(inputs.map_build and scan_profile["uses_robot_body_turns"]),
         "snapshot_artifact": str(artifacts.runtime_metric_map) if inputs.map_build else "",
         "cleanup_actions_disabled": inputs.map_build,
+        "stable_anchor_priority": bool(inputs.map_build and scan_profile["stable_anchor_priority"]),
+        "movable_prior_policy": scan_profile["movable_prior_policy"] if inputs.map_build else "",
     }
 
 
