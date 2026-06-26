@@ -309,7 +309,7 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
         "cleanup_capability",
         output_root=tmp_path,
         stamp="live-blocked",
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="codex-router-responses",
         product_runner=_passing_product_runner,
     )
@@ -323,7 +323,7 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     result = payload["results"][0]
     assert result["status"] == "blocked"
     assert result["failure_class"] == "model_or_provider_unavailable"
-    assert result["identity"]["agent_engine"] == "codex-cli"
+    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
     assert result["identity"]["runner_class"] == "live-agent"
     assert result["identity"]["provider_profile"] == "codex-router-responses"
     assert result["grader_outputs"]["runner"]["error_type"] == "LiveAgentEvalNotExecuted"
@@ -331,7 +331,7 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     assert preflight["schema"] == "roboclaws_live_eval_preflight_v1"
     assert preflight["provider_readiness"]["provider_profile"] == "codex-router-responses"
     assert preflight["provider_readiness"]["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
-    assert preflight["runtime_readiness"]["required_runtime"] == "docker-backed coding-agent CLI"
+    assert preflight["runtime_readiness"]["required_runtime"] == "OpenAI Agents SDK cleanup runner"
     assert preflight["blocker"] == "live_execution_not_requested"
     assert preflight["runtime_readiness"]["repo_native_live_eval_runner"] == (
         "opt_in_via_live_execution_run"
@@ -630,14 +630,13 @@ def test_live_surface_discovery_fails_on_ambiguous_current_sibling_artifacts(
         )
 
 
-def test_live_surface_product_waits_for_detached_codex_status(
+def test_live_surface_product_requires_sdk_run_result_after_foreground_success(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     from roboclaws.evals import live_runtime
 
     sleeps: list[float] = []
-    status_reads = 0
 
     def fake_run(
         command: list[str],
@@ -652,32 +651,16 @@ def test_live_surface_product_waits_for_detached_codex_status(
 
     def fake_sleep(seconds: float) -> None:
         sleeps.append(seconds)
-        run_dir = tmp_path / "trial-0000" / "surface-run" / "0615_0310" / "seed-7"
-        nonlocal status_reads
-        status_reads += 1
-        if status_reads == 2:
-            _write_product_artifacts(run_dir, completion_status="success")
-            (run_dir / "run_result.json").write_text(
-                json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
-            )
-            (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
-
-    clock = {"now": 0.0}
-
-    def fake_monotonic() -> float:
-        clock["now"] += 0.25
-        return clock["now"]
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
     monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
-    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
 
-    result = live_runtime.run_live_surface_product(
-        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
-    )
+    with pytest.raises(RuntimeError, match="live surface run finished without"):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
+        )
 
-    assert sleeps
-    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0310/seed-7")
+    assert sleeps == []
 
 
 def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
@@ -744,30 +727,17 @@ def test_live_surface_product_fails_aloud_on_malformed_run_result(
     assert "invalid live eval JSON artifact" in runner["message"]
 
 
-def test_live_surface_product_recovers_completed_artifact_after_timeout(
+def test_live_surface_product_does_not_recover_sdk_artifact_after_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     from roboclaws.evals import live_runtime
 
-    clock = {"now": 0.0}
-    poll_count = {"value": 0}
     timeout_run_dir: Path | None = None
-
-    def fake_monotonic() -> float:
-        return clock["now"]
+    sleeps: list[float] = []
 
     def fake_sleep(seconds: float) -> None:
-        clock["now"] += seconds
-        poll_count["value"] += 1
-        if poll_count["value"] == 2 and timeout_run_dir is not None:
-            _write_product_artifacts(timeout_run_dir, completion_status="success")
-            (timeout_run_dir / "run_result.json").write_text(
-                json.dumps(_run_result(timeout_run_dir, completion_status="success")) + "\n"
-            )
-            (timeout_run_dir / "live_status.json").write_text(
-                '{"phase": "finished", "exit_status": 0}\n'
-            )
+        sleeps.append(seconds)
 
     def fake_run(command: list[str], **_kwargs: Any) -> Any:
         output_arg = next(item for item in command if item.startswith("output_dir="))
@@ -785,16 +755,17 @@ def test_live_surface_product_recovers_completed_artifact_after_timeout(
         )
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
-    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
 
-    result = live_runtime.run_live_surface_product(
-        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
-    )
+    with pytest.raises(TimeoutError, match="live eval trial timed out after 5s"):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
+        )
 
-    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0311/seed-7")
+    assert sleeps == []
+    assert timeout_run_dir is not None
     record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
-    assert record["returncode"] == "timeout_after_completion"
+    assert record["returncode"] == "timeout"
     assert record["timeout_completion_grace_s"] == 30.0
 
 
@@ -840,60 +811,43 @@ def test_live_surface_timeout_rejects_invalid_config(value: str) -> None:
         live_runtime.live_surface_timeout_s(kwargs)
 
 
-def test_live_surface_product_recovers_after_detached_wait_deadline(
+def test_live_surface_product_does_not_wait_after_sdk_process_success(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     from roboclaws.evals import live_runtime
 
-    clock = {"now": 0.0}
     sleep_count = {"value": 0}
-    detached_run_dir: Path | None = None
 
     def fake_run(command: list[str], **_kwargs: Any) -> Any:
         output_arg = next(item for item in command if item.startswith("output_dir="))
         output_dir = Path(output_arg.removeprefix("output_dir="))
         run_dir = output_dir / "0615_0312" / "seed-7"
         run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
-        nonlocal detached_run_dir
-        detached_run_dir = run_dir
+        (run_dir / "live_status.json").write_text('{"phase": "running-sdk"}\n')
         return _completed_process(returncode=0)
 
-    def fake_monotonic() -> float:
-        return clock["now"]
-
     def fake_sleep(seconds: float) -> None:
-        clock["now"] += seconds
         sleep_count["value"] += 1
-        if sleep_count["value"] == 3 and detached_run_dir is not None:
-            _write_product_artifacts(detached_run_dir, completion_status="success")
-            (detached_run_dir / "run_result.json").write_text(
-                json.dumps(_run_result(detached_run_dir, completion_status="success")) + "\n"
-            )
-            (detached_run_dir / "live_status.json").write_text(
-                '{"phase": "finished", "exit_status": 0}\n'
-            )
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
-    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
 
-    result = live_runtime.run_live_surface_product(
-        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
-    )
+    with pytest.raises(RuntimeError, match="live surface run finished without"):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+        )
 
-    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0312/seed-7")
+    assert sleep_count["value"] == 0
 
 
-def test_live_surface_product_rejects_detached_run_result_without_terminal_status(
+def test_live_surface_product_accepts_sdk_run_result_without_terminal_status(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     from roboclaws.evals import live_runtime
 
-    clock = {"now": 0.0}
-    detached_run_dir: Path | None = None
+    sleeps: list[float] = []
 
     def fake_run(command: list[str], **_kwargs: Any) -> Any:
         output_arg = next(item for item in command if item.startswith("output_dir="))
@@ -903,35 +857,24 @@ def test_live_surface_product_rejects_detached_run_result_without_terminal_statu
         (run_dir / "run_result.json").write_text(
             json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
         )
-        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
-        nonlocal detached_run_dir
-        detached_run_dir = run_dir
+        (run_dir / "live_status.json").write_text('{"phase": "finishing-sdk"}\n')
         return _completed_process(returncode=0)
 
-    def fake_monotonic() -> float:
-        return clock["now"]
-
     def fake_sleep(seconds: float) -> None:
-        clock["now"] += seconds
+        sleeps.append(seconds)
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
-    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
     monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
-    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "0")
 
-    with pytest.raises(
-        TimeoutError,
-        match=r"detached live eval trial did not finish within 1s",
-    ):
-        live_runtime.run_live_surface_product(
-            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
-        )
+    result = live_runtime.run_live_surface_product(
+        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+    )
 
-    assert detached_run_dir is not None
-    assert (detached_run_dir / "run_result.json").is_file()
+    assert sleeps == []
+    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0313/seed-7")
 
 
-def test_live_surface_product_rejects_detached_run_result_with_failed_status(
+def test_live_surface_product_rejects_failed_live_status(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -952,7 +895,7 @@ def test_live_surface_product_rejects_detached_run_result_with_failed_status(
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
 
-    with pytest.raises(RuntimeError, match="detached live surface run failed with exit 1"):
+    with pytest.raises(RuntimeError, match="live surface run reported failed status 1"):
         live_runtime.run_live_surface_product(
             **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
         )
@@ -1029,7 +972,7 @@ def test_live_open_ended_eval_grades_artifacts_after_checker_nonzero_exit(
     assert command_record["returncode"] == 1
 
 
-def test_live_open_ended_eval_waits_for_detached_checker_status_after_recovery(
+def test_live_open_ended_eval_recovers_checker_nonzero_foreground_artifact(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1062,18 +1005,14 @@ def test_live_open_ended_eval_waits_for_detached_checker_status_after_recovery(
             )
             + "\n"
         )
-        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
-        return _completed_process(returncode=1, stderr="cleanup checker exited with status 1")
-
-    def fake_sleep(seconds: float) -> None:
-        sleeps.append(seconds)
-        clock["now"] += seconds
-        assert current_run_dir is not None
-        run_dir = current_run_dir
         (run_dir / "live_status.json").write_text(
             '{"phase": "failed", "exit_status": 1, '
             '"reason": "cleanup checker exited with status 1"}\n'
         )
+        return _completed_process(returncode=1, stderr="cleanup checker exited with status 1")
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
 
     def fake_monotonic() -> float:
         return clock["now"]
@@ -1094,7 +1033,8 @@ def test_live_open_ended_eval_waits_for_detached_checker_status_after_recovery(
 
     result = live_runtime.run_live_surface_product(**kwargs)
 
-    assert sleeps
+    assert current_run_dir is not None
+    assert sleeps == []
     assert result["eval_effective_run_dir"].endswith("surface-run/0616_1405/seed-7")
     command_record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
     assert command_record["returncode"] == 1
@@ -1501,7 +1441,7 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
         "cleanup_capability",
         output_root=tmp_path,
         stamp="live-command",
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="codex-router-responses",
         live_execution="run",
         live_product_runner=live_product_runner,
@@ -1509,14 +1449,15 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
 
     command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
     assert "backend=mujoco" in command
-    assert "agent_engine=codex-cli" in command
+    assert "agent_engine=openai-agents-sdk" in command
     assert "provider_profile=codex-router-responses" in command
     assert "evidence_lane=world-public-labels" in command
     assert "run_preset=smoke" in command
     assert "preset=cleanup" in command
     assert not any(item.startswith("generated_mess_count=") for item in command)
     plan = resolve_surface_launch(command[5:])
-    assert plan.agent_engine == "codex-cli"
+    assert plan.agent_engine == "openai-agents-sdk"
+    assert plan.dispatch_runner == "openai-agents-live"
     assert plan.backend == "mujoco"
     assert plan.evidence_mode == "smoke"
 
@@ -1577,7 +1518,7 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
         "open_ended_goals",
         output_root=tmp_path,
         stamp="live-open-task-command",
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile="codex-router-responses",
         live_execution="run",
         live_product_runner=live_product_runner,
@@ -1585,7 +1526,7 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
 
     command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
     assert "surface=household-world" in command
-    assert "agent_engine=codex-cli" in command
+    assert "agent_engine=openai-agents-sdk" in command
     assert "provider_profile=codex-router-responses" in command
     assert "run_preset=smoke" in command
     assert not any(item.startswith("preset=") for item in command)
@@ -1674,16 +1615,16 @@ def test_eval_runner_rejects_invalid_sample_launch_metadata(
 
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
     kwargs: dict[str, Any] = {
-        "agent_engine": "claude-code",
-        "provider_profile": "mimo-tp-anthropic",
-        "model": "mimo-v2.5",
+        "agent_engine": "openai-agents-sdk",
+        "provider_profile": "codex-router-responses",
+        "model": "gpt-5.5",
     }
 
     env = live_surface_env(kwargs, base_env={"PATH": "/bin"})
 
     assert env["PATH"] == "/bin"
-    assert env["ROBOCLAWS_PROVIDER_PROFILE"] == "mimo-tp-anthropic"
-    assert env["ROBOCLAWS_CLAUDE_MODEL"] == "mimo-v2.5"
+    assert env["ROBOCLAWS_PROVIDER_PROFILE"] == "codex-router-responses"
+    assert env["ROBOCLAWS_CODEX_MODEL"] == "gpt-5.5"
 
 
 def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
@@ -2568,7 +2509,7 @@ def _live_surface_kwargs(run_dir: Path, *, live_timeout_s: float | None = None) 
         "cleanup_profile": "smoke",
         "scene_source": "procthor-10k-val",
         "scene_index": 0,
-        "agent_engine": "codex-cli",
+        "agent_engine": "openai-agents-sdk",
         "provider_profile": "codex-router-responses",
         "model": None,
         "live_timeout_s": live_timeout_s,

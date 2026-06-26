@@ -26,7 +26,6 @@ from roboclaws.core.json_sources import read_json_object  # noqa: E402
 SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
-DETACHED_LIVE_PRODUCT_TIMEOUT_S = 3600.0
 DINO_SIDECAR_AUTOSTART_ENV = "ROBOCLAWS_EVAL_HARNESS_AUTOSTART_DINO_SIDECAR"
 DINO_SIDECAR_STARTUP_TIMEOUT_S = 15.0
 ROW_BLOCKER_REQUIREMENT_PRIORITY = {
@@ -187,7 +186,6 @@ def _run_row(row: dict[str, Any], manifest: dict[str, Any]) -> None:
         _display_path(stdout_path),
         _display_path(stderr_path),
     ]
-    _wait_for_detached_live_product_row(row)
     _attach_eval_outputs(row)
     _classify_eval_result_row(row)
     _classify_failed_row(row, stderr=result.stderr, stdout=result.stdout)
@@ -202,11 +200,7 @@ def _row_environment(row: dict[str, Any]) -> dict[str, str]:
 
 
 def _should_default_provider_timing_proxy(row: dict[str, Any]) -> bool:
-    axes = row.get("axes") or {}
-    return row.get("expense") == "live-agent" and axes.get("agent_engine") in {
-        "codex-cli",
-        "claude-code",
-    }
+    return False
 
 
 def _resolve_row_command(row: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
@@ -278,111 +272,6 @@ def _classify_failed_row(row: dict[str, Any], *, stderr: str, stdout: str) -> No
                 "detail": "provider, key, rate-limit, or model service failure",
             }
         ]
-
-
-def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
-    if not _is_detached_live_product_row(row):
-        return
-    run_root = _row_command_output_dir(row)
-    if run_root is None:
-        return
-    run_dir = _discover_live_product_run_dir(run_root)
-    if run_dir is None:
-        return
-    row["detached_live_run_dir"] = _display_path(run_dir)
-    deadline = time.monotonic() + DETACHED_LIVE_PRODUCT_TIMEOUT_S
-    while time.monotonic() <= deadline:
-        run_result = run_dir / "run_result.json"
-        live_status = run_dir / "live_status.json"
-        status, source_error = _load_live_status_source(live_status)
-        if source_error:
-            row["status"] = "blocked"
-            row["outcome"] = "blocked"
-            row["blocker_category"] = "environment_blocked"
-            row["blockers"] = [
-                _environment_blocker(f"detached live product row source error: {source_error}")
-            ]
-            _append_output_artifacts(row, live_status, run_dir / "driver.log")
-            return
-        if run_result.is_file() and _detached_live_status_is_complete(status):
-            row["status"] = "ran"
-            row["outcome"] = "passed"
-            _append_output_artifacts(
-                row,
-                run_result,
-                live_status,
-                run_dir / "report.html",
-            )
-            return
-        exit_status = status.get("exit_status")
-        phase = str(status.get("phase") or "").lower()
-        if exit_status not in {None, 0} or phase in {"failed", "stopped_by_operator"}:
-            row["status"] = "blocked"
-            row["outcome"] = "blocked"
-            row["blocker_category"] = "environment_blocked"
-            row["blockers"] = [
-                _environment_blocker(
-                    "detached live product row ended before run_result.json: "
-                    f"{phase or exit_status}"
-                )
-            ]
-            _append_output_artifacts(row, live_status, run_dir / "driver.log")
-            return
-        time.sleep(1.0)
-        run_dir = _discover_live_product_run_dir(run_root) or run_dir
-    row["status"] = "blocked"
-    row["outcome"] = "blocked"
-    row["blocker_category"] = "environment_blocked"
-    row["blockers"] = [
-        _environment_blocker(
-            f"detached live product row did not finish within {DETACHED_LIVE_PRODUCT_TIMEOUT_S:g}s"
-        )
-    ]
-    _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
-
-
-def _detached_live_status_is_complete(status: dict[str, Any]) -> bool:
-    return status.get("exit_status") == 0
-
-
-def _load_live_status_source(path: Path) -> tuple[dict[str, Any], str]:
-    if not path.exists():
-        return {}, ""
-    try:
-        return _load_required_json_object(path, label="live_status"), ""
-    except (OSError, ValueError) as exc:
-        return {}, str(exc)
-
-
-def _is_detached_live_product_row(row: dict[str, Any]) -> bool:
-    axes = row.get("axes") if isinstance(row.get("axes"), dict) else {}
-    command = [str(item) for item in row.get("resolved_command") or row.get("command") or []]
-    return (
-        row.get("row_kind") == "live_agent_eval"
-        and axes.get("agent_engine") == "codex-cli"
-        and "run::surface" in command
-        and any(item.startswith("output_dir=") for item in command)
-    )
-
-
-def _row_command_output_dir(row: dict[str, Any]) -> Path | None:
-    for item in row.get("resolved_command") or row.get("command") or []:
-        text = str(item)
-        if text.startswith("output_dir="):
-            return Path(text.split("=", 1)[1])
-    return None
-
-
-def _discover_live_product_run_dir(run_root: Path) -> Path | None:
-    candidates = []
-    if run_root.is_dir():
-        candidates.extend(path.parent for path in run_root.glob("**/live_status.json"))
-        candidates.extend(path.parent for path in run_root.glob("**/run_result.json"))
-    candidates = [path for path in candidates if path.is_dir()]
-    if not candidates:
-        return run_root if run_root.is_dir() else None
-    candidates.sort(key=lambda item: item.stat().st_mtime, reverse=True)
-    return candidates[0]
 
 
 def _append_output_artifacts(row: dict[str, Any], *paths: Path) -> None:

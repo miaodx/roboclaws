@@ -4,50 +4,17 @@ source_of_truth:
   registry: roboclaws/agents/provider_registry.py
   narrative: docs/human/model-matrix.md
 verdicts:
-  - agent_engine: codex-cli
-    provider_route: codex-router-responses
-    provider_profile: codex-router-responses
-    model_id: gpt-5.5
-    route_status: healthy
-    lane_verdicts:
-      structured_labels: healthy
-      camera_grounded_labels: healthy
-      camera_raw_fpv: healthy
-    evidence: current local cleanup evidence
-    notes: Default Codex Responses route; requires CODEX_BASE_URL and CODEX_API_KEY.
-  - agent_engine: codex-cli
-    provider_route: mimo-mify-responses
-    provider_profile: mimo-mify-responses
-    model_id: xiaomi/mimo-v2.5
-    route_status: degraded
-    lane_verdicts:
-      structured_labels: degraded
-      camera_grounded_labels: degraded
-      camera_raw_fpv: blocked
-    evidence: current local Codex/mimo-mify-responses probes
-    notes: MCP calls work, but current probes can early-stop after one live-agent turn.
-  - agent_engine: codex-cli
-    provider_route: minimax-responses
-    provider_profile: minimax-responses
-    model_id: MiniMax-M3
-    route_status: blocked
-    lane_verdicts:
-      structured_labels: blocked
-      camera_grounded_labels: blocked
-      camera_raw_fpv: blocked
-    evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
-    notes: MiniMax Responses auth/transport connects, but Codex's MCP router rejects MiniMax-emitted tool names such as mcp__cleanup__metric_map and cleanup__ping_tool as unsupported calls.
   - agent_engine: openai-agents-sdk
     provider_route: codex-router-responses
     provider_profile: codex-router-responses
     model_id: gpt-5.5
-    route_status: experimental
+    route_status: preferred
     lane_verdicts:
       structured_labels: experimental
       camera_grounded_labels: experimental
       camera_raw_fpv: healthy
-    evidence: experimental SDK route
-    notes: SDK route remains non-default.
+    evidence: current SDK route
+    notes: Default active live-agent route; requires CODEX_BASE_URL and CODEX_API_KEY.
   - agent_engine: openai-agents-sdk
     provider_route: mimo-tp-openai-chat
     provider_profile: mimo-tp-openai-chat
@@ -92,25 +59,6 @@ verdicts:
       camera_raw_fpv: blocked
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
     notes: Default MiniMax model. M3 is multimodal and image-capable, but raw FPV remains blocked until runtime image transport is verified for this route.
-  - agent_engine: claude-code
-    provider_route: mimo-tp-anthropic
-    provider_profile: mimo-tp-anthropic
-    model_id: mimo-v2.5
-    route_status: healthy
-    lane_verdicts:
-      structured_labels: healthy
-      camera_grounded_labels: healthy
-      camera_raw_fpv: healthy
-    evidence: current Claude Code household route evidence
-    notes: Default Claude Code route when MIMO_TP_KEY is configured.
-  - agent_engine: claude-code
-    provider_route: mimo-mify-anthropic
-    provider_profile: mimo-mify-anthropic
-    model_id: xiaomi/mimo-v2.5
-    route_status: experimental
-    lane_verdicts:
-      structured_labels: experimental
-      camera_grounded_labels: experimental
-      camera_raw_fpv: experimental
-    evidence: gateway route wired; cleanup verdict pending
-    notes: Uses XM_LLM_API_KEY through the Anthropic-compatible mimo-mify-responses gateway.
+retired_agent_engines:
+  - codex-cli
+  - claude-code

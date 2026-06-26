@@ -24,12 +24,11 @@ actionability and `runtime_map_prior` consumption. Eval-harness recommendations
 now distinguish open-ended, map-build, scene-sampler stress, and planner-proof
 proof rows. Live eval execution is opt-in with `live_execution=run`; default
 non-direct eval requests still record blocked identity/preflight packets so
-provider-backed work is not launched by accident. Codex CLI live eval runs pass
-a fixed product `run_dir` through the public launch route and poll detached live
-artifacts before grading, including a short completion grace window for
-late-written `run_result.json` files. OpenAI Agents SDK live eval runs now use
-the same open-ended sample contract and grade current `world-public-labels`
-artifacts. Failed, blocked, or inconclusive eval results can be promoted into
+provider-backed work is not launched by accident. Historical Codex CLI live eval
+evidence used a fixed product `run_dir` and detached artifact polling, but
+current OpenAI Agents SDK live eval runs use the open-ended sample contract and
+grade current `world-public-labels` artifacts. Failed, blocked, or inconclusive
+eval results can be promoted into
 regression samples with
 `just agent::eval promote-regression ...` while keeping private scorer truth
 inside grader-only sample metadata.
@@ -112,14 +111,14 @@ No current human blocker for the implemented cross-environment map/waypoint
 source-of-truth plan. Product runtime, smoke helpers, and current tests now fail
 loudly without a selected Base Metric Map bundle as intended.
 
-No current implementation blocker for deterministic or open-ended coding-agent
-smoke eval work. Opt-in live eval execution reaches the live product route on
-this host, and `open_ended_goals` passed with `agent_engine=codex-cli`,
-`provider_profile=codex-router-responses`, and `live_execution=run` on 2026-06-16. The same
-suite also passed with `agent_engine=openai-agents-sdk`,
-`provider_profile=minimax-responses`, and `live_execution=run` on 2026-06-16. The
-`openai-agents-sdk` / `codex-router-responses` route was exercised live but blocked on an
-upstream 502 provider response, so it is not counted as a behavioral pass.
+No current implementation blocker for deterministic or OpenAI Agents SDK smoke
+eval work. Opt-in live eval execution reaches the live product route on this
+host, and `open_ended_goals` passed with `agent_engine=openai-agents-sdk`,
+`provider_profile=minimax-responses`, and `live_execution=run` on 2026-06-16.
+The `openai-agents-sdk` / `codex-router-responses` route was exercised live but
+blocked on an upstream 502 provider response, so it is not counted as a
+behavioral pass. Historical Codex CLI live-eval evidence remains report-only
+and is not a current active engine contract.
 Default non-direct eval requests remain blocked identity/preflight packets
 unless live execution is explicitly requested. Remaining validation blockers are
 external or product-route-specific: broader live-agent `pass^k` proof needs

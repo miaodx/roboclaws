@@ -27,24 +27,6 @@ class AgentEngineSpec:
 
 
 AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
-    "codex-cli": AgentEngineSpec(
-        id="codex-cli",
-        label="Codex CLI",
-        dispatch_runner="codex",
-        internal_runner_class="live-agent",
-        supported_provider_profiles=supported_provider_profiles("codex-cli"),
-        default_provider_profile=default_provider_profile("codex-cli"),
-        provider_env_key=provider_env_key("codex-cli"),
-    ),
-    "claude-code": AgentEngineSpec(
-        id="claude-code",
-        label="Claude Code",
-        dispatch_runner="claude",
-        internal_runner_class="live-agent",
-        supported_provider_profiles=supported_provider_profiles("claude-code"),
-        default_provider_profile=default_provider_profile("claude-code"),
-        provider_env_key=provider_env_key("claude-code"),
-    ),
     "openai-agents-sdk": AgentEngineSpec(
         id="openai-agents-sdk",
         label="OpenAI Agents SDK",

@@ -49,23 +49,23 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-AGIBOT_CODEX_MAP_BUILD = (
-    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+AGIBOT_SDK_CLEANUP = (
+    "agibot-g2/map-12::agibot-gdk::cleanup::openai-agents-sdk::camera-grounded-labels"
 )
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+AGIBOT_SDK_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::openai-agents-sdk::camera-grounded-labels"
+)
 B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
-MUJOCO_CLAUDE_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
+MUJOCO_SDK_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
 )
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
 )
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
-)
-MUJOCO_CODEX_MAP_BUILD = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
+MUJOCO_SDK_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::openai-agents-sdk::"
+    "world-public-labels"
 )
 
 
@@ -91,16 +91,16 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
     disabled = {route.id: route.disabled_reason for route in routes if not route.enabled}
 
     assert {route.id for route in supported} >= {
-        MUJOCO_CODEX_OPEN_TASK,
-        MUJOCO_CLAUDE_OPEN_TASK,
-        AGIBOT_CODEX_MAP_BUILD,
-        MUJOCO_CODEX_MAP_BUILD,
-        B1_CODEX_OPEN_TASK,
+        MUJOCO_OPENAI_AGENTS_OPEN_TASK,
+        MUJOCO_OPENAI_AGENTS_OPEN_TASK,
+        AGIBOT_SDK_MAP_BUILD,
+        MUJOCO_SDK_MAP_BUILD,
+        B1_OPENAI_AGENTS_OPEN_TASK,
         B1_OPENAI_AGENTS_OPEN_TASK,
     }
     assert {route.agent_engine_id for route in supported} >= {
-        "codex-cli",
-        "claude-code",
+        "openai-agents-sdk",
+        "openai-agents-sdk",
         "openai-agents-sdk",
     }
     assert {route.lock_name for route in supported} == {
@@ -108,16 +108,14 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         "isaac_gpu",
         "agibot_g2",
     }
-    assert disabled[AGIBOT_CODEX_CLEANUP] == (
-        "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
-    )
+    assert "Physical manipulation is not active" in disabled[AGIBOT_SDK_CLEANUP]
     validate_supported_routes_against_catalog()
 
 
 def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
-    mujoco = get_selection(MUJOCO_CODEX_OPEN_TASK).to_payload()
-    b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
-    agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
+    mujoco = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()
+    b1 = get_selection(B1_OPENAI_AGENTS_OPEN_TASK).to_payload()
+    agibot = get_selection(AGIBOT_SDK_MAP_BUILD).to_payload()
 
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
@@ -132,7 +130,7 @@ def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
 
 
 def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_SDK_CLEANUP)
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -152,7 +150,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         "world=molmospaces/procthor-objaverse-val/0",
         "backend=mujoco",
         "preset=cleanup",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
     ]
     assert "preset=cleanup" in argv
     assert "evidence_lane=world-public-labels" in argv
@@ -186,7 +184,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert not any(item.startswith("preset=") for item in default_open_ended)
     assert "prompt=在这个场景中完成开放性导航任务，并报告你看到的证据。" in default_open_ended
 
-    disabled = get_selection(AGIBOT_CODEX_CLEANUP)
+    disabled = get_selection(AGIBOT_SDK_CLEANUP)
     with pytest.raises(ConsoleLaunchError, match="cannot accept a custom prompt"):
         build_launch_argv(disabled, root=tmp_path, run_id="run-2", prompt="custom")
 
@@ -211,7 +209,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
                     "world_id": "molmospaces/procthor-objaverse-val/0",
                     "backend_id": "mujoco",
                     "intent_id": "open-ended",
-                    "agent_engine_id": "codex-cli",
+                    "agent_engine_id": "openai-agents-sdk",
                     "provider_profile": "codex-router-responses",
                     "evidence_lane": "world-public-labels",
                     "scenario_setup": "baseline",
@@ -237,7 +235,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     )
     assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
     assert "household-open-task skill instructions" in payload["agent_kickoff_prompt"]
-    assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
+    assert payload["wrapper_notes"] == []
 
 
 @pytest.mark.parametrize(
@@ -254,7 +252,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
         ),
         (
             {
-                "agent_engine_id": "codex-cli",
+                "agent_engine_id": "openai-agents-sdk",
                 "evidence_lane": "world-public-labels",
                 "overrides": {"relocation_count": "abc"},
             },
@@ -343,7 +341,7 @@ def test_prompt_preview_rejects_invalid_relocation_count(
     overrides: dict[str, str],
     expected_error: str,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_SDK_CLEANUP)
 
     with pytest.raises(ValueError, match=expected_error):
         build_prompt_preview(
@@ -404,7 +402,7 @@ def test_prompt_preview_keeps_existing_prompt_minimums_for_zero_budget_env() -> 
 def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(B1_CODEX_OPEN_TASK)
+    route = get_selection(B1_OPENAI_AGENTS_OPEN_TASK)
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert readiness["blocker_kind"] == "needs_route_parameter"
@@ -423,7 +421,7 @@ def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blockin
 
 
 def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     readiness = route_readiness(
         tmp_path,
         route,
@@ -436,17 +434,17 @@ def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> Non
     assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
 
 
-def test_console_readiness_uses_claude_provider_profile_override(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CLAUDE_OPEN_TASK)
+def test_console_readiness_uses_sdk_mify_provider_profile_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     readiness = route_readiness(
         tmp_path,
         route,
-        overrides={"port": _free_port(), "provider_profile": "mimo-mify-anthropic"},
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-responses"},
         env={"XM_LLM_API_KEY": "key"},
     )
 
     assert readiness["can_start"] is True
-    assert readiness["provider"]["provider"] == "mimo-mify-anthropic"
+    assert readiness["provider"]["provider"] == "mimo-mify-responses"
     assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
 
 
@@ -502,7 +500,7 @@ def test_operator_state_derives_public_fields_and_artifact_links(tmp_path: Path)
     )
     (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_OPEN_TASK))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK))
 
     assert state["run_id"] == "run-a"
     assert state["latest_tool_call"]["name"] == "navigate_to_object"
@@ -665,7 +663,7 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     routes = {route["id"]: route for route in payload["combinations"]}
     worlds = {world["id"]: world for world in payload["worlds"]}
     world_id = "molmospaces/procthor-objaverse-val/10"
-    route_id = f"{world_id}::mujoco::map-build::codex-cli::world-public-labels"
+    route_id = f"{world_id}::mujoco::map-build::openai-agents-sdk::world-public-labels"
     assert world_id in worlds
     assert worlds[world_id]["preview_assets"]["map"]["href"] == (
         "/previews/molmospaces-procthor-objaverse-val-10-map.png"
@@ -694,9 +692,11 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     if "ai2thor/FloorPlan201" in worlds:
         assert "topdown" not in worlds["ai2thor/FloorPlan201"]["preview_assets"]
     assert routes[
-        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::openai-agents-sdk::camera-grounded-labels"
     ]["enabled"]
-    assert not routes["b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"]["enabled"]
+    assert not routes["b1-map12::isaaclab::open-task::openai-agents-sdk::camera-grounded-labels"][
+        "enabled"
+    ]
     assert not any(
         "::isaaclab::" in route_id for route_id in routes if route_id.startswith("molmospaces/")
     )
@@ -825,7 +825,7 @@ def _assert_scene_preview_rejects_invalid_paths(base_url: str) -> None:
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "latest-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -868,9 +868,9 @@ def test_operator_console_run_reload_ignores_legacy_route_query(tmp_path: Path) 
     thread.start()
     try:
         host, port = server.server_address
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/api/runs/{run_id}?route=molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
-        ) as response:
+        route_id = "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
+        url = f"http://{host}:{port}/api/runs/{run_id}?route={route_id}"
+        with urllib.request.urlopen(url) as response:
             payload = json.loads(response.read().decode("utf-8"))
     finally:
         server.shutdown()
@@ -896,7 +896,7 @@ def test_operator_console_run_endpoint_rejects_legacy_route_id_field(
             method="POST",
             data=json.dumps(
                 {
-                    "route_id": MUJOCO_CODEX_CLEANUP,
+                    "route_id": MUJOCO_SDK_CLEANUP,
                     "intent": "open-ended",
                     "prompt": "收拾桌面上的杯子",
                 }
@@ -916,7 +916,7 @@ def test_operator_console_run_endpoint_rejects_legacy_route_id_field(
 
 
 def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "parent-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -994,7 +994,7 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
 def test_operator_console_resume_endpoint_records_paused_handoff_request(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "paused-handoff-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1233,7 +1233,7 @@ def _assert_operator_control_artifacts(tmp_path: Path, run_dir: Path, route) -> 
 def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "control-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
 
@@ -1249,7 +1249,7 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
 def test_operator_console_control_endpoint_rejects_malformed_request_body(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "malformed-control-body-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
 
@@ -1266,7 +1266,7 @@ def test_operator_console_control_endpoint_rejects_malformed_request_body(
 def test_operator_console_control_endpoint_rejects_non_object_request_body(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "non-object-control-body-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
 
@@ -1283,7 +1283,7 @@ def test_operator_console_control_endpoint_rejects_non_object_request_body(
 def test_operator_console_control_endpoint_rejects_malformed_control_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "malformed-control-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
     (run_dir / "operator_control.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
@@ -1299,7 +1299,7 @@ def test_operator_console_control_endpoint_rejects_malformed_control_source(
 def test_operator_console_control_endpoint_rejects_non_object_control_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "non-object-control-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
     (run_dir / "operator_control.jsonl").write_text("[]\n", encoding="utf-8")
@@ -1315,7 +1315,7 @@ def test_operator_console_control_endpoint_rejects_non_object_control_source(
 def test_operator_console_control_endpoint_rejects_malformed_operator_state_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "malformed-control-state-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
     state_path = run_dir / "operator_state.json"
@@ -1333,7 +1333,7 @@ def test_operator_console_control_endpoint_rejects_malformed_operator_state_sour
 def test_operator_console_control_endpoint_rejects_non_object_operator_state_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "non-object-control-state-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
     state_path = run_dir / "operator_state.json"
@@ -1351,7 +1351,7 @@ def test_operator_console_control_endpoint_rejects_non_object_operator_state_sou
 def test_operator_console_control_endpoint_does_not_overwrite_corrupt_state_after_tool_call(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "corrupt-control-state-after-call-run"
     run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
     state_path = run_dir / "operator_state.json"
@@ -1385,7 +1385,7 @@ def test_operator_console_control_endpoint_does_not_overwrite_corrupt_state_afte
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "handoff-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1443,7 +1443,7 @@ def test_operator_console_control_endpoint_allows_paused_operator_handoff(
 
 
 def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_MAP_BUILD)
+    route = get_selection(MUJOCO_SDK_MAP_BUILD)
     run_id = "map-build-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1485,7 +1485,7 @@ def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: P
 
 
 def test_operator_console_control_endpoint_rejects_terminal_run(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "finished-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1527,10 +1527,10 @@ def test_operator_console_control_endpoint_rejects_terminal_run(tmp_path: Path) 
 
 
 def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = (
         "20260610-224107-molmospaces-procthor-objaverse-val-0-mujoco-open-task-"
-        "codex-cli-world-public-labels"
+        "openai-agents-sdk-world-public-labels"
     )
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     attempt_dir = run_dir / "0610_2241" / "seed-7"
@@ -1549,7 +1549,7 @@ def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path:
         encoding="utf-8",
     )
     (attempt_dir / "live_status.json").write_text(
-        json.dumps({"phase": "running-codex"}),
+        json.dumps({"phase": "running-sdk"}),
         encoding="utf-8",
     )
     ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
@@ -1585,7 +1585,7 @@ def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path:
 def test_operator_console_stop_endpoint_rejects_non_object_operator_state_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "non-object-stop-state-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1623,7 +1623,7 @@ def test_operator_console_stop_endpoint_rejects_non_object_operator_state_source
 def test_operator_console_stop_endpoint_rejects_malformed_live_status_source(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = "malformed-live-status-stop-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     attempt_dir = run_dir / "0619_1112" / "seed-7"

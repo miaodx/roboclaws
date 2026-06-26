@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +15,18 @@ from roboclaws.evals.models import (
     EvalTrial,
 )
 from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS, AgentEngineSpec
+from roboclaws.launch.retired_agent_engines import (
+    is_retired_agent_engine,
+    retired_agent_engine_message,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def agent_engine_spec(agent_engine: str) -> AgentEngineSpec:
     engine_id = str(agent_engine or "direct-runner").strip()
+    if is_retired_agent_engine(engine_id):
+        raise ValueError(retired_agent_engine_message(engine_id))
     try:
         return AGENT_ENGINE_SPECS[engine_id]
     except KeyError as exc:
@@ -131,17 +136,7 @@ def _runtime_readiness(agent_engine: str) -> dict[str, Any]:
         "repo_native_live_eval_runner": "opt_in_via_live_execution_run",
         "product_route_available": "eval runner can call the public run::surface route",
     }
-    if agent_engine in {"codex-cli", "claude-code"}:
-        script = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
-        runtime.update(
-            {
-                "required_runtime": "docker-backed coding-agent CLI",
-                "coding_agent_docker_script": "available" if script.exists() else "missing",
-                "docker_cli": "available" if shutil.which("docker") else "missing",
-                "tmux_cli": "available" if shutil.which("tmux") else "missing",
-            }
-        )
-    elif agent_engine == "openai-agents-sdk":
+    if agent_engine == "openai-agents-sdk":
         script = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
         runtime.update(
             {

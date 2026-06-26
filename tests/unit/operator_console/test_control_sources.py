@@ -17,8 +17,9 @@ from roboclaws.operator_console.control import _serialize_tool_result
 from roboclaws.operator_console.routes import get_selection
 from roboclaws.operator_console.server import ConsoleRequestHandler
 
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
 )
 
 
@@ -69,7 +70,7 @@ def test_control_tool_response_rejects_non_object_json_text() -> None:
 
 
 def _write_running_operator_control_state(root: Path, run_id: str) -> Path:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_dir = root / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(

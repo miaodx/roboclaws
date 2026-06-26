@@ -231,7 +231,7 @@ PROVIDER_KEY_GATE = RouteGate(
     id="provider_key",
     label="Agent provider route present",
     kind="provider_key",
-    help_text="Load a repo-local coding-agent provider route before launch.",
+    help_text="Load a repo-local OpenAI Agents SDK provider route before launch.",
 )
 MCP_PORT_FREE_GATE = RouteGate(
     id="mcp_port_free",
@@ -365,8 +365,9 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "agibot-g2/map-12",
             "agibot-gdk",
             "map-build",
-            "codex-cli",
+            "openai-agents-sdk",
             "codex-router-responses",
+            evidence_lanes=(CAMERA_GROUNDED_LABELS_LANE,),
             camera_labeler=AGIBOT_CAMERA_LABELER,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
             gates=(
@@ -378,29 +379,10 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             ),
             required_overrides=("context_json",),
             default_overrides=(
-                "policy=codex_agibot_map_build_pilot",
+                "policy=openai_agents_agibot_map_build",
                 "visual_grounding_timeout_s=20",
             ),
             emergency_stop_required=True,
-        ),
-        *_lane_selections(
-            "b1-map12",
-            "isaaclab",
-            "open-ended",
-            "codex-cli",
-            "codex-router-responses",
-            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=(
-                *common_gates,
-                B1_ALIGNMENT_ARTIFACT_GATE,
-                B1_NAVIGATION_ARTIFACT_GATE,
-            ),
-            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
-            default_overrides=("seed=7",),
-            supports_operator_steer=True,
-            supports_paused_handoff_resume=True,
-            supports_relative_navigation_control=True,
         ),
         *_lane_selections(
             "b1-map12",
@@ -434,33 +416,6 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     world_id,
                     "mujoco",
                     "cleanup",
-                    "codex-cli",
-                    "codex-router-responses",
-                    gates=common_gates,
-                    default_overrides=("seed=7",),
-                    supports_operator_steer=True,
-                    supports_paused_handoff_resume=True,
-                    supports_relative_navigation_control=True,
-                )
-            )
-            rows.extend(
-                _lane_selections(
-                    world_id,
-                    "mujoco",
-                    "cleanup",
-                    "claude-code",
-                    "mimo-tp-anthropic",
-                    gates=common_gates,
-                    default_overrides=("seed=7",),
-                    supports_operator_steer=True,
-                    supports_relative_navigation_control=True,
-                )
-            )
-            rows.extend(
-                _lane_selections(
-                    world_id,
-                    "mujoco",
-                    "cleanup",
                     "openai-agents-sdk",
                     "codex-router-responses",
                     gates=common_gates,
@@ -475,26 +430,11 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 world_id,
                 "mujoco",
                 "map-build",
-                "codex-cli",
+                "openai-agents-sdk",
                 "codex-router-responses",
                 scenario_setup=ENVIRONMENT_SETUP_BASELINE,
                 gates=common_gates,
                 default_overrides=("seed=7",),
-            )
-        )
-        rows.extend(
-            _lane_selections(
-                world_id,
-                "mujoco",
-                "open-ended",
-                "codex-cli",
-                "codex-router-responses",
-                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-                gates=common_gates,
-                default_overrides=("seed=7",),
-                supports_operator_steer=True,
-                supports_paused_handoff_resume=True,
-                supports_relative_navigation_control=True,
             )
         )
         rows.extend(
@@ -509,20 +449,6 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
                 supports_paused_handoff_resume=True,
-                supports_relative_navigation_control=True,
-            )
-        )
-        rows.extend(
-            _lane_selections(
-                world_id,
-                "mujoco",
-                "open-ended",
-                "claude-code",
-                "mimo-tp-anthropic",
-                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-                gates=common_gates,
-                default_overrides=("seed=7",),
-                supports_operator_steer=True,
                 supports_relative_navigation_control=True,
             )
         )
@@ -548,23 +474,6 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "b1-map12",
             "isaaclab",
             "open-ended",
-            "codex-cli",
-            "codex-router-responses",
-            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            enabled=False,
-            unsupported_reason=(
-                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
-            ),
-            gates=_common_gates(),
-            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
-            default_overrides=("seed=7",),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "b1-map12",
-            "isaaclab",
-            "open-ended",
             "openai-agents-sdk",
             "codex-router-responses",
             evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
@@ -582,31 +491,15 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "agibot-g2/map-12",
             "agibot-gdk",
             "cleanup",
-            "codex-cli",
+            "openai-agents-sdk",
             "codex-router-responses",
             evidence_lane="camera-grounded-labels",
             enabled=False,
             unsupported_reason=(
-                "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
+                "Physical manipulation is not active. Use Agibot G2 Map Build for map evidence."
             ),
             supports_prompt=False,
             emergency_stop_required=True,
-        ),
-        *(
-            _selection(
-                world_id,
-                "mujoco",
-                "map-build",
-                "claude-code",
-                "mimo-tp-anthropic",
-                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-                enabled=False,
-                unsupported_reason=(
-                    "Map-build is currently proven for Codex CLI and direct runner only."
-                ),
-                default_overrides=("seed=7",),
-            )
-            for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS
         ),
     )
 
@@ -621,8 +514,6 @@ def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection
                 "under the current cleanup rules. Use Map Build or choose a cleanup-ready scene."
             )
             for agent_engine_id, provider_profile in (
-                ("codex-cli", "codex-router-responses"),
-                ("claude-code", "mimo-tp-anthropic"),
                 ("openai-agents-sdk", "codex-router-responses"),
             ):
                 rows.extend(
@@ -637,8 +528,7 @@ def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection
                         gates=_common_gates(),
                         default_overrides=("seed=7",),
                         supports_operator_steer=True,
-                        supports_paused_handoff_resume=agent_engine_id
-                        in {"codex-cli", "openai-agents-sdk"},
+                        supports_paused_handoff_resume=True,
                     )
                 )
     return tuple(rows)

@@ -594,9 +594,7 @@ class LiveOpenAIAgentsCleanupRunner:
         result = None
         attempts: list[dict[str, Any]] = []
         while True:
-            self._write_status(
-                "running-openai-agents-continuation" if attempt_index else "running-openai-agents"
-            )
+            self._write_status("running-sdk")
             self._raise_agent_sdk_budget_failure_if_any(
                 attempt_index=attempt_index,
                 stage="before",
@@ -815,7 +813,7 @@ class LiveOpenAIAgentsCleanupRunner:
         attempt_index = _next_sdk_resume_attempt_index(self.run_dir)
         prompt = _resume_prompt(self.initial_kickoff_prompt, request)
         self._write_status(
-            "running-openai-agents-resume",
+            "running-sdk",
             reason=OPERATOR_HANDOFF_REASON,
             resume_available=False,
             detail=str(request.get("message_id") or ""),

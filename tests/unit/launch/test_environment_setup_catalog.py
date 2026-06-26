@@ -44,7 +44,7 @@ def test_launch_backend_catalog_normalizes_command_layer_backend_values() -> Non
     assert (
         normalize_map_build_codex_implementation_backend(
             "agibot_gdk",
-            context="household-world.map-build codex-cli",
+            context="household-world.map-build openai-agents-sdk",
         )
         == "agibot_gdk"
     )
@@ -54,11 +54,12 @@ def test_launch_backend_catalog_normalizes_command_layer_backend_values() -> Non
 
     with pytest.raises(
         ValueError,
-        match="household-world.map-build codex-cli unsupported backend 'api_semantic_synthetic'",
+        match="household-world.map-build openai-agents-sdk unsupported backend "
+        "'api_semantic_synthetic'",
     ):
         normalize_map_build_codex_implementation_backend(
             "api_semantic_synthetic",
-            context="household-world.map-build codex-cli",
+            context="household-world.map-build openai-agents-sdk",
         )
 
 
@@ -78,7 +79,8 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
             "surface=household-world",
             "world=b1-map12",
             "backend=isaaclab",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
+            "provider_profile=codex-router-responses",
             "prompt=inspect the digital twin",
             "evidence_lane=world-public-labels",
         ]
@@ -104,7 +106,8 @@ def test_b1_launch_accepts_explicit_robot_consumption_proof_artifacts() -> None:
             "surface=household-world",
             "world=b1-map12",
             "backend=isaaclab",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
+            "provider_profile=codex-router-responses",
             "prompt=inspect the digital twin",
             "evidence_lane=world-public-labels",
             "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
@@ -133,7 +136,8 @@ def test_b1_launch_rejects_stale_semantic_projection_artifact_axis() -> None:
                 "surface=household-world",
                 "world=b1-map12",
                 "backend=isaaclab",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "prompt=inspect the digital twin",
                 "evidence_lane=world-public-labels",
                 "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
@@ -167,7 +171,7 @@ def test_cleanup_surface_exposes_setup_overrides_but_dispatches_private_count() 
             "world=molmospaces/val_0",
             "backend=mujoco",
             "intent=cleanup",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
             "seed=7",
@@ -197,7 +201,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "world=molmospaces/val_0",
             "backend=mujoco",
             "intent=map-build",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
         ]
@@ -208,7 +212,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "world=molmospaces/val_0",
             "backend=mujoco",
             "intent=open-ended",
-            "agent_engine=codex-cli",
+            "agent_engine=openai-agents-sdk",
             "provider_profile=codex-router-responses",
             "evidence_lane=world-public-labels",
             "prompt=帮我找遥控器",
@@ -249,7 +253,8 @@ def test_surface_rejects_old_public_generated_mess_count() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "evidence_lane=world-public-labels",
                 "generated_mess_count=3",
             ]
@@ -289,7 +294,8 @@ def test_launch_rejects_explicit_blank_optional_axes(axis: str, hint: str) -> No
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=cleanup",
-        "agent_engine=codex-cli",
+        "agent_engine=openai-agents-sdk",
+        "provider_profile=codex-router-responses",
         "evidence_lane=world-public-labels",
     ]
     args = [item for item in args if not item.startswith(f"{axis}=")]
@@ -303,11 +309,7 @@ def test_launch_rejects_explicit_blank_optional_axes(axis: str, hint: str) -> No
 
 @pytest.mark.parametrize(
     ("agent_engine", "provider_profile", "env_key"),
-    (
-        ("codex-cli", "mimo-mify-responses", "ROBOCLAWS_PROVIDER_PROFILE"),
-        ("claude-code", "mimo-mify-anthropic", "ROBOCLAWS_PROVIDER_PROFILE"),
-        ("openai-agents-sdk", "mimo-tp-openai-chat", "ROBOCLAWS_PROVIDER_PROFILE"),
-    ),
+    (("openai-agents-sdk", "mimo-tp-openai-chat", "ROBOCLAWS_PROVIDER_PROFILE"),),
 )
 def test_provider_profile_env_export_uses_agent_engine_catalog(
     agent_engine: str,
@@ -331,15 +333,14 @@ def test_provider_profile_env_export_uses_agent_engine_catalog(
     assert exported[env_key] == provider_profile
 
 
-@pytest.mark.parametrize("agent_engine", ["codex-cli", "openai-agents-sdk"])
-def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: str) -> None:
+def test_openai_agents_sdk_accepts_minimax_provider_profile() -> None:
     plan = resolve_surface_launch(
         [
             "surface=household-world",
             "world=molmospaces/val_0",
             "backend=mujoco",
             "intent=cleanup",
-            f"agent_engine={agent_engine}",
+            "agent_engine=openai-agents-sdk",
             "provider_profile=minimax-responses",
             "evidence_lane=world-public-labels",
         ]
@@ -357,15 +358,15 @@ def test_raw_fpv_rejects_routes_without_verified_image_transport() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
                 "provider_profile=minimax-responses",
                 "evidence_lane=camera-raw-fpv",
             ]
         )
 
 
-def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
-    with pytest.raises(LaunchError, match="provider_profile 'mimo-tp-openai-chat' is unsupported"):
+def test_retired_engines_are_rejected_before_provider_profile_validation() -> None:
+    with pytest.raises(LaunchError, match="unsupported agent_engine 'codex-cli'"):
         resolve_surface_launch(
             [
                 "surface=household-world",
@@ -374,6 +375,18 @@ def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
                 "intent=cleanup",
                 "agent_engine=codex-cli",
                 "provider_profile=mimo-tp-openai-chat",
+                "evidence_lane=world-public-labels",
+            ]
+        )
+    with pytest.raises(LaunchError, match="unsupported agent_engine 'claude-code'"):
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=claude-code",
+                "provider_profile=mimo-mify-anthropic",
                 "evidence_lane=world-public-labels",
             ]
         )
@@ -396,7 +409,8 @@ def test_surface_rejects_old_public_driver_and_environment_setup() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "environment_setup=baseline",
             ]
         )
@@ -410,7 +424,8 @@ def test_baseline_rejects_active_relocation_count() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "evidence_lane=world-public-labels",
                 "scenario_setup=baseline",
                 "relocation_count=3",
@@ -426,7 +441,8 @@ def test_invalid_relocation_count_is_rejected() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "evidence_lane=world-public-labels",
                 "scenario_setup=relocate-cleanup-related-objects",
                 "relocation_count=-1",
@@ -442,7 +458,8 @@ def test_loose_object_relocation_setup_is_not_publicly_supported() -> None:
                 "world=molmospaces/val_0",
                 "backend=mujoco",
                 "intent=cleanup",
-                "agent_engine=codex-cli",
+                "agent_engine=openai-agents-sdk",
+                "provider_profile=codex-router-responses",
                 "evidence_lane=world-public-labels",
                 "scenario_setup=relocate-loose-objects",
             ]

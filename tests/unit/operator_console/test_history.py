@@ -8,18 +8,19 @@ from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
 )
 
 
 def test_latest_run_payload_uses_history_index_and_nested_attempt_artifacts(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     run_id = (
         "20260609-102534-molmospaces-procthor-objaverse-val-0-mujoco-open-task-"
-        "codex-cli-world-public-labels"
+        "openai-agents-sdk-world-public-labels"
     )
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0609_1025" / "seed-7"

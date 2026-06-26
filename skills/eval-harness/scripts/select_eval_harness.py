@@ -182,7 +182,6 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
 
 EXPLICIT_AXIS_SIGNAL_OVERRIDES: tuple[tuple[str, str, str], ...] = (
     ("agent_engine", "openai-agents-sdk", "agent_sdk"),
-    ("agent_engine", "codex-cli", "cleanup_skill"),
     ("intent", "open-ended", "open_ended"),
     ("intent", "planner-proof", "planner_proof"),
     ("preset", "cleanup", "cleanup_skill"),

@@ -10,8 +10,8 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-AGIBOT_CODEX_MAP_BUILD = (
-    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+AGIBOT_SDK_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::openai-agents-sdk::camera-grounded-labels"
 )
 AGIBOT_GATES = {"localization_ready": True, "run_enabled": True, "estop_ready": True}
 
@@ -53,7 +53,7 @@ def test_agibot_readiness_requires_readable_context_json(tmp_path: Path) -> None
 def _agibot_readiness(tmp_path: Path, *, context_json: str | Path) -> dict[str, object]:
     return route_readiness(
         tmp_path,
-        get_selection(AGIBOT_CODEX_MAP_BUILD),
+        get_selection(AGIBOT_SDK_MAP_BUILD),
         overrides={"context_json": str(context_json), "port": _free_port()},
         gates=AGIBOT_GATES,
         env=CODEX_ENV,

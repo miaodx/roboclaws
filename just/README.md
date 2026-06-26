@@ -50,14 +50,12 @@ MolmoSpaces household routes do not accept `backend=isaaclab`.
 
 Agent engines:
 
-- `codex-cli`
-- `claude-code`
 - `openai-agents-sdk`
 - `direct-runner`
 
-Provider profiles are selected only for agent engines that need a model/key
-route. Examples include `codex-router-responses`, `mimo-mify-responses`,
-`kimi-openai-chat`, `mimo-tp-anthropic`, and `mimo-mify-anthropic`.
+Provider profiles are selected only for the SDK live engine. Examples include
+`codex-router-responses`, `mimo-mify-responses`, `minimax-responses`, and
+`kimi-openai-chat`.
 `direct-runner` is a deterministic contract/eval baseline and does not accept
 `provider_profile`; it is not a live robot agent runtime.
 
@@ -110,77 +108,45 @@ keeping cleanup evaluation.
 
 ## Live Agent Launch Behavior
 
-`just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels` launches a detached tmux session.
-The session owns the cleanup MCP server, the `codex exec` process, raw Codex
-logs, the MCP trace, and the final checker. The invoking terminal returns after
-printing the tmux session name and artifact directory, so monitor sessions do
-not spend their own context window on the live agent transcript.
+`agent_engine=openai-agents-sdk` is the only active live-agent product engine.
+It owns the cleanup/map-build MCP server process, SDK model calls, MCP trace,
+model-call metrics, `run_result.json`, and the final checker. The route runs in
+the foreground through the SDK runner and records probeable `live_status.json`
+under the run directory.
 
-Use the printed probe command, or let it find the latest Codex cleanup run:
+Use the probe command to summarize an SDK live run:
 
 ```bash
 just molmo::status
-just molmo::status output/molmo/codex-report/<stamp>/seed-7
-tmux attach -t <session>
-tail -f output/molmo/codex-report/<stamp>/seed-7/driver.log
+just molmo::status output/household/household-world/open-ended/openai-agents-live-world-public-labels/seed-7
 ```
 
-The probe summarizes tmux liveness, elapsed time, MCP tool progress,
-`run_result.json` / `report.html` readiness, and the latest Codex message when
-available. Only one detached Molmo/Codex cleanup run is allowed at a time
-because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a run is
-active or the requested MCP port is already accepting connections, the launcher
-fails instead of choosing another port.
+The probe summarizes elapsed time, MCP tool progress, and
+`run_result.json` / `report.html` readiness when those artifacts exist. Each
+visual run owns its requested MCP port and backend slot; if the port is already
+accepting connections, the launcher fails instead of choosing another port.
 
-Repo-local `.env` keys route live Codex and Claude launchers without editing
-user-level CLI config. Normal users configure keys only; command shape controls
-behavior.
+Repo-local `.env` keys route live SDK runs without editing user-level CLI
+config. Normal users configure keys only; command shape controls behavior.
 
 ```bash
 cp .env.example .env
-# Fill CODEX_BASE_URL and CODEX_API_KEY for the default Codex router Responses route.
-# Fill MIMO_TP_KEY or XM_LLM_API_KEY for Claude Code routes.
-# Optional: set ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses explicitly to use XM_LLM_API_KEY for Codex.
-# Optional: set ROBOCLAWS_PROVIDER_PROFILE=minimax-responses explicitly to use MM_API_KEY for Codex.
-# Optional: fill MIMO_BASE_URL and MIMO_API_KEY for MiMo inside benchmark/SDK probes.
+# Fill CODEX_BASE_URL and CODEX_API_KEY for the default codex-router-responses SDK route.
+# Optional: set ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses with XM_LLM_API_KEY.
+# Optional: set ROBOCLAWS_PROVIDER_PROFILE=minimax-responses with MM_API_KEY.
 ```
 
-Detached live Codex sessions inherit selected API keys and proxy variables
-exported in the invoking shell at launch time. They also source repo-local
-`.env` inside the runner, so either route works for local-only credentials.
-
-Run `just code::codex-provider-smoke` locally before long Codex visual runs to
-verify the `.env`-configured Responses-compatible endpoint works with the pinned
-Docker-backed Codex CLI. Provider/model facts are centralized in
+Provider/model facts are centralized in
 `roboclaws/agents/provider_registry.py`, with current live verdicts in
 `docs/human/model-route-verdicts.yaml` and narrative notes in
-`docs/human/model-matrix.md`. Hosted CI does not run Codex or Codex provider
-smoke.
+`docs/human/model-matrix.md`.
 
-Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
+`codex-cli` and `claude-code` are retired active engines. Current
+`run::surface`, `agent::run`, eval-harness, and operator-console routes reject
+them instead of launching Docker wrappers or hidden fallbacks. The pinned
+Docker coding-agent toolchain may remain under private `code::*` helpers for
+explicit manual debugging, but it is not a current product launch path.
 
-```bash
-just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-tp-anthropic preset=cleanup evidence_lane=world-public-labels
-```
-
-The image is defined by `Dockerfile.coding-agents` and pins
-`@openai/codex@0.130.0` plus `@anthropic-ai/claude-code@2.1.143` by default.
-Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
-agent CLIs. `just code::docker-install-wrappers` still exists for CI setup and
-manual debugging where a `codex` or `claude` command path is required.
-
-Codex runs use repo-local `.env` credentials in the pinned container. Host
-`~/.codex` auth/config is not copied into repo workflows:
-
-```bash
-just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-router-responses preset=cleanup evidence_lane=world-public-labels
-```
-
-Docker-backed coding-agent tasks use an isolated generated workspace owned by
-the recipe. The agent container sees `/workspace/task` plus only the mounted
-task skill directories under `/workspace/skills/<name>`. Repo-root
-`AGENTS.md`, `CLAUDE.md`, `.git`, and implementation files are not mounted; the
-MCP implementation stays on the host and is reached over HTTP.
 Current task mappings:
 
 - `surface=household-world preset=map-build`: `household-open-task` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for public `backend=agibot-gdk`, lowered internally to implementation backend `agibot_gdk`
@@ -192,27 +158,19 @@ Python owns route metadata and reusable launch pieces:
 
 - Public task specs live in domain packages such as `roboclaws.household.tasks`,
   then register through `roboclaws.launch.catalog`.
-- Coding-agent driver helpers and kickoff prompts live under
-  `roboclaws.agents`.
+- Live-agent driver helpers and kickoff prompts live under `roboclaws.agents`.
 - MCP server startup goes through `python -m roboclaws.cli.agent_server`, with
   launch-shaped household targets selecting the household server variants.
 - Direct deterministic household cleanup runs through
   `python -m roboclaws.household.realworld_cleanup`; the example script is a
   thin wrapper for manual use.
 
-For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
-bundled/system Codex skills are not available. Recipe-owned prompts should state
-that the bundled task skill instructions are already available in the generated
-workspace and should include the operative task constraints directly; avoid
-prompting Codex to call `read_mcp_resource`, `resources/read`, or invented MCP
-namespaces such as `mcp__<server>__`.
-
 ## Examples
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels runtime_map_prior=output/map/runtime_metric_map.json
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
@@ -259,9 +217,9 @@ Prompt mappings for agents:
 |---|---|
 | "run the map-build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
 | "run the map-build contract baseline" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
-| "run the map-build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
-| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels` |
-| "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"` |
+| "run the map-build task with the SDK" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the household cleanup task with the SDK" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=world-public-labels` |
+| "run an open-ended household goal with the SDK" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"` |
 | "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |
 | "run the planner proof dry run" | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` |
 

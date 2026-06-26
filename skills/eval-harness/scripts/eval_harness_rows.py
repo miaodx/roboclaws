@@ -16,7 +16,6 @@ def candidate_rows(
     *, output_dir: Path, explicit_axes: dict[str, list[str]]
 ) -> list[dict[str, Any]]:
     provider_profiles = explicit_axes.get("provider_profile") or [DEFAULT_PROVIDER_PROFILE]
-    codex_provider = provider_profiles[0]
     agent_sdk_provider = next(
         (profile for profile in provider_profiles if profile != DEFAULT_PROVIDER_PROFILE),
         DEFAULT_AGENT_SDK_PROVIDER_PROFILE,
@@ -270,85 +269,6 @@ def candidate_rows(
             row_dir=row_dir,
         ),
         _row(
-            row_id="codex-open-task-live-eval",
-            row_kind="live_agent_eval",
-            command=_eval_suite_command(
-                suite="open_ended_goals",
-                budget="smoke",
-                output_root=eval_output_root,
-                stamp="codex-open-task-live-eval",
-                agent_engine="codex-cli",
-                provider_profile=codex_provider,
-                live_execution="run",
-            ),
-            axes={
-                "agent_engine": "codex-cli",
-                "provider_profile": codex_provider,
-                "intent": "open-ended",
-                "preset": "",
-                "evidence_lane": "world-public-labels",
-                "backend": DEFAULT_BACKEND,
-                "world": DEFAULT_WORLD,
-            },
-            reason="Open-task launch changes need a representative live Codex eval row.",
-            rule_ids=("open_ended",),
-            requirements=("just", "python_env", "docker", "codex_provider"),
-            expense="live-agent",
-            row_dir=row_dir,
-        ),
-        _row(
-            row_id="codex-cleanup-live-eval",
-            row_kind="live_agent_eval",
-            command=_eval_suite_command(
-                suite="cleanup_capability",
-                budget="smoke",
-                output_root=eval_output_root,
-                stamp="codex-cleanup-live-eval",
-                agent_engine="codex-cli",
-                provider_profile=codex_provider,
-                live_execution="run",
-            ),
-            axes={
-                "agent_engine": "codex-cli",
-                "provider_profile": codex_provider,
-                "intent": "cleanup",
-                "preset": "cleanup",
-                "evidence_lane": "world-public-labels",
-                "backend": DEFAULT_BACKEND,
-                "world": DEFAULT_WORLD,
-            },
-            reason="Cleanup skill or MCP changes need a representative live Codex eval row.",
-            rule_ids=("cleanup_skill", "mcp_checker"),
-            requirements=("just", "python_env", "docker", "codex_provider"),
-            expense="live-agent",
-            row_dir=row_dir,
-        ),
-        _row(
-            row_id="codex-cleanup-camera-raw-fpv-live-product",
-            row_kind="live_agent_eval",
-            command=_cleanup_command(
-                row_dir=row_dir,
-                row_id="codex-cleanup-camera-raw-fpv-live-product",
-                agent_engine="codex-cli",
-                provider_profile=codex_provider,
-                evidence_lane="camera-raw-fpv",
-            ),
-            axes={
-                "agent_engine": "codex-cli",
-                "provider_profile": codex_provider,
-                "intent": "cleanup",
-                "preset": "cleanup",
-                "evidence_lane": "camera-raw-fpv",
-                "backend": DEFAULT_BACKEND,
-                "world": DEFAULT_WORLD,
-            },
-            reason="RAW-FPV changes need a live or direct RAW-FPV cleanup gate.",
-            rule_ids=("raw_fpv",),
-            requirements=("just", "python_env", "docker", "codex_provider"),
-            expense="live-agent",
-            row_dir=row_dir,
-        ),
-        _row(
             row_id="openai-agents-sdk-open-task-live-eval",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
@@ -370,10 +290,65 @@ def candidate_rows(
                 "world": DEFAULT_WORLD,
             },
             reason=(
-                "Agent SDK runner or prompt changes need a representative live-agent "
+                "Agent SDK or open-task launch changes need a representative live-agent "
                 "capability eval row."
             ),
             rule_ids=("agent_sdk", "open_ended"),
+            requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
+            expense="live-agent",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="openai-agents-sdk-cleanup-live-eval",
+            row_kind="live_agent_eval",
+            command=_eval_suite_command(
+                suite="cleanup_capability",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="openai-agents-sdk-cleanup-live-eval",
+                agent_engine="openai-agents-sdk",
+                provider_profile=agent_sdk_provider,
+                live_execution="run",
+            ),
+            axes={
+                "agent_engine": "openai-agents-sdk",
+                "provider_profile": agent_sdk_provider,
+                "intent": "cleanup",
+                "preset": "cleanup",
+                "evidence_lane": "world-public-labels",
+                "backend": DEFAULT_BACKEND,
+                "world": DEFAULT_WORLD,
+            },
+            reason=(
+                "Cleanup skill or MCP changes need a representative SDK live-agent "
+                "cleanup capability eval row."
+            ),
+            rule_ids=("cleanup_skill", "mcp_checker"),
+            requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
+            expense="live-agent",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="openai-agents-sdk-cleanup-camera-raw-fpv-live-product",
+            row_kind="live_agent_eval",
+            command=_cleanup_command(
+                row_dir=row_dir,
+                row_id="openai-agents-sdk-cleanup-camera-raw-fpv-live-product",
+                agent_engine="openai-agents-sdk",
+                provider_profile=agent_sdk_provider,
+                evidence_lane="camera-raw-fpv",
+            ),
+            axes={
+                "agent_engine": "openai-agents-sdk",
+                "provider_profile": agent_sdk_provider,
+                "intent": "cleanup",
+                "preset": "cleanup",
+                "evidence_lane": "camera-raw-fpv",
+                "backend": DEFAULT_BACKEND,
+                "world": DEFAULT_WORLD,
+            },
+            reason="RAW-FPV changes need a live or direct SDK RAW-FPV cleanup gate.",
+            rule_ids=("raw_fpv",),
             requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
             expense="live-agent",
             row_dir=row_dir,

@@ -49,8 +49,8 @@ def household_surface_args(
 
 def _agent_engine_id(agent_engine: str) -> str:
     engine_map = {
-        "codex": "codex-cli",
-        "claude": "claude-code",
+        "codex": "openai-agents-sdk",
+        "claude": "openai-agents-sdk",
         "openai-agents-live": "openai-agents-sdk",
         "direct": "direct-runner",
         "mcp-smoke": "direct-runner",

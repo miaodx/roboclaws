@@ -862,9 +862,9 @@ def _task_blocks_route(
             return True
         if (
             kind == "tmux_session"
-            and _route_uses_codex_molmo_singleton(route)
+            and _route_uses_sdk_molmo_singleton(route)
             and str(resource.get("session_id") or resource.get("label") or "").startswith(
-                "roboclaws-molmo-codex-"
+                "roboclaws-molmo-openai-agents-sdk-"
             )
         ):
             return True
@@ -875,12 +875,12 @@ def _route_uses_molmo_live_visual(route: ConsoleLaunchSelection) -> bool:
     return (
         route.world_id.startswith("molmospaces/")
         and route.backend_id == "mujoco"
-        and route.agent_engine_id in {"codex-cli", "claude-code", "openai-agents-sdk"}
+        and route.agent_engine_id == "openai-agents-sdk"
     )
 
 
-def _route_uses_codex_molmo_singleton(route: ConsoleLaunchSelection) -> bool:
-    return _route_uses_molmo_live_visual(route) and route.agent_engine_id == "codex-cli"
+def _route_uses_sdk_molmo_singleton(route: ConsoleLaunchSelection) -> bool:
+    return False
 
 
 def _resource_phrase(resources: list[dict[str, Any]]) -> str:

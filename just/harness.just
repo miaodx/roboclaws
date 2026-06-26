@@ -1,7 +1,6 @@
 # Household and planner proof harness dispatchers.
 #
 # Preferred entrypoints:
-# - just harness::molmo-cleanup-codex-perf  live Codex cleanup performance lane
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
@@ -22,56 +21,6 @@ timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"
 
 default:
     @just --list harness
-
-# Live Codex cleanup timing lane. This is the local Docker-backed Codex route
-# with the normal world-public evidence lane and per-tool robot-view timeline capture
-# disabled explicitly.
-molmo-cleanup-codex-perf *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    args=("$@")
-    seed="7"
-    output_dir="output/molmo/codex-perf-harness"
-    task="帮我收拾这个房间"
-    generated_mess_count="10"
-    host="127.0.0.1"
-    port="18788"
-    map_bundle="auto"
-    robot_views="off"
-    for arg in "${args[@]}"; do
-      if [[ "$arg" != *=* ]]; then
-        echo "error: override '$arg' is not key=value" >&2
-        exit 1
-      fi
-      key="${arg%%=*}"
-      value="${arg#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle|robot_views)
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      if [[ "$key" == "prompt" ]]; then
-        key="task"
-      fi
-      printf -v "$key" '%s' "$value"
-    done
-    cmd=(just molmo::household-world-impl codex-live world-public-labels \
-      "$seed" "$output_dir" "$task" "$generated_mess_count" "$host" "$port" \
-      "$map_bundle" "skill" "$robot_views")
-    if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
-      printf 'just'
-      for arg in "${cmd[@]:1}"; do
-        printf '\t%s' "$arg"
-      done
-      printf '\n'
-      exit 0
-    fi
-    exec "${cmd[@]}"
 
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited

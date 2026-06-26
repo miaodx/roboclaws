@@ -21,8 +21,9 @@ from roboclaws.operator_console.interactions import (
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_OPEN_TASK = (
-    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
 )
 
 
@@ -30,8 +31,8 @@ def _write_run(
     root: Path,
     *,
     run_id: str = "run-a",
-    selection_id: str = MUJOCO_CODEX_OPEN_TASK,
-    phase: str = "running-codex",
+    selection_id: str = MUJOCO_OPENAI_AGENTS_OPEN_TASK,
+    phase: str = "running-sdk",
     run_result: dict[str, object] | None = None,
 ) -> Path:
     route = get_selection(selection_id)
@@ -79,7 +80,7 @@ def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None
 
 
 def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Path) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
 
     with pytest.raises(InteractionError, match="Use Steer"):
         append_next_goal_request(tmp_path, "run-a", "Now build the Runtime Metric Map")
@@ -93,7 +94,7 @@ def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Pat
 def test_steer_rejects_malformed_operator_state_source_without_writing_message(
     tmp_path: Path,
 ) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     state_path = run_dir / "operator_state.json"
     state_path.write_text("{not-json", encoding="utf-8")
 
@@ -124,7 +125,7 @@ def test_list_messages_preserves_passive_bad_operator_state_summary(
     tmp_path: Path,
     source: str,
 ) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     state_path = run_dir / "operator_state.json"
     state_path.write_text(source, encoding="utf-8")
 
@@ -154,7 +155,7 @@ def test_get_operator_session_rejects_malformed_session_source(tmp_path: Path) -
 def test_steer_rejects_non_object_session_source_without_writing_message(
     tmp_path: Path,
 ) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     state = json.loads((run_dir / "operator_state.json").read_text(encoding="utf-8"))
     session_id = state["operator_session_id"]
     session_path = console_output_root(tmp_path) / "sessions" / f"{session_id}.json"
@@ -188,7 +189,7 @@ def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path
     assert request["auto_start_allowed"] is True
     assert request["queue_reason"] == "parent_terminal_and_result_available"
     assert request["operator_session_id"].startswith("session-")
-    assert request["selection_id"] == MUJOCO_CODEX_OPEN_TASK
+    assert request["selection_id"] == MUJOCO_OPENAI_AGENTS_OPEN_TASK
     assert request["next_goal_packet"]["instruction"].startswith(
         "This is a linked follow-up Robot Run"
     )
@@ -215,7 +216,7 @@ def test_failed_parent_next_goal_requires_confirmation(tmp_path: Path) -> None:
 
 
 def test_active_steer_is_seen_only_by_check_operator_messages(tmp_path: Path) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
 
     steer = append_steer_message(tmp_path, "run-a", "Observe the desk again")
     before = list_operator_messages(tmp_path, "run-a")
@@ -264,8 +265,7 @@ def test_paused_handoff_resume_fails_loudly_for_unsupported_route(tmp_path: Path
     run_dir = _write_run(
         tmp_path,
         selection_id=(
-            "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::"
-            "world-public-labels"
+            "agibot-g2/map-12::agibot-gdk::map-build::openai-agents-sdk::camera-grounded-labels"
         ),
         phase="paused",
     )
@@ -280,7 +280,7 @@ def test_paused_handoff_resume_fails_loudly_for_unsupported_route(tmp_path: Path
 
 
 def test_operator_message_state_surfaces_malformed_source_errors(tmp_path: Path) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     (run_dir / "operator_messages.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
 
     messages = list_operator_messages(tmp_path, "run-a")
@@ -303,7 +303,7 @@ def test_operator_message_state_surfaces_malformed_source_errors(tmp_path: Path)
 
 
 def test_operator_message_state_surfaces_non_object_source_errors(tmp_path: Path) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     (run_dir / "operator_messages.jsonl").write_text("[]\n", encoding="utf-8")
 
     messages = list_operator_messages(tmp_path, "run-a")
@@ -318,7 +318,7 @@ def test_operator_message_state_surfaces_non_object_source_errors(tmp_path: Path
 
 
 def test_operator_messages_keep_valid_rows_with_source_errors(tmp_path: Path) -> None:
-    run_dir = _write_run(tmp_path, phase="running-codex")
+    run_dir = _write_run(tmp_path, phase="running-sdk")
     (run_dir / "operator_messages.jsonl").write_text(
         json.dumps(
             {
