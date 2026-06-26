@@ -180,25 +180,25 @@ just agent::eval execute since=origin/main budget=focused
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 ```
 
-For product-like `camera_labeler=grounding-dino` runs, start a real sidecar from
-the dedicated visual-grounding environment. This is the route to use before
-claiming cleanup or map-build behavior from GroundingDINO evidence:
+Product-like `camera_labeler=grounding-dino` runs auto-start the local real
+sidecar from the dedicated visual-grounding environment when the default
+`VISUAL_GROUNDING_BASE_URL` is not already reachable. The sidecar defaults to
+DINO base recall (`IDEA-Research/grounding-dino-base`,
+`box_threshold=0.25`, `text_threshold=0.20`).
+
+You can also start it manually:
 
 ```bash
-VISUAL_GROUNDING_DEVICE=auto \
-VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
-VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
-VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
-  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline real-router --adapter-mode real
+.venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline real-router --adapter-mode real
 ```
 
 The `camera-grounded-labels` product route runs a fail-fast sidecar readiness
-check before starting the simulator or agent. A default `--pipeline
+check before starting the simulator or agent. A running `--pipeline
 grounding-dino` service without real adapters is treated as contract-only
-evidence and blocks product runs instead of producing an ambiguous cleanup
-failure. Each run writes `visual_grounding_readiness.json` into its artifact
+evidence and still blocks product runs instead of producing an ambiguous cleanup
+failure. Set `ROBOCLAWS_AUTOSTART_VISUAL_GROUNDING_SIDECAR=0` to disable local
+auto-start. Each run writes `visual_grounding_readiness.json` into its artifact
 directory so a report can prove whether it used a real adapter.
 
 To exercise only the HTTP contract without real model dependencies, start the

@@ -28,6 +28,7 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
     RealWorldCleanupContract,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noqa: E402
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
 from roboclaws.maps.bundle import (  # noqa: E402
@@ -160,6 +161,10 @@ def render_molmospaces_preview(
 ) -> dict[str, Any]:
     scene_ref = _molmospaces_scene_ref(world_id)
     scene_index = scene_ref.scene_index
+    map_bundle_dir = molmospaces_nav2_map_bundle_path(
+        scene_source=scene_ref.scene_source,
+        scene_index=scene_index,
+    )
     slug = _world_slug(world_id)
     fpv_path = output_dir / f"{slug}-fpv.png"
     map_path = output_dir / f"{slug}-map.png"
@@ -199,6 +204,7 @@ def render_molmospaces_preview(
         contract = RealWorldCleanupContract(
             CleanupBackendSession(backend.scenario, backend=backend),
             perception_mode=RAW_FPV_ONLY_MODE,
+            map_bundle_dir=map_bundle_dir,
         )
         metric_map = contract.metric_map()
         waypoint = _first_public_waypoint(metric_map)
@@ -302,6 +308,7 @@ def render_molmospaces_preview(
             seed=seed,
             width=width,
             height=height,
+            map_bundle_dir=map_bundle_dir,
             waypoint=waypoint,
             navigation=navigation,
             robot_views=views,
@@ -1031,6 +1038,7 @@ def _preview_metadata(
     seed: int,
     width: int,
     height: int,
+    map_bundle_dir: Path | None = None,
     waypoint: dict[str, Any],
     navigation: dict[str, Any],
     robot_views: dict[str, Any],
@@ -1062,6 +1070,7 @@ def _preview_metadata(
         "renderer": "molmospaces_subprocess_mujoco",
         "scene_source": scene_source,
         "scene_index": scene_index,
+        "map_bundle_dir": str(map_bundle_dir) if map_bundle_dir is not None else "",
         "seed": seed,
         "render_resolution": {"width": width, "height": height},
         "views": {

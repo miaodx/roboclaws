@@ -157,6 +157,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         skill_name="molmo-realworld-cleanup"
       fi
     fi
+    managed_visual_grounding_pid=""
+    managed_visual_grounding_stdout=""
+    managed_visual_grounding_stderr=""
     open_ended_intent="false"
     if [[ "$task_intent" == "open-ended" ]]; then
       open_ended_intent="true"
@@ -517,6 +520,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       if [[ "$profile" != "camera-grounded-labels" || "$visual_grounding" == "sim" ]]; then
         return 0
       fi
+      ensure_visual_grounding_sidecar_for_run "$readiness_run_dir"
+    }
+    run_visual_grounding_readiness_for_run() {
+      local readiness_run_dir="$1"
       local -a readiness_args=(
         --pipeline "$visual_grounding"
         --require-real-adapter
@@ -527,6 +534,109 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       fi
       .venv/bin/python scripts/visual_grounding/check_visual_grounding_readiness.py \
         "${readiness_args[@]}"
+    }
+    visual_grounding_readiness_reason() {
+      local readiness_path="$1"
+      if [[ ! -f "$readiness_path" ]]; then
+        return 1
+      fi
+      .venv/bin/python -c 'import json, sys; from pathlib import Path; payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")); print(str(payload.get("reason") or ""))' "$readiness_path"
+    }
+    visual_grounding_autostart_enabled() {
+      local value="${ROBOCLAWS_AUTOSTART_VISUAL_GROUNDING_SIDECAR:-1}"
+      case "${value,,}" in
+        0|false|no|off)
+          return 1
+          ;;
+      esac
+      return 0
+    }
+    visual_grounding_base_url() {
+      printf '%s\n' "${VISUAL_GROUNDING_BASE_URL:-http://127.0.0.1:18880}"
+    }
+    visual_grounding_local_endpoint() {
+      .venv/bin/python -c 'import os, sys; from urllib.parse import urlparse; parsed = urlparse(os.environ.get("VISUAL_GROUNDING_BASE_URL", "http://127.0.0.1:18880")); host = parsed.hostname or "127.0.0.1"; port = parsed.port or (443 if parsed.scheme == "https" else 80); sys.exit(1) if parsed.scheme not in {"", "http"} or host not in {"127.0.0.1", "localhost", "::1"} else None; print(f"{host}\t{port}")'
+    }
+    start_managed_visual_grounding_sidecar() {
+      local readiness_run_dir="$1"
+      if [[ -n "$managed_visual_grounding_pid" ]]; then
+        return 0
+      fi
+      local endpoint
+      if ! endpoint="$(visual_grounding_local_endpoint)"; then
+        return 1
+      fi
+      local sidecar_host="${endpoint%%$'\t'*}"
+      local sidecar_port="${endpoint##*$'\t'}"
+      local sidecar_python=".venv-visual-grounding/bin/python"
+      if [[ ! -x "$sidecar_python" ]]; then
+        sidecar_python=".venv/bin/python"
+      fi
+      if [[ ! -x "$sidecar_python" ]]; then
+        return 1
+      fi
+      local sidecar_dir="${readiness_run_dir}/visual_grounding_sidecar"
+      mkdir -p "$sidecar_dir"
+      managed_visual_grounding_stdout="${sidecar_dir}/stdout.log"
+      managed_visual_grounding_stderr="${sidecar_dir}/stderr.log"
+      echo "==> starting managed visual grounding sidecar: $(visual_grounding_base_url) pipeline=real-router adapter_mode=real"
+      "$sidecar_python" scripts/visual_grounding/serve_visual_grounding_service.py \
+        --host "$sidecar_host" \
+        --port "$sidecar_port" \
+        --pipeline real-router \
+        --adapter-mode real \
+        >"$managed_visual_grounding_stdout" \
+        2>"$managed_visual_grounding_stderr" &
+      managed_visual_grounding_pid="$!"
+      for _ in {1..75}; do
+        if ! kill -0 "$managed_visual_grounding_pid" >/dev/null 2>&1; then
+          wait "$managed_visual_grounding_pid" >/dev/null 2>&1 || true
+          managed_visual_grounding_pid=""
+          return 1
+        fi
+        if (echo > /dev/tcp/"$sidecar_host"/"$sidecar_port") >/dev/null 2>&1; then
+          return 0
+        fi
+        sleep 0.2
+      done
+      return 1
+    }
+    stop_managed_visual_grounding_sidecar() {
+      set +e
+      if [[ -n "$managed_visual_grounding_pid" ]]; then
+        if kill -0 "$managed_visual_grounding_pid" >/dev/null 2>&1; then
+          kill "$managed_visual_grounding_pid" >/dev/null 2>&1 || true
+          wait "$managed_visual_grounding_pid" >/dev/null 2>&1 || true
+        fi
+        managed_visual_grounding_pid=""
+      fi
+    }
+    trap stop_managed_visual_grounding_sidecar EXIT
+    ensure_visual_grounding_sidecar_for_run() {
+      local readiness_run_dir="$1"
+      local readiness_path="${readiness_run_dir}/visual_grounding_readiness.json"
+      local readiness_probe_stderr="${readiness_run_dir}/visual_grounding_readiness_probe.stderr.log"
+      if run_visual_grounding_readiness_for_run "$readiness_run_dir" 2>"$readiness_probe_stderr"; then
+        return 0
+      fi
+      local reason
+      reason="$(visual_grounding_readiness_reason "$readiness_path" || true)"
+      if [[ "$reason" != "connection_error" ]]; then
+        cat "$readiness_probe_stderr" >&2 || true
+        return 1
+      fi
+      if ! visual_grounding_autostart_enabled; then
+        cat "$readiness_probe_stderr" >&2 || true
+        return 1
+      fi
+      if ! start_managed_visual_grounding_sidecar "$readiness_run_dir"; then
+        echo "error: failed to auto-start visual grounding sidecar at $(visual_grounding_base_url)" >&2
+        if [[ -n "$managed_visual_grounding_stderr" ]]; then
+          echo "sidecar stderr: $managed_visual_grounding_stderr" >&2
+        fi
+        return 1
+      fi
+      run_visual_grounding_readiness_for_run "$readiness_run_dir"
     }
     interactive_visual_cap="${ROBOCLAWS_MOLMO_INTERACTIVE_VISUAL_BACKEND_CAP:-1}"
     if [[ "${ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS:-0}" == "1" ]]; then
@@ -753,7 +863,12 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           done
 
           echo "==> OpenAI Agents SDK provider for this run: ${openai_agents_profile_summary}"
-          exec "${runner_args[@]}"
+          set +e
+          "${runner_args[@]}"
+          exit_code="$?"
+          set -e
+          stop_managed_visual_grounding_sidecar
+          exit "$exit_code"
         fi
 
         visual_slot_path=""
@@ -785,6 +900,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
               --run-id "$slot_run_id" \
               --pid "$$" >/dev/null 2>&1 || true
           fi
+          stop_managed_visual_grounding_sidecar
         }
         trap cleanup_server EXIT INT TERM
         wait_for_mcp_ready() {

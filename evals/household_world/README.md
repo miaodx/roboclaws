@@ -24,6 +24,27 @@ Run the map-build consumer suite with:
 just agent::eval suite=map_build_consumer budget=smoke
 ```
 
+Run the source-aware scene sampler stress suite with:
+
+```bash
+just agent::eval suite=scene_sampler_stress budget=smoke
+```
+
+Scene-sampler fixtures are generated from the MolmoSpaces scene catalog, not
+hand-maintained one file at a time. After changing scene candidate indices,
+committed Base Metric Map bundles, room-label manifests, or operator-console
+preview assets, check the required sync surface with:
+
+```bash
+.venv/bin/python scripts/operator_console/check_scene_catalog_sync.py
+```
+
+That guard covers `scene_sampler_stress.json`,
+`samples/scene_sampler/*.json`, and the MolmoSpaces operator-console previews.
+The cleanup, map-build consumer, and open-ended suites are separate capability
+samples; they do not need to refresh just because the scene sampler admits a
+new scene unless their own world, prompt, grader, or scenario contract changes.
+
 Run repeated cleanup trials for `pass@k` and `pass^k` metrics with:
 
 ```bash

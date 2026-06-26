@@ -2423,6 +2423,19 @@ def test_molmo_just_openai_agents_forwards_camera_grounded_history_compaction() 
     assert "--camera-grounded-history-retain" in text
 
 
+def test_molmo_camera_grounded_product_runs_autostart_real_sidecar() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "ROBOCLAWS_AUTOSTART_VISUAL_GROUNDING_SIDECAR" in text
+    assert "ensure_visual_grounding_sidecar_for_run" in text
+    assert '[[ "$reason" != "connection_error" ]]' in text
+    assert "--pipeline real-router" in text
+    assert "--adapter-mode real" in text
+    assert ".venv-visual-grounding/bin/python" in text
+    assert "stop_managed_visual_grounding_sidecar" in text
+    assert 'exec "${runner_args[@]}"' not in text
+
+
 def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",

@@ -262,6 +262,51 @@ def test_cleanup_report_hides_failure_reason_on_success(tmp_path: Path) -> None:
     assert "successful completion note" not in html
 
 
+def test_open_ended_report_ignores_advisory_cleanup_failure(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "task_intent": "open-ended",
+        "goal_contract": {"intent": "open-ended"},
+        "cleanup_status_role": "advisory",
+        "intent_status": "success",
+        "goal_status": "success",
+        "final_status": "success",
+        "cleanup_status": "failed",
+        "completion_status": "failed",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": {**score.to_dict(), "status": "success"},
+        "terminate_reason": "open-ended task completed",
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "MolmoSpaces Open-ended Pilot" in html
+    assert "Open-ended artifact" in html
+    assert "Failure Reason" not in html
+    assert "<span>Status</span><strong>Success</strong>" in html
+
+
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     locations = {

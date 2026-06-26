@@ -11,6 +11,7 @@ from roboclaws.launch.worlds import (
 )
 
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _assert_contains_all(body: str, snippets: tuple[str, ...]) -> None:
@@ -151,6 +152,8 @@ ROUTE_FIELD_APP_REQUIRED = (
     "enabledLaunchCount > 0",
     "isMolmospacesWorld",
     "return leftMolmo ? 1 : -1",
+    "preferredPreviewCombination(state.combinations)",
+    "routeHasPreviewAssets",
     "payload.runtime",
     "/api/runtime/tasks",
     "/api/prompt-preview",
@@ -165,7 +168,7 @@ ROUTE_FIELD_APP_REQUIRED = (
     "TASK RUNNING",
     "data-open-background-tasks",
     "backgroundTaskViewAvailable",
-    "els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== \"tasks\";",
+    'els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== "tasks";',
     "copyVisualPath",
     "copy_command",
     "api_post",
@@ -194,6 +197,19 @@ def test_static_app_references_existing_dom_ids() -> None:
     referenced_ids = set(re.findall(r'getElementById\("([^"`$]+)"\)', app))
 
     assert referenced_ids - declared_ids == set()
+
+
+def test_static_app_references_existing_els_keys() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+    els_match = re.search(r"const els = \{(?P<body>.*?)\n\};", app, re.DOTALL)
+    assert els_match is not None
+    declared_keys = set(
+        re.findall(r"^\s*([A-Za-z][A-Za-z0-9]*):", els_match.group("body"), re.MULTILINE)
+    )
+    referenced_keys = set(re.findall(r"\bels\.([A-Za-z][A-Za-z0-9]*)\b", app))
+
+    assert referenced_keys - declared_keys == set()
 
 
 def test_static_app_has_route_specific_field_groups() -> None:
@@ -243,7 +259,7 @@ def _assert_scene_preview_app_wiring(app: str) -> None:
     assert '"runtime_map",' in app
     assert 'data-view-role="${escapeHtml(visualRole)}"' in app
     assert 'data-artifact-source-family="${escapeHtml(sourceFamily)}"' in app
-    assert "No top-down scene preview is available." in app
+    assert "No Top2Down scene preview is available." in app
     assert "state.activeRunId" in app
     assert "Grounding will appear after a camera-grounded run starts." in app
 
@@ -267,18 +283,13 @@ def _assert_molmospaces_preview_files(preview_dir: Path) -> list[str]:
     molmospaces_preview_files = sorted(
         path.name
         for path in preview_dir.glob("molmospaces-*.png")
-        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
+        if path.name in expected_preview_files
     )
     assert molmospaces_preview_files == expected_preview_files
     return molmospaces_preview_files
 
 
 def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
-    metadata_files = sorted(
-        path.name
-        for path in preview_dir.glob("molmospaces-*-preview.json")
-        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
-    )
     expected_metadata_files = sorted(
         {
             *(
@@ -292,10 +303,16 @@ def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
             ),
         }
     )
+    metadata_files = sorted(
+        path.name
+        for path in preview_dir.glob("molmospaces-*-preview.json")
+        if path.name in expected_metadata_files
+    )
     assert metadata_files == expected_metadata_files
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
+        assert set(preview_by_view) == {"fpv", "map", "chase", "topdown"}
         _assert_preview_png_files_exist(preview_dir, preview_by_view)
         scene_slug = Path(preview_by_view["fpv"]).name.rsplit("-", 1)[0]
         metadata_path = preview_dir / f"{scene_slug}-preview.json"
@@ -319,9 +336,14 @@ def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
 
 
 def _assert_preview_png_files_exist(preview_dir: Path, preview_by_view: dict[str, str]) -> None:
-    for view_name in ("fpv", "map", "chase", "topdown"):
-        path = preview_dir / Path(preview_by_view[view_name]).name
-        assert path.is_file()
+    for view_name, asset_path in preview_by_view.items():
+        if asset_path.startswith("/previews/"):
+            path = preview_dir / Path(asset_path).name
+        elif asset_path.startswith("/asset-previews/maps/"):
+            path = REPO_ROOT / "assets" / "maps" / asset_path.removeprefix("/asset-previews/maps/")
+        else:
+            raise AssertionError(f"unsupported preview asset path: {asset_path}")
+        assert path.is_file(), view_name
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
@@ -401,11 +423,14 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="blank-chase"' not in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
-    assert ">Base Map<" in html
-    assert ">Runtime Map<" in html
+    assert ">Metric Map<" in html
+    assert ">Base Map<" not in html
+    assert ">Runtime Map<" not in html
     assert ">Semantic Map<" not in html
-    assert ">Top-down<" in html
+    assert ">Top2Down<" in html
+    assert ">Top-down<" not in html
     assert 'data-panel-title="fpv"' in html
+    assert 'data-panel-title="chase"' in html
     assert 'data-panel="grounding"' in html
     assert 'data-panel="grounding"' not in html.split('class="view-grid mode-overview"', 1)[0]
     assert "topdown-frame" in html
@@ -418,21 +443,24 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert "routeHasOverviewChase" not in app
     assert 'resource_kind !== "physical_robot"' not in app
     overview_body = app.split('if (view === "overview") {', 1)[1].split("\n  }", 1)[0]
-    assert 'new Set(["fpv", "map", "runtime_map", "topdown"])' in overview_body
+    assert 'new Set(["fpv", "map", "chase", "topdown"])' in overview_body
     assert '"outputs"' not in overview_body
     assert '"tasks"' not in overview_body
     assert '"grounding"' not in overview_body
-    assert '"chase"' not in overview_body
+    assert '"runtime_map"' not in overview_body
     assert "Missing run chase artifact" in app
+    assert "Missing Metric Map artifact" in app
+    assert "sourceAssets.runtime_map || sourceAssets.map" in app
+    assert 'routeHasView(route, "chase") ? previews.chase : null' in app
     assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
-    assert '"runtime_map topdown"' in css
+    assert '"chase topdown"' in css
     assert "object-position: center center" in css
     assert ".image-panel > .image-frame" in css
     assert "aspect-ratio: auto" in css
-    assert '.mode-overview [data-panel="runtime_map"]' in css
-    assert '.mode-overview [data-panel="chase"]' not in css
+    assert '.mode-overview [data-panel="runtime_map"]' not in css
+    assert '.mode-overview [data-panel="chase"]' in css
     assert '.mode-overview [data-panel="blank-chase"]' not in css
     assert ".blank-panel" not in css
     assert "[hidden]" in css
