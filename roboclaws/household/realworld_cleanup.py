@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from roboclaws.household import realworld_visual_candidate_declarations
 from roboclaws.household.backend_contract import (
@@ -17,6 +18,9 @@ from roboclaws.household.backend_contract import (
 )
 from roboclaws.household.isaac_lab_backend import (
     ISAACLAB_SUBPROCESS_BACKEND,
+)
+from roboclaws.household.map_build_scan_profile import (
+    map_build_scan_profile,
 )
 from roboclaws.household.nav2_map_bundle import (
     selected_nav2_map_bundle_dir,
@@ -47,7 +51,6 @@ from roboclaws.household.realworld_contract import (
     RealWorldCleanupContract,
 )
 from roboclaws.household.realworld_direct_cleanup_loop import (
-    MAP_BUILD_CAMERA_SCHEDULE,
     DirectCleanupLoopHooks,
     complete_direct_cleanup,
     direct_cleanup_policy_name,
@@ -72,6 +75,7 @@ from roboclaws.household.semantic_timeline import (
 from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
 )
+from roboclaws.household.task_intent import HOUSEHOLD_INTENT_OPEN_ENDED
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
@@ -270,6 +274,7 @@ def run_realworld_cleanup(
             "use_planner_proof_for_cleanup_primitives requires planner_proof_run_result"
         )
     runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
+    selected_map_build_scan_profile = map_build_scan_profile()
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
@@ -359,6 +364,12 @@ def run_realworld_cleanup(
         {},
         contract.static_fixture_projection,
     )
+    open_ended_prior_waypoints = _open_ended_prior_waypoint_ids(
+        runtime_map_prior=runtime_map_prior,
+        task_prompt=task_prompt,
+        goal_contract=goal_contract,
+        run_metadata_overrides=run_metadata_overrides,
+    )
 
     policy_name = direct_cleanup_policy_name(
         map_build=map_build,
@@ -383,6 +394,9 @@ def run_realworld_cleanup(
         ),
         agent_scratchpad=agent_scratchpad,
         hooks=direct_loop_hooks,
+        map_build_scan_profile=selected_map_build_scan_profile,
+        waypoint_filter=_prior_waypoint_filter(open_ended_prior_waypoints),
+        stop_after_waypoint=_open_ended_prior_stop(open_ended_prior_waypoints),
     )
 
     done = complete_direct_cleanup(
@@ -437,7 +451,7 @@ def run_realworld_cleanup(
             selected_bundle_dir=selected_bundle_dir,
             planner_proof_evidence=planner_proof_evidence,
             use_planner_proof_for_cleanup_primitives=(use_planner_proof_for_cleanup_primitives),
-            map_build_camera_schedule=MAP_BUILD_CAMERA_SCHEDULE,
+            map_build_scan_profile=selected_map_build_scan_profile,
             run_metadata_overrides=run_metadata_overrides,
         )
     )
@@ -447,6 +461,103 @@ def run_realworld_cleanup(
 
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
     return read_runtime_map_prior_artifact(path)
+
+
+def _open_ended_prior_waypoint_ids(
+    *,
+    runtime_map_prior: dict[str, Any] | None,
+    task_prompt: str,
+    goal_contract: Any | None,
+    run_metadata_overrides: dict[str, Any] | None,
+) -> tuple[str, ...]:
+    if not runtime_map_prior:
+        return ()
+    sample_id = str((run_metadata_overrides or {}).get("eval_sample_id") or "")
+    if not sample_id.startswith("open_ended."):
+        return ()
+    if str(getattr(goal_contract, "intent", "") or "") != HOUSEHOLD_INTENT_OPEN_ENDED:
+        return ()
+    prompt_tokens = _search_tokens(
+        [
+            task_prompt,
+            str(getattr(goal_contract, "normalized_goal", "") or ""),
+            str(getattr(goal_contract, "raw_prompt", "") or ""),
+        ]
+    )
+    if not prompt_tokens:
+        return ()
+    matches: list[str] = []
+    for anchor in runtime_map_prior.get("public_semantic_anchors") or []:
+        if not isinstance(anchor, dict):
+            continue
+        waypoint_id = str(anchor.get("waypoint_id") or "")
+        if not waypoint_id:
+            continue
+        anchor_tokens = _search_tokens(
+            [
+                str(anchor.get("label") or ""),
+                str(anchor.get("category") or ""),
+                str(anchor.get("anchor_type") or ""),
+                *[str(item) for item in anchor.get("aliases") or []],
+            ]
+        )
+        if prompt_tokens.intersection(anchor_tokens) and waypoint_id not in matches:
+            matches.append(waypoint_id)
+    return tuple(matches)
+
+
+def _search_tokens(values: list[str]) -> set[str]:
+    ignored = {
+        "and",
+        "area",
+        "find",
+        "it",
+        "is",
+        "report",
+        "room",
+        "the",
+        "there",
+        "to",
+        "where",
+    }
+    tokens: set[str] = set()
+    for value in values:
+        for token in re.findall(r"[a-zA-Z0-9]+", value.lower()):
+            if len(token) > 2 and token not in ignored:
+                tokens.add(token)
+    return tokens
+
+
+def _prior_waypoint_filter(
+    waypoint_ids: tuple[str, ...],
+) -> Callable[[list[dict[str, Any]]], list[dict[str, Any]]] | None:
+    if not waypoint_ids:
+        return None
+    priority = {waypoint_id: index for index, waypoint_id in enumerate(waypoint_ids)}
+
+    def filter_waypoints(waypoints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(
+            waypoints,
+            key=lambda waypoint: priority.get(
+                str(waypoint.get("waypoint_id") or ""),
+                len(priority),
+            ),
+        )
+
+    return filter_waypoints
+
+
+def _open_ended_prior_stop(
+    waypoint_ids: tuple[str, ...],
+) -> Callable[[RealWorldCleanupContract], bool] | None:
+    if not waypoint_ids:
+        return None
+    priority = set(waypoint_ids)
+
+    def stop_after_current_confirmation(contract: RealWorldCleanupContract) -> bool:
+        return bool(priority.intersection(contract._observed_waypoint_ids))  # noqa: SLF001
+
+    return stop_after_current_confirmation
 
 
 def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:

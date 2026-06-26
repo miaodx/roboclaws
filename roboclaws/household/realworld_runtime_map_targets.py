@@ -19,6 +19,10 @@ TARGET_ACTIONABILITY_ANCHOR_UNBOUND = "anchor_unbound"
 TARGET_ACTIONABILITY_NEEDS_OBSERVE = "needs_observe"
 TARGET_ACTIONABILITY_ACTIONABLE = "actionable"
 
+POSE_ROLE_INSPECTION_WAYPOINT = "inspection_waypoint"
+POSE_ROLE_BEST_VIEW_POSE = "best_view_pose"
+LOCALIZATION_STATUS_VIEWPOINT_ONLY = "viewpoint_only"
+
 CANDIDATE_STATE_VISUAL_SCAN_REQUIRED = (
     realworld_visual_candidates.CANDIDATE_STATE_VISUAL_SCAN_REQUIRED
 )
@@ -42,6 +46,7 @@ class RuntimeMapTargetContract(Protocol):
     _fixtures: dict[str, dict[str, Any]]
     _generated_inspection_waypoints: Mapping[str, dict[str, Any]]
     _inspection_observations: Sequence[dict[str, Any]]
+    _fixture_observations_by_fixture_id: Mapping[str, dict[str, Any]]
     _object_lifecycle: Mapping[str, dict[str, Any]]
     _observed_waypoint_ids: Collection[str]
     _private_waypoint_by_public_id: Mapping[str, dict[str, Any]]
@@ -120,6 +125,9 @@ def target_candidate_from_waypoint(
         else "",
         "waypoint_id": waypoint_id,
         "pose": contract._waypoint_pose(waypoint),
+        "pose_source": POSE_ROLE_INSPECTION_WAYPOINT,
+        "pose_role": POSE_ROLE_INSPECTION_WAYPOINT,
+        "localization_status": LOCALIZATION_STATUS_VIEWPOINT_ONLY,
         "waypoint_source": str(waypoint.get("waypoint_source") or ""),
         "verified_navigation": True,
         "actionability": actionability,
@@ -169,6 +177,11 @@ def target_candidate_from_anchor(
         "source_observation_id": str(anchor.get("source_observation_id") or ""),
         "waypoint_id": waypoint_id,
         "pose": dict(anchor.get("pose") or {}),
+        "pose_source": str(anchor.get("pose_source") or POSE_ROLE_BEST_VIEW_POSE),
+        "pose_role": str(anchor.get("pose_role") or POSE_ROLE_BEST_VIEW_POSE),
+        "localization_status": str(
+            anchor.get("localization_status") or LOCALIZATION_STATUS_VIEWPOINT_ONLY
+        ),
         "verified_navigation": verified_navigation,
         "affordances": list(anchor.get("affordances") or []),
         "actionability": actionability,
@@ -218,6 +231,9 @@ def target_candidate_from_observed_object(
         "source_fixture_id": str(observed.get("source_fixture_id") or ""),
         "candidate_fixture_id": str(observed.get("candidate_fixture_id") or ""),
         "visual_grounding_evidence": dict(observed.get("visual_grounding_evidence") or {}),
+        "localization_status": str(
+            observed.get("localization_status") or LOCALIZATION_STATUS_VIEWPOINT_ONLY
+        ),
         "verified_navigation": actionability == TARGET_ACTIONABILITY_ACTIONABLE,
         "actionability": actionability,
         "target_actionability_status": actionability,
@@ -407,7 +423,7 @@ def seed_public_fixture_anchor_ids_from_prior_anchors(contract: RuntimeMapTarget
         anchor_id = str(anchor.get("anchor_id") or "")
         if not _is_place_anchor(anchor) or not anchor_id:
             continue
-        fixture_id = best_internal_fixture_for_anchor(contract, anchor)
+        fixture_id = _best_internal_fixture_for_prior_anchor(contract, anchor)
         if fixture_id:
             contract._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
 
@@ -421,6 +437,56 @@ def seed_public_fixture_anchor_ids_for_waypoint(
         fixture_id = str(fixture_id or "")
         if fixture_id and fixture_id in contract._fixtures:
             public_anchor_id_for_fixture(contract, fixture_id)
+
+
+def record_fixture_observations_for_waypoint(
+    contract: RuntimeMapTargetContract,
+    waypoint: dict[str, Any],
+    *,
+    source_observation_id: str,
+    producer_type: str,
+    producer_id: str,
+) -> list[dict[str, Any]]:
+    public_waypoint_id = str(waypoint.get("waypoint_id") or contract._current_waypoint_id)
+    room_id = str(waypoint.get("room_id") or "")
+    rows = []
+    for fixture_id in _fixture_ids_for_public_waypoint(contract, waypoint):
+        fixture = contract._fixtures.get(fixture_id)
+        if not fixture:
+            continue
+        anchor_id = public_anchor_id_for_fixture(contract, fixture_id)
+        row = {
+            "fixture_id": fixture_id,
+            "anchor_id": anchor_id,
+            "category": str(fixture.get("category") or fixture.get("name") or "fixture"),
+            "label": str(fixture.get("category") or fixture.get("name") or "Observed fixture"),
+            "anchor_type": _semantic_anchor_type_for_fixture(fixture),
+            "room_id": room_id or str(fixture.get("room_id") or fixture.get("room_area") or ""),
+            "waypoint_id": public_waypoint_id,
+            "source_observation_id": str(source_observation_id),
+            "producer_type": str(producer_type),
+            "producer_id": str(producer_id),
+            "confidence": 0.68,
+            "private_truth_included": False,
+        }
+        if not row["anchor_id"]:
+            continue
+        contract._fixture_observations_by_fixture_id[fixture_id] = row
+        rows.append(dict(row))
+    return rows
+
+
+def _fixture_ids_for_public_waypoint(
+    contract: RuntimeMapTargetContract,
+    waypoint: dict[str, Any],
+) -> list[str]:
+    private_waypoint = contract._private_waypoint_for_public_waypoint(waypoint)
+    waypoint_id = str(waypoint.get("waypoint_id") or private_waypoint.get("waypoint_id") or "")
+    fixture_ids = {str(item) for item in private_waypoint.get("fixture_ids") or [] if str(item)}
+    for fixture_id in contract._fixtures:
+        if public_waypoint_id_for_private_fixture(contract, fixture_id) == waypoint_id:
+            fixture_ids.add(str(fixture_id))
+    return sorted(fixture_ids)
 
 
 def public_runtime_fixture_candidates(
@@ -619,6 +685,15 @@ def public_anchor_id_for_fixture(contract: RuntimeMapTargetContract, fixture_id:
     anchor_id = contract._public_anchor_ids_by_private_fixture_id.get(fixture_id)
     if anchor_id:
         return anchor_id
+    allocation_key = _fixture_anchor_allocation_key(contract, fixture_id)
+    for mapped_fixture_id, mapped_anchor_id in sorted(
+        contract._public_anchor_ids_by_private_fixture_id.items()
+    ):
+        if not mapped_anchor_id:
+            continue
+        if _fixture_anchor_allocation_key(contract, mapped_fixture_id) == allocation_key:
+            contract._public_anchor_ids_by_private_fixture_id[fixture_id] = mapped_anchor_id
+            return mapped_anchor_id
     used_anchor_ids = set(contract._public_anchor_ids_by_private_fixture_id.values())
     used_anchor_ids.update(
         str(anchor.get("anchor_id") or "") for anchor in contract._runtime_map_anchor_priors
@@ -629,6 +704,20 @@ def public_anchor_id_for_fixture(contract: RuntimeMapTargetContract, fixture_id:
     anchor_id = f"anchor_fixture_{index:03d}"
     contract._public_anchor_ids_by_private_fixture_id[fixture_id] = anchor_id
     return anchor_id
+
+
+def _fixture_anchor_allocation_key(
+    contract: RuntimeMapTargetContract,
+    fixture_id: str,
+) -> tuple[str, str, str]:
+    fixture = getattr(contract, "_fixtures", {}).get(fixture_id) or {}
+    return (
+        _semantic_anchor_type_for_fixture(fixture),
+        _norm(str(fixture.get("category") or fixture.get("name") or fixture_id)),
+        public_waypoint_id_for_private_fixture(contract, fixture_id)
+        if hasattr(contract, "_preferred_waypoint_for_fixture")
+        else "",
+    )
 
 
 def internal_fixture_id_for_public_reference(
@@ -661,8 +750,12 @@ def internal_fixture_id_for_public_anchor(
         ),
         {},
     )
+    if not _is_place_anchor(anchor):
+        return ""
     fixture_id = (
-        best_internal_fixture_for_anchor(contract, anchor) if _is_place_anchor(anchor) else ""
+        _best_internal_fixture_for_prior_anchor(contract, anchor)
+        if _is_prior_runtime_anchor(anchor)
+        else best_internal_fixture_for_anchor(contract, anchor)
     )
     if fixture_id:
         contract._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
@@ -721,6 +814,48 @@ def best_internal_fixture_for_anchor(
         ):
             return fixture_id
     return ""
+
+
+def _best_internal_fixture_for_prior_anchor(
+    contract: RuntimeMapTargetContract,
+    anchor: dict[str, Any],
+) -> str:
+    """Bind prior anchors only when the local waypoint evidence agrees."""
+
+    category = str(anchor.get("category") or "")
+    if not _norm(category):
+        return ""
+    waypoint_id = str(anchor.get("waypoint_id") or "")
+    public_waypoint = contract._waypoint_by_id(waypoint_id) or {}
+    private_waypoint = contract._private_waypoint_for_public_waypoint(public_waypoint)
+    for fixture_id in [str(item) for item in private_waypoint.get("fixture_ids") or []]:
+        fixture = contract._fixtures.get(fixture_id, {})
+        if _anchor_category_matches_fixture(category, fixture, fixture_id):
+            return fixture_id
+    for fixture_id, fixture in contract._fixtures.items():
+        if public_waypoint_id_for_private_fixture(contract, fixture_id) != waypoint_id:
+            continue
+        if _anchor_category_matches_fixture(category, fixture, fixture_id):
+            return fixture_id
+    return ""
+
+
+def _is_prior_runtime_anchor(anchor: dict[str, Any]) -> bool:
+    return (
+        str(anchor.get("freshness") or "") == "prior"
+        or str(anchor.get("promotion_status") or "") == "prior_runtime_snapshot"
+    )
+
+
+def _anchor_category_matches_fixture(
+    category: str,
+    fixture: dict[str, Any],
+    fixture_id: str,
+) -> bool:
+    return _norm(category) in _norm(
+        " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
+        or fixture_id
+    )
 
 
 def runtime_anchor_target_fixture_for_detection(
@@ -807,15 +942,29 @@ def _append_fixture_public_semantic_anchors(
     anchors: list[dict[str, Any]],
     seen: set[str],
 ) -> None:
+    candidates_by_anchor_id: dict[str, dict[str, Any]] = {}
     for fixture_id, anchor_id in sorted(
         contract._public_anchor_ids_by_private_fixture_id.items(),
         key=lambda item: item[1],
     ):
         anchor = _fixture_public_semantic_anchor(contract, fixture_id, anchor_id)
+        if not anchor:
+            continue
+        current = candidates_by_anchor_id.get(anchor_id)
+        if current is None or _fixture_anchor_evidence_rank(anchor) > _fixture_anchor_evidence_rank(
+            current
+        ):
+            candidates_by_anchor_id[anchor_id] = anchor
+    seen_viewpoint_keys: set[tuple[str, str, str, str, str]] = set()
+    for anchor_id, anchor in sorted(candidates_by_anchor_id.items()):
         if not anchor or anchor_id in seen:
+            continue
+        viewpoint_key = _fixture_anchor_viewpoint_key(anchor)
+        if viewpoint_key in seen_viewpoint_keys:
             continue
         anchors.append(anchor)
         seen.add(anchor_id)
+        seen_viewpoint_keys.add(viewpoint_key)
 
 
 def _append_prior_public_semantic_anchors(
@@ -827,6 +976,9 @@ def _append_prior_public_semantic_anchors(
     for prior_anchor in contract._runtime_map_anchor_priors:
         anchor_id = str(prior_anchor.get("anchor_id") or "")
         if anchor_id and anchor_id in seen:
+            continue
+        waypoint_id = str(prior_anchor.get("waypoint_id") or "")
+        if waypoint_id and contract._waypoint_by_id(waypoint_id) is None:
             continue
         anchors.append(dict(prior_anchor))
         if anchor_id:
@@ -850,6 +1002,9 @@ def _room_area_public_semantic_anchor(
         "room_label": room_label,
         "waypoint_id": waypoint_id,
         "pose": contract._waypoint_pose(waypoint),
+        "pose_source": POSE_ROLE_INSPECTION_WAYPOINT,
+        "pose_role": POSE_ROLE_INSPECTION_WAYPOINT,
+        "localization_status": LOCALIZATION_STATUS_VIEWPOINT_ONLY,
         "affordances": ["navigate", "observe"],
         "aliases": [room_id, room_label],
         "producer_type": "generated_exploration_candidate",
@@ -882,6 +1037,9 @@ def _waypoint_public_semantic_anchor(
         "room_label": str(waypoint.get("room_label") or ""),
         "waypoint_id": waypoint_id,
         "pose": contract._waypoint_pose(waypoint),
+        "pose_source": POSE_ROLE_INSPECTION_WAYPOINT,
+        "pose_role": POSE_ROLE_INSPECTION_WAYPOINT,
+        "localization_status": LOCALIZATION_STATUS_VIEWPOINT_ONLY,
         "affordances": ["observe"],
         "producer_type": "generated_exploration_candidate",
         "producer_id": "base_metric_map_exploration",
@@ -907,17 +1065,25 @@ def _fixture_public_semantic_anchor(
     if fixture is None:
         return {}
     supporting = _supporting_detections_for_fixture(contract, fixture_id)
+    fixture_observation = dict(contract._fixture_observations_by_fixture_id.get(fixture_id) or {})
+    if not supporting and not fixture_observation:
+        return {}
     best_detection = supporting[0] if supporting else {}
     best_lifecycle = contract._object_lifecycle.get(
         str(best_detection.get("object_id") or ""),
         {},
     )
-    waypoint_id = str(best_lifecycle.get("waypoint_id") or contract._current_waypoint_id)
+    waypoint_id = str(fixture_observation.get("waypoint_id") or "")
+    if not waypoint_id:
+        waypoint_id = public_waypoint_id_for_private_fixture(contract, fixture_id)
+    if not waypoint_id:
+        waypoint_id = str(best_lifecycle.get("waypoint_id") or contract._current_waypoint_id)
     waypoint = contract._waypoint_by_id(waypoint_id) or {}
     source_observation_id = str(
-        best_detection.get("source_observation_id")
-        or best_lifecycle.get("source_observation_id")
+        fixture_observation.get("source_observation_id")
         or contract._observation_id_for_waypoint(waypoint_id)
+        or best_detection.get("source_observation_id")
+        or best_lifecycle.get("source_observation_id")
     )
     confidence_values = [
         _float_or_zero(item.get("visibility_confidence"))
@@ -928,21 +1094,42 @@ def _fixture_public_semantic_anchor(
     return {
         "anchor_id": anchor_id,
         "anchor_type": _semantic_anchor_type_for_fixture(fixture),
-        "category": str(fixture.get("category") or fixture.get("name") or "fixture"),
-        "label": str(fixture.get("category") or fixture.get("name") or "Observed fixture"),
-        "room_id": str((waypoint or {}).get("room_id") or best_lifecycle.get("room_id") or ""),
+        "category": str(
+            fixture_observation.get("category")
+            or fixture.get("category")
+            or fixture.get("name")
+            or "fixture"
+        ),
+        "label": str(
+            fixture_observation.get("label")
+            or fixture.get("category")
+            or fixture.get("name")
+            or "Observed fixture"
+        ),
+        "room_id": str(
+            fixture_observation.get("room_id")
+            or (waypoint or {}).get("room_id")
+            or fixture.get("room_id")
+            or best_lifecycle.get("room_id")
+            or ""
+        ),
         "waypoint_id": waypoint_id,
         "pose": contract._waypoint_pose(waypoint),
+        "pose_source": POSE_ROLE_INSPECTION_WAYPOINT,
+        "pose_role": POSE_ROLE_BEST_VIEW_POSE,
+        "localization_status": LOCALIZATION_STATUS_VIEWPOINT_ONLY,
         "affordances": _anchor_affordances_for_fixture(fixture),
         "producer_type": str(
             best_detection.get("producer_type")
             or best_detection.get("perception_source")
+            or fixture_observation.get("producer_type")
             or "visible_detection"
         ),
         "producer_id": str(
             best_detection.get("producer_id")
             or best_detection.get("model_provenance")
             or best_detection.get("producer_type")
+            or fixture_observation.get("producer_id")
             or "visible_detection"
         ),
         "confidence": round(float(confidence), 6),
@@ -956,6 +1143,7 @@ def _fixture_public_semantic_anchor(
             "supporting_observed_object_ids": [
                 str(item.get("object_id") or "") for item in supporting
             ],
+            "fixture_observation_id": str(fixture_observation.get("source_observation_id") or ""),
             "image_region": (
                 best_detection.get("image_region")
                 or {"type": "bbox", "value": best_detection.get("image_bbox") or []}
@@ -976,6 +1164,32 @@ def _supporting_detections_for_fixture(
             continue
         supporting.append(dict(detection))
     return supporting
+
+
+def _fixture_anchor_evidence_rank(anchor: dict[str, Any]) -> tuple[int, int, float]:
+    evidence = anchor.get("evidence") if isinstance(anchor.get("evidence"), dict) else {}
+    supporting_count = len(evidence.get("supporting_observed_object_ids") or [])
+    image_region = (
+        evidence.get("image_region") if isinstance(evidence.get("image_region"), dict) else {}
+    )
+    has_image_region = int(bool(image_region.get("value")))
+    return (
+        supporting_count,
+        has_image_region,
+        _float_or_zero(anchor.get("confidence")),
+    )
+
+
+def _fixture_anchor_viewpoint_key(anchor: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    pose = anchor.get("pose") if isinstance(anchor.get("pose"), dict) else {}
+    pose_key = ",".join(str(round(_float_or_zero(pose.get(key)), 4)) for key in ("x", "y", "yaw"))
+    return (
+        str(anchor.get("category") or ""),
+        str(anchor.get("room_id") or ""),
+        str(anchor.get("waypoint_id") or ""),
+        pose_key,
+        str(anchor.get("source_observation_id") or ""),
+    )
 
 
 def safe_anchor_id(value: str) -> str:

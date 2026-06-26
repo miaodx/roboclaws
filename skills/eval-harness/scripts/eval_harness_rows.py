@@ -10,6 +10,12 @@ DEFAULT_BACKEND = "mujoco"
 DEFAULT_SEED = "7"
 DEFAULT_PROVIDER_PROFILE = "codex-router-responses"
 DEFAULT_AGENT_SDK_PROVIDER_PROFILE = "minimax-responses"
+MAP_BUILD_CONSUMER_MODEL_MATRIX_PROVIDER_PROFILES = (
+    "codex-router-responses",
+    "mimo-inside-openai-chat",
+    "kimi-openai-chat",
+    "minimax-responses",
+)
 
 
 def candidate_rows(
@@ -214,6 +220,14 @@ def candidate_rows(
             expense="deterministic",
             row_dir=row_dir,
         ),
+        *[
+            _map_build_consumer_model_matrix_row(
+                output_root=eval_output_root,
+                row_dir=row_dir,
+                provider_profile=profile,
+            )
+            for profile in MAP_BUILD_CONSUMER_MODEL_MATRIX_PROVIDER_PROFILES
+        ],
         _row(
             row_id="open-ended-goals-eval-suite",
             row_kind="eval_suite",
@@ -554,6 +568,51 @@ def candidate_rows(
             row_dir=row_dir,
         ),
     ]
+
+
+def _map_build_consumer_model_matrix_row(
+    *,
+    output_root: Path,
+    row_dir: Path,
+    provider_profile: str,
+) -> dict[str, Any]:
+    row_id = f"map-build-consumer-openai-agents-sdk-{provider_profile}"
+    return _row(
+        row_id=row_id,
+        row_kind="live_agent_eval",
+        command=_eval_suite_command(
+            suite="map_build_consumer",
+            budget="focused",
+            output_root=output_root,
+            stamp=row_id,
+            agent_engine="openai-agents-sdk",
+            provider_profile=provider_profile,
+            live_execution="run",
+        ),
+        axes={
+            "agent_engine": "openai-agents-sdk",
+            "provider_profile": provider_profile,
+            "intent": "map-build-consumer",
+            "suite": "map_build_consumer",
+            "evidence_lane": "world-public-labels",
+            "backend": DEFAULT_BACKEND,
+            "world": DEFAULT_WORLD,
+            "parallel_group_id": "map_build_consumer_2026_06_24",
+            "provider_cell_count": str(len(MAP_BUILD_CONSUMER_MODEL_MATRIX_PROVIDER_PROFILES)),
+            "default_local_concurrency_width": "1",
+            "concurrency_policy": ("serial_by_default_for_single_molmospaces_visual_backend_slot"),
+        },
+        reason=(
+            "MapBuild consumer plan/model-matrix proof needs this provider profile "
+            "as a first-class availability-or-behavior cell. Run provider cells "
+            "serially unless ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS is explicitly "
+            "raised and each live row has an isolated stamp/output root."
+        ),
+        rule_ids=("map_build",),
+        requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
+        expense="live-agent",
+        row_dir=row_dir,
+    )
 
 
 def _cleanup_command(

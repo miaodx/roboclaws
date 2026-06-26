@@ -1,9 +1,9 @@
 ---
 plan_scope: map-build-panorama-consumer-experiments
-status: DRAFT
+status: DONE_ROOT_ENV_LIVE_PROOF
 created: 2026-06-24
-last_reviewed: 2026-06-24
-implementation_allowed: false
+last_reviewed: 2026-06-25
+implementation_allowed: true
 source:
   - user discussion on making dedicated MapBuild improve downstream open-ended and cleanup tasks
   - current MapBuild default/config and Runtime Metric Map prior audit
@@ -17,7 +17,7 @@ related_context:
   - docs/human/mcp-skills-and-semantic-profiles.md
 ---
 
-# MapBuild Panorama And Downstream Consumer Proof
+# MapBuild Fixture-Focused Scan And Downstream Consumer Proof
 
 ## Goal
 
@@ -63,7 +63,7 @@ Known behavior from the current audit:
 
 - direct MapBuild visits inspection waypoints and uses a small camera yaw sweep;
 - SDK MapBuild asks the agent to inspect waypoints and use `adjust_camera` when
-  evidence is incomplete, but does not require robot-body panorama scanning;
+  evidence is incomplete, but did not previously require robot-body scanning;
 - `adjust_camera` only changes camera yaw/pitch within a bounded range and
   resets after navigation;
 - robot-relative body turns already exist through
@@ -90,35 +90,25 @@ them to choose where to look first, but must re-observe before acting.
 
 ## Proposed MapBuild Change
 
-### 1. Add A Scan Profile Contract
+### 1. Add A Fixed Fixture-Focused Scan Contract
 
-Introduce an explicit MapBuild scan profile in the map-build task/runtime
-configuration, without changing the public MCP tool set.
+Dedicated `preset=map-build` should use one default scan contract, not a
+human-selectable profile matrix. The contract emphasizes stable fixtures,
+surfaces, receptacles, room or area anchors, and navigation-visible landmarks.
+Movable observations remain non-actionable hints until a consumer run confirms
+them with current evidence.
 
-The scan profile starts as task/runtime or eval-row configuration. It is not a
-new public `just run::surface` launch axis unless a later review explicitly
-approves that command-surface growth. The baseline `standard` profile must stay
-runnable after the dedicated MapBuild default changes, otherwise the downstream
-A/B comparison loses its denominator.
-
-Initial profiles:
-
-| Profile | Behavior | Intended Use |
-| --- | --- | --- |
-| `standard` | Current waypoint inspection plus small camera yaw sweep | cheapest regression baseline |
-| `panorama` | At each inspection waypoint, rotate robot body through bounded headings and observe after each turn | richer Runtime Metric Map evidence |
-| `fixture-focused` | Panorama scan plus prompt/report emphasis on stable fixtures, surfaces, receptacles, and room anchors | default dedicated MapBuild candidate |
-
-Dedicated `preset=map-build` should default to `fixture-focused` once the
-profile is implemented and verified. Regular cleanup should not inherit the
-extra rotation cost by default.
+Do not add a public `scan_profile` launch axis. Do not keep a separate
+`panorama` runtime profile: the body-turn scan is an implementation detail of
+the fixture-focused MapBuild contract, not a product strategy. Regular cleanup
+should not inherit the extra rotation cost by default.
 
 ### 2. Use Existing Body-Turn Primitive First
 
 Do not add a new `rotate_360` MCP tool in the first implementation.
 
-At each inspection waypoint, `panorama` / `fixture-focused` should use repeated
-bounded calls equivalent to:
+At each inspection waypoint, the fixture-focused MapBuild contract should use
+repeated bounded calls equivalent to:
 
 ```text
 observe
@@ -131,13 +121,12 @@ observe
 navigate_to_relative_pose(forward_m=0, lateral_m=0, yaw_delta_deg=90)
 ```
 
-The exact heading count can be configurable, but the first experiment should
-use four headings so reports can compare a clear panorama budget against the
-current camera-only scan.
+The first experiment should use four headings so direct-runner and SDK traces
+can prove the same bounded scan contract.
 
 Add a composite `rotate_360` MCP tool only if execution traces show repeated
 body-turn calls are a real agent reliability problem rather than just a prompt
-or direct-runner profile concern.
+or runner concern.
 
 ### 3. Clarify Stable Versus Movable Prior Semantics
 
@@ -164,14 +153,14 @@ where applicable.
 
 ### Comparison Result Contract
 
-The existing `map_build_consumer` suite is a useful baseline contract, but it is
+The existing `map_build_consumer` suite is a useful product contract, but it is
 not enough to prove downstream improvement by itself. The implementation should
 add an explicit comparison result artifact or eval-report section for these
 experiments.
 
 Each comparison should record:
 
-- variant ids: `no_prior`, `standard_prior`, `fixture_focused_prior`;
+- variant ids: `no_prior`, `fixture_focused_prior`;
 - denominator parity: same world, seed, backend, prompt, generated mess setup,
   agent engine, provider profile, and timeout class where applicable;
 - model/provider identity: `provider_profile`, resolved model id, wire API,
@@ -244,8 +233,8 @@ Parallelism requirements:
 
 Recommended wave order:
 
-1. Deterministic MapBuild baseline: direct-runner `standard` and
-   `fixture-focused` profiles, producing canonical prior artifacts.
+1. Deterministic MapBuild proof: direct-runner fixture-focused MapBuild,
+   producing the canonical prior artifact.
 2. Four-way model consumer wave for open-ended stable-anchor search using the
    same canonical prior.
 3. Four-way model consumer wave for cleanup using the same canonical prior and
@@ -268,9 +257,8 @@ Example prompts:
 Variants:
 
 - no runtime prior;
-- prior from `standard` MapBuild;
 - prior from `fixture-focused` MapBuild.
-- the same three prior variants across each target model profile when live
+- the same two prior variants across each target model profile when live
   route health allows.
 
 Required metrics:
@@ -330,9 +318,8 @@ actionability rules.
 Variants:
 
 - cleanup with no `runtime_map_prior`;
-- cleanup with `standard` MapBuild prior;
 - cleanup with `fixture-focused` MapBuild prior.
-- the same three prior variants across each target model profile when live
+- the same two prior variants across each target model profile when live
   route health allows.
 
 Required metrics:
@@ -357,13 +344,13 @@ optimization.
 
 ### Experiment D: MapBuild Coverage Quality
 
-Purpose: show that the new MapBuild scan profile actually creates richer map
+Purpose: show that the new MapBuild scan contract actually creates richer map
 evidence before consumer runs.
 
-Compare `standard` versus `fixture-focused` MapBuild reports. Compare
-direct-runner MapBuild first. Then compare SDK MapBuild across the target model
-profiles as a separate model-build-quality experiment, not as the canonical
-denominator for consumer proof.
+Compare fixture-focused MapBuild reports across direct-runner and SDK runs. Then
+compare SDK MapBuild across the target model profiles as a separate
+model-build-quality experiment, not as the canonical denominator for consumer
+proof.
 
 Required metrics:
 
@@ -377,8 +364,8 @@ Required metrics:
 - per-run cost: wall time and tool-call counts.
 
 Expected result: `fixture-focused` should produce materially more stable
-anchors and surface/receptacle evidence than the current camera-only baseline,
-with an explicit runtime/tool-call cost.
+anchors and surface/receptacle evidence than the previous camera-only MapBuild
+contract, with an explicit runtime/tool-call cost.
 
 Stable-anchor counts should be bucketed from public runtime-map evidence, not
 private fixture tables. The initial buckets should be fixtures,
@@ -388,8 +375,8 @@ surfaces/receptacles, room/area anchors, and navigation-visible landmarks.
 
 Implementation is complete only when all of these are true:
 
-- `preset=map-build` has an explicit scan profile contract and a documented
-  default.
+- `preset=map-build` has an explicit fixture-focused scan contract and a
+  documented default.
 - The first implementation uses existing robot-relative body turns instead of
   adding a new MCP composite tool.
 - MapBuild prompts and direct-runner behavior agree on stable-anchor priority
@@ -405,7 +392,7 @@ Implementation is complete only when all of these are true:
   cost, and time-to-target across variants.
 - The comparison artifact separates provider/runtime availability from agent
   behavior.
-- `standard` remains available as the explicit baseline after the dedicated
+- No public or eval-facing scan-profile matrix remains after the dedicated
   MapBuild default changes.
 - The first live model matrix attempts the four target provider/model profiles:
   `codex-router-responses` / `gpt-5.5`,
@@ -424,7 +411,8 @@ Implementation is complete only when all of these are true:
   explicitly.
 - Do not add a public `rotate_360` MCP tool unless the first implementation
   proves the repeated primitive calls are the blocker.
-- Do not make regular cleanup runs perform panorama scanning by default.
+- Do not make regular cleanup runs perform fixture-focused body-turn scanning by
+  default.
 - Do not count movable-object prior evidence as task success without current
   observation.
 - Do not promote any tested model profile to the default product route as part
@@ -432,16 +420,14 @@ Implementation is complete only when all of these are true:
 
 ## Implementation Slices
 
-### Slice 1: MapBuild Scan Profile
+### Slice 1: MapBuild Scan Contract
 
-- Add scan profile configuration for MapBuild.
-- Implement `standard`, `panorama`, and `fixture-focused` semantics where the
-  current map-build runner and SDK prompts consume scan policy.
-- Ensure the default dedicated MapBuild route selects the intended profile.
+- Add one fixed fixture-focused scan contract for MapBuild.
+- Ensure the dedicated MapBuild route uses the intended contract.
 - Record profile, heading count, body turns, camera adjustments, and observe
   counts in run artifacts/reports.
-- Keep scan profile out of the public launch grammar unless separately
-  reviewed.
+- Keep scan profile/profile-like knobs out of the public launch grammar unless
+  separately reviewed.
 
 ### Slice 2: Prior Semantics And Prompt Contract
 
@@ -453,7 +439,7 @@ Implementation is complete only when all of these are true:
 - Require SDK MapBuild and direct-runner MapBuild to both record whether
   `fixture-focused` actually exercised body-turn observations. If SDK traces do
   not use `navigate_to_relative_pose`, mark that variant not comparable instead
-  of silently counting it as panorama proof.
+  of silently counting it as complete scan proof.
 
 ### Slice 3: Experiment Harness Rows
 
@@ -471,8 +457,8 @@ Implementation is complete only when all of these are true:
 
 ### Slice 4: Reports And Decision Thresholds
 
-- Add report summaries that compare no-prior, `standard`, and
-  `fixture-focused` variants.
+- Add report summaries that compare no-prior and fixture-focused-prior
+  variants.
 - Include per-tool counts and time-to-target metrics.
 - Mark results as `improved`, `no_regression`, `inconclusive`, or `regressed`
   with the reason visible in report data.
@@ -589,9 +575,68 @@ Local/live/manual gates:
   requested MiMo 1000 row without explicitly reporting that MiMo 1000 was not
   available.
 
+## Closeout Evidence
+
+Closeout status: DONE_ROOT_ENV_LIVE_PROOF
+
+Implementation commits:
+
+- `fa8ecf4c refactor: fix mapbuild scan contract`
+- `1fa8fff3 docs: record root-env mapbuild evidence`
+
+Final proof command:
+
+```bash
+set -a && source /home/mi/ws/gogo/roboclaws/.env && set +a && \
+just agent::eval execute \
+  plan=docs/plans/2026-06-24-map-build-panorama-consumer-experiments.md \
+  budget=focused \
+  output_dir=/tmp/happy-crab-eval-harness-execute-root-env-final
+```
+
+Final proof summary:
+
+- The focused root-env execute completed with 19 selected rows run and 0
+  non-zero exits; 6 rows were skipped by selector as irrelevant.
+- Deterministic `map_build_consumer` passed 5/5. The fixture-focused prior
+  reduced the stable-anchor open-ended row from no-prior `observe=18`,
+  `navigate_to_waypoint=13` to `observe=12`,
+  `navigate_to_waypoint=7`; cleanup prior was `no_regression` with
+  `movable_hint_rechecked`.
+- Direct world-public MapBuild passed with
+  `scan_profile_id=fixture-focused`, `navigate_to_relative_pose:request=28`,
+  and `observe:request=35`.
+- Direct world-public cleanup using that Runtime Metric Map prior passed with
+  `final_status=success`, `restored_count=5/5`, and
+  `runtime_metric_map_prior.loaded=true`.
+- Root-env Grounding DINO MapBuild passed with
+  `visual_grounding_pipeline_id=grounding-dino`,
+  `scan_profile_id=fixture-focused`,
+  `navigate_to_relative_pose:request=28`,
+  `declare_visual_candidates:request=35`, and `observe:request=35`.
+- Root-env Grounding DINO cleanup completed as `partial_success` with
+  `restored_count=3/5`, `sweep_coverage_rate=1.0`, and
+  `visual_grounding_pipeline_id=grounding-dino`.
+- Live OpenAI Agents SDK MapBuild consumer matrix completed:
+  `codex-router-responses` 3/5, `mimo-inside-openai-chat` 2/5,
+  `kimi-openai-chat` 3/5, and `minimax-responses` 3/5. The recurring failures
+  were open-ended fridge behavior failures classified as
+  `private_goal_not_satisfied`, not provider/credential failures.
+- Extra selected root-env live rows passed:
+  `openai-agents-sdk-open-task-live-eval` 3/3 and
+  `openai-agents-sdk-cleanup-live-eval` 3/3 repetitions.
+
+Residual follow-up:
+
+- Inspect the `mimo-inside-openai-chat` cleanup no-prior classification:
+  the product run wrote partial-success evidence while the eval row reported
+  `harness_bug_unclassified`.
+- Treat Grounding DINO cleanup quality as a separate behavior improvement
+  track. The MapBuild DINO scan contract itself passed.
+
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: EXECUTED_ROOT_ENV_LIVE_PROOF
 
 Task source: `docs/plans/2026-06-24-map-build-panorama-consumer-experiments.md`
 
@@ -599,12 +644,13 @@ Canonical source: `docs/plans/2026-06-24-map-build-panorama-consumer-experiments
 
 Route: durable `$intuitive-flow`
 
-Goal: implement MapBuild fixture-focused panorama scanning and prove downstream
-benefit through targeted open-ended and cleanup experiments.
+Goal: implement MapBuild fixture-focused body-turn scanning and prove
+downstream benefit through targeted open-ended and cleanup experiments.
 
 Scope:
 
-- MapBuild scan profile contract and default dedicated MapBuild behavior.
+- MapBuild fixture-focused scan contract and default dedicated MapBuild
+  behavior.
 - Prompt/direct-runner alignment for stable-anchor priority and movable-prior
   safety.
 - Runtime/report metrics needed to compare downstream consumer behavior.
@@ -617,7 +663,7 @@ Non-goals:
 - new MCP composite rotate tool in the first slice;
 - automatic cleanup consumption of latest MapBuild output;
 - private fixture truth exposure;
-- regular cleanup panorama scanning by default;
+- regular cleanup fixture-focused body-turn scanning by default;
 - real-robot proof;
 - product default model-route changes.
 

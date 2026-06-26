@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 
+from roboclaws.household.map_build_scan_profile import (
+    map_build_scan_profile,
+)
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.task_intent import (
     HOUSEHOLD_INTENT_MAP_BUILD,
@@ -298,10 +301,15 @@ def render_kickoff_prompt(
     )
 
 
-def render_map_build_prompt(profile: str, task: str) -> str:
+def render_map_build_prompt(
+    profile: str,
+    task: str,
+) -> str:
     """Render the live-agent kickoff prompt for intent=map-build."""
 
+    selected_scan_profile = map_build_scan_profile()
     prompt = CUSTOM_PREFIX + MAP_BUILD_RULES.format(task=task)
+    prompt += " " + _map_build_scan_profile_prompt(selected_scan_profile.to_payload())
     if profile == "camera-raw-fpv":
         return (
             prompt + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
@@ -314,6 +322,27 @@ def render_map_build_prompt(profile: str, task: str) -> str:
             "destination oracle fields; use them only as map labels."
         )
     return prompt
+
+
+def _map_build_scan_profile_prompt(scan_profile: dict[str, object]) -> str:
+    profile_id = str(scan_profile.get("profile") or "fixture-focused")
+    body_turn_count = int(scan_profile.get("body_turn_count_per_waypoint") or 4)
+    yaw_delta = float(scan_profile.get("body_turn_yaw_delta_deg") or 90.0)
+    emphasis = (
+        " Prioritize stable semantic anchors: fixtures, surfaces, receptacles, "
+        "room or area anchors, and navigation-visible landmarks. Record movable "
+        "objects only as observations that future runs must recheck before action."
+        if bool(scan_profile.get("stable_anchor_priority"))
+        else ""
+    )
+    return (
+        f"MapBuild scan_profile={profile_id}: at each inspection waypoint, after the "
+        f"initial observe, call navigate_to_relative_pose(forward_m=0, lateral_m=0, "
+        f"yaw_delta_deg={yaw_delta:g}) then observe again for each of {body_turn_count} "
+        "bounded robot-body headings. If navigate_to_relative_pose is blocked, report "
+        "the blocked capability instead of silently treating camera-only scanning as "
+        f"complete MapBuild scan proof.{emphasis}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -337,7 +366,12 @@ def main(argv: list[str] | None = None) -> int:
     intent = normalize_household_intent(str(getattr(goal_contract, "intent", "") or args.intent))
     if intent == HOUSEHOLD_INTENT_MAP_BUILD:
         task = args.task or "build a Runtime Metric Map of this room"
-        print(render_map_build_prompt(args.profile, task))
+        print(
+            render_map_build_prompt(
+                args.profile,
+                task,
+            )
+        )
     else:
         print(
             render_kickoff_prompt(

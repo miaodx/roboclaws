@@ -50,6 +50,10 @@ def resolve_artifact_dependencies(
     return {
         "runtime_map_prior_path": runtime_map_prior_path,
         "runtime_map_prior_source_sample_id": source_sample_id,
+        "runtime_map_prior_source_status": str(source_artifacts.get("source_status") or ""),
+        "runtime_map_prior_source_failure_class": str(
+            source_artifacts.get("source_failure_class") or ""
+        ),
     }
 
 
@@ -59,6 +63,24 @@ def dependency_failure(dependency_artifacts: dict[str, Any]) -> dict[str, Any] |
     explicit_source = dependency_artifacts.get("runtime_map_prior_source") == "explicit_path"
     if not source_sample_id and not explicit_source:
         return None
+    source_status = str(dependency_artifacts.get("runtime_map_prior_source_status") or "")
+    source_failure_class = str(
+        dependency_artifacts.get("runtime_map_prior_source_failure_class") or ""
+    )
+    if (
+        source_sample_id
+        and source_status == "blocked"
+        and source_failure_class in {"environment_blocked", "model_or_provider_unavailable"}
+    ):
+        return {
+            "failure_class": source_failure_class,
+            "missing_dependencies": ["runtime_map_prior_path"],
+            "resolved_dependencies": dict(dependency_artifacts),
+            "message": (
+                "runtime_map_prior source sample was blocked before producing "
+                f"runtime_metric_map: {source_failure_class}"
+            ),
+        }
     if not prior_path:
         message = (
             "explicit runtime_map_prior path was empty"

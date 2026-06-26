@@ -150,6 +150,7 @@ run dispatch_target agent_engine mode="" *overrides:
         cleanup_routine|record_robot_views|robot_views|\
         host|max_wall_seconds|min_generated_mess_count|\
         b1_alignment_artifact|b1_navigation_artifact|map_bundle|mode|model|output_dir|policy|port|prompt|provider|provider_profile|\
+        regrade_source|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|operator_resume_requests_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\

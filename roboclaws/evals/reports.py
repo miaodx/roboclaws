@@ -6,6 +6,10 @@ import html
 from pathlib import Path
 from typing import Any
 
+from roboclaws.evals.map_build_reports import (
+    map_build_matrix_summary_from_bundles,
+    render_map_build_review_section,
+)
 from roboclaws.evals.models import (
     EVAL_RESULT_SCHEMA,
     MISSING_NOT_APPLICABLE,
@@ -92,6 +96,9 @@ def aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     open_ended = _open_ended_aggregate(results)
     if open_ended:
         aggregate["open_ended"] = open_ended
+    comparison = _comparison_aggregate(results)
+    if comparison:
+        aggregate["comparison"] = comparison
     return aggregate
 
 
@@ -102,6 +109,11 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
     rows = "\n".join(_report_row(result, output_dir=output_dir) for result in bundle["results"])
     aggregate = bundle["aggregate"]
     sampler_projection = _sampler_projection_section(aggregate)
+    map_build_review = render_map_build_review_section(
+        map_build_matrix_summary_from_bundles([bundle]),
+        output_dir=output_dir,
+    )
+    comparison = _comparison_section(aggregate)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -120,6 +132,8 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
   <h1>{html.escape(str(suite["suite_id"]))}</h1>
   <p>Pass@1: {aggregate["pass_at_1"]} ({aggregate["passed"]}/{aggregate["total"]} trials)</p>
 {sampler_projection}
+{map_build_review}
+{comparison}
   <table>
     <thead>
       <tr>
@@ -135,6 +149,139 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _comparison_aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
+        metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
+        sample_metadata = identity.get("sample_metadata")
+        if not isinstance(sample_metadata, dict):
+            sample_metadata = {}
+        variant_id = str(
+            sample_metadata.get("variant_id")
+            or sample_metadata.get("prior_variant")
+            or _variant_id_from_identity(identity)
+        )
+        if variant_id == "not_applicable":
+            continue
+        row = {
+            "sample_id": str(identity.get("sample_id") or ""),
+            "variant_id": variant_id,
+            "provider_profile": str(identity.get("provider_profile") or ""),
+            "model": str(identity.get("model") or ""),
+            "agent_engine": str(identity.get("agent_engine") or ""),
+            "status": str(result.get("status") or ""),
+            "failure_class": str(result.get("failure_class") or ""),
+            "tool_counts": dict(metrics.get("comparison_tool_counts") or {}),
+            "first_relevant_evidence": dict(metrics.get("first_relevant_evidence") or {}),
+            "first_actionable_object_discovery": dict(
+                metrics.get("first_actionable_object_discovery") or {}
+            ),
+            "prior_use_verdict": str(metrics.get("prior_use_verdict") or "prior_ignored"),
+        }
+        rows.append(
+            {
+                **row,
+                "comparison_label": "",
+                "reason": "",
+            }
+        )
+    if not rows:
+        return {}
+    baselines = {
+        _comparison_baseline_key(row): row for row in rows if row["variant_id"] == "no_prior"
+    }
+    for row in rows:
+        baseline = baselines.get(_comparison_baseline_key(row))
+        row["comparison_label"] = _comparison_label(row, baseline)
+        row["reason"] = _comparison_reason(row, baseline)
+    return {
+        "schema": "map_build_consumer_comparison_summary_v1",
+        "rows": rows,
+        "variant_ids": sorted({row["variant_id"] for row in rows}),
+        "provider_profiles": sorted({row["provider_profile"] for row in rows}),
+    }
+
+
+def _variant_id_from_identity(identity: dict[str, Any]) -> str:
+    sample_id = str(identity.get("sample_id") or "")
+    if ".no_prior" in sample_id or "_no_prior_" in sample_id or sample_id.endswith("_no_prior"):
+        return "no_prior"
+    if (
+        ".fixture_focused_prior" in sample_id
+        or "_fixture_focused_prior_" in sample_id
+        or sample_id.endswith("_fixture_focused_prior")
+    ):
+        return "fixture_focused_prior"
+    return "not_applicable"
+
+
+def _comparison_baseline_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
+    sample_id = str(row.get("sample_id") or "")
+    family = sample_id.split(".", 1)[0]
+    return (
+        family,
+        str(row.get("agent_engine") or ""),
+        str(row.get("provider_profile") or ""),
+        str(row.get("model") or ""),
+    )
+
+
+def _comparison_label(row: dict[str, Any], baseline: dict[str, Any] | None) -> str:
+    status = str(row.get("status") or "")
+    failure_class = str(row.get("failure_class") or "")
+    if status == "blocked" or failure_class == "model_or_provider_unavailable":
+        return "inconclusive"
+    if status == "failed":
+        return "regressed"
+    if str(row.get("variant_id") or "") != "no_prior" and _row_improves_baseline(
+        row,
+        baseline,
+    ):
+        return "improved"
+    return "no_regression" if status == "passed" else "inconclusive"
+
+
+def _comparison_reason(row: dict[str, Any], baseline: dict[str, Any] | None) -> str:
+    failure_class = str(row.get("failure_class") or "")
+    if failure_class == "model_or_provider_unavailable":
+        return "provider_or_runtime_unavailable_not_behavior"
+    if str(row.get("status") or "") == "failed":
+        return failure_class or "behavior_failed"
+    prior_verdict = str(row.get("prior_use_verdict") or "prior_ignored")
+    if prior_verdict == "unsafe_prior_use":
+        return "prior_movable_object_used_without_current_confirmation"
+    if str(row.get("variant_id") or "") == "no_prior":
+        return prior_verdict
+    if _row_improves_baseline(row, baseline):
+        return "lower_search_cost_than_no_prior"
+    if baseline is None:
+        return f"{prior_verdict}; no matching no_prior baseline"
+    return prior_verdict
+
+
+def _row_improves_baseline(row: dict[str, Any], baseline: dict[str, Any] | None) -> bool:
+    if baseline is None:
+        return False
+    row_counts = row.get("tool_counts") if isinstance(row.get("tool_counts"), dict) else {}
+    baseline_counts = (
+        baseline.get("tool_counts") if isinstance(baseline.get("tool_counts"), dict) else {}
+    )
+    for key in ("observe", "navigate_to_waypoint", "adjust_camera"):
+        row_value = _int_metric(row_counts.get(key))
+        baseline_value = _int_metric(baseline_counts.get(key))
+        if row_value >= 0 and baseline_value >= 0 and row_value < baseline_value:
+            return True
+    return False
+
+
+def _int_metric(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
 
 
 def _sampler_projection_aggregate(suite: EvalSuite) -> dict[str, Any]:
@@ -286,6 +433,58 @@ def _sampler_projection_section(aggregate: dict[str, Any]) -> str:
     </table>
   </section>
 """
+
+
+def _comparison_section(aggregate: dict[str, Any]) -> str:
+    comparison = aggregate.get("comparison")
+    if not isinstance(comparison, dict):
+        return ""
+    rows = comparison.get("rows")
+    if not isinstance(rows, list):
+        return ""
+    body = "\n".join(_comparison_row(row) for row in rows[:24])
+    return f"""  <section>
+    <h2>MapBuild Consumer Comparison</h2>
+    <p>Variants: {html.escape(", ".join(comparison.get("variant_ids") or []))};
+    providers: {html.escape(", ".join(comparison.get("provider_profiles") or []))}.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Sample</th><th>Variant</th><th>Provider</th><th>Status</th>
+          <th>Label</th><th>Prior use</th><th>Observe</th><th>Body turns</th>
+          <th>First evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+{body}
+      </tbody>
+    </table>
+  </section>
+"""
+
+
+def _comparison_row(row: Any) -> str:
+    payload = row if isinstance(row, dict) else {}
+    tool_counts = payload.get("tool_counts") if isinstance(payload.get("tool_counts"), dict) else {}
+    first = (
+        payload.get("first_relevant_evidence")
+        if isinstance(payload.get("first_relevant_evidence"), dict)
+        else {}
+    )
+    return (
+        "        <tr>"
+        f"<td>{html.escape(str(payload.get('sample_id') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('variant_id') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('provider_profile') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('status') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('comparison_label') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('prior_use_verdict') or ''))}</td>"
+        f"<td>{html.escape(str(tool_counts.get('observe') or 0))}</td>"
+        f"<td>{html.escape(str(tool_counts.get('navigate_to_relative_pose') or 0))}</td>"
+        f"<td>{html.escape(str(first.get('tool') or ''))} "
+        f"{html.escape(str(first.get('step') or ''))}</td>"
+        "</tr>"
+    )
 
 
 def _sampler_projection_source_row(source: str, payload: Any) -> str:

@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.map_build_scan_profile import (
+    MapBuildScanProfile,
+)
+from roboclaws.household.map_build_scan_profile import (
+    map_build_scan_profile as build_map_build_scan_profile,
+)
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -15,14 +21,11 @@ from roboclaws.household.realworld_contract import (
 from roboclaws.household.skill_scratchpad import empty_skill_scratchpad
 
 MAP_BUILD_POLICY = "map_build_baseline"
-MAP_BUILD_CAMERA_SCHEDULE: tuple[dict[str, float], ...] = (
-    {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
-    {"yaw_delta_deg": -30.0, "pitch_delta_deg": 0.0},
-    {"yaw_delta_deg": 60.0, "pitch_delta_deg": 0.0},
-)
 
 ToolCaller = Callable[..., dict[str, Any]]
 ObservationPostprocessor = Callable[..., dict[str, Any]]
+WaypointFilter = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+StopAfterWaypoint = Callable[[RealWorldCleanupContract], bool]
 
 
 @dataclass(frozen=True)
@@ -90,10 +93,17 @@ def run_direct_cleanup_scan(
     planner_proof_evidence: dict[str, Any] | None,
     agent_scratchpad: dict[str, Any],
     hooks: DirectCleanupLoopHooks,
+    map_build_scan_profile: MapBuildScanProfile | None = None,
+    waypoint_filter: WaypointFilter | None = None,
+    stop_after_waypoint: StopAfterWaypoint | None = None,
 ) -> int:
+    scan_profile = map_build_scan_profile or default_map_build_scan_profile()
     handled_handles: set[str] = set()
     pending_detections: dict[str, dict[str, Any]] = {}
-    for waypoint in metric_map["inspection_waypoints"]:
+    waypoints = [dict(item) for item in metric_map["inspection_waypoints"]]
+    if waypoint_filter is not None:
+        waypoints = waypoint_filter(waypoints)
+    for waypoint in waypoints:
         view_index = _scan_direct_cleanup_waypoint(
             trace_events=trace_events,
             started_at=started_at,
@@ -112,7 +122,10 @@ def run_direct_cleanup_scan(
             handled_handles=handled_handles,
             pending_detections=pending_detections,
             hooks=hooks,
+            map_build_scan_profile=scan_profile,
         )
+        if stop_after_waypoint is not None and stop_after_waypoint(contract):
+            break
     if not map_build:
         return _clean_pending_detections(
             trace_events=trace_events,
@@ -134,6 +147,10 @@ def run_direct_cleanup_scan(
     return view_index
 
 
+def default_map_build_scan_profile() -> MapBuildScanProfile:
+    return build_map_build_scan_profile()
+
+
 def _scan_direct_cleanup_waypoint(
     *,
     trace_events: list[dict[str, Any]],
@@ -153,6 +170,7 @@ def _scan_direct_cleanup_waypoint(
     handled_handles: set[str],
     pending_detections: dict[str, dict[str, Any]],
     hooks: DirectCleanupLoopHooks,
+    map_build_scan_profile: MapBuildScanProfile,
 ) -> int:
     waypoint_id = str(waypoint["waypoint_id"])
     hooks.call_tool(
@@ -174,6 +192,7 @@ def _scan_direct_cleanup_waypoint(
         map_build=map_build,
         perception_mode=perception_mode,
         hooks=hooks,
+        map_build_scan_profile=map_build_scan_profile,
     )
     if map_build:
         return view_index
@@ -210,9 +229,14 @@ def _observe_direct_cleanup_waypoint(
     map_build: bool,
     perception_mode: str,
     hooks: DirectCleanupLoopHooks,
+    map_build_scan_profile: MapBuildScanProfile,
 ) -> tuple[list[dict[str, Any]], int]:
     detections = []
-    for camera_index, camera_step in enumerate(_camera_schedule_for_direct_scan(map_build)):
+    camera_schedule = _camera_schedule_for_direct_scan(
+        map_build=map_build,
+        scan_profile=map_build_scan_profile,
+    )
+    for camera_index, camera_step in enumerate(camera_schedule):
         if map_build and camera_index > 0:
             hooks.call_tool(
                 trace_events,
@@ -247,12 +271,70 @@ def _observe_direct_cleanup_waypoint(
                 perception_mode=perception_mode,
             )
         )
+    if map_build and map_build_scan_profile.uses_robot_body_turns:
+        for turn_index in range(map_build_scan_profile.body_turn_count_per_waypoint):
+            turn_response = hooks.call_tool(
+                trace_events,
+                started_at,
+                "navigate_to_relative_pose",
+                {
+                    "forward_m": 0.0,
+                    "lateral_m": 0.0,
+                    "yaw_delta_deg": map_build_scan_profile.body_turn_yaw_delta_deg,
+                    "scan_profile": map_build_scan_profile.profile_id,
+                    "turn_index": turn_index + 1,
+                },
+                lambda yaw=map_build_scan_profile.body_turn_yaw_delta_deg: (
+                    contract.navigate_to_relative_pose(
+                        forward_m=0.0,
+                        lateral_m=0.0,
+                        yaw_delta_deg=yaw,
+                    )
+                ),
+            )
+            if not turn_response.get("ok"):
+                raise RuntimeError(
+                    "map-build scan profile "
+                    f"{map_build_scan_profile.profile_id!r} requires body-turn "
+                    "navigate_to_relative_pose, but backend returned "
+                    f"{turn_response.get('status') or turn_response.get('error_reason')}"
+                )
+            observation = hooks.call_tool(
+                trace_events,
+                started_at,
+                "observe",
+                {"scan_profile": map_build_scan_profile.profile_id, "turn_index": turn_index + 1},
+                contract.observe,
+                postprocess=lambda response: hooks.attach_raw_fpv_robot_view(
+                    response=response,
+                    contract=contract,
+                    base_contract=base_contract,
+                    robot_view_steps=robot_view_steps,
+                    output_dir=output_dir,
+                    view_index_ref=[view_index],
+                    record_robot_views=record_robot_views,
+                ),
+            )
+            view_index = hooks.view_index_after_raw_fpv(robot_view_steps, view_index)
+            detections.extend(
+                hooks.detections_for_policy(
+                    trace_events=trace_events,
+                    started_at=started_at,
+                    contract=contract,
+                    observation=observation,
+                    perception_mode=perception_mode,
+                )
+            )
     return detections, view_index
 
 
-def _camera_schedule_for_direct_scan(map_build: bool) -> tuple[dict[str, float], ...]:
+def _camera_schedule_for_direct_scan(
+    *,
+    map_build: bool,
+    scan_profile: MapBuildScanProfile,
+) -> tuple[dict[str, float], ...]:
     if map_build:
-        return MAP_BUILD_CAMERA_SCHEDULE
+        return scan_profile.camera_schedule
     return ({"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},)
 
 

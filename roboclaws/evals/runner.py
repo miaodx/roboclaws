@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,7 @@ from roboclaws.evals.live_runtime import (
     run_live_eval_trial,
     run_live_surface_product,
 )
+from roboclaws.evals.map_build_quality import grade_runtime_metric_map_quality
 from roboclaws.evals.models import (
     MISSING_NOT_APPLICABLE,
     MISSING_UNAVAILABLE,
@@ -68,6 +70,7 @@ def run_eval_suite(
     model: str | None = None,
     live_execution: str = "blocked",
     live_timeout_s: float | None = None,
+    regrade_source: Path | None = None,
     product_runner: ProductRun = run_realworld_cleanup,
     live_product_runner: ProductRun | None = None,
 ) -> EvalSuiteRun:
@@ -75,6 +78,8 @@ def run_eval_suite(
 
     if live_execution not in {"blocked", "run"}:
         raise ValueError("live_execution must be blocked or run")
+    if regrade_source is not None and agent_engine == "direct-runner":
+        raise ValueError("regrade_source is only supported for live-agent eval runs")
 
     suite_path = resolve_suite_path(suite_ref)
     suite = load_eval_suite(suite_path)
@@ -84,7 +89,8 @@ def run_eval_suite(
         agent_engine=engine.id,
         provider_profile=provider_profile,
     )
-    run_stamp = stamp or time.strftime("%Y%m%dT%H%M%S")
+    regrade_source_dir = _resolved_regrade_source(regrade_source, suite=suite)
+    run_stamp = stamp or _default_run_stamp()
     output_dir = output_root / _path_token(suite.suite_id) / run_stamp
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -118,15 +124,19 @@ def run_eval_suite(
                 model=model,
                 live_execution=live_execution,
                 live_timeout_s=live_timeout_s,
+                regrade_source_dir=regrade_source_dir,
                 product_runner=product_runner,
                 live_product_runner=live_product_runner,
             )
             results.append(result)
             sample_artifacts[sample_artifact_key(sample.sample_id, repetition_index)] = (
-                result.artifacts or _artifact_paths(run_dir)
+                _sample_artifact_record(result, run_dir=run_dir)
             )
             if repetition_index == 0:
-                sample_artifacts[sample.sample_id] = result.artifacts or _artifact_paths(run_dir)
+                sample_artifacts[sample.sample_id] = _sample_artifact_record(
+                    result,
+                    run_dir=run_dir,
+                )
 
     bundle = results_bundle(suite=suite, results=results, output_dir=output_dir, budget=budget)
     results_path = output_dir / "eval_results.json"
@@ -161,6 +171,28 @@ def resolve_suite_path(suite_ref: str) -> Path:
     if path.exists():
         return path
     raise ValueError(f"unknown eval suite {suite_ref!r}")
+
+
+def _resolved_regrade_source(regrade_source: Path | None, *, suite: EvalSuite) -> Path | None:
+    if regrade_source is None:
+        return None
+    source = Path(regrade_source)
+    if not source.is_absolute():
+        source = REPO_ROOT / source
+    source = source.resolve()
+    if not source.is_dir():
+        raise ValueError(f"regrade_source does not exist or is not a directory: {source}")
+    if source.name == _path_token(suite.suite_id) and (source / "eval_results.json").is_file():
+        return source
+    suite_dir = source / _path_token(suite.suite_id)
+    if suite_dir.is_dir():
+        return suite_dir.resolve()
+    if (source / "eval_results.json").is_file():
+        return source
+    raise ValueError(
+        "regrade_source must point to an existing eval run directory for "
+        f"{suite.suite_id} or an output root containing it"
+    )
 
 
 def _load_suite_samples(suite: EvalSuite) -> list[EvalSample]:
@@ -239,11 +271,21 @@ def _run_trial(
     model: str | None,
     live_execution: str,
     live_timeout_s: float | None,
+    regrade_source_dir: Path | None,
     product_runner: ProductRun,
     live_product_runner: ProductRun | None,
 ) -> EvalResult:
     run_dir.mkdir(parents=True, exist_ok=True)
     if agent_engine != "direct-runner":
+        if regrade_source_dir is not None:
+            return _regrade_live_eval_trial(
+                sample=sample,
+                trial=trial,
+                run_dir=run_dir,
+                repetition_index=repetition_index,
+                sample_artifacts=sample_artifacts,
+                regrade_source_dir=regrade_source_dir,
+            )
         if live_execution == "run":
             return run_live_eval_trial(
                 sample=sample,
@@ -313,6 +355,101 @@ def _run_trial(
         metrics=metrics,
         limitations=trial.limitations,
     )
+
+
+def _regrade_live_eval_trial(
+    *,
+    sample: EvalSample,
+    trial: EvalTrial,
+    run_dir: Path,
+    repetition_index: int,
+    sample_artifacts: dict[str, dict[str, Any]],
+    regrade_source_dir: Path,
+) -> EvalResult:
+    try:
+        dependency_artifacts = resolve_artifact_dependencies(
+            sample,
+            repetition_index=repetition_index,
+            sample_artifacts=sample_artifacts,
+        )
+        failure = dependency_failure(dependency_artifacts)
+        if failure is not None:
+            return _failed_result_from_dependency(trial, run_dir, failure)
+        source_run_dir = _regrade_effective_run_dir(
+            regrade_source_dir,
+            sample=sample,
+            repetition_index=repetition_index,
+        )
+        run_result = _load_required_regrade_run_result(source_run_dir)
+    except Exception as exc:  # noqa: BLE001 - eval packets must classify regrade failures.
+        return _blocked_result_from_exception(trial, exc)
+
+    grader_outputs = _grade_trial(
+        sample=sample,
+        run_dir=source_run_dir,
+        run_result=run_result,
+        dependency_artifacts=dependency_artifacts,
+    )
+    status, failure_class = _status_from_graders(grader_outputs)
+    artifacts = _artifact_paths(source_run_dir)
+    metrics = _metrics_from_graders(grader_outputs, status=status, run_result=run_result)
+    return EvalResult.from_trial(
+        trial,
+        status=status,
+        failure_class=failure_class,
+        grader_outputs=grader_outputs,
+        artifacts=artifacts,
+        artifact_schema_versions={key: MISSING_UNAVAILABLE for key in artifacts},
+        metrics=metrics,
+        limitations=(*trial.limitations, "live_eval_regraded_from_existing_artifacts"),
+    )
+
+
+def _regrade_effective_run_dir(
+    regrade_source_dir: Path,
+    *,
+    sample: EvalSample,
+    repetition_index: int,
+) -> Path:
+    trial_dir = (
+        regrade_source_dir
+        / "runs"
+        / _path_token(sample.sample_id)
+        / f"trial-{repetition_index:04d}"
+    )
+    command_record = trial_dir / "live_eval_command.json"
+    if command_record.is_file():
+        record, error = _load_optional_json_mapping(command_record)
+        effective = str(record.get("effective_run_dir") or "").strip() if not error else ""
+        if effective:
+            path = Path(effective)
+            if not path.is_absolute():
+                path = (REPO_ROOT / path).resolve()
+            else:
+                path = path.resolve()
+            if not path.is_relative_to(trial_dir.resolve()):
+                raise ValueError(
+                    f"regrade effective run dir must stay under source trial dir {trial_dir}, "
+                    f"got {path}"
+                )
+            if not path.is_dir():
+                raise ValueError(f"regrade effective run dir does not exist: {path}")
+            return path
+    surface_root = trial_dir / "surface-run"
+    candidates = sorted(surface_root.glob(f"**/seed-{sample.seed}"))
+    if not candidates and surface_root.is_dir():
+        candidates = [surface_root]
+    for candidate in candidates:
+        if (candidate / "run_result.json").is_file():
+            return candidate
+    raise ValueError(f"regrade_source has no live artifacts for sample {sample.sample_id}")
+
+
+def _load_required_regrade_run_result(run_dir: Path) -> dict[str, Any]:
+    run_result, error = _load_required_json_mapping(run_dir / "run_result.json")
+    if error:
+        raise ValueError(f"invalid regrade run_result: {error}")
+    return run_result
 
 
 def _grade_trial(
@@ -448,53 +585,17 @@ def _outcome_grader(
     if sample.intent == "map-build":
         runtime_map_path = run_dir / "runtime_metric_map.json"
         runtime_map, runtime_map_error = _load_required_json_mapping(runtime_map_path)
-        config = sample.grader_config or {}
-        schema_ok = runtime_map.get("schema") == str(
-            config.get("require_runtime_metric_map_schema") or "runtime_metric_map_v1"
+        return grade_runtime_metric_map_quality(
+            runtime_map=runtime_map,
+            runtime_map_exists=runtime_map_path.exists(),
+            runtime_map_error=runtime_map_error,
+            config=sample.grader_config or {},
+            private_goal_reference=_map_build_private_goal_reference(
+                sample=sample,
+                run_dir=run_dir,
+                run_result=run_result,
+            ),
         )
-        anchors, anchors_error = _optional_list_value(
-            runtime_map,
-            "public_semantic_anchors",
-        )
-        exploration, exploration_error = _optional_list_value(
-            runtime_map,
-            "generated_exploration_candidates",
-        )
-        runtime_map_error = runtime_map_error or anchors_error or exploration_error
-        private_truth_absent = runtime_map.get("private_truth_included") is False
-        source_map_not_mutated = runtime_map.get("source_map_mutated") is False
-        passed = (
-            runtime_map_path.exists()
-            and schema_ok
-            and len(anchors) >= _int_value(config.get("min_public_semantic_anchors") or 0)
-            and len(exploration)
-            >= _int_value(config.get("min_generated_exploration_candidates") or 0)
-            and (private_truth_absent if config.get("require_private_truth_absent", True) else True)
-            and (
-                source_map_not_mutated
-                if config.get("require_source_map_not_mutated", True)
-                else True
-            )
-        )
-        failure_class = MISSING_NOT_APPLICABLE
-        if not passed:
-            failure_class = (
-                "artifact_missing"
-                if runtime_map_error not in {"", "missing"}
-                else "map_actionability_failure"
-            )
-        return {
-            "status": "passed" if passed else "failed",
-            "failure_class": failure_class,
-            "runtime_metric_map_exists": runtime_map_path.exists(),
-            "runtime_metric_map_schema": runtime_map.get("schema", MISSING_UNAVAILABLE),
-            "runtime_metric_map_error": runtime_map_error or MISSING_NOT_APPLICABLE,
-            "schema_ok": schema_ok,
-            "public_semantic_anchor_count": len(anchors),
-            "generated_exploration_candidate_count": len(exploration),
-            "private_truth_absent": private_truth_absent,
-            "source_map_not_mutated": source_map_not_mutated,
-        }
     if sample.intent == "open-ended":
         open_ended = _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result)
         return {
@@ -530,6 +631,76 @@ def _outcome_grader(
         "mess_restoration_rate": score.get("mess_restoration_rate", MISSING_UNAVAILABLE),
         "disturbance_count": score.get("disturbance_count", MISSING_UNAVAILABLE),
     }
+
+
+def _map_build_private_goal_reference(
+    *,
+    sample: EvalSample,
+    run_dir: Path,
+    run_result: dict[str, Any],
+) -> dict[str, Any]:
+    reference = dict(sample.private_goal_reference or {})
+    if str(run_result.get("backend") or "") != "molmospaces_subprocess":
+        return reference
+    truth = _molmospaces_fixture_truth_from_backend_state(
+        run_dir / "molmospaces_backend_state.json"
+    )
+    if truth:
+        reference["simulator_fixture_truth"] = truth
+    return reference
+
+
+def _molmospaces_fixture_truth_from_backend_state(path: Path) -> dict[str, Any]:
+    state, error = _load_optional_json_mapping(path)
+    if error or not state:
+        return {}
+    receptacles = state.get("receptacles") if isinstance(state.get("receptacles"), dict) else {}
+    rows = []
+    categories = set()
+    for raw_id, raw_fixture in receptacles.items():
+        if not isinstance(raw_fixture, dict):
+            continue
+        category = str(raw_fixture.get("category") or raw_fixture.get("name") or "").strip()
+        room_id = str(
+            raw_fixture.get("room_id")
+            or raw_fixture.get("room_area")
+            or _room_id_for_receptacle_id(str(raw_id))
+        ).strip()
+        if not category or not room_id:
+            continue
+        categories.add(category)
+        rows.append(
+            {
+                "category": category,
+                "waypoint_ids": [f"{room_id}_inspection"],
+            }
+        )
+    merged: dict[str, set[str]] = {}
+    for row in rows:
+        key = _normalized_truth_category(row["category"])
+        merged.setdefault(key, set()).update(row["waypoint_ids"])
+    return {
+        "schema": "map_build_simulator_fixture_truth_v1",
+        "truth_scope": "grader_only",
+        "truth_source": "molmospaces_backend_state.receptacles",
+        "pose_semantics": "best_view_waypoint_only",
+        "categories": sorted(categories),
+        "best_view_waypoint_truth": [
+            {"category": category, "waypoint_ids": sorted(waypoint_ids)}
+            for category, waypoint_ids in sorted(merged.items())
+        ],
+    }
+
+
+def _room_id_for_receptacle_id(value: str) -> str:
+    parts = str(value or "").rsplit("_", 3)
+    if parts and parts[-1].isdigit():
+        return f"room_{parts[-1]}"
+    return ""
+
+
+def _normalized_truth_category(value: Any) -> str:
+    return str(value or "").strip().lower()
 
 
 def _sampler_admission_grader(*, sample: EvalSample) -> dict[str, Any]:
@@ -585,6 +756,7 @@ def _efficiency_grader(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str
         timing_payload["live_timing"] = live_timing
         timing_payload["runner_wall_time_s"] = _live_wall_time_s(live_timing)
     model_attempt_summary = _model_attempt_summary(timing_payload)
+    trace_events, trace_errors = _read_trace_events_with_errors(run_dir / "trace.jsonl")
     source_errors = [
         error
         for error in (
@@ -594,14 +766,24 @@ def _efficiency_grader(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str
         if error
     ]
     return {
-        "status": "failed" if source_errors else "passed",
-        "failure_class": "artifact_missing" if source_errors else MISSING_NOT_APPLICABLE,
+        "status": "failed" if source_errors or trace_errors else "passed",
+        "failure_class": (
+            "artifact_missing" if source_errors or trace_errors else MISSING_NOT_APPLICABLE
+        ),
         "source_errors": source_errors,
+        "trace_parse_errors": trace_errors,
         "tool_event_count": sum(_int_value(value) for value in tool_counts.values()),
         "tool_call_count": sum(
             _int_value(value) for key, value in tool_counts.items() if str(key).endswith(":request")
         ),
         "tool_event_counts": dict(tool_counts),
+        "comparison_tool_counts": _comparison_tool_counts(tool_counts),
+        "first_relevant_evidence": _first_relevant_evidence(trace_events),
+        "first_actionable_object_discovery": _first_actionable_object_discovery(
+            trace_events,
+            run_result=run_result,
+        ),
+        "prior_use_verdict": _prior_use_verdict(run_result, trace_events=trace_events),
         "wall_time_s": _first_available_number(
             timing_payload,
             (
@@ -1195,6 +1377,7 @@ def _metrics_from_graders(
     run_result: dict[str, Any],
 ) -> dict[str, Any]:
     score = run_result.get("score") if isinstance(run_result.get("score"), dict) else {}
+    efficiency = grader_outputs["efficiency"]
     return {
         "pass": 1.0 if status == "passed" else 0.0,
         "private_truth_leak_count": grader_outputs["privacy"]["private_truth_leak_count"],
@@ -1204,15 +1387,125 @@ def _metrics_from_graders(
             "artifact_readiness",
             MISSING_NOT_APPLICABLE,
         ),
-        "tool_event_count": grader_outputs["efficiency"]["tool_event_count"],
-        "tool_call_count": grader_outputs["efficiency"].get("tool_call_count", 0),
-        "tool_event_counts": grader_outputs["efficiency"].get("tool_event_counts", {}),
-        "wall_time_s": grader_outputs["efficiency"].get("wall_time_s", MISSING_UNAVAILABLE),
-        "model_attempt_summary": grader_outputs["efficiency"].get(
+        "tool_event_count": efficiency["tool_event_count"],
+        "tool_call_count": efficiency.get("tool_call_count", 0),
+        "tool_event_counts": efficiency.get("tool_event_counts", {}),
+        "comparison_tool_counts": efficiency.get("comparison_tool_counts", {}),
+        "first_relevant_evidence": efficiency.get("first_relevant_evidence", {}),
+        "first_actionable_object_discovery": efficiency.get(
+            "first_actionable_object_discovery",
+            {},
+        ),
+        "prior_use_verdict": efficiency.get("prior_use_verdict", "prior_ignored"),
+        "wall_time_s": efficiency.get("wall_time_s", MISSING_UNAVAILABLE),
+        "model_attempt_summary": efficiency.get(
             "model_attempt_summary",
             {},
         ),
     }
+
+
+def _comparison_tool_counts(tool_counts: dict[str, Any]) -> dict[str, int]:
+    return {
+        tool: int(tool_counts.get(f"{tool}:request") or 0)
+        for tool in (
+            "observe",
+            "adjust_camera",
+            "navigate_to_waypoint",
+            "navigate_to_relative_pose",
+        )
+    }
+
+
+def _first_relevant_evidence(trace_events: list[dict[str, Any]]) -> dict[str, Any]:
+    for index, event in enumerate(trace_events, start=1):
+        if event.get("event") != "response":
+            continue
+        if event.get("tool") not in {
+            "observe",
+            "resolve_target_query",
+            "declare_visual_candidates",
+        }:
+            continue
+        return {
+            "step": index,
+            "tool": str(event.get("tool") or ""),
+            "wallclock_elapsed": event.get("wallclock_elapsed", MISSING_UNAVAILABLE),
+        }
+    return {"step": MISSING_UNAVAILABLE, "tool": MISSING_UNAVAILABLE}
+
+
+def _first_actionable_object_discovery(
+    trace_events: list[dict[str, Any]],
+    *,
+    run_result: dict[str, Any],
+) -> dict[str, Any]:
+    for index, event in enumerate(trace_events, start=1):
+        if event.get("event") != "response" or event.get("tool") != "observe":
+            continue
+        response = event.get("response") if isinstance(event.get("response"), dict) else event
+        for detection in _list_of_mappings(response.get("visible_object_detections")):
+            if str(detection.get("candidate_state") or "") == "navigation_authorized":
+                return {
+                    "step": index,
+                    "tool": "observe",
+                    "object_id": str(detection.get("object_id") or ""),
+                    "wallclock_elapsed": event.get("wallclock_elapsed", MISSING_UNAVAILABLE),
+                }
+    observed = (
+        run_result.get("runtime_metric_map", {}).get("observed_objects")
+        if isinstance(run_result.get("runtime_metric_map"), dict)
+        else []
+    )
+    for item in _list_of_mappings(observed):
+        if str(item.get("actionability") or "") == "actionable":
+            return {
+                "step": MISSING_UNAVAILABLE,
+                "tool": "runtime_metric_map",
+                "object_id": str(item.get("object_id") or ""),
+            }
+    return {"step": MISSING_UNAVAILABLE, "tool": MISSING_UNAVAILABLE}
+
+
+def _prior_use_verdict(
+    run_result: dict[str, Any],
+    *,
+    trace_events: list[dict[str, Any]],
+) -> str:
+    prior = (
+        run_result.get("runtime_metric_map_prior")
+        if isinstance(run_result.get("runtime_metric_map_prior"), dict)
+        else {}
+    )
+    if not prior.get("loaded"):
+        return "prior_ignored"
+    runtime_map = (
+        run_result.get("runtime_metric_map")
+        if isinstance(run_result.get("runtime_metric_map"), dict)
+        else {}
+    )
+    observed_objects = _list_of_mappings(runtime_map.get("observed_objects"))
+    if any(str(item.get("freshness") or "") == "prior" for item in observed_objects):
+        unsafe = any(
+            str(item.get("actionability") or "") == "actionable"
+            for item in observed_objects
+            if str(item.get("freshness") or "") == "prior"
+        )
+        if unsafe:
+            return "unsafe_prior_use"
+    if any(item.get("prior_match_basis") for item in observed_objects):
+        return "movable_hint_rechecked"
+    anchors = _list_of_mappings(runtime_map.get("public_semantic_anchors"))
+    if anchors and int(prior.get("anchor_prior_count") or 0) > 0:
+        return "stable_anchor_used"
+    target_queries = [
+        event
+        for event in trace_events
+        if event.get("tool") == "resolve_target_query" and event.get("event") == "response"
+    ]
+    if target_queries:
+        return "stable_anchor_used"
+    return "prior_ignored"
 
 
 def _blocked_result_from_exception(trial: EvalTrial, exc: Exception) -> EvalResult:
@@ -1255,9 +1548,20 @@ def _failure_class_from_exception(exc: Exception) -> str:
         "live eval run_result",
         "invalid live eval json artifact",
         "live eval json artifact",
+        "regrade_source",
+        "regrade effective run dir",
+        "regrade run_result",
     )
     if any(token in message for token in artifact_tokens):
         return "artifact_missing"
+    tool_argument_tokens = (
+        "invalid function arguments json",
+        "invalid function arguments",
+        "invalid_prompt",
+        "tool_call_id",
+    )
+    if any(token in message for token in tool_argument_tokens):
+        return "tool_argument_invalid"
     provider_tokens = (
         "provider_transient_failure",
         "provider_config_failure",
@@ -1280,21 +1584,22 @@ def _failed_result_from_dependency(
     dependency_failure: dict[str, Any],
 ) -> EvalResult:
     failure_class = str(dependency_failure.get("failure_class") or "artifact_missing")
+    blocked = failure_class in {"environment_blocked", "model_or_provider_unavailable"}
     artifacts = _artifact_paths(run_dir)
     return EvalResult.from_trial(
         trial,
-        status="failed",
+        status="blocked" if blocked else "failed",
         failure_class=failure_class,
         grader_outputs={
             "artifacts": {
-                "status": "failed",
+                "status": "blocked" if blocked else "failed",
                 "missing": [],
                 "missing_dependencies": dependency_failure.get("missing_dependencies", []),
                 "resolved_dependencies": dependency_failure.get("resolved_dependencies", {}),
                 "required": {},
             },
             "runner": {
-                "status": "failed",
+                "status": "blocked" if blocked else "failed",
                 "error_type": "EvalDependencyError",
                 "message": str(dependency_failure.get("message") or ""),
             },
@@ -1304,6 +1609,16 @@ def _failed_result_from_dependency(
         metrics={"pass": 0.0},
         limitations=(*trial.limitations, "eval_dependency_missing_before_product_run"),
     )
+
+
+def _sample_artifact_record(result: EvalResult, *, run_dir: Path) -> dict[str, Any]:
+    artifacts = result.artifacts or _artifact_paths(run_dir)
+    return {
+        **artifacts,
+        "source_status": result.status,
+        "source_failure_class": result.failure_class,
+        "source_sample_id": str(result.identity.get("sample_id") or ""),
+    }
 
 
 def _artifact_paths(run_dir: Path) -> dict[str, Any]:
@@ -1409,6 +1724,10 @@ def _budget_steps(budget: str) -> int | str:
 
 def _path_token(value: str) -> str:
     return str(value).replace("/", "_").replace(".", "_")
+
+
+def _default_run_stamp() -> str:
+    return f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}-{time.time_ns()}"
 
 
 def _int_value(value: Any) -> int:

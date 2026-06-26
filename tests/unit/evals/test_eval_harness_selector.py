@@ -107,6 +107,10 @@ def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) 
                 "direct-map-build-world-public",
                 "direct-cleanup-runtime-prior-consumer",
                 "map-build-consumer-eval-suite",
+                "map-build-consumer-openai-agents-sdk-codex-router-responses",
+                "map-build-consumer-openai-agents-sdk-mimo-inside-openai-chat",
+                "map-build-consumer-openai-agents-sdk-kimi-openai-chat",
+                "map-build-consumer-openai-agents-sdk-minimax-responses",
             ),
         },
         {
@@ -315,6 +319,59 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
     assert rows["direct-camera-grounded-grounding-dino"]["axes"]["camera_labeler"] == (
         "grounding-dino"
     )
+
+
+def test_map_build_consumer_plan_selects_four_profile_model_matrix(
+    tmp_path: Path,
+) -> None:
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        plan=REPO_ROOT / "docs/plans/2026-06-24-map-build-panorama-consumer-experiments.md",
+        output_dir=tmp_path / "harness",
+    )
+
+    rows = _selected_rows(manifest)
+    matrix_rows = {
+        row_id: row
+        for row_id, row in rows.items()
+        if row_id.startswith("map-build-consumer-openai-agents-sdk-")
+    }
+    assert set(matrix_rows) == {
+        "map-build-consumer-openai-agents-sdk-codex-router-responses",
+        "map-build-consumer-openai-agents-sdk-mimo-inside-openai-chat",
+        "map-build-consumer-openai-agents-sdk-kimi-openai-chat",
+        "map-build-consumer-openai-agents-sdk-minimax-responses",
+    }
+    assert {row["axes"]["provider_profile"] for row in matrix_rows.values()} == {
+        "codex-router-responses",
+        "mimo-inside-openai-chat",
+        "kimi-openai-chat",
+        "minimax-responses",
+    }
+    for row in matrix_rows.values():
+        assert "suite=map_build_consumer" in row["command"]
+        assert "agent_engine=openai-agents-sdk" in row["command"]
+        assert "live_execution=run" in row["command"]
+        assert row["axes"]["provider_cell_count"] == "4"
+        assert row["axes"]["default_local_concurrency_width"] == "1"
+        assert row["axes"]["concurrency_policy"] == (
+            "serial_by_default_for_single_molmospaces_visual_backend_slot"
+        )
+
+
+def test_explicit_provider_axis_selects_matching_map_build_consumer_matrix_rows(
+    tmp_path: Path,
+) -> None:
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        provider_profile=["kimi-openai-chat", "minimax-responses"],
+        output_dir=tmp_path,
+    )
+
+    rows = _selected_rows(manifest)
+    assert "map-build-consumer-openai-agents-sdk-kimi-openai-chat" in rows
+    assert "map-build-consumer-openai-agents-sdk-minimax-responses" in rows
+    assert "map-build-consumer-openai-agents-sdk-mimo-inside-openai-chat" not in rows
 
 
 def test_explicit_codex_env_selects_agent_sdk_availability_evidence(

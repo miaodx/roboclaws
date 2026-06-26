@@ -207,7 +207,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     )
     if completed.returncode != 0:
         _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
-        run_result = _recover_open_ended_run_result_after_nonzero_exit(
+        run_result = _recover_eval_run_result_after_nonzero_checker_exit(
             kwargs,
             sample_run_dir=sample_run_dir,
         )
@@ -330,7 +330,7 @@ def _live_surface_already_complete(
         if status:
             exit_status = status.get("exit_status")
             if exit_status not in {None, 0}:
-                if allow_open_ended_checker_failure and _is_open_ended_checker_failure(status):
+                if allow_open_ended_checker_failure and _is_checker_failure(status):
                     return True
                 _raise_for_terminal_live_status(effective_run_dir, status)
         return True
@@ -703,12 +703,12 @@ def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _recover_open_ended_run_result_after_nonzero_exit(
+def _recover_eval_run_result_after_nonzero_checker_exit(
     kwargs: dict[str, Any],
     *,
     sample_run_dir: Path,
 ) -> dict[str, Any]:
-    if not _is_open_ended_eval_sample(kwargs):
+    if not _is_recoverable_checker_eval_sample(kwargs):
         return {}
     return _load_json(sample_run_dir / "run_result.json")
 
@@ -716,6 +716,11 @@ def _recover_open_ended_run_result_after_nonzero_exit(
 def _is_open_ended_eval_sample(kwargs: dict[str, Any]) -> bool:
     sample: EvalSample | None = kwargs.get("eval_sample")
     return sample is not None and sample.intent == "open-ended"
+
+
+def _is_recoverable_checker_eval_sample(kwargs: dict[str, Any]) -> bool:
+    sample: EvalSample | None = kwargs.get("eval_sample")
+    return sample is not None and sample.intent in {"open-ended", "cleanup"}
 
 
 def _live_surface_run_is_terminal(
@@ -730,13 +735,13 @@ def _live_surface_run_is_terminal(
     if exit_status == 0:
         return True
     if exit_status not in {None, 0}:
-        if allow_open_ended_checker_failure and _is_open_ended_checker_failure(status):
+        if allow_open_ended_checker_failure and _is_checker_failure(status):
             return True
         _raise_for_terminal_live_status(run_dir, status)
     return False
 
 
-def _is_open_ended_checker_failure(status: dict[str, Any]) -> bool:
+def _is_checker_failure(status: dict[str, Any]) -> bool:
     reason = str(status.get("reason") or "").lower()
     return "cleanup checker exited with status" in reason
 

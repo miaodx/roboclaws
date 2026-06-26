@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-24
+Last updated: 2026-06-26
 
 This is the human-facing dashboard for current repo state. Keep it short,
 latest-first, and pointer-based. Do not use this file as a changelog or
@@ -10,9 +10,9 @@ leave a link.
 
 ## Current Focus
 
-Review the implemented cross-environment map/waypoint source-of-truth cleanup
-and keep any follow-up limited to strict Base Metric Map bundle validation or
-current runtime-map consumers.
+MapBuild optimization and testing has reached the current acceptance target:
+`preset=map-build` builds a richer, reliable Runtime Metric Map that helps
+downstream open-ended and cleanup tasks in the focused eval harness.
 
 The active product shape is:
 
@@ -44,27 +44,31 @@ providers.
 
 ## Next Action
 
-If continuing repo work, start from strict Base Metric Map bundle validation or
-runtime-map consumers. Use:
+If continuing repo work, start from the completed MapBuild quality/eval harness
+and choose the next product target explicitly:
+
+`docs/status/active/map-build-quality-eval-harness.md`
+
+Use:
 
 ```bash
-just agent::eval recommend plan=<path> budget=focused
+just agent::eval recommend plan=docs/plans/2026-06-26-map-build-quality-eval-harness.md budget=focused
 ```
 
 for plan/diff-driven verification recommendations.
 
 ## Current Blockers
 
-- No current human blocker for the implemented cross-environment
-  map/waypoint source-of-truth plan.
+- No current human blocker for deterministic MapBuild quality-gate work.
 - No current implementation blocker for deterministic or OpenAI Agents SDK smoke
   eval work.
+- The focused MapBuild consumer live matrix has been attempted across the four
+  target SDK provider profiles. Codex, Kimi, and Mimo pass 5/5; MiniMax passes
+  MapBuild quality plus cleanup utility rows, with one provider/tool-call JSON
+  failure in the open-ended no-prior row.
 - Broader live-agent `pass^k`, RAW-FPV live cleanup, and
   validation-required maintainer routes still depend on provider/runtime
   capacity and route-specific off-work-network proof.
-- The `openai-agents-sdk` / `codex-router-responses` route was exercised live
-  but blocked on an upstream 502 provider response; this is not counted as a
-  behavioral pass.
 
 ## Human Review Surface
 
@@ -81,6 +85,7 @@ for plan/diff-driven verification recommendations.
 ## Current Source Links
 
 Plans:
+`docs/plans/2026-06-26-map-build-quality-eval-harness.md`,
 `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`,
 `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`,
 `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`,
@@ -105,11 +110,16 @@ and `docs/adr/0138-use-detector-only-visual-grounding-sidecar.md`.
 - Shipped history: `docs/retrospectives/`
 - Concurrent standalone work: `docs/status/active/`
 
-## Parked
+## Repo-Wide Parked Work
 
-- Queued implementation tasks: `TODOS.md`
-- Scratch ideas and future directions: `THOUGHTS.md`
+- Queued implementation tasks unrelated to the current active focus:
+  `TODOS.md`
+- Scratch ideas and future directions unrelated to the current active focus:
+  `THOUGHTS.md`
 - GitHub issues track externally visible work for `MiaoDX/roboclaws`.
+
+Current MapBuild optimization work is not parked. Its active state lives in
+`docs/status/active/map-build-quality-eval-harness.md`.
 
 ## Workflow Contract
 
