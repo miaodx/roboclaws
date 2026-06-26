@@ -19,7 +19,9 @@
           </div>
         </div>
         <div class="global-controls">
-          <button class="secondary view-mode" data-view="tasks">Background Tasks</button>
+          <button id="background-tasks-button" class="secondary view-mode" data-view="tasks" hidden>
+            Background Tasks
+          </button>
           <button id="latest-result-button" class="secondary">Latest Result</button>
           <button id="pause-button" class="secondary" disabled hidden>Pause Agent</button>
           <button id="stop-button" class="danger" disabled>Stop Run</button>
@@ -209,35 +211,34 @@
         </nav>
         <section id="visual-grid" class="view-grid mode-overview">
           <article class="image-panel" data-panel="fpv">
-            <div class="panel-header"><span>FPV</span><button data-copy="fpv">Copy Path</button></div>
+            <div class="panel-header"><span data-panel-title="fpv">FPV</span><button data-copy="fpv">Copy Path</button></div>
             <div class="image-frame ratio-4-3" id="fpv-frame">No frame yet. Waiting for the first observation artifact.</div>
           </article>
-          <article class="image-panel" data-panel="grounding">
-            <div class="panel-header"><span>Grounding</span><button data-copy="grounding">Copy Path</button></div>
+          <article class="image-panel" data-panel="grounding" hidden>
+            <div class="panel-header"><span data-panel-title="grounding">Grounding</span><button data-copy="grounding">Copy Path</button></div>
             <div class="image-frame ratio-4-3" id="grounding-frame">No grounding result yet.</div>
           </article>
           <article class="image-panel" data-panel="map">
-            <div class="panel-header"><span>Base Metric Map preview</span><button data-copy="map">Copy Path</button></div>
+            <div class="panel-header"><span data-panel-title="map">Base Map</span><button data-copy="map">Copy Path</button></div>
             <div class="image-frame" id="map-frame">Base navigation map preview has not been written yet.</div>
           </article>
           <article class="image-panel" data-panel="runtime_map">
-            <div class="panel-header"><span>Runtime Metric Map preview</span><button data-copy="runtime_map">Copy Path</button></div>
+            <div class="panel-header"><span data-panel-title="runtime_map">Runtime Map</span><button data-copy="runtime_map">Copy Path</button></div>
             <div class="image-frame" id="runtime_map-frame">Runtime metric map preview has not been written yet.</div>
           </article>
           <article class="image-panel" data-panel="topdown">
-            <div class="panel-header"><span>Top-down Scene View</span><button data-copy="topdown">Copy Path</button></div>
+            <div class="panel-header"><span data-panel-title="topdown">Top-down</span><button data-copy="topdown">Copy Path</button></div>
             <div class="image-frame" id="topdown-frame">Top-down scene view has not been written yet.</div>
           </article>
-          <article class="image-panel" data-panel="chase">
+          <article class="image-panel" data-panel="chase" hidden>
             <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
             <div class="image-frame ratio-16-9" id="chase-frame">Chase view unavailable for this backend.</div>
           </article>
-          <article class="image-panel blank-panel" data-panel="blank-chase" aria-hidden="true"></article>
-          <article id="outputs-panel" class="outputs-panel" data-panel="outputs">
+          <article id="outputs-panel" class="outputs-panel" data-panel="outputs" hidden>
             <h2>Outputs</h2>
             <div id="artifact-list" class="artifact-list"></div>
           </article>
-          <article id="tasks-panel" class="tasks-panel" data-panel="tasks">
+          <article id="tasks-panel" class="tasks-panel" data-panel="tasks" hidden>
             <div class="tasks-header">
               <h2>Background Tasks</h2>
               <button id="refresh-tasks-button" class="secondary" type="button">Refresh</button>
