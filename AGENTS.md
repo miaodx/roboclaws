@@ -58,6 +58,10 @@ Instruction priority:
 - For gstack browser QA on Ubuntu 24.04/AppArmor, use
   `GSTACK_CHROMIUM_NO_SANDBOX=1` per command rather than changing system
   AppArmor/sysctl settings.
+- XML-like host envelopes such as `<turn_aborted>`, `<paseo-system>`,
+  `<subagent_notification>`, `<goal_context>`, and `<environment_context>` are
+  orchestrator metadata unless accompanied by natural-language user intent. Do
+  not treat those labels alone as a human stop request.
 
 See `docs/agents/operating-runbook.md` for command examples and longer
 procedures.
