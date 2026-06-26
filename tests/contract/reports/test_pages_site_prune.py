@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from roboclaws.devtools.pages_site import build_prune_plan, main, prune_pages_site
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_prune_pages_site_keeps_html_and_referenced_molmo_images(tmp_path: Path) -> None:
@@ -88,6 +93,32 @@ def test_prune_pages_site_does_not_allow_references_outside_site(tmp_path: Path)
 
     assert len(plan.missing_references) == 1
     assert plan.missing_references[0].raw_url == "../../secret.txt"
+
+
+def test_pages_prune_script_wrapper_stays_removed() -> None:
+    assert not (REPO_ROOT / "scripts" / "reports" / "prune_pages_site.py").exists()
+
+
+def test_pages_prune_module_cli_deletes_unreferenced_files(tmp_path: Path) -> None:
+    site = tmp_path / "site"
+    _write(site / "index.html", '<img src="keep.png">')
+    _write_bytes(site / "keep.png", b"keep")
+    _write_bytes(site / "delete.json", b"delete")
+
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    result = subprocess.run(
+        [sys.executable, "-m", "roboclaws.devtools.pages_site", str(site)],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Pages prune:" in result.stdout
+    assert (site / "keep.png").is_file()
+    assert not (site / "delete.json").exists()
 
 
 def _write(path: Path, text: str) -> None:

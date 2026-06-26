@@ -63,8 +63,8 @@ EXECUTABLE_SEARCH_ROOTS = (
 )
 _GUARD_RELPATH = "tests/contract/regression/test_mimo_v25_migration_guard.py"
 PRO_TEXTBRIDGE_ALLOWED_RELPATHS = {
+    "roboclaws/agents/model_matrix_benchmark.py",
     "scripts/dev/benchmark_model_matrix.py",
-    "scripts/dev/model_matrix_benchmark_catalog.py",
     "tests/unit/providers/test_model_matrix_benchmark.py",
 }
 FORBIDDEN_PRO_TEXTBRIDGE_PATTERNS = (

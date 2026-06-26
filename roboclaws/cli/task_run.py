@@ -27,7 +27,7 @@ def print_launch_trace(plan: LaunchPlan) -> None:
         f"runner_class={plan.internal_runner_class}",
         f"dispatch_runner={plan.dispatch_runner}",
         f"dispatch_target={plan.dispatch_target}",
-        f"mode={plan.mode}",
+        f"mode={plan.evidence_mode}",
         f"profile={plan.profile or ''}",
         f"report={plan.report or ''}",
         f"prompt={plan.prompt_id}",

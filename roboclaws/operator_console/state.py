@@ -168,7 +168,7 @@ def derive_operator_state(
 
     return {
         "run_id": run_id,
-        "display_run_id": _display_run_id(run_dir, display_run_dir),
+        "display_run_id": display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
         "selected_intent": status.get("selected_intent") or (route.intent_id if route else ""),
         "run_dir": str(run_dir),
@@ -235,6 +235,17 @@ def resolve_display_run_dir(run_dir: Path) -> Path:
     if not candidates:
         return run_dir
     return max(candidates, key=_run_dir_activity_mtime)
+
+
+def display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
+    """Return the operator-facing id for a wrapper run or nested live attempt."""
+
+    if wrapper_run_dir == display_run_dir:
+        return wrapper_run_dir.name
+    try:
+        return str(display_run_dir.relative_to(wrapper_run_dir))
+    except ValueError:
+        return display_run_dir.name
 
 
 def redacted_artifact_text(path: Path, *, max_bytes: int = 200_000) -> str:
@@ -698,7 +709,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
 
 
 def _artifact_href(root: Path, path: Path) -> str:
-    if not _is_relative_to(path, root):
+    if not path.is_relative_to(root):
         return ""
     return f"/artifacts/{path.relative_to(root)}?v={path.stat().st_mtime_ns}"
 
@@ -938,15 +949,6 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
     return {key: run_result[key] for key in allowed if key in run_result}
 
 
-def _display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
-    if wrapper_run_dir == display_run_dir:
-        return wrapper_run_dir.name
-    try:
-        return str(display_run_dir.relative_to(wrapper_run_dir))
-    except ValueError:
-        return display_run_dir.name
-
-
 def _run_dir_activity_mtime(path: Path) -> float:
     mtimes: list[float] = []
     for marker in LIVE_RUN_MARKERS:
@@ -969,11 +971,3 @@ def _safe_mtime(path: Path) -> float:
         return path.stat().st_mtime
     except OSError:
         return 0.0
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True

@@ -312,7 +312,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         rel = Path(unquote(request_path.removeprefix("/previews/")))
         path = (self.static_root / "previews" / rel).resolve()
         preview_root = (self.static_root / "previews").resolve()
-        if not _is_relative_to(path, preview_root):
+        if not path.is_relative_to(preview_root):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         relative_name = path.relative_to(preview_root).as_posix()
@@ -325,7 +325,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         rel = Path(unquote(request_path.removeprefix("/asset-previews/maps/")))
         preview_root = (self.project_root / "assets" / "maps").resolve()
         path = (preview_root / rel).resolve()
-        if not _is_relative_to(path, preview_root) or path.name != "preview.png":
+        if not path.is_relative_to(preview_root) or path.name != "preview.png":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if not path.exists():
@@ -615,14 +615,6 @@ def main(argv: list[str] | None = None) -> int:
         os.environ[OUTPUT_ROOT_ENV] = str(args.output_root)
     run_server(args.repo_root.resolve(), args.host, args.port)
     return 0
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
 
 
 def _parse_run_action_path(path: str) -> tuple[str, str] | None:
