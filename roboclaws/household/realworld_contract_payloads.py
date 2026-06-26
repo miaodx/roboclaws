@@ -4,7 +4,18 @@ import copy
 from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any, Protocol
 
-from roboclaws.household import realworld_runtime_map_contract, realworld_runtime_map_targets
+from roboclaws.household import (
+    agent_view as agent_view_module,
+)
+from roboclaws.household import (
+    realworld_runtime_map_contract,
+    realworld_runtime_map_targets,
+)
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 
 class RealWorldPayloadContract(Protocol):
@@ -237,6 +248,7 @@ def agent_view_payload(
     *,
     realworld_contract: str,
     visible_object_detections_mode: str,
+    forbidden_keys: frozenset[str],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
     observed_objects = [
@@ -256,26 +268,30 @@ def agent_view_payload(
             static_fixture_projection=static_fixture_projection,
             cleanup_worklist=cleanup_worklist,
         )
-    payload = {
-        "contract": realworld_contract,
-        "perception_mode": contract.perception_mode,
-        "detection_exposure_policy": contract.visible_detection_exposure_policy,
-        "structured_detections_available": contract.perception_mode
-        == visible_object_detections_mode,
-        "metric_map": metric_map,
-        "runtime_metric_map": runtime_metric_map,
-        "static_fixture_projection": static_fixture_projection,
-        "observed_objects": observed_objects,
-        "raw_fpv_observations": [dict(item) for item in contract._raw_fpv_observations],
-        "camera_model_policy_evidence": contract.camera_model_policy_payload(),
-        "model_declared_observations": model_declared["observations"],
-        "model_declared_observation_evidence": model_declared,
-        "policy_view": contract.policy_view_payload(),
-        "cleanup_worklist": cleanup_worklist,
-        "observed_waypoint_ids": sorted(contract._observed_waypoint_ids),
-        "public_tool_names": contract.public_tool_names(),
-        "forbidden_private_fields_absent": True,
-    }
+    payload = agent_view_module.build_agent_view(
+        contract=realworld_contract,
+        perception_mode=contract.perception_mode,
+        detection_exposure_policy=contract.visible_detection_exposure_policy,
+        structured_detections_available=contract.perception_mode == visible_object_detections_mode,
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_metric_map,
+        observed_objects=observed_objects,
+        raw_fpv_observations=[dict(item) for item in contract._raw_fpv_observations],
+        camera_model_policy_evidence=contract.camera_model_policy_payload(),
+        model_declared_observations=model_declared["observations"],
+        model_declared_observation_evidence=model_declared,
+        policy_view=contract.policy_view_payload(),
+        cleanup_worklist=cleanup_worklist,
+        observed_waypoint_ids=contract._observed_waypoint_ids,
+        public_tool_names=contract.public_tool_names(),
+        capability_profiles=(
+            HOUSEHOLD_WORLD_PROFILE,
+            HOUSEHOLD_MANIPULATION_PROFILE,
+            HOUSEHOLD_EPISODE_PROFILE,
+        ),
+        public_acceptance_config=dict(getattr(contract, "public_acceptance_config", {}) or {}),
+        forbidden_keys=forbidden_keys,
+    )
     assert_no_forbidden_agent_view_keys(payload)
     return payload
 
@@ -346,9 +362,8 @@ def policy_view_payload(
     payload = {
         "schema": "realworld_cleanup_policy_view_v1",
         "allowed_inputs": [
-            "metric_map",
+            "base_navigation_map",
             "runtime_metric_map",
-            "static_fixture_projection",
             "observed_objects",
             "raw_fpv_observations",
             "camera_model_policy_evidence",
@@ -362,8 +377,9 @@ def policy_view_payload(
         ],
         "chase_camera_policy_input": False,
         "public_contract_note": (
-            "Policy inputs are robot-local or static-map data. Chase and "
-            "third-person simulation views are report-only evidence."
+            "Policy inputs are robot-local observations, Base Navigation Map "
+            "context, and Runtime Metric Map evidence. Chase and third-person "
+            "simulation views are report-only evidence."
         ),
     }
     assert_no_forbidden_agent_view_keys(payload)

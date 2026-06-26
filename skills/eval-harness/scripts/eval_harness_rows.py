@@ -74,7 +74,56 @@ def candidate_rows(
                 "Cleanup, MCP, checker, and report changes need deterministic cleanup "
                 "contract checks."
             ),
-            rule_ids=("cleanup_skill", "mcp_checker"),
+            rule_ids=("cleanup_skill", "mcp_checker", "agent_view_module"),
+            requirements=("python_env",),
+            expense="deterministic",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="agent-view-contract-tests",
+            row_kind="deterministic_gate",
+            command=[
+                "./scripts/dev/run_pytest_standalone.sh",
+                "-q",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_agent_view_payload_keeps_private_evaluation_out",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_raw_fpv_mode_suppresses_structured_detections",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_camera_model_policy_registers_model_labelled_candidates",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_camera_model_policy_records_sim_pipeline_provenance",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_camera_labels_missing_raw_image_fails_before_sidecar",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::"
+                "test_realworld_camera_labels_http_success_uses_destination_resolver",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::"
+                "test_realworld_mcp_registered_tools_match_profile_public_surface",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::"
+                "test_agent_sdk_camera_grounded_composite_tool_is_opt_in",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::"
+                "test_realworld_mcp_rejects_removed_static_fixture_projection_tool",
+                "tests/contract/mcp/test_semantic_profiles.py",
+                "tests/unit/molmo_cleanup/test_visual_grounding.py::"
+                "test_visual_grounding_request_rejects_static_fixture_projection_field",
+                "tests/unit/molmo_cleanup/test_visual_grounding.py::"
+                "test_visual_grounding_request_rejects_private_public_map_hints",
+                "tests/unit/molmo_cleanup/test_visual_grounding.py::"
+                "test_visual_grounding_request_rejects_private_hint_keys",
+                "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::"
+                "test_agibot_map_build_camera_labels_call_external_grounding",
+                "tests/contract/agibot/test_agibot_map_context_scripts.py::"
+                "test_sdk_runner_exports_base_navigation_context_generated_candidates",
+            ],
+            axes={"intent": "agent-view", "agent_engine": "direct-runner"},
+            reason=(
+                "Agent View module changes need artifact schema, privacy guard, MCP "
+                "response, profile capability, active-perception, sidecar public-input, "
+                "and Agibot export coverage."
+            ),
+            rule_ids=("agent_view_module",),
             requirements=("python_env",),
             expense="deterministic",
             row_dir=row_dir,
@@ -103,7 +152,7 @@ def candidate_rows(
                 "world": DEFAULT_WORLD,
             },
             reason="MCP/server/checker changes need at least one public cleanup product route.",
-            rule_ids=("mcp_checker",),
+            rule_ids=("mcp_checker", "agent_view_module"),
             requirements=("just", "python_env"),
             expense="local-sim",
             row_dir=row_dir,

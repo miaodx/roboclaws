@@ -1189,16 +1189,6 @@ def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
     assert missing_default["provider"]["provider"] == "mimo-tp-anthropic"
     assert "MIMO_TP_KEY" in missing_default["blocker"]
 
-    kimi = route_readiness(
-        tmp_path,
-        route,
-        env={"KIMI_API_KEY": "key"},
-        overrides={"port": _free_port(), "provider_profile": "kimi-anthropic"},
-        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic"},
-    )
-    assert kimi["can_start"] is True
-    assert kimi["provider"]["provider"] == "kimi-anthropic"
-
     mify = route_readiness(
         tmp_path,
         route,

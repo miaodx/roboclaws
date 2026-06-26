@@ -86,6 +86,43 @@ from scripts.molmo_cleanup.openai_agents_perf_profile import (
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
+OPERATOR_HANDOFF_REASON = "operator_handoff_requested"
+OPERATOR_HANDOFF_MARKERS = (
+    "manual adjust",
+    "manual reposition",
+    "manual control",
+    "operator handoff",
+    "human handoff",
+    "wait for operator",
+    "wait for human",
+    "手动调整",
+    "手动调",
+    "手动控制",
+    "手动移动",
+    "人工调整",
+    "人工接管",
+    "人工介入",
+)
+OPERATOR_HANDOFF_WAIT_MARKERS = (
+    "do not call done",
+    "don't call done",
+    "not call done",
+    "without done",
+    "do not exit",
+    "don't exit",
+    "wait",
+    "stop here",
+    "不调用 done",
+    "不调用done",
+    "不要调用 done",
+    "不要调用done",
+    "不 call done",
+    "不退出",
+    "不要退出",
+    "不要推出",
+    "等待",
+    "我现在停止",
+)
 
 
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
@@ -373,6 +410,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self.server_log_file: BinaryIO | None = None
         self.server_log_thread: threading.Thread | None = None
         self.run_lease = HouseholdLiveRunLease()
+        self.operator_handoff_active = False
         self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
         self.skill_context = _load_agent_sdk_skill_context(
             args.repo_root,
@@ -429,6 +467,10 @@ class LiveOpenAIAgentsCleanupRunner:
             self._start_server()
             self._wait_for_mcp_ready()
             self._run_sdk_agent()
+            if self.operator_handoff_active:
+                status = self._finish_operator_handoff()
+                self._release_visual_slot()
+                return status
             self._wait_for_server_finish()
             self._check_result()
         except KeyboardInterrupt:
@@ -555,6 +597,22 @@ class LiveOpenAIAgentsCleanupRunner:
                 break
             if (self.run_dir / "run_result.json").is_file():
                 break
+            handoff = _explicit_operator_handoff_requested(self.args)
+            if handoff and self.server_proc is not None and self.server_proc.poll() is None:
+                attempt_summary["recovery_action"] = "operator_handoff"
+                attempt_summary["recovery_reason"] = OPERATOR_HANDOFF_REASON
+                self.operator_handoff_active = True
+                self._write_status(
+                    "paused",
+                    reason=OPERATOR_HANDOFF_REASON,
+                    resume_available=True,
+                    detail=handoff,
+                )
+                print(
+                    "==> OpenAI Agents SDK requested an operator handoff; keeping "
+                    "MCP server alive for manual control"
+                )
+                break
             self._raise_agent_sdk_budget_failure_if_any(
                 attempt_index=attempt_index,
                 stage="after",
@@ -605,6 +663,8 @@ class LiveOpenAIAgentsCleanupRunner:
                 failure,
             )
         if not (self.run_dir / "run_result.json").is_file():
+            if self.operator_handoff_active:
+                return
             raise RuntimeError(
                 "OpenAI Agents SDK turn ended without done after "
                 f"{len(attempts)} OpenAI Agents SDK invocation(s)"
@@ -693,6 +753,38 @@ class LiveOpenAIAgentsCleanupRunner:
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
+
+    def _finish_operator_handoff(self) -> int:
+        assert self.server_proc is not None
+        print("==> waiting for operator handoff to finish")
+        self._mark_timing("operator_handoff_wait_start")
+        status = self.server_proc.wait()
+        self._mark_timing("server_finished")
+        self._finish_server_log_tee()
+        self.server_proc = None
+
+        terminal_phase = _wait_for_terminal_phase_from_status(self.status_path)
+        if (self.run_dir / "run_result.json").is_file() and status == 0:
+            self._check_result()
+            self._write_live_timing("finished", 0)
+            self._write_status("finished", 0)
+            return 0
+        if terminal_phase in {
+            "stopped_by_operator",
+            "human_takeover_stop",
+            "emergency_stopped",
+        }:
+            self._write_live_timing(terminal_phase, 130, reason=terminal_phase)
+            return 0
+        if status != 0:
+            reason = f"cleanup MCP server exited with status {status} during operator handoff"
+            self._write_status("failed", 1, reason=reason)
+            self._write_live_timing("failed", 1, reason=reason)
+            return 1
+        reason = "operator handoff server exited without run_result.json"
+        self._write_status("failed", 1, reason=reason)
+        self._write_live_timing("failed", 1, reason=reason)
+        return 1
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
@@ -1067,6 +1159,60 @@ def _failure_from_sdk_result(
         resume_available=bool(getattr(result, "resume_available", False)),
         detail=getattr(result, "detail", ""),
     )
+
+
+def _explicit_operator_handoff_requested(args: argparse.Namespace) -> str:
+    parts = [
+        str(getattr(args, "task", "") or ""),
+        str(getattr(args, "kickoff_prompt", "") or ""),
+    ]
+    text = _normalized_handoff_text("\n".join(part for part in parts if part))
+    if not text:
+        return ""
+    has_manual_marker = any(marker in text for marker in OPERATOR_HANDOFF_MARKERS)
+    has_wait_marker = any(marker in text for marker in OPERATOR_HANDOFF_WAIT_MARKERS)
+    if not (has_manual_marker and has_wait_marker):
+        return ""
+    return (
+        "OpenAI Agents SDK ended without done after an explicit operator handoff request. "
+        "The MCP server remains alive for operator-console manual control."
+    )
+
+
+def _normalized_handoff_text(text: str) -> str:
+    lowered = text.lower()
+    for char in "`'\"“”‘’[](){}<>":
+        lowered = lowered.replace(char, " ")
+    return " ".join(lowered.split())
+
+
+def _wait_for_terminal_phase_from_status(status_path: Path, *, timeout_s: float = 2.0) -> str:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        phase = _phase_from_status(status_path)
+        if phase in {
+            "finished",
+            "failed",
+            "stopped_by_operator",
+            "human_takeover_stop",
+            "emergency_stopped",
+        }:
+            return phase
+        if time.monotonic() >= deadline:
+            return phase
+        time.sleep(0.05)
+
+
+def _phase_from_status(status_path: Path) -> str:
+    if not status_path.is_file():
+        return ""
+    payload = read_json_value(status_path, label="OpenAI Agents live status")
+    if not isinstance(payload, dict):
+        raise ValueError(
+            "OpenAI Agents live status must contain a JSON object, got "
+            f"{type(payload).__name__}"
+        )
+    return str(payload.get("phase") or "").strip().lower()
 
 
 def _context_budget_failure(

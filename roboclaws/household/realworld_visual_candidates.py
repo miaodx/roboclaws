@@ -198,9 +198,9 @@ def _visual_grounding_overlay_for_candidate(
     return str(rel_path)
 
 
-def _static_fixture_projection_for_visual_grounding_request(
+def _public_map_hints_for_visual_grounding_request(
     static_fixture_projection: dict[str, Any],
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     rows = []
     for room in static_fixture_projection.get("rooms") or []:
         room_id = str(room.get("room_id") or "")
@@ -214,7 +214,12 @@ def _static_fixture_projection_for_visual_grounding_request(
                     "affordances": list(fixture.get("affordances") or []),
                 }
             )
-    return rows
+    return {
+        "schema": "visual_grounding_public_map_hints_v1",
+        "source": "public_agent_view_map_evidence",
+        "fixture_hints": rows,
+        "private_truth_included": False,
+    }
 
 
 def _model_declared_observation_event(

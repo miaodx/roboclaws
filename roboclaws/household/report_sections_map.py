@@ -3,23 +3,25 @@ from __future__ import annotations
 import html
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
+
 
 def map_evidence_refresh_summary_section(run_result: dict[str, Any]) -> str:
     if not _is_map_evidence_refresh_run(run_result):
         return ""
 
     agent_view = run_result.get("agent_view") or {}
-    runtime_metric_map = (
-        agent_view.get("runtime_metric_map") or run_result.get("runtime_metric_map") or {}
+    runtime_metric_map = run_result.get("runtime_metric_map") or (
+        agent_view_module.runtime_metric_map(agent_view) if agent_view else {}
     )
     anchors = runtime_metric_map.get("public_semantic_anchors") or []
     observed = runtime_metric_map.get("observed_objects") or []
     generated = runtime_metric_map.get("generated_exploration_candidates") or []
     raw_observations = run_result.get("raw_fpv_observations") or (
-        agent_view.get("raw_fpv_observations") or []
+        agent_view_module.raw_fpv_observations(agent_view) if agent_view else []
     )
     model_observations = run_result.get("model_declared_observations") or (
-        agent_view.get("model_declared_observations") or []
+        agent_view_module.model_declared_observations(agent_view) if agent_view else []
     )
     trace = run_result.get("cleanup_policy_trace") or {}
     events = trace.get("events") or []

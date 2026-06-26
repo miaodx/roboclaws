@@ -2807,7 +2807,7 @@ def test_coding_agent_env_shell_profile_facts_match_python_registry() -> None:
     ]
 
 
-def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
+def test_coding_agent_minimax_model_rejects_removed_highspeed_variant() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -2827,13 +2827,13 @@ def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
         ],
         cwd=REPO_ROOT,
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
 
-    assert 'model="MiniMax-M2.7-highspeed"' in result.stdout.splitlines()
-    assert 'model_providers.minimax-responses.wire_api="responses"' in result.stdout.splitlines()
+    assert result.returncode == 2
+    assert "unknown coding-agent model 'MiniMax-M2.7-highspeed'" in result.stderr
 
 
 def test_coding_agent_codex_provider_args_reject_unknown_model_override() -> None:

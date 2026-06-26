@@ -297,11 +297,11 @@ def test_launch_rejects_explicit_blank_optional_axes(axis: str, hint: str) -> No
 
 @pytest.mark.parametrize(
     ("agent_engine", "provider_profile", "env_key"),
-    (
-        ("codex-cli", "mimo-mify-responses", "ROBOCLAWS_PROVIDER_PROFILE"),
-        ("claude-code", "kimi-anthropic", "ROBOCLAWS_PROVIDER_PROFILE"),
-        ("openai-agents-sdk", "mimo-tp-openai-chat", "ROBOCLAWS_PROVIDER_PROFILE"),
-    ),
+        (
+            ("codex-cli", "mimo-mify-responses", "ROBOCLAWS_PROVIDER_PROFILE"),
+            ("claude-code", "mimo-mify-anthropic", "ROBOCLAWS_PROVIDER_PROFILE"),
+            ("openai-agents-sdk", "mimo-tp-openai-chat", "ROBOCLAWS_PROVIDER_PROFILE"),
+        ),
 )
 def test_provider_profile_env_export_uses_agent_engine_catalog(
     agent_engine: str,

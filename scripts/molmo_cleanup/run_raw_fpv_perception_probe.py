@@ -34,6 +34,7 @@ from roboclaws.core.json_sources import (  # noqa: E402
     read_json_object,
     read_jsonl_object_rows,
 )
+from roboclaws.household import agent_view as agent_view_module  # noqa: E402
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -1219,9 +1220,11 @@ def _raw_observations_from_json_artifacts(run_dir: Path) -> list[dict[str, Any]]
             if isinstance(item, dict) and item.get("observation_id")
         )
         agent_view = payload.get("agent_view") or {}
+        if payload.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA:
+            agent_view = payload
         observations.extend(
             item
-            for item in agent_view.get("raw_fpv_observations") or []
+            for item in (agent_view_module.raw_fpv_observations(agent_view) if agent_view else [])
             if isinstance(item, dict) and item.get("observation_id")
         )
     return observations
@@ -1286,7 +1289,10 @@ def _derive_resolved_contrast_labels(
             if not path.is_file():
                 continue
             payload = _load_json(path, label="RAW-FPV contrast artifact")
-            for item in payload.get("model_declared_observations") or []:
+            observations = payload.get("model_declared_observations") or []
+            if payload.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA:
+                observations = agent_view_module.model_declared_observations(payload)
+            for item in observations:
                 if item.get("grounding_status") != "resolved":
                     continue
                 observation_id = str(item.get("source_observation_id") or "")

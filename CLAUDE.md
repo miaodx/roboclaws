@@ -77,8 +77,8 @@ Work-network restriction: if `just dev::network-status` reports `network: work`
 OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
 `just chat::run`, and OpenClaw local/integration verification gates.
 System-provider Claude Code is also blocked on the work
-network. `just molmo::claude-report` may run there when `.env` contains a supported MiMo,
-Kimi, or MiMo mify Anthropic key route. Codex recipes default to `codex-router-responses` and may
+network. `just molmo::claude-report` may run there when `.env` contains a supported MiMo
+or MiMo mify Anthropic key route. Codex recipes default to `codex-router-responses` and may
 run there when `CODEX_BASE_URL` and `CODEX_API_KEY` are configured. The mimo-mify-responses
 and MiniMax routes are available only with explicit
 `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` and `XM_LLM_API_KEY` or `MM_API_KEY`.

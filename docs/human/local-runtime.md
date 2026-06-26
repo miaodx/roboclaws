@@ -30,7 +30,7 @@ settings. Codex defaults to `codex-router-responses` and requires `CODEX_BASE_UR
 `XM_LLM_API_KEY` is present. To use mimo-mify-responses, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses`
 explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
 API, and web search disabled.
-Claude Code prefers a MiMo key when available, then Kimi, then the mimo-mify-responses
+Claude Code prefers a MiMo key when available, then the mimo-mify-responses
 Anthropic route from `XM_LLM_API_KEY` (`mimo-mify-anthropic`,
 `xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
 network.

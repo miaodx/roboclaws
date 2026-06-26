@@ -14,8 +14,8 @@ from roboclaws.household.subprocess_backend import _parse_last_json_object
 
 SCHEMA = "roboclaws_isaac_lab_runtime_smoke_check_v1"
 SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
-ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-map-chase-verify"
-ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
+ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-topdown-chase-verify"
+ROBOT_VIEW_KEYS = ("fpv", "chase", "topdown", "verify")
 MIN_REVIEWABLE_IMAGE_STDDEV = 5.0
 MIN_REVIEWABLE_IMAGE_COLOR_COUNT = 128
 

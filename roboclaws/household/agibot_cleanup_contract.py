@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_sdk_runner import (
     AGIBOT_GDK_NORMAL_NAVI_PROVENANCE,
     BLOCKED_MANIPULATION_TOOLS,
@@ -24,6 +25,11 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 
 class AgibotCleanupBackendSession:
@@ -299,32 +305,58 @@ class AgibotCleanupMCPContract:
             metric_map=metric_map,
             static_fixture_projection=static_fixture_projection,
         )
-        return {
-            "contract": REALWORLD_CONTRACT,
+        model_declared_evidence = {
+            "schema": "model_declared_observations_v1",
             "perception_mode": self.perception_mode,
-            "structured_detections_available": False,
-            "metric_map": metric_map,
-            "runtime_metric_map": runtime_metric_map,
-            "static_fixture_projection": static_fixture_projection,
-            "observed_objects": [],
-            "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
-            "camera_model_policy_evidence": self.camera_model_policy_payload(),
-            "model_declared_observations": [],
-            "model_declared_observation_evidence": {
-                "schema": "model_declared_observations_v1",
-                "perception_mode": self.perception_mode,
-                "observation_count": 0,
-                "resolved_count": 0,
-                "acted_count": 0,
-                "observations": [],
-                "private_truth_included": False,
-            },
-            "policy_view": self.policy_view_payload(),
-            "cleanup_worklist": self.cleanup_worklist_payload(),
-            "observed_waypoint_ids": sorted(self._observed_waypoint_ids),
-            "public_tool_names": self.public_tool_names(),
-            "forbidden_private_fields_absent": True,
+            "observation_count": 0,
+            "resolved_count": 0,
+            "acted_count": 0,
+            "observations": [],
+            "private_truth_included": False,
         }
+        return agent_view_module.build_agent_view(
+            contract=REALWORLD_CONTRACT,
+            perception_mode=self.perception_mode,
+            detection_exposure_policy="agibot_g2_policy_camera",
+            structured_detections_available=False,
+            base_navigation_map=metric_map,
+            runtime_metric_map=runtime_metric_map,
+            observed_objects=[],
+            raw_fpv_observations=[dict(item) for item in self._raw_fpv_observations],
+            camera_model_policy_evidence=self.camera_model_policy_payload(),
+            model_declared_observations=[],
+            model_declared_observation_evidence=model_declared_evidence,
+            policy_view=self.policy_view_payload(),
+            cleanup_worklist=self.cleanup_worklist_payload(),
+            observed_waypoint_ids=self._observed_waypoint_ids,
+            public_tool_names=self.public_tool_names(),
+            blocked_capabilities=BLOCKED_MANIPULATION_TOOLS,
+            capability_profiles=(
+                HOUSEHOLD_WORLD_PROFILE,
+                HOUSEHOLD_MANIPULATION_PROFILE,
+                HOUSEHOLD_EPISODE_PROFILE,
+            ),
+            forbidden_keys=frozenset(
+                {
+                    "generated_mess_set",
+                    "generated_mess_count",
+                    "environment_setup",
+                    "relocation_policy",
+                    "relocation_count",
+                    "relocated_object_ids",
+                    "relocated_objects",
+                    "before_relocation_positions",
+                    "after_relocation_positions",
+                    "target_count",
+                    "acceptable_destination_sets",
+                    "valid_receptacle_ids",
+                    "private_manifest",
+                    "is_misplaced",
+                    "global_movable_object_inventory",
+                    "target_receptacle_id",
+                }
+            ),
+        )
 
     def runtime_metric_map_payload(
         self,
@@ -431,7 +463,7 @@ class AgibotCleanupMCPContract:
             "schema": "realworld_cleanup_policy_view_v1",
             "policy_observation_camera": "head_color",
             "allowed_inputs": [
-                "metric_map",
+                "base_navigation_map",
                 "runtime_metric_map",
                 "raw_fpv_observations",
                 "navigation_status",

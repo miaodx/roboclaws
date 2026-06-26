@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_contract_rehearsal import (
     BLOCKED_MANIPULATION_TOOLS,
     CLEANUP_ACTION_CONFIDENCE_LAYER,
@@ -19,6 +20,7 @@ from roboclaws.household.agibot_contract_rehearsal import (
     run_molmospaces_agibot_contract_rehearsal,
     run_molmospaces_agibot_prehardware_rehearsal,
 )
+from roboclaws.mcp.profiles import HOUSEHOLD_MANIPULATION_PROFILE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "molmo_cleanup" / ("run_molmospaces_agibot_contract_rehearsal.py")
@@ -114,6 +116,10 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     assert [item["tool"] for item in runtime_export["blocked_manipulation_results"]] == list(
         BLOCKED_MANIPULATION_TOOLS
     )
+    capabilities = agent_view_module.capabilities(run_result["agent_view"])
+    blocked_details = {item["name"]: item for item in capabilities["blocked_capability_details"]}
+    assert set(blocked_details) == set(BLOCKED_MANIPULATION_TOOLS)
+    assert blocked_details["pick"]["source_profile_id"] == HOUSEHOLD_MANIPULATION_PROFILE
     assert all(
         item["status"] == "blocked_capability"
         for item in runtime_export["blocked_manipulation_results"]
@@ -137,7 +143,8 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     assert "pick, place, place_inside, open_receptacle, close_receptacle" in report_text
     assert "Raw FPV Observations" in report_text
     assert "No semantic cleanup actions recorded" in report_text
-    assert "agibot_gdk_normal_navi" not in serialized
+    assert "source_agibot_map" not in serialized
+    assert "current_agibot_map" not in serialized
     assert "agibot_gdk_normal_navi" not in report_text
     assert "agibot_gdk" not in sys.modules
 
@@ -306,9 +313,9 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_base_navigation_ma
     assert runtime_metric_map["source_map_mutated"] is False
     assert runtime_metric_map["generated_exploration_candidates"]
     assert runtime_metric_map["public_semantic_anchors"]
-    assert agent_view["metric_map"]["rooms"] == []
-    assert agent_view["metric_map"]["inspection_waypoints"]
-    assert agent_view["forbidden_private_fields_absent"] is True
+    assert agent_view_module.base_navigation_map(agent_view)["rooms"] == []
+    assert agent_view_module.base_navigation_map(agent_view)["inspection_waypoints"]
+    assert agent_view_module.forbidden_private_fields_absent(agent_view) is True
     assert runtime_export["base_navigation_map_start"] is True
     assert runtime_export["online_map_build"] is True
     assert runtime_export["cleanup_actions_included"] is False

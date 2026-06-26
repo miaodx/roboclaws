@@ -33,7 +33,6 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
 
     monkeypatch.setenv("MM_API_KEY", "fake-mm-key")
     monkeypatch.setenv("MM_BASE_URL", "https://api.minimaxi.com/v1")
-    monkeypatch.setenv("ROBOCLAWS_CODEX_MODEL", "MiniMax-M2.7-highspeed")
     monkeypatch.setattr(
         "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
         lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
@@ -74,7 +73,7 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
 
     OpenAIAgentsLiveRuntime().run(request)
 
-    assert captured["model"] == "MiniMax-M2.7-highspeed"
+    assert captured["model"] == "MiniMax-M3"
     assert captured["base_url"] == "https://api.minimaxi.com/v1"
     assert captured["api_key"] == "fake-mm-key"
     wrapped_model = captured["agent_kwargs"]["model"]
@@ -87,5 +86,5 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
     ]
     assert events[0]["provider_profile"] == "minimax-responses"
     assert events[0]["wire_api"] == "responses"
-    assert events[0]["model"] == "MiniMax-M2.7-highspeed"
+    assert events[0]["model"] == "MiniMax-M3"
     assert events[0]["agent_sdk_responses_features"]["available"] is True

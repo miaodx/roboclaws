@@ -321,25 +321,18 @@ def _mify_cases() -> tuple[MatrixCase, ...]:
 def _minimax_cases() -> tuple[MatrixCase, ...]:
     route = provider_route_spec("minimax-responses")
     base_url = route_base_url(route)
-    notes = {
-        "MiniMax-M3": (
-            "Default MiniMax model; official route is multimodal and supports image input."
-        ),
-        "MiniMax-M2.7-highspeed": "Explicit non-default text-only comparison row.",
-    }
-    return tuple(
+    return (
         MatrixCase(
-            case_id=f"minimax-responses:{model}:responses",
+            case_id="minimax-responses:MiniMax-M3:responses",
             provider_id="minimax-responses",
             provider_label="MiniMax",
-            model=model,
+            model="MiniMax-M3",
             wire_api="openai-responses",
             api_key_env=route.api_key_env or "",
             base_url=base_url,
             expected_support="native",
-            note=notes[model],
-        )
-        for model in ("MiniMax-M3", "MiniMax-M2.7-highspeed")
+            note="Default MiniMax model; official route is multimodal and supports image input.",
+        ),
     )
 
 
@@ -400,7 +393,6 @@ def _mimo_inside_cases() -> tuple[MatrixCase, ...]:
 
 def _kimi_cases() -> tuple[MatrixCase, ...]:
     chat_route = provider_route_spec("kimi-openai-chat")
-    anthropic_route = provider_route_spec("kimi-anthropic")
     return (
         MatrixCase(
             case_id="kimi:kimi-k2.7-code:chat",
@@ -413,33 +405,10 @@ def _kimi_cases() -> tuple[MatrixCase, ...]:
             headers=(("User-Agent", "claude-code/1.0.0"),),
             expected_support="native",
             note=(
-                "Kimi K2.7 Code requires Thinking On for the new code-model "
-                "behavior. The chat benchmark sends thinking=enabled and "
-                "preserves reasoning_content; thinking=disabled is only a "
-                "diagnostic contrast."
+                "Kimi K2.7 Code is the standard thinking-only coding route. "
+                "No explicit thinking body is sent. The provider accepts and echoes "
+                "arbitrary K2.7 suffixes, so benchmark the canonical model id."
             ),
-        ),
-        MatrixCase(
-            case_id="kimi:kimi-k2.7-code:responses",
-            provider_id="kimi",
-            provider_label="Kimi",
-            model="kimi-k2.7-code",
-            wire_api="openai-responses",
-            api_key_env=chat_route.api_key_env or "",
-            base_url=route_base_url(chat_route),
-            headers=(("User-Agent", "claude-code/1.0.0"),),
-            expected_support="probe",
-        ),
-        MatrixCase(
-            case_id="kimi:k2.6:anthropic",
-            provider_id="kimi",
-            provider_label="Kimi",
-            model="k2.6",
-            wire_api="anthropic-messages",
-            api_key_env=anthropic_route.api_key_env or "",
-            base_url=route_base_url(anthropic_route),
-            headers=(("User-Agent", "Claude-Code/1.0"),),
-            expected_support="native",
         ),
     )
 

@@ -32,7 +32,6 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'value="kimi-openai-chat"',
     'id="claude-fields"',
     'id="claude-provider-input"',
-    'value="kimi-anthropic"',
     'value="mimo-tp-anthropic"',
     'value="mimo-mify-anthropic"',
     'id="agibot-fields"',

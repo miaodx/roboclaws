@@ -196,7 +196,7 @@ def _assert_isaac_robot_view_step(
         _assert_isaac_bounds_camera_contract(camera_contract, step)
     views = step.get("views") or {}
     assert isinstance(views, dict), step
-    for key in ("fpv", "chase", "map", "verify"):
+    for key in ("fpv", "chase", "topdown", "verify"):
         _assert_nonblank_image(
             _resolve_path(base, str(views.get(key) or "")),
             f"Isaac {key} robot view",

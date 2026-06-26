@@ -29,7 +29,7 @@ def test_default_cases_cover_routes_and_wire_formats() -> None:
     assert "mimo-token-plan:mimo-v2.5:openai-chat" in cases
     assert "mimo-token-plan:mimo-v2.5:anthropic" in cases
     assert "mimo-inside-openai-chat:mimo-1000:openai-chat" in cases
-    assert "kimi:k2.6:anthropic" in cases
+    assert "kimi:kimi-k2.7-code:chat" in cases
     assert "nvidia:nemotron-nano-vl:chat" in cases
     assert {case.wire_api for case in cases.values()} == {
         "openai-chat",
@@ -106,11 +106,6 @@ def test_payloads_match_wire_format() -> None:
         prompt="ping",
         max_tokens=8,
     )
-    anthropic_payload = script.payload_for_case(
-        cases["kimi:k2.6:anthropic"],
-        prompt="ping",
-        max_tokens=8,
-    )
     kimi_payload = script.payload_for_case(
         cases["kimi:kimi-k2.7-code:chat"],
         prompt="ping",
@@ -125,10 +120,7 @@ def test_payloads_match_wire_format() -> None:
     assert responses_payload["max_output_tokens"] == 8
     assert responses_payload["reasoning"] == {"effort": "medium"}
     assert "messages" not in responses_payload
-    assert anthropic_payload["messages"] == [{"role": "user", "content": "ping"}]
-    assert anthropic_payload["max_tokens"] == 8
-    assert "max_output_tokens" not in anthropic_payload
-    assert kimi_payload["thinking"] == {"type": "enabled", "keep": "all"}
+    assert "thinking" not in kimi_payload
 
 
 def test_default_token_budget_leaves_room_for_reasoning() -> None:
@@ -146,16 +138,16 @@ def test_default_token_budget_leaves_room_for_reasoning() -> None:
     assert "agent-case" in script.LAYER_CHOICES
 
 
-def test_headers_include_anthropic_version_and_custom_user_agent() -> None:
+def test_headers_include_kimi_coding_user_agent() -> None:
     script = _load_script_module()
     cases = {case.case_id: case for case in script.default_cases()}
 
-    headers = script.headers_for_case(cases["kimi:k2.6:anthropic"], api_key="secret")
+    headers = script.headers_for_case(cases["kimi:kimi-k2.7-code:chat"], api_key="secret")
 
     assert headers["Authorization"] == "Bearer secret"
-    assert headers["x-api-key"] == "secret"
-    assert headers["anthropic-version"] == "2023-06-01"
-    assert headers["User-Agent"] == "Claude-Code/1.0"
+    assert "x-api-key" not in headers
+    assert "anthropic-version" not in headers
+    assert headers["User-Agent"] == "claude-code/1.0.0"
 
 
 def test_missing_key_skips_without_secret_values() -> None:

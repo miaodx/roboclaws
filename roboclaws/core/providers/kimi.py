@@ -134,7 +134,7 @@ class KimiProvider(_AnthropicBase):
 
     def __init__(
         self,
-        model: str = "kimi-k2.6",
+        model: str = "kimi-k2.7-code",
         api_key: str | None = None,
         max_tokens: int = 256,
         retry_attempts: int = 4,
@@ -186,7 +186,7 @@ class KimiCodingProvider:
 
     def __init__(
         self,
-        model: str = "kimi-k2.6",
+        model: str = "kimi-k2.7-code",
         api_key: str | None = None,
         max_tokens: int = 8192,
         retry_attempts: int = 2,

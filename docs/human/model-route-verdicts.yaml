@@ -1,5 +1,5 @@
 schema: roboclaws_model_route_verdicts_v1
-last_reviewed: 2026-06-16
+last_reviewed: 2026-06-22
 source_of_truth:
   registry: roboclaws/agents/provider_registry.py
   narrative: docs/human/model-matrix.md
@@ -37,17 +37,6 @@ verdicts:
       camera_raw_fpv: blocked
     evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
     notes: MiniMax Responses auth/transport connects, but Codex's MCP router rejects MiniMax-emitted tool names such as mcp__cleanup__metric_map and cleanup__ping_tool as unsupported calls.
-  - agent_engine: codex-cli
-    provider_route: minimax-responses
-    provider_profile: minimax-responses
-    model_id: MiniMax-M2.7-highspeed
-    route_status: blocked
-    lane_verdicts:
-      structured_labels: blocked
-      camera_grounded_labels: blocked
-      camera_raw_fpv: blocked
-    evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
-    notes: Same MCP tool-name routing failure as MiniMax-M3; keep only as an explicit re-review route until Codex or MiniMax changes the Responses MCP tool-call shape.
   - agent_engine: openai-agents-sdk
     provider_route: codex-router-responses
     provider_profile: codex-router-responses
@@ -90,8 +79,8 @@ verdicts:
       structured_labels: experimental
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
-    evidence: 2026-06-16 Kimi OpenAI Chat thinking probes; cleanup verdict pending
-    notes: Default model is kimi-k2.7-code. Kimi K2.7 Code requires Thinking On for the new code-model behavior. OpenAI Agents SDK uses model_thinking_mode=default|enabled|disabled and maps Chat routes to thinking={type: enabled, keep: all} or thinking={type: disabled}; disabled is diagnostic/A-B only because it disables reasoning_content on probed Chat routes.
+    evidence: output/dev/model-matrix/20260622_170914/model_matrix_benchmark.json plus 2026-06-22 suffix probe with kimi-k2.7-code-highspeed-not-exist
+    notes: Default model is kimi-k2.7-code. Kimi K2.7 Code routes are thinking-only and no longer send the old explicit thinking body. The provider accepts arbitrary K2.7 suffixes and echoes them, so suffix variants are not treated as catalog models.
   - agent_engine: openai-agents-sdk
     provider_route: minimax-responses
     provider_profile: minimax-responses
@@ -103,17 +92,6 @@ verdicts:
       camera_raw_fpv: blocked
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
     notes: Default MiniMax model. M3 is multimodal and image-capable, but raw FPV remains blocked until runtime image transport is verified for this route.
-  - agent_engine: openai-agents-sdk
-    provider_route: minimax-responses
-    provider_profile: minimax-responses
-    model_id: MiniMax-M2.7-highspeed
-    route_status: healthy
-    lane_verdicts:
-      structured_labels: healthy
-      camera_grounded_labels: experimental
-      camera_raw_fpv: blocked
-    evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
-    notes: Explicit non-default text-only variant. The single paired cleanup run did not show a speed advantage over MiniMax-M3.
   - agent_engine: claude-code
     provider_route: mimo-tp-anthropic
     provider_profile: mimo-tp-anthropic
@@ -125,17 +103,6 @@ verdicts:
       camera_raw_fpv: healthy
     evidence: current Claude Code household route evidence
     notes: Default Claude Code route when MIMO_TP_KEY is configured.
-  - agent_engine: claude-code
-    provider_route: kimi-anthropic
-    provider_profile: kimi-anthropic
-    model_id: kimi-k2.6
-    route_status: healthy
-    lane_verdicts:
-      structured_labels: healthy
-      camera_grounded_labels: healthy
-      camera_raw_fpv: healthy
-    evidence: current Claude Code household route evidence
-    notes: Kimi can be selected explicitly with ROBOCLAWS_PROVIDER_PROFILE.
   - agent_engine: claude-code
     provider_route: mimo-mify-anthropic
     provider_profile: mimo-mify-anthropic

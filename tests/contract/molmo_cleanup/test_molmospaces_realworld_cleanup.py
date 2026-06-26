@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
@@ -136,9 +137,9 @@ def _assert_cleanup_result_contract(
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
     assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
     assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(PREBUILT_BUNDLE)
-    assert run_result["agent_view"]["metric_map"]["map_bundle"]["environment_id"] == (
-        "molmospaces-procthor-10k-val-0"
-    )
+    assert agent_view_module.base_navigation_map(run_result["agent_view"])["map_bundle"][
+        "environment_id"
+    ] == ("molmospaces-procthor-10k-val-0")
     assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
     assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
     assert run_result["advisory_evaluation"]["authoritative"] is False

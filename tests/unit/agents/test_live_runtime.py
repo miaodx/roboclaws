@@ -113,7 +113,7 @@ def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -
 
     assert responses["reasoning"] == {"effort": "medium"}
     assert "truncation" not in responses
-    assert kimi_chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
+    assert "extra_body" not in kimi_chat
     assert kimi_chat["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
     assert mimo_inside_chat["extra_body"]["thinking"] == {"type": "disabled"}
     assert disabled_chat["extra_body"]["thinking"] == {"type": "disabled"}
@@ -1187,7 +1187,7 @@ def test_openai_agents_runtime_applies_kimi_coding_user_agent(tmp_path: Path, mo
     assert captured["base_url"] == "https://api.kimi.com/coding/v1"
     assert captured["api_key"] == "fake-kimi-key"
     assert model_settings.include_usage is True
-    assert model_settings.extra_body == {"thinking": {"type": "enabled", "keep": "all"}}
+    assert not hasattr(model_settings, "extra_body")
     assert model_settings.extra_headers == {"User-Agent": "claude-code/1.0.0"}
     events = [
         json.loads(line)
@@ -2449,9 +2449,7 @@ def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
     assert captured["agent_kwargs"]["model_settings"].extra_headers == {
         "User-Agent": "claude-code/1.0.0"
     }
-    assert captured["agent_kwargs"]["model_settings"].extra_body == {
-        "thinking": {"type": "enabled", "keep": "all"}
-    }
+    assert not hasattr(captured["agent_kwargs"]["model_settings"], "extra_body")
 
 
 def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(

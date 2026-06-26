@@ -72,6 +72,28 @@ def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) 
             "present_rows": ("direct-camera-raw-fpv", "codex-cleanup-camera-raw-fpv-live-product"),
         },
         {
+            "name": "agent_view_module",
+            "changed_files": ["roboclaws/household/agent_view.py"],
+            "present_rows": (
+                "agent-view-contract-tests",
+                "cleanup-contract-tests",
+                "household-direct-world-public-product",
+            ),
+        },
+        {
+            "name": "agent_view_related_paths",
+            "changed_files": [
+                "roboclaws/household/realworld_agent_view_contract.py",
+                "roboclaws/household/realworld_contract_payloads.py",
+                "roboclaws/household/agibot_cleanup_contract.py",
+            ],
+            "present_rows": (
+                "agent-view-contract-tests",
+                "cleanup-contract-tests",
+                "household-direct-world-public-product",
+            ),
+        },
+        {
             "name": "map_build",
             "changed_files": ["roboclaws/maps/runtime_prior_snapshot.py"],
             "present_rows": (

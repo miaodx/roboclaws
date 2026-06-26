@@ -4,9 +4,23 @@ import base64
 import binascii
 from typing import Any
 
-VISUAL_GROUNDING_REQUEST_SCHEMA = "visual_grounding_request_v1"
+VISUAL_GROUNDING_REQUEST_SCHEMA = "visual_grounding_request_v2"
 VISUAL_GROUNDING_RESPONSE_SCHEMA = "visual_grounding_response_v1"
 VISUAL_GROUNDING_PIPELINE_SCHEMA = "visual_grounding_pipeline_v1"
+_FORBIDDEN_REQUEST_HINT_KEYS = frozenset(
+    {
+        "acceptable_destination_sets",
+        "generated_mess_count",
+        "generated_mess_set",
+        "hidden_target_ids",
+        "private_evaluation",
+        "private_manifest",
+        "private_scorer_truth",
+        "relocation_manifest",
+        "scenario_setup",
+        "target_count",
+    }
+)
 
 
 class VisualGroundingContractError(ValueError):
@@ -97,8 +111,33 @@ def _validate_base64(raw: Any) -> None:
 def _validate_request_hints(payload: dict[str, Any]) -> None:
     if not isinstance(payload.get("category_hints"), list):
         raise VisualGroundingContractError("category_hints must be a list")
-    if not isinstance(payload.get("static_fixture_projection"), list):
-        raise VisualGroundingContractError("static_fixture_projection must be a list")
+    public_map_hints = payload.get("public_map_hints")
+    if not isinstance(public_map_hints, dict):
+        raise VisualGroundingContractError("public_map_hints must be an object")
+    if not isinstance(public_map_hints.get("fixture_hints"), list):
+        raise VisualGroundingContractError("public_map_hints.fixture_hints must be a list")
+    if public_map_hints.get("private_truth_included") is True:
+        raise VisualGroundingContractError("public_map_hints must not include private truth")
+    _assert_no_forbidden_request_hint_keys(public_map_hints)
+    if "static_fixture_projection" in payload:
+        raise VisualGroundingContractError(
+            "static_fixture_projection is not a live visual grounding request field; "
+            "use public_map_hints.fixture_hints"
+        )
+
+
+def _assert_no_forbidden_request_hint_keys(value: Any) -> None:
+    if isinstance(value, dict):
+        forbidden = _FORBIDDEN_REQUEST_HINT_KEYS.intersection(value)
+        if forbidden:
+            raise VisualGroundingContractError(
+                f"public_map_hints contains forbidden private fields: {sorted(forbidden)}"
+            )
+        for item in value.values():
+            _assert_no_forbidden_request_hint_keys(item)
+    elif isinstance(value, list):
+        for item in value:
+            _assert_no_forbidden_request_hint_keys(item)
 
 
 def _validate_pipeline_request(pipeline_request: Any) -> None:

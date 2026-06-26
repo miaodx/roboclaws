@@ -17,7 +17,6 @@ PROVIDER_PROFILE_MINIMAX_RESPONSES = "minimax-responses"
 PROVIDER_PROFILE_MIMO_OPENAI_CHAT = "mimo-tp-openai-chat"
 PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT = "mimo-inside-openai-chat"
 PROVIDER_PROFILE_KIMI_OPENAI_CHAT = "kimi-openai-chat"
-PROVIDER_PROFILE_KIMI_ANTHROPIC = "kimi-anthropic"
 PROVIDER_PROFILE_MIMO_ANTHROPIC = "mimo-tp-anthropic"
 PROVIDER_PROFILE_MIMO_MIFY_ANTHROPIC = "mimo-mify-anthropic"
 
@@ -141,26 +140,15 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         openclaw_model_id="anthropic_kimi/k2p5",
     ),
     ModelSpec(
-        model_id="kimi-k2.6",
-        aliases=("kimi", "kimi-k2.6", "k2.6"),
-        family="kimi",
-        model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
-        direct_provider_adapter="kimi",
-        direct_required_env_keys=("KIMI_API_KEY",),
-        cost_per_m={"input": 1.00, "output": 3.00},
-        openclaw_model_id="anthropic_kimi/k2.6",
-    ),
-    ModelSpec(
         model_id="kimi-k2.7-code",
-        aliases=("kimi-k2.7-code", "k2.7-code", "kimi-code"),
+        aliases=("kimi", "kimi-k2.7-code", "k2.7-code", "kimi-code"),
         family="kimi",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
         default_use=True,
         default_use_note=(
-            "Default Kimi coding model. Kimi K2.7 Code requires Thinking On for "
-            "the new code-model behavior. OpenAI Agents SDK routes use the "
-            "normalized model_thinking_mode switch and map it to provider-specific "
-            "request fields."
+            "Default Kimi coding model. Kimi K2.7 Code is a thinking-only route. "
+            "The provider accepts arbitrary K2.7 suffixes and echoes them, so the "
+            "catalog keeps the canonical model id only."
         ),
         direct_provider_adapter="kimi-coding",
         direct_required_env_keys=("KIMI_API_KEY",),
@@ -174,7 +162,6 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         direct_provider_adapter="kimi-coding",
         direct_required_env_keys=("KIMI_API_KEY",),
         cost_per_m={"input": 1.00, "output": 3.00},
-        openclaw_model_id="anthropic_kimi/k2.6",
     ),
     ModelSpec(
         model_id="claude-3-5-sonnet-20241022",
@@ -250,18 +237,7 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         family="minimax",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
         default_use=True,
-        default_use_note=(
-            "Default MiniMax model; multimodal and faster than the M2.7 row in "
-            "local cleanup evidence."
-        ),
-    ),
-    ModelSpec(
-        model_id="MiniMax-M2.7-highspeed",
-        aliases=("minimax-highspeed", "minimax-m2.7-highspeed", "MiniMax-M2.7-highspeed"),
-        family="minimax",
-        model_capabilities=_caps(MODEL_CAP_TEXT),
-        default_use=False,
-        default_use_note="Available explicit variant only; not the default MiniMax route.",
+        default_use_note="Default MiniMax model for current cleanup evidence.",
     ),
 )
 
@@ -333,8 +309,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_api=WIRE_RESPONSES,
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
-        default_use_note="Default-enabled MiniMax route; uses MiniMax-M3, not M2.7-highspeed.",
-        compatible_model_ids=("MiniMax-M3", "MiniMax-M2.7-highspeed"),
+        default_use_note="Default-enabled MiniMax route; uses MiniMax-M3.",
+        compatible_model_ids=("MiniMax-M3",),
         per_engine_status={
             "codex-cli": ROUTE_BLOCKED,
             "openai-agents-sdk": ROUTE_HEALTHY,
@@ -409,33 +385,14 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note=(
-            "Default-enabled Kimi coding route. K2.7 Code requires Thinking On "
-            "for the new code-model behavior. Default OpenAI Agents SDK payloads "
-            "enable thinking through the provider-aware model_thinking_mode policy."
+            "Default-enabled Kimi coding route. K2.7 Code is thinking-only; keep "
+            "the canonical kimi-k2.7-code id because the provider accepts and "
+            "echoes arbitrary suffixes."
         ),
         compatible_model_ids=("kimi-k2.7-code",),
         per_engine_status={"openai-agents-sdk": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
-            "tool_call_transport": ROUTE_CAP_SUPPORTED,
-        },
-    ),
-    ProviderRouteSpec(
-        route_id="kimi-anthropic",
-        public_profile=PROVIDER_PROFILE_KIMI_ANTHROPIC,
-        label="Kimi Anthropic",
-        supported_engines=("claude-code",),
-        default_model_id="kimi-k2.6",
-        required_env_keys=("KIMI_API_KEY",),
-        api_key_env="KIMI_API_KEY",
-        base_url_env="KIMI_ANTHROPIC_BASE_URL",
-        base_url_default="https://api.kimi.com/coding/",
-        wire_api=WIRE_ANTHROPIC,
-        wire_source=WIRE_SOURCE_NATIVE,
-        compatible_model_ids=("kimi-k2.6",),
-        per_engine_status={"claude-code": ROUTE_HEALTHY},
-        route_capabilities={
-            "image_transport": ROUTE_CAP_SUPPORTED,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
     ),
@@ -472,25 +429,6 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_GATEWAY,
         compatible_model_ids=("xiaomi/mimo-v2.5",),
         per_engine_status={"claude-code": ROUTE_EXPERIMENTAL},
-        route_capabilities={
-            "image_transport": ROUTE_CAP_SUPPORTED,
-            "tool_call_transport": ROUTE_CAP_SUPPORTED,
-        },
-    ),
-    ProviderRouteSpec(
-        route_id="kimi",
-        public_profile="kimi",
-        label="Kimi OpenClaw",
-        supported_engines=("openclaw-gateway",),
-        default_model_id="kimi-k2.6",
-        required_env_keys=("KIMI_API_KEY",),
-        api_key_env="KIMI_API_KEY",
-        base_url_env=None,
-        base_url_default="https://api.kimi.com/coding/",
-        wire_api=WIRE_ANTHROPIC,
-        wire_source=WIRE_SOURCE_NATIVE,
-        compatible_model_ids=("kimi-k2.6",),
-        per_engine_status={"openclaw-gateway": ROUTE_EXPERIMENTAL},
         route_capabilities={
             "image_transport": ROUTE_CAP_SUPPORTED,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
@@ -1073,7 +1011,10 @@ def _main(argv: list[str] | None = None) -> int:
             else "route_id is required"
         )
     if args.command == "model-id":
-        print(_model_command_text(args.route_id))
+        try:
+            print(_model_command_text(args.route_id))
+        except KeyError as exc:
+            parser.error(f"unknown model {exc.args[0]!r}; use a catalog model id or alias")
         return 0
     if args.command == "provider-model-id":
         if not args.agent_engine:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.semantic_timeline import (
     CLOSE_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
@@ -104,7 +105,7 @@ def cleanup_policy_trace_from_events(
     *,
     schema: str,
 ) -> dict[str, Any]:
-    metric_map = agent_view.get("metric_map") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
     accumulator = _PolicyTraceAccumulator(waypoints=_trace_waypoints(metric_map))
     for raw in trace_events:
         if raw.get("event") == "response":

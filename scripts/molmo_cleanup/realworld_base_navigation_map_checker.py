@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.realworld_contract import forbidden_agent_view_keys
 from roboclaws.maps.base_waypoints import (
     BASE_WAYPOINT_GENERATION_POLICY,
@@ -11,9 +12,9 @@ from roboclaws.maps.base_waypoints import (
 
 
 def assert_base_navigation_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
-    metric_map = agent_view.get("metric_map") or {}
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
-    runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
+    static_fixture_projection: dict[str, Any] = {"rooms": []}
+    runtime_map = data.get("runtime_metric_map") or agent_view_module.runtime_metric_map(agent_view)
     static_map = runtime_map.get("static_map") or {}
     _assert_base_navigation_core(metric_map, static_fixture_projection, runtime_map)
     _assert_rooms_and_static_map(metric_map, static_fixture_projection, static_map)

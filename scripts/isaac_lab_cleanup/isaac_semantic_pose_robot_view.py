@@ -28,7 +28,7 @@ class SemanticPoseRobotViewRequest:
     focus_receptacle_id: str | None = None
 
 
-ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
+ROBOT_VIEW_KEYS = ("fpv", "chase", "topdown", "verify")
 
 
 def real_semantic_pose_robot_view_images(

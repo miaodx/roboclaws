@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.maps.base_waypoints import (
     BASE_WAYPOINT_GENERATION_POLICY,
     BASE_WAYPOINT_PURPOSE,
@@ -15,7 +16,7 @@ from scripts.molmo_cleanup.realworld_base_navigation_map_checker import (
 
 def test_checker_accepts_canonical_base_area_inspection_waypoints() -> None:
     agent_view = _agent_view_with_waypoint(_canonical_base_waypoint())
-    data = {"runtime_metric_map": agent_view["runtime_metric_map"]}
+    data = {"runtime_metric_map": agent_view_module.runtime_metric_map(agent_view)}
 
     assert_base_navigation_map(data, agent_view)
 
@@ -24,7 +25,7 @@ def test_checker_rejects_fixture_fields_on_canonical_base_waypoints() -> None:
     waypoint = _canonical_base_waypoint()
     waypoint["fixture_id"] = "private_fixture"
     agent_view = _agent_view_with_waypoint(waypoint)
-    data = {"runtime_metric_map": agent_view["runtime_metric_map"]}
+    data = {"runtime_metric_map": agent_view_module.runtime_metric_map(agent_view)}
 
     with pytest.raises(AssertionError):
         assert_base_navigation_map(data, agent_view)
@@ -109,23 +110,38 @@ def _agent_view_with_waypoint(waypoint: dict[str, object]) -> dict[str, object]:
             }
         ],
     }
-    return {
-        "metric_map": {
-            "base_navigation_map": {"enabled": True},
-            "rooms": [room],
-            "driveable_ways": [],
-            "room_category_hints": [
-                {
-                    "anchor_id": "anchor_room_2",
-                    "anchor_type": "room_area",
-                    "room_id": "room_2",
-                }
-            ],
-            "inspection_waypoints": [dict(waypoint)],
-        },
-        "static_fixture_projection": {
-            "schema": "static_fixture_projection_v1",
-            "rooms": [],
-        },
-        "runtime_metric_map": runtime_map,
+    metric_map = {
+        "base_navigation_map": {"enabled": True},
+        "rooms": [room],
+        "driveable_ways": [],
+        "room_category_hints": [
+            {
+                "anchor_id": "anchor_room_2",
+                "anchor_type": "room_area",
+                "room_id": "room_2",
+            }
+        ],
+        "inspection_waypoints": [dict(waypoint)],
     }
+    return agent_view_module.build_agent_view(
+        contract="realworld_cleanup_v1",
+        perception_mode="visible_object_detections",
+        detection_exposure_policy="world_public_labels",
+        structured_detections_available=True,
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_map,
+        observed_objects=[],
+        raw_fpv_observations=[],
+        camera_model_policy_evidence={},
+        model_declared_observations=[],
+        model_declared_observation_evidence={},
+        policy_view={
+            "schema": "realworld_cleanup_policy_view_v1",
+            "excluded_report_only_views": [],
+            "chase_camera_policy_input": False,
+        },
+        cleanup_worklist={"schema": "cleanup_worklist_v1", "objects": [], "waypoints": []},
+        observed_waypoint_ids=[],
+        public_tool_names=["metric_map"],
+        forbidden_keys=frozenset(),
+    )

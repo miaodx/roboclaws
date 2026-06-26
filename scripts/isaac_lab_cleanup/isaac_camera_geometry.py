@@ -63,7 +63,7 @@ def isaac_camera_view_poses(
                 tensor([target]),
             ),
             "chase": chase_pose,
-            "map": (
+            "topdown": (
                 tensor([[center[0], center[1], scene_bounds["max"][2] + span * 1.25]]),
                 tensor([[center[0], center[1], floor_z]]),
             ),
@@ -82,7 +82,7 @@ def isaac_camera_view_poses(
     return {
         "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
         "chase": chase_pose,
-        "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
+        "topdown": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
         "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
     }
 
