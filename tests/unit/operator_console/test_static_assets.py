@@ -52,7 +52,8 @@ ROUTE_FIELD_HTML_REQUIRED = (
     "Try Mess-up",
     'data-operator-mode="steer"',
     'data-operator-mode="goal"',
-    'data-view="tasks"',
+    'id="background-tasks-button"',
+    '<button id="background-tasks-button" class="secondary view-mode" data-view="tasks" hidden>',
     'id="tasks-panel"',
     "Background Tasks",
     'id="background-task-list"',
@@ -163,6 +164,9 @@ ROUTE_FIELD_APP_REQUIRED = (
     "background_blockers",
     "TASK RUNNING",
     "data-open-background-tasks",
+    "backgroundTaskViewAvailable",
+    "els.backgroundTasksButton.hidden = activeCount <= 0 && state.activeView !== \"tasks\";",
+    "copyVisualPath",
     "copy_command",
     "api_post",
 )
@@ -394,33 +398,43 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-view="outputs"' in html
     assert 'data-view="artifacts"' not in html
     assert 'id="outputs-panel"' in html
-    assert 'data-panel="blank-chase"' in html
+    assert 'data-panel="blank-chase"' not in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
     assert ">Base Map<" in html
     assert ">Runtime Map<" in html
     assert ">Semantic Map<" not in html
     assert ">Top-down<" in html
+    assert 'data-panel-title="fpv"' in html
+    assert 'data-panel="grounding"' in html
+    assert 'data-panel="grounding"' not in html.split('class="view-grid mode-overview"', 1)[0]
     assert "topdown-frame" in html
-    assert "Top-down Scene View" in app
+    assert "Top-down Scene View" not in app
+    assert "FPV(+Grounding)" in app
+    assert 'display_source === "visual_grounding_overlay"' in app
     assert 'activeView: "overview"' in app
     assert "visiblePanelsForView" in app
     assert "routeViewModes" in app
-    assert "routeHasOverviewChase" in app
-    assert 'resource_kind !== "physical_robot"' in app
-    assert 'panels.add("chase")' in app
-    assert 'panels.add("blank-chase")' in app
+    assert "routeHasOverviewChase" not in app
+    assert 'resource_kind !== "physical_robot"' not in app
+    overview_body = app.split('if (view === "overview") {', 1)[1].split("\n  }", 1)[0]
+    assert 'new Set(["fpv", "map", "runtime_map", "topdown"])' in overview_body
+    assert '"outputs"' not in overview_body
+    assert '"tasks"' not in overview_body
+    assert '"grounding"' not in overview_body
+    assert '"chase"' not in overview_body
     assert "Missing run chase artifact" in app
     assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
-    assert '"chase topdown"' in css
+    assert '"runtime_map topdown"' in css
     assert "object-position: center center" in css
     assert ".image-panel > .image-frame" in css
     assert "aspect-ratio: auto" in css
-    assert '.mode-overview [data-panel="chase"]' in css
-    assert '.mode-overview [data-panel="blank-chase"]' in css
-    assert ".blank-panel" in css
+    assert '.mode-overview [data-panel="runtime_map"]' in css
+    assert '.mode-overview [data-panel="chase"]' not in css
+    assert '.mode-overview [data-panel="blank-chase"]' not in css
+    assert ".blank-panel" not in css
     assert "[hidden]" in css
     assert "display: none !important" in css
     assert ".top-run-bar.run-active #run-title" in css

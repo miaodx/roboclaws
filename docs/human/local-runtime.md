@@ -35,8 +35,9 @@ Run `just dev::network-status` before validation-required maintainer workflows.
 On the work network, guarded maintainer routes and system-provider Claude Code
 are blocked; the repo-local SDK `codex-router-responses` route
 (`CODEX_BASE_URL` plus `CODEX_API_KEY`) and explicit SDK
-`mimo-mify-responses` override remain allowed. Work-network restrictions are documented in
-[`AGENTS.md`](../../AGENTS.md).
+`mimo-mify-responses` override remain allowed. Agent-facing work-network
+restrictions and examples are documented in
+[`docs/agents/operating-runbook.md`](../agents/operating-runbook.md).
 
 For the current model/provider compatibility table, see
 [`model-matrix.md`](model-matrix.md).

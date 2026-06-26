@@ -250,7 +250,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_CODEX_RESPONSES,
         public_profile=PROVIDER_PROFILE_CODEX_RESPONSES,
-        label="Codex Router Responses",
+        label="Codex GPT5.5",
         supported_engines=("openai-agents-sdk",),
         default_model_id="gpt-5.5",
         required_env_keys=("CODEX_BASE_URL", "CODEX_API_KEY"),
@@ -273,7 +273,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
         public_profile=PROVIDER_PROFILE_MIMO_MIFY_RESPONSES,
-        label="MiMo mify Responses Gateway",
+        label="Mimo MIFY v2.5",
         supported_engines=("openai-agents-sdk",),
         default_model_id="xiaomi/mimo-v2.5",
         required_env_keys=("XM_LLM_API_KEY",),
@@ -299,7 +299,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MINIMAX_RESPONSES,
         public_profile=PROVIDER_PROFILE_MINIMAX_RESPONSES,
-        label="MiniMax Responses",
+        label="MiniMax M3",
         supported_engines=("openai-agents-sdk",),
         default_model_id="MiniMax-M3",
         required_env_keys=("MM_API_KEY",),
@@ -323,7 +323,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MIMO_OPENAI_CHAT,
         public_profile=PROVIDER_PROFILE_MIMO_OPENAI_CHAT,
-        label="MiMo token plan OpenAI Chat",
+        label="Mimo TP v2.5",
         supported_engines=("openai-agents-sdk",),
         default_model_id="mimo-v2.5",
         required_env_keys=("MIMO_TP_KEY",),
@@ -344,7 +344,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id=PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT,
         public_profile=PROVIDER_PROFILE_MIMO_INSIDE_OPENAI_CHAT,
-        label="MiMo inside OpenAI Chat",
+        label="Mimo Inside 1000",
         supported_engines=("openai-agents-sdk",),
         default_model_id="mimo-1000",
         required_env_keys=("MIMO_BASE_URL", "MIMO_API_KEY"),
@@ -369,7 +369,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
     ProviderRouteSpec(
         route_id="kimi-openai-chat",
         public_profile=PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
-        label="Kimi OpenAI Chat",
+        label="Kimi K2.7",
         supported_engines=("openai-agents-sdk",),
         default_model_id="kimi-k2.7-code",
         required_env_keys=("KIMI_API_KEY",),
