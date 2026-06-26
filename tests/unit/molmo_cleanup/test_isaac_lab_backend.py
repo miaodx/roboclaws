@@ -327,7 +327,7 @@ def _assert_fake_isaac_robot_views(
     assert views["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
     assert views["native_render_diagnostics"]["schema"] == "isaac_native_render_diagnostics_v1"
     assert views["native_render_diagnostics"]["default_render_settings_changed"] is False
-    assert set(views["views"]) == {"fpv", "chase", "map", "verify"}
+    assert set(views["views"]) == {"fpv", "chase", "topdown", "verify"}
     for path in views["views"].values():
         assert Path(path).is_file()
 
@@ -4061,7 +4061,7 @@ def test_isaac_lab_real_worker_views_reuse_real_smoke_images(
     assert result["ok"] is True
     assert result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
     assert "placeholder" not in json.dumps(result["view_provenance"])
-    assert set(result["views"]) == {"fpv", "chase", "map", "verify"}
+    assert set(result["views"]) == {"fpv", "chase", "topdown", "verify"}
     assert result["shapes"]["fpv"] == [48, 64, 3]
     for path in result["views"].values():
         assert Path(path).is_file()

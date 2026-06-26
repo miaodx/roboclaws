@@ -1668,10 +1668,17 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         lambda *_args, **_kwargs: {"status": "ok", "object_pixels": 1, "boxes": []},
     )
 
-    def fail_canonical_render(*_args, **_kwargs):
-        raise AssertionError("MuJoCo robot FPV must use robot_0/head_camera")
+    def fake_topdown_render(*_args, **kwargs):
+        output_dir = Path(kwargs["output_dir"])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        image_path = output_dir / "topdown_scene.png"
+        worker.Image.new("RGB", (16, 12)).save(image_path)
+        return {
+            "ok": True,
+            "images": {"topdown_scene": str(image_path)},
+        }
 
-    monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fail_canonical_render)
+    monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fake_topdown_render)
     result = worker.write_robot_views(
         state,
         tmp_path,
@@ -1797,6 +1804,11 @@ def test_worker_robot_views_keeps_backend_local_fallback_without_pose(
         "_focus_visibility",
         lambda *_args, **_kwargs: {"status": "ok", "object_pixels": 1, "boxes": []},
     )
+    monkeypatch.setattr(
+        worker,
+        "_render_camera_views_with_model_data",
+        lambda *_args, **kwargs: _fake_topdown_render(worker, kwargs["output_dir"]),
+    )
 
     result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
 
@@ -1806,6 +1818,16 @@ def test_worker_robot_views_keeps_backend_local_fallback_without_pose(
     assert result["camera_control_contract"]["agent_facing_fpv"]["source"] == (
         "robot_0/head_camera"
     )
+
+
+def _fake_topdown_render(worker, output_dir: Path) -> dict[str, object]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    image_path = output_dir / "topdown_scene.png"
+    worker.Image.new("RGB", (16, 12)).save(image_path)
+    return {
+        "ok": True,
+        "images": {"topdown_scene": str(image_path)},
+    }
 
 
 def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place() -> None:

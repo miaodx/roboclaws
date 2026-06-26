@@ -1720,7 +1720,7 @@ def _provider_config(provider: str, *, model: str) -> dict[str, Any]:
     if provider != "codex-router-responses":
         return {"error": {"type": "unsupported_provider", "provider": provider}}
     readiness = provider_readiness(
-        agent_engine="codex-cli",
+        agent_engine="openai-agents-sdk",
         provider_profile=provider,
         model=model,
         env=dict(os.environ),

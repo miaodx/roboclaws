@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.artifact_report import (
     is_cleanup_run_result_artifact,
     load_cleanup_scenario_artifact,
@@ -257,6 +258,18 @@ def test_rerender_cleanup_report_from_run_result_handles_missing_scenario_artifa
                 ],
             }
         ],
+        "agent_view": _minimal_agent_view(),
+        "private_evaluation": {
+            "schema_version": "private_evaluation_v1",
+            "generated_mess_set": ["observed_001"],
+            "object_results": [
+                {
+                    "object_id": "observed_001",
+                    "restored": True,
+                    "actual_location_id": "sink_01",
+                }
+            ],
+        },
         "robot_view_steps": [
             {
                 "action": "navigate_to_object observed_001",
@@ -289,6 +302,33 @@ def test_rerender_cleanup_report_from_run_result_handles_missing_scenario_artifa
     assert "<span>nav</span><small>object</small>" in report_text
     assert "Subphase: <strong>nav</strong>" in report_text
     assert "nav/object" not in report_text
+
+
+def _minimal_agent_view() -> dict[str, object]:
+    return agent_view_module.build_agent_view(
+        contract="realworld_cleanup_v1",
+        perception_mode="visible_object_detections",
+        detection_exposure_policy="public_runtime_map",
+        structured_detections_available=True,
+        base_metric_map={"schema": "real_robot_map_bundle_v1", "map_bundle": {}},
+        runtime_metric_map={"schema": "runtime_metric_map_v1", "static_map": {}},
+        observed_objects=[
+            {
+                "object_id": "observed_001",
+                "category": "Plate",
+                "state": "placed",
+            }
+        ],
+        raw_fpv_observations=[],
+        camera_model_policy_evidence={},
+        model_declared_observations=[],
+        model_declared_observation_evidence={},
+        policy_view={},
+        cleanup_worklist={},
+        observed_waypoint_ids=[],
+        public_tool_names=[],
+        forbidden_keys=frozenset(),
+    )
 
 
 def test_rerender_cleanup_report_from_run_result_resolves_declared_paths_under_run_dir(

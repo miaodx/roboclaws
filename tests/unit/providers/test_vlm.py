@@ -127,9 +127,9 @@ def test_create_provider_gpt4o_mini(monkeypatch):
 
 def test_create_provider_kimi(monkeypatch):
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
-    with patch("roboclaws.core.provider_factory.KimiProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.KimiCodingProvider.__init__", return_value=None):
         p = create_provider("kimi")
-    assert isinstance(p, KimiProvider)
+    assert isinstance(p, KimiCodingProvider)
 
 
 def test_create_provider_kimi_alias(monkeypatch):

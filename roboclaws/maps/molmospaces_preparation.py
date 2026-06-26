@@ -16,6 +16,19 @@ from roboclaws.maps.spatial_contract import (
 BASE_METRIC_MAP_CONTRACT_SCHEMA = "base_metric_map_v1"
 MOLMOSPACES_BASE_METRIC_PREPARATION_SCHEMA = "molmospaces_base_metric_map_preparation_v1"
 
+_SEMANTIC_CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("kitchen", ("kitchen",)),
+    ("living_room", ("living", "lounge")),
+    ("dining_area", ("dining",)),
+    ("bedroom", ("bed",)),
+    ("bathroom", ("bath", "toilet")),
+    ("corridor", ("corridor", "hall")),
+    ("entry", ("entry", "foyer")),
+    ("storage", ("storage", "closet")),
+    ("utility", ("utility", "laundry")),
+    ("meeting_room", ("meeting", "conference")),
+)
+
 
 def prepare_molmospaces_base_metric_map(
     *,
@@ -184,26 +197,9 @@ def _origin_for_rooms(rooms: list[dict[str, Any]]) -> dict[str, float]:
 
 def _semantic_category_from_label(label: str, *, room_id: str, room_type: str) -> str:
     text = f"{label} {room_id} {room_type}".lower().replace("_", " ")
-    if "kitchen" in text:
-        return "kitchen"
-    if "living" in text or "lounge" in text:
-        return "living_room"
-    if "dining" in text:
-        return "dining_area"
-    if "bed" in text:
-        return "bedroom"
-    if "bath" in text or "toilet" in text:
-        return "bathroom"
-    if "corridor" in text or "hall" in text:
-        return "corridor"
-    if "entry" in text or "foyer" in text:
-        return "entry"
-    if "storage" in text or "closet" in text:
-        return "storage"
-    if "utility" in text or "laundry" in text:
-        return "utility"
-    if "meeting" in text or "conference" in text:
-        return "meeting_room"
+    for category, terms in _SEMANTIC_CATEGORY_RULES:
+        if any(term in text for term in terms):
+            return category
     return "open_area"
 
 

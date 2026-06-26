@@ -2,15 +2,15 @@
 
 Source gate: `docs/plans/refactor-architecture-cleanup-campaign.md`
 
-Latest user intent: finish the current verified slice group, then stop the
-architecture cleanup campaign. No fresh discovery pass should run until the
-user explicitly resumes the campaign.
+Latest user intent: resume the autonomous codebase simplification campaign
+with fresh reduce-entropy discovery, architecture-report input, and verified
+refactor slices until the stop condition is met.
 
 Current slice:
 
-- Agibot contract-rehearsal runtime owner move complete. Campaign stopped by
-  user request after committing this slice; remaining quality-ratchet output is
-  broader oversized-module baseline drift in other owners.
+- PARKED after post-Slice-33 discovery pass 2. Two independent fresh passes
+  found no clear safe autonomous P1/P2 slice after shrink attempts, so the
+  campaign stop condition is met.
 
 Last proven evidence:
 
@@ -88,6 +88,63 @@ Last proven evidence:
   no longer lists `roboclaws/household/agibot_contract_rehearsal.py` or
   `roboclaws/household/agibot_contract_rehearsal_stages.py`; it still fails on
   unrelated oversized-module drift listed under parked work.
+- Fresh post-`12b66126` discovery found a current false-confidence candidate:
+  `.venv/bin/python scripts/dev/check_python_quality_ratchet.py` failed with
+  new complexity rows in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py` and two
+  operator-console test helpers.
+- Slice 29 moved robot-view artifact path naming and scene-alignment point
+  collection into same-owner private helpers in
+  `scripts/molmo_cleanup/molmospaces_worker_outputs.py`. Focused robot-view
+  worker tests, touched-file Ruff, touched-file format check, and
+  `git diff --check` passed. The quality-ratchet output no longer lists
+  `molmospaces_worker_outputs.py`; it still fails on two operator-console test
+  helper PLR0915 rows plus broader oversized-module baseline drift.
+- Slice 30 split overlong operator-console scene-sampler readiness and static
+  asset assertion helpers into same-file assertion vocabulary. Focused tests,
+  PLR0915 Ruff, touched-file Ruff, touched-file format check, and
+  `git diff --check` passed. The quality-ratchet output now reports only
+  oversized-module baseline drift and no current Ruff complexity rows.
+- Slice 31 replaced the MolmoSpaces map-preparation semantic category branch
+  ladder with an ordered rule table in the same map-preparation owner. Focused
+  map-preparation contract coverage, direct C901 Ruff, touched-file Ruff,
+  touched-file format check, and `git diff --check` passed. The quality-ratchet
+  summary now reports zero Ruff complexity violations; the full ratchet command
+  still fails only on oversized-module baseline drift.
+- Post-`29e3d316` discovery found duplicate live-run timing ownership:
+  `scripts/molmo_cleanup/run_live_codex_cleanup.py` still carried local runner
+  timing and MCP trace timing helpers while `roboclaws.agents.live_timing`
+  already owned the active OpenAI Agents timing interface. Slice 32 moved the
+  Codex-specific timing interpretation into that existing agent-layer owner,
+  kept the retired Codex runner script and output schema intact, and reduced
+  `run_live_codex_cleanup.py` from 1455 to 1393 lines. Focused Codex timing
+  tests, active OpenAI Agents timing tests, touched-file Ruff, touched-file
+  format check, ratchet summary, and `git diff --check` passed. The full
+  ratchet still fails only on broader oversized-module baseline drift.
+- Post-`7cd1b445` discovery found a small same-owner duplicate stack in
+  `roboclaws.operator_console.interactions`: operator message and resume JSONL
+  source errors used parallel formatter helpers. Slice 33 merged that private
+  formatting into one parameterized helper while preserving source labels and
+  user-facing error text. Focused interaction source-error tests, touched-file
+  Ruff, touched-file format check, ratchet summary, and `git diff --check`
+  passed. `interactions.py` shrank from 895 to 881 lines; the full ratchet
+  still fails only on broader oversized-module baseline drift.
+- Post-`60f9fd67` discovery pass 1 checked current ratchet summary, top
+  oversized household/report/operator-console/script owners, stale/public alias
+  hits, checker legacy flags, operator-console state JSON source helpers, and
+  raw-FPV semantic aliasing. No clear safe P1/P2 slice remained after shrink
+  attempts: the hits were public migrations already parked, broad report/test
+  sprawl, legitimate artifact/link ownership, or domain-heavy visual-label
+  aliasing that needs a larger contract.
+- Post-`60f9fd67` discovery pass 2 independently checked the ratchet proof,
+  exact oversized-module failures, small script/module surfaces, repeated
+  private-helper names, text/JSON source readers, live MolmoSpaces aliases, and
+  operator-console JSONL/source helpers. The ratchet summary still reports
+  zero Ruff complexity violations, and the full ratchet still fails only on
+  oversized-module baseline drift. No implementation slice passed the campaign
+  bar: remaining candidates require public command migration, broader
+  test-suite/report restructuring, domain-contract decisions, or would only
+  move lines without deleting, merging, or canonicalizing a real concept.
 
 Completed slice batch:
 
@@ -152,19 +209,32 @@ Completed slice batch:
   and relative-path formatting into the Agibot contract-rehearsal runtime
   owner, and updated contract tests to assert active GDK navigation claims
   instead of scanning capability-profile metadata strings.
+- Slice 29: deepened MolmoSpaces worker robot-view output assembly and
+  scene-alignment point collection inside the current worker-output owner.
+- Slice 30: split operator-console scene-sampler readiness and static
+  overview/output UI assertion helpers so tests no longer produce current
+  PLR0915 quality-ratchet rows.
+- Slice 31: deepened MolmoSpaces map-preparation room category rules into an
+  ordered table and added interface-level priority/fallback coverage.
+- Slice 32: moved Codex live-run timing calculation and MCP trace timing reads
+  into the existing agent-layer live timing owner.
+- Slice 33: merged duplicate operator-console JSONL source-error formatting in
+  the interactions owner.
 
 Next proof:
 
 ```bash
-# Campaign stopped by user request after Slice 28.
-# On resume, run fresh post-HEAD discovery before selecting the next slice.
+.venv/bin/python scripts/dev/check_python_quality_ratchet.py
+# Expect remaining failures to be oversized-module baseline drift only.
 ```
 
 Stop condition:
 
 - Stop for public contract migration, unavailable proof, external/hardware
   evidence, or two consecutive fresh post-HEAD no-clear-candidate handoffs.
-- Current stop reason: user requested stopping after the current slice group.
+- Current stop reason: met. Post-Slice-33 discovery passes 1 and 2 found no
+  clear safe P1/P2 autonomous slice after parking public migrations and broad
+  oversized-module restructuring.
 
 No-touch scope:
 
@@ -203,3 +273,26 @@ Parked work:
   `agibot_map_build_mcp_server.py`, `realworld_contract.py`, several
   `scripts/molmo_cleanup/*` files, and large contract/unit tests. These are
   outside the final Agibot runtime-owner slice.
+- Latest quality-ratchet residual after Slice 29: current complexity rows
+  remain in
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py:_assert_projection_readiness_and_candidates`
+  and
+  `tests/unit/operator_console/test_static_assets.py:test_static_app_uses_overview_workspace_and_outputs_copy`.
+  Treat broader oversized-module drift as architecture pressure and prefer
+  safe owner-local shrink slices before any baseline refresh.
+- Latest quality-ratchet residual after Slice 33: no current Ruff complexity
+  rows remain. Remaining full-ratchet failures are oversized-module baseline
+  drift across household, launch, operator-console, scripts, and large tests;
+  select only owner-local shrink slices that delete, merge, canonicalize, or
+  clearly deepen a real owner concept.
+- No-clear pass 1 after Slice 33: public MolmoSpaces alias/checker-flag
+  migrations remain parked; `operator_console.state` already centralizes JSON
+  source errors; remaining oversized owners need broader domain contracts or
+  test-suite restructuring rather than a safe autonomous slice.
+- No-clear pass 2 after Slice 33: `run_molmospaces_scene_camera_comparison.py`
+  remains a live recipe wrapper; the small map/preparation scripts still own
+  CLI defaults or output formatting; `operator_console.jsonl_sources` and the
+  merged interaction source-error helper already cover the JSONL/source-error
+  owner; public MolmoSpaces `val_*` aliases remain documented/tested launch
+  surfaces; remaining quality-ratchet failures are oversized-module baseline
+  drift that needs a new owner-specific plan or reviewed baseline decision.

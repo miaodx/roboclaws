@@ -713,54 +713,40 @@ def _read_resume_rows_with_source_errors(
 
 
 def _message_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
-    if issue.kind == "read_error":
-        message = f"cannot read operator message source: {issue.message}"
-    elif issue.kind == "invalid_json":
-        message = f"invalid JSON: {issue.message}"
-    else:
-        message = issue.message
-    return _message_source_error(issue.path, message, line_number=issue.line_number)
+    return _issue_source_error(
+        issue,
+        source="operator_messages",
+        read_error_prefix="cannot read operator message source",
+    )
 
 
 def _resume_issue_source_error(issue: JsonlSourceIssue) -> dict[str, Any]:
+    return _issue_source_error(
+        issue,
+        source="operator_resume_requests",
+        read_error_prefix="cannot read operator resume source",
+    )
+
+
+def _issue_source_error(
+    issue: JsonlSourceIssue,
+    *,
+    source: str,
+    read_error_prefix: str,
+) -> dict[str, Any]:
     if issue.kind == "read_error":
-        message = f"cannot read operator resume source: {issue.message}"
+        message = f"{read_error_prefix}: {issue.message}"
     elif issue.kind == "invalid_json":
         message = f"invalid JSON: {issue.message}"
     else:
         message = issue.message
-    return _resume_source_error(issue.path, message, line_number=issue.line_number)
-
-
-def _message_source_error(
-    path: Path,
-    message: str,
-    *,
-    line_number: int | None = None,
-) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "source": "operator_messages",
-        "path": str(path),
+        "source": source,
+        "path": str(issue.path),
         "message": message,
     }
-    if line_number is not None:
-        payload["line"] = line_number
-    return payload
-
-
-def _resume_source_error(
-    path: Path,
-    message: str,
-    *,
-    line_number: int | None = None,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "source": "operator_resume_requests",
-        "path": str(path),
-        "message": message,
-    }
-    if line_number is not None:
-        payload["line"] = line_number
+    if issue.line_number is not None:
+        payload["line"] = issue.line_number
     return payload
 
 
