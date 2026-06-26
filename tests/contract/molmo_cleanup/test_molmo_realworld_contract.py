@@ -2504,13 +2504,7 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_8_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="food")
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
@@ -2539,13 +2533,7 @@ def test_realworld_raw_fpv_visual_candidate_requires_reviewable_fpv_bbox() -> No
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_8_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="food")
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
@@ -2584,9 +2572,7 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    tomato_waypoint = contract.metric_map()["inspection_waypoints"][0]
-    contract.navigate_to_waypoint(str(tomato_waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="food")
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
@@ -2651,13 +2637,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    work_waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_8_inspection"
-    )
-    contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="food")
     raw_observation_id = observation["raw_fpv_observation"]["observation_id"]
     first = contract.navigate_to_visual_candidate(
         raw_observation_id,
@@ -2842,13 +2822,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_8_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="food")
     declared = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"],
         candidates=[
@@ -2874,13 +2848,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_6_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="toy")
     declared = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"],
         candidates=[
@@ -2906,9 +2874,7 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
-    waypoint = contract.metric_map()["inspection_waypoints"][0]
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="electronics")
 
     bad_source_fixture = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
@@ -3175,14 +3141,7 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback(
         visual_grounding_client=client,
         visual_grounding_pipeline_id="grounding-dino",
     )
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_6_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-
-    observation = contract.observe()
+    observation = _observe_raw_fpv_category(contract, category="toy")
     _attach_raw_fpv_test_image(
         contract,
         tmp_path=tmp_path,
@@ -3297,13 +3256,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
         visual_grounding_pipeline_id="grounding-dino",
         visual_grounding_artifact_base_dir=tmp_path,
     )
-    waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_6_inspection"
-    )
-    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-
+    contract.navigate_to_waypoint(contract._preferred_waypoint_for_fixture("sofa_01"))  # noqa: SLF001
     observation = contract.observe()
     _attach_raw_fpv_test_image(
         contract,
@@ -3467,6 +3420,23 @@ def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
         if observation["visible_object_detections"]:
             return observation
     raise AssertionError("expected at least one visible object detection")
+
+
+def _observe_raw_fpv_category(
+    contract: RealWorldCleanupContract,
+    *,
+    category: str,
+) -> dict:
+    matching = [
+        item
+        for item in contract.scenario.objects
+        if _declared_category_matches_object(category, item)
+    ]
+    assert matching, f"expected scenario object category {category}"
+    fixture_id = contract.contract.object_locations()[matching[0].object_id]
+    waypoint_id = contract._preferred_waypoint_for_fixture(fixture_id)  # noqa: SLF001
+    contract.navigate_to_waypoint(waypoint_id)
+    return contract.observe()
 
 
 def _observe_all_public_waypoints(contract: RealWorldCleanupContract) -> dict:
