@@ -19,6 +19,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
         "provider_profile=codex-router-responses",
         "live_execution=run",
         "live_timeout_s=30",
+        "regrade_source=output/evals/household_world_cleanup_capability/source-run",
     )
 
     assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
@@ -28,6 +29,7 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
     assert "provider_profile=codex-router-responses" in trace
     assert "live_execution=run" in trace
     assert "live_timeout_s=30" in trace
+    assert "regrade_source=output/evals/household_world_cleanup_capability/source-run" in trace
 
 
 def test_agent_eval_public_facade_routes_promotion_cli() -> None:
@@ -43,6 +45,19 @@ def test_agent_eval_public_facade_routes_promotion_cli() -> None:
     assert "eval_results=output/evals/demo/eval_results.json" in trace
     assert "source_sample_id=cleanup.smoke_seed7" in trace
     assert "regression_sample_id=regression.cleanup_demo" in trace
+
+
+def test_agent_eval_public_facade_routes_map_build_report_cli() -> None:
+    trace = _trace_agent_eval(
+        "map-build-report",
+        "eval_results=output/evals/a/eval_results.json,output/evals/b/eval_results.json",
+        "output_dir=output/evals/map-build-matrix-report",
+    )
+
+    assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
+    assert "map-build-report" in trace
+    assert "eval_results=output/evals/a/eval_results.json,output/evals/b/eval_results.json" in trace
+    assert "output_dir=output/evals/map-build-matrix-report" in trace
 
 
 def test_agent_eval_public_facade_routes_eval_harness_recommend() -> None:

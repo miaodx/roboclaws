@@ -314,12 +314,17 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     loaded = [load_eval_sample(path) for path in sample_paths]
     assert {sample.sample_id for sample in loaded} == {
         "cleanup.consume_map_seed7",
+        "cleanup.consumer_fixture_focused_prior_seed7",
+        "cleanup.consumer_no_prior_seed7",
         "cleanup.repeated_seed7",
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
+        "map_build.fixture_focused_seed7",
         "open_ended.drink_seed7",
         "open_ended.living_waypoint_seed7",
         "open_ended.room4_anchor_seed7",
+        "open_ended.stable_anchor_fixture_focused_prior_seed7",
+        "open_ended.stable_anchor_no_prior_seed7",
         "scene_sampler.procthor-10k-val.0.map_build",
         "scene_sampler.procthor-10k-val.10.map_build",
         "scene_sampler.procthor-10k-val.11.map_build",
@@ -338,7 +343,11 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         "scene_sampler.procthor-objaverse-val.14.map_build",
     }
     suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
-    assert {sample.sample_id for sample in loaded} <= suite_sample_ids
+    standalone_sample_ids = {
+        "cleanup.consume_map_seed7",
+        "map_build.baseline_seed7",
+    }
+    assert {sample.sample_id for sample in loaded} <= suite_sample_ids | standalone_sample_ids
 
     map_build_sample = next(
         sample for sample in loaded if sample.sample_id == "map_build.baseline_seed7"
@@ -349,6 +358,38 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     assert map_build_sample.provider_profiles == (
         MISSING_NOT_APPLICABLE,
         "codex-router-responses",
+        "minimax-responses",
+    )
+
+    map_build_consumer_suite = suites[1]
+    assert map_build_consumer_suite.suite_id == "household_world.map_build_consumer"
+    assert map_build_consumer_suite.sample_ids == (
+        "map_build.fixture_focused_seed7",
+        "open_ended.stable_anchor_no_prior_seed7",
+        "open_ended.stable_anchor_fixture_focused_prior_seed7",
+        "cleanup.consumer_no_prior_seed7",
+        "cleanup.consumer_fixture_focused_prior_seed7",
+    )
+    assert map_build_consumer_suite.metadata["comparison_variants"] == [
+        "no_prior",
+        "fixture_focused_prior",
+    ]
+    assert map_build_consumer_suite.metadata["model_matrix_provider_profiles"] == [
+        "codex-router-responses",
+        "mimo-inside-openai-chat",
+        "kimi-openai-chat",
+        "minimax-responses",
+    ]
+
+    fixture_map_build_sample = next(
+        sample for sample in loaded if sample.sample_id == "map_build.fixture_focused_seed7"
+    )
+    assert "map_build_scan_profile" not in fixture_map_build_sample.launch_overrides
+    assert fixture_map_build_sample.provider_profiles == (
+        MISSING_NOT_APPLICABLE,
+        "codex-router-responses",
+        "mimo-inside-openai-chat",
+        "kimi-openai-chat",
         "minimax-responses",
     )
 

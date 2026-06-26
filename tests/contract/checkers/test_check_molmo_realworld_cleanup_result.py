@@ -169,6 +169,57 @@ def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
     assert "Target Candidates" in (tmp_path / "report.html").read_text()
 
 
+def test_checker_rejects_duplicate_current_run_fixture_anchor_viewpoints(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    runtime_map = result["runtime_metric_map"]
+    anchor = next(
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] in {"fixture", "surface", "receptacle"}
+    )
+    duplicate = {**anchor, "anchor_id": f"{anchor['anchor_id']}_duplicate"}
+    runtime_map["public_semantic_anchors"].append(duplicate)
+    result["agent_view"]["runtime_metric_map"] = runtime_map
+
+    with pytest.raises(AssertionError, match="duplicate_fixture_anchor_viewpoints"):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
+def test_checker_rejects_rgb_only_runtime_map_object_pose(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    observed = result["runtime_metric_map"]["observed_objects"][0]
+    observed["object_pose"] = {"x": 1.0, "y": 2.0, "yaw": 0.0}
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError, match="RGB-only current-run map evidence"):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            expect_policy="camera_model_policy_baseline",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
 def test_checker_can_require_map_build_mode(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -191,7 +242,9 @@ def test_checker_can_require_map_build_mode(tmp_path: Path) -> None:
         require_camera_model_policy=True,
     )
     counts = result["tool_event_counts"]
-    assert counts["adjust_camera:request"] >= 1
+    assert result["map_build"]["scan_profile_id"] == "fixture-focused"
+    assert result["map_build"]["uses_robot_body_turns"] is True
+    assert counts["navigate_to_relative_pose:request"] >= 1
     assert counts.get("pick:request") is None
     assert result["runtime_metric_map"]["observed_objects"]
 

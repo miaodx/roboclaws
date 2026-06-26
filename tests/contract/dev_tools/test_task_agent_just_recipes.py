@@ -2481,6 +2481,10 @@ def test_map_build_live_prompt_disables_cleanup_actions() -> None:
     assert "declare_visual_candidates" in prompt
     assert "adjust_camera" in prompt
     assert "observe again" in prompt
+    assert "scan_profile=fixture-focused" in prompt
+    assert "navigate_to_relative_pose" in prompt
+    assert "stable semantic anchors" in prompt
+    assert "future runs must recheck before action" in prompt
     assert "required_next_tool" in prompt
     assert "required_tool" in prompt
     assert "generated target-inspection candidate" in prompt

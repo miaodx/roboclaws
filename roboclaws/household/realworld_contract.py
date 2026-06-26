@@ -536,15 +536,24 @@ class RealWorldCleanupContract:
             )
             return response
         source_observation_id = self._next_visible_observation_id()
-        detections = self._visible_detections_for_waypoint(
-            waypoint,
-            source_observation_id=source_observation_id,
-            visual_confirmation=self._camera_scan_confirmed(),
-        )
         perception_source = (
             SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
             if self.sanitize_world_labels
             else "robot_local_visible_object_detections"
+        )
+        fixture_observations = (
+            realworld_runtime_map_targets.record_fixture_observations_for_waypoint(
+                self,
+                waypoint,
+                source_observation_id=source_observation_id,
+                producer_type=perception_source,
+                producer_id=perception_source,
+            )
+        )
+        detections = self._visible_detections_for_waypoint(
+            waypoint,
+            source_observation_id=source_observation_id,
+            visual_confirmation=self._camera_scan_confirmed(),
         )
         response = self._ok(
             "observe",
@@ -562,6 +571,7 @@ class RealWorldCleanupContract:
             visible_object_detections=[
                 self._agent_visible_detection_payload(detection) for detection in detections
             ],
+            visible_fixture_detections=fixture_observations,
             held_object_id=self._held_handle,
             perception_source=perception_source,
             private_target_truth_included=False,

@@ -23,6 +23,7 @@ class ApiSemanticCleanupBackend:
         self._known_receptacles = {item.receptacle_id: item for item in scenario.receptacles}
         self._held_object_id: str | None = None
         self._current_receptacle_id = "floor_01"
+        self._heading_deg = 0.0
         self._open_receptacle_ids: set[str] = set()
         self._containment: dict[str, dict[str, str]] = {}
         self.tool_event_counts: Counter[str] = Counter()
@@ -112,6 +113,29 @@ class ApiSemanticCleanupBackend:
     def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
         self._count("navigate_to_receptacle")
         return self._navigate_to_receptacle("navigate_to_receptacle", receptacle_id)
+
+    def navigate_to_relative_pose(
+        self,
+        *,
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        self._count("navigate_to_relative_pose")
+        previous_heading_deg = self._heading_deg
+        self._heading_deg = (self._heading_deg + float(yaw_delta_deg)) % 360.0
+        return self._ok(
+            "navigate_to_relative_pose",
+            primitive_provenance=API_SEMANTIC_PROVENANCE,
+            state_mutation="agent_pose_semantic",
+            backend_pose_mutation_available=True,
+            applied_forward_m=float(forward_m),
+            applied_lateral_m=float(lateral_m),
+            applied_yaw_delta_deg=float(yaw_delta_deg),
+            previous_heading_deg=previous_heading_deg,
+            heading_deg=self._heading_deg,
+            clamped=False,
+        )
 
     def _navigate_to_receptacle(self, tool: str, receptacle_id: str) -> dict[str, Any]:
         if receptacle_id not in self._known_receptacles:

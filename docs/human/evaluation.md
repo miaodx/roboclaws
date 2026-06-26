@@ -78,6 +78,34 @@ just agent::eval suite=cleanup_capability budget=smoke \
 The eval result records blocked provider/runtime conditions separately from
 agent behavior when the selected live route cannot finish.
 
+Completed live eval artifacts can be regraded after grader changes without
+launching a provider route:
+
+```bash
+just agent::eval suite=map_build_consumer budget=focused \
+  agent_engine=openai-agents-sdk provider_profile=codex-router-responses \
+  regrade_source=output/evals/<suite>/<stamp>
+```
+
+MapBuild review can also be rendered as a cross-run matrix report after running
+multiple providers or settings:
+
+```bash
+just agent::eval map-build-report \
+  eval_results=output/evals/<suite>/<stamp>/eval_results.json,output/evals/<suite>/<other-stamp>/eval_results.json \
+  output_dir=output/evals/map-build-matrix-review
+```
+
+`eval_results=` accepts comma-separated files or directories. Directories are
+searched for `eval_results.json`. The command writes
+`map_build_matrix_report.html` and `map_build_matrix_summary.json`; the report
+compares MapBuild quality, runtime-map enrichment over the Base Metric Map,
+downstream open-ended and cleanup deltas between tasks run without the MapBuild
+prior and with the fixture-focused MapBuild prior, wall time, model attempts,
+and MCP/tool request counts. It uses only eval artifacts and grader outputs;
+private fixture/scorer truth remains grader-only and is not converted into
+runtime or agent-facing map input.
+
 `scene_sampler_stress` is the static eval projection for source-aware
 MolmoSpaces scene sampling. It currently admits six prepared
 `procthor-10k-val` map-build samples and ten prepared `procthor-objaverse-val`

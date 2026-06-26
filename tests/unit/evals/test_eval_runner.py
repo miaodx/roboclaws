@@ -16,6 +16,7 @@ from roboclaws.evals.regression import (
 )
 from roboclaws.evals.runner import run_eval_suite
 from roboclaws.launch.catalog import resolve_surface_launch
+from tests.support import eval_runtime_map
 
 
 def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
@@ -52,6 +53,23 @@ def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
     assert "run_result" in report_html
     assert 'href="runs/cleanup_smoke_seed7/trial-0000/run_result.json"' in report_html
     assert "Scene Sampler Projection" not in report_html
+
+
+def test_eval_runner_default_stamp_is_unique_for_quick_repeated_runs(tmp_path: Path) -> None:
+    first = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        product_runner=_passing_product_runner,
+    )
+    second = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        product_runner=_passing_product_runner,
+    )
+
+    assert first.output_dir != second.output_dir
+    assert first.results_path.exists()
+    assert second.results_path.exists()
 
 
 def test_cleanup_outcome_accepts_semantic_success_when_exact_private_goal_is_partial(
@@ -185,6 +203,103 @@ def test_smoke_eval_uses_canonical_map_bundle(
     assert captured_kwargs["backend"] == "api_semantic_synthetic"
     assert captured_kwargs["evidence_lane"] == "smoke"
     assert captured_kwargs["map_bundle_dir"] == "assets/maps/molmospaces/procthor-10k-val/0"
+
+
+def test_eval_runner_does_not_expose_map_build_scan_profile_override(
+    tmp_path: Path,
+) -> None:
+    map_build_kwargs: dict[str, Any] = {}
+
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        if kwargs.get("map_build"):
+            map_build_kwargs.update(kwargs)
+        return _passing_product_runner(**kwargs)
+
+    run_eval_suite(
+        "map_build_consumer",
+        output_root=tmp_path,
+        stamp="scan-profile-default",
+        product_runner=product_runner,
+    )
+
+    assert map_build_kwargs["run_metadata_overrides"]["eval_sample_id"] == (
+        "map_build.fixture_focused_seed7"
+    )
+    assert "map_build_scan_profile" not in map_build_kwargs
+
+
+def test_map_build_consumer_report_records_comparison_metrics(tmp_path: Path) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        sample_id = str(kwargs["run_metadata_overrides"]["eval_sample_id"])
+        if sample_id.startswith("map_build."):
+            _write_product_artifacts(run_dir, completion_status="map_build_complete")
+            return _run_result(
+                run_dir,
+                completion_status="map_build_complete",
+                map_build=True,
+            )
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=sample_id.startswith("open_ended."),
+        )
+        result = _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended" if sample_id.startswith("open_ended.") else "cleanup",
+            final_status="success",
+            include_completion_claim=sample_id.startswith("open_ended."),
+        )
+        if kwargs.get("runtime_map_prior_path"):
+            result["runtime_metric_map_prior"] = {
+                "loaded": True,
+                "source": str(kwargs["runtime_map_prior_path"]),
+                "anchor_prior_count": 1,
+                "object_prior_count": 1,
+            }
+            result["runtime_metric_map"]["observed_objects"] = [
+                {
+                    "object_id": "cup_1",
+                    "freshness": "current_run",
+                    "actionability": "actionable",
+                    "prior_match_basis": "category_room_source_fixture",
+                }
+            ]
+        return result
+
+    run = run_eval_suite(
+        "map_build_consumer",
+        output_root=tmp_path,
+        stamp="comparison",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    comparison = payload["aggregate"]["comparison"]
+    assert comparison["schema"] == "map_build_consumer_comparison_summary_v1"
+    assert comparison["variant_ids"] == [
+        "fixture_focused_prior",
+        "no_prior",
+    ]
+    rows = {row["sample_id"]: row for row in comparison["rows"]}
+    fixture_row = rows["cleanup.consumer_fixture_focused_prior_seed7"]
+    assert fixture_row["variant_id"] == "fixture_focused_prior"
+    assert fixture_row["prior_use_verdict"] == "movable_hint_rechecked"
+    assert fixture_row["comparison_label"] == "no_regression"
+    assert set(fixture_row["tool_counts"]) == {
+        "observe",
+        "adjust_camera",
+        "navigate_to_waypoint",
+        "navigate_to_relative_pose",
+    }
+    assert (
+        rows["open_ended.stable_anchor_fixture_focused_prior_seed7"]["comparison_label"]
+        == "no_regression"
+    )
+    report_text = run.report_path.read_text()
+    assert "MapBuild Review" in report_text
+    assert "MapBuild Consumer Comparison" in report_text
 
 
 @pytest.mark.parametrize(
@@ -374,6 +489,50 @@ def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> 
     )
 
 
+def test_eval_runner_regrades_existing_live_artifacts_without_provider_call(
+    tmp_path: Path,
+) -> None:
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        surface_run_dir = Path(kwargs["output_dir"]) / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        result = _run_result(surface_run_dir, completion_status="success")
+        (surface_run_dir / "run_result.json").write_text(json.dumps(result) + "\n")
+        result["eval_effective_run_dir"] = str(surface_run_dir)
+        return result
+
+    source_run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-source",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    def forbidden_live_product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("regrade_source must not call the live provider route")
+
+    regrade = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-source-regrade",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        regrade_source=source_run.output_dir,
+        live_product_runner=forbidden_live_product_runner,
+    )
+
+    payload = json.loads(regrade.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 3
+    result = payload["results"][0]
+    assert result["status"] == "passed"
+    assert "live_eval_regraded_from_existing_artifacts" in result["limitations"]
+    assert result["artifacts"]["run_result"].endswith(
+        "live-source/runs/cleanup_repeated_seed7/trial-0000/surface-run/seed-7/run_result.json"
+    )
+
+
 def test_eval_runner_rejects_live_result_without_effective_run_dir(tmp_path: Path) -> None:
     def live_product_runner(**kwargs: Any) -> dict[str, Any]:
         stale_trial_dir = Path(kwargs["output_dir"])
@@ -459,6 +618,37 @@ def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path
     assert result["status"] == "blocked"
     assert result["failure_class"] == "model_or_provider_unavailable"
     assert result["grader_outputs"]["runner"]["status"] == "blocked"
+
+
+def test_eval_runner_classifies_live_tool_argument_failures_as_agent_failures(
+    tmp_path: Path,
+) -> None:
+    def live_product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError(
+            "OpenAI Agents SDK runtime failed: agent_cli_failure; "
+            "Error code: 400 - {'error': {'message': "
+            "'invalid params, invalid function arguments json string, "
+            "tool_call_id: call_function_1 (2013)', 'code': 'invalid_prompt'}}"
+        )
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-tool-argument-invalid",
+        agent_engine="openai-agents-sdk",
+        provider_profile="minimax-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["blocked"] == 0
+    assert payload["aggregate"]["failure_classes"] == {"tool_argument_invalid": 3}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "tool_argument_invalid"
+    assert result["grader_outputs"]["runner"]["status"] == "failed"
 
 
 def test_live_surface_product_discovers_timestamped_run_dir(
@@ -1037,6 +1227,103 @@ def test_live_open_ended_eval_recovers_checker_nonzero_foreground_artifact(
     assert sleeps == []
     assert result["eval_effective_run_dir"].endswith("surface-run/0616_1405/seed-7")
     command_record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
+    assert command_record["returncode"] == 1
+
+
+def test_live_cleanup_eval_grades_artifacts_after_checker_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "seed-7"
+        command_text = " ".join(command)
+        if "preset=map-build" in command_text:
+            _write_product_artifacts(run_dir, completion_status="map_build_complete")
+            (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
+            (run_dir / "run_result.json").write_text(
+                json.dumps(
+                    _run_result(
+                        run_dir,
+                        completion_status="map_build_complete",
+                        map_build=True,
+                    )
+                )
+                + "\n"
+            )
+            return _completed_process(returncode=0)
+        if "preset=cleanup" not in command_text:
+            _write_product_artifacts(
+                run_dir,
+                completion_status="success",
+                include_goal_contract=True,
+            )
+            (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
+            (run_dir / "run_result.json").write_text(
+                json.dumps(
+                    _run_result(
+                        run_dir,
+                        completion_status="success",
+                        task_intent="open-ended",
+                        include_completion_claim=True,
+                    )
+                )
+                + "\n"
+            )
+            return _completed_process(returncode=0)
+        _write_product_artifacts(run_dir, completion_status="partial_success")
+        result = _run_result(
+            run_dir,
+            completion_status="partial_success",
+            task_intent="cleanup",
+        )
+        result["score"]["semantic_acceptability"] = {
+            "status": "success",
+            "accepted_count": 5,
+            "total_targets": 5,
+        }
+        (run_dir / "run_result.json").write_text(json.dumps(result) + "\n")
+        (run_dir / "live_status.json").write_text(
+            '{"phase": "failed", "exit_status": 1, '
+            '"reason": "cleanup checker exited with status 1"}\n'
+        )
+        return _completed_process(returncode=1, stderr="cleanup checker exited with status 1")
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    run = run_eval_suite(
+        "map_build_consumer",
+        output_root=tmp_path,
+        stamp="live-cleanup-checker-nonzero",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_timeout_s=12.5,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = next(
+        item
+        for item in payload["results"]
+        if item["identity"]["sample_id"] == "cleanup.consumer_no_prior_seed7"
+    )
+    assert result["status"] == "passed"
+    assert result["failure_class"] == "not_applicable"
+    assert result["grader_outputs"]["outcome"]["semantic_completion_status"] == "success"
+    command_record = json.loads(
+        (
+            tmp_path
+            / "household_world_map_build_consumer"
+            / "live-cleanup-checker-nonzero"
+            / "runs"
+            / "cleanup_consumer_no_prior_seed7"
+            / "trial-0000"
+            / "live_eval_command.json"
+        ).read_text()
+    )
     assert command_record["returncode"] == 1
 
 
@@ -1630,29 +1917,29 @@ def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
 def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
     tmp_path: Path,
 ) -> None:
-    seen_runtime_priors: list[str] = []
+    seen_runtime_priors: dict[str, str] = {}
 
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
         sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
         if "runtime_map_prior_path" in kwargs:
-            seen_runtime_priors.append(str(kwargs["runtime_map_prior_path"]))
-        if sample_id == "map_build.baseline_seed7":
+            seen_runtime_priors[sample_id] = str(kwargs["runtime_map_prior_path"])
+        if sample_id == "map_build.fixture_focused_seed7":
             _write_product_artifacts(run_dir, completion_status="map_build_complete")
             return _run_result(
                 run_dir,
                 completion_status="map_build_complete",
                 map_build=True,
             )
-        if sample_id == "open_ended.drink_seed7":
+        if sample_id.startswith("open_ended."):
             _write_product_artifacts(
                 run_dir,
-                completion_status="failed",
+                completion_status="success",
                 include_goal_contract=True,
             )
             return _run_result(
                 run_dir,
-                completion_status="failed",
+                completion_status="success",
                 task_intent="open-ended",
                 final_status="success",
                 include_completion_claim=True,
@@ -1668,19 +1955,25 @@ def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
     )
 
     payload = json.loads(run.results_path.read_text())
-    assert payload["aggregate"]["passed"] == 3
+    assert payload["aggregate"]["passed"] == 5
     assert payload["aggregate"]["failed"] == 0
-    assert len(seen_runtime_priors) == 1
-    assert seen_runtime_priors[0].endswith(
-        "runs/map_build_baseline_seed7/trial-0000/runtime_metric_map.json"
-    )
+    assert seen_runtime_priors == {
+        "open_ended.stable_anchor_fixture_focused_prior_seed7": (
+            str(run.output_dir)
+            + "/runs/map_build_fixture_focused_seed7/trial-0000/runtime_metric_map.json"
+        ),
+        "cleanup.consumer_fixture_focused_prior_seed7": (
+            str(run.output_dir)
+            + "/runs/map_build_fixture_focused_seed7/trial-0000/runtime_metric_map.json"
+        ),
+    }
     results = {result["identity"]["sample_id"]: result for result in payload["results"]}
-    map_result = results["map_build.baseline_seed7"]
+    map_result = results["map_build.fixture_focused_seed7"]
     assert map_result["grader_outputs"]["outcome"]["runtime_metric_map_schema"] == (
         "runtime_metric_map_v1"
     )
-    assert map_result["grader_outputs"]["outcome"]["public_semantic_anchor_count"] >= 1
-    open_result = results["open_ended.drink_seed7"]
+    assert map_result["grader_outputs"]["outcome"]["public_semantic_anchor_count"] >= 20
+    open_result = results["open_ended.stable_anchor_fixture_focused_prior_seed7"]
     assert open_result["status"] == "passed"
     assert open_result["grader_outputs"]["outcome"]["completion_claim_present"] is True
     assert open_result["grader_outputs"]["outcome"]["artifact_readiness"] == "ready"
@@ -1693,6 +1986,22 @@ def test_focused_map_build_eval_passes_camera_labeler_to_product_runner(
     tmp_path: Path,
 ) -> None:
     captured_kwargs: dict[str, Any] = {}
+    suite_path = tmp_path / "camera_grounded_map_build_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.camera_grounded_map_build",
+                "version": "2026-06-24",
+                "capability": "household_world",
+                "sample_ids": ["map_build.baseline_seed7"],
+                "sample_refs": ["evals/household_world/samples/map_build/baseline_seed7.json"],
+                "required_graders": ["artifacts", "privacy", "trajectory", "outcome"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         if kwargs["run_metadata_overrides"]["eval_sample_id"] == "map_build.baseline_seed7":
@@ -1706,7 +2015,7 @@ def test_focused_map_build_eval_passes_camera_labeler_to_product_runner(
         )
 
     run_eval_suite(
-        "map_build_consumer",
+        str(suite_path),
         output_root=tmp_path,
         stamp="map-build-camera-labeler",
         budget="focused",
@@ -1721,7 +2030,8 @@ def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> N
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
         _write_product_artifacts(run_dir, completion_status="map_build_complete")
-        (run_dir / "runtime_metric_map.json").write_text('{"schema": "wrong"}\n')
+        if kwargs["run_metadata_overrides"]["eval_sample_id"] == "map_build.fixture_focused_seed7":
+            (run_dir / "runtime_metric_map.json").write_text('{"schema": "wrong"}\n')
         return _run_result(run_dir, completion_status="map_build_complete")
 
     run = run_eval_suite(
@@ -1733,10 +2043,88 @@ def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> N
 
     payload = json.loads(run.results_path.read_text())
     result = payload["results"][0]
-    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["identity"]["sample_id"] == "map_build.fixture_focused_seed7"
     assert result["status"] == "failed"
     assert result["failure_class"] == "map_actionability_failure"
     assert result["grader_outputs"]["outcome"]["schema_ok"] is False
+
+
+def test_map_build_eval_uses_molmospaces_backend_fixture_truth_for_live_backend(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        if kwargs["run_metadata_overrides"]["eval_sample_id"] == "map_build.fixture_focused_seed7":
+            _write_molmospaces_map_build_artifacts(run_dir)
+            return _run_result(
+                run_dir,
+                completion_status="map_build_complete",
+                map_build=True,
+                backend="molmospaces_subprocess",
+            )
+        return _run_result(run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp="molmospaces-truth",
+        budget="focused",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.fixture_focused_seed7"
+    assert result["status"] == "passed"
+    assert outcome["sim_truth_fixture_category_recall"] == 1.0
+    assert outcome["sim_truth_fixture_category_precision"] == 1.0
+    assert outcome["sim_truth_best_view_waypoint_accuracy"] == 1.0
+    assert outcome["sim_truth_expected_fixture_categories"] == [
+        "bed",
+        "countertop",
+        "desk",
+        "diningtable",
+        "fridge",
+        "shelvingunit",
+        "sink",
+        "sofa",
+        "tvstand",
+    ]
+
+
+def test_map_build_eval_keeps_molmospaces_best_view_waypoint_gate(tmp_path: Path) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        if kwargs["run_metadata_overrides"]["eval_sample_id"] == "map_build.fixture_focused_seed7":
+            _write_molmospaces_map_build_artifacts(run_dir, wrong_waypoint_category="desk")
+            return _run_result(
+                run_dir,
+                completion_status="map_build_complete",
+                map_build=True,
+                backend="molmospaces_subprocess",
+            )
+        return _run_result(run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp="molmospaces-bad-waypoint",
+        budget="focused",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.fixture_focused_seed7"
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "map_actionability_failure"
+    assert outcome["sim_truth_fixture_category_recall"] == 1.0
+    assert outcome["sim_truth_best_view_waypoint_accuracy"] < 1.0
+    assert outcome["sim_truth_best_view_waypoint_mismatches"]
 
 
 @pytest.mark.parametrize(
@@ -1771,7 +2159,7 @@ def test_map_build_eval_classifies_malformed_runtime_metric_map_as_invalid_artif
     payload = json.loads(run.results_path.read_text())
     result = payload["results"][0]
     outcome = result["grader_outputs"]["outcome"]
-    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["identity"]["sample_id"] == "map_build.fixture_focused_seed7"
     assert result["status"] == "failed"
     assert result["failure_class"] == "artifact_missing"
     assert outcome["failure_class"] == "artifact_missing"
@@ -1820,7 +2208,7 @@ def test_map_build_eval_rejects_wrong_shaped_runtime_map_lists(
     payload = json.loads(run.results_path.read_text())
     result = payload["results"][0]
     outcome = result["grader_outputs"]["outcome"]
-    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["identity"]["sample_id"] == "map_build.fixture_focused_seed7"
     assert result["status"] == "failed"
     assert result["failure_class"] == "artifact_missing"
     assert outcome["failure_class"] == "artifact_missing"
@@ -1945,29 +2333,27 @@ def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path:
         run_dir = Path(kwargs["output_dir"])
         sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
         launched_samples.append(sample_id)
-        if sample_id == "map_build.baseline_seed7":
-            _write_product_artifacts(run_dir, completion_status="map_build_complete")
-            (run_dir / "runtime_metric_map.json").unlink()
-            return _run_result(
-                run_dir,
-                completion_status="map_build_complete",
-                map_build=True,
-                include_runtime_map=False,
-            )
-        if sample_id == "open_ended.drink_seed7":
+        if sample_id == "map_build.fixture_focused_seed7":
+            raise RuntimeError("provider_config_failure: missing CODEX_API_KEY")
+        if sample_id.startswith("open_ended."):
             _write_product_artifacts(
                 run_dir,
-                completion_status="failed",
+                completion_status="success",
                 include_goal_contract=True,
             )
             return _run_result(
                 run_dir,
-                completion_status="failed",
+                completion_status="success",
                 task_intent="open-ended",
                 final_status="success",
                 include_completion_claim=True,
             )
-        raise AssertionError("cleanup consumer should not launch without runtime_map_prior_path")
+        if sample_id in {
+            "cleanup.consumer_no_prior_seed7",
+        }:
+            _write_product_artifacts(run_dir, completion_status="success")
+            return _run_result(run_dir, completion_status="success")
+        raise AssertionError("fixture-prior consumer should not launch without a runtime map")
 
     run = run_eval_suite(
         "evals/household_world/suites/map_build_consumer.json",
@@ -1980,15 +2366,49 @@ def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path:
     cleanup_result = next(
         result
         for result in results
-        if result["identity"]["sample_id"] == "cleanup.consume_map_seed7"
+        if result["identity"]["sample_id"] == "cleanup.consumer_fixture_focused_prior_seed7"
     )
-    assert launched_samples == ["map_build.baseline_seed7", "open_ended.drink_seed7"]
-    assert cleanup_result["status"] == "failed"
-    assert cleanup_result["failure_class"] == "artifact_missing"
-    assert cleanup_result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
-    assert cleanup_result["grader_outputs"]["artifacts"]["missing_dependencies"] == [
-        "runtime_map_prior_path"
+    open_ended_result = next(
+        result
+        for result in results
+        if result["identity"]["sample_id"]
+        == ("open_ended.stable_anchor_fixture_focused_prior_seed7")
+    )
+    assert launched_samples == [
+        "map_build.fixture_focused_seed7",
+        "open_ended.stable_anchor_no_prior_seed7",
+        "cleanup.consumer_no_prior_seed7",
     ]
+    for result in (cleanup_result, open_ended_result):
+        assert result["status"] == "blocked"
+        assert result["failure_class"] == "model_or_provider_unavailable"
+        assert result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
+        assert result["grader_outputs"]["artifacts"]["missing_dependencies"] == [
+            "runtime_map_prior_path"
+        ]
+
+
+def test_eval_dependency_resolver_propagates_blocked_source_sample() -> None:
+    sample = load_eval_sample(
+        Path(__file__).resolve().parents[3]
+        / "evals/household_world/samples/cleanup/consumer_fixture_focused_prior_seed7.json"
+    )
+
+    dependencies = resolve_artifact_dependencies(
+        sample,
+        repetition_index=0,
+        sample_artifacts={
+            "map_build.fixture_focused_seed7": {
+                "source_status": "blocked",
+                "source_failure_class": "model_or_provider_unavailable",
+            }
+        },
+    )
+    failure = dependency_failure(dependencies)
+
+    assert failure is not None
+    assert failure["failure_class"] == "model_or_provider_unavailable"
+    assert "source sample was blocked" in failure["message"]
 
 
 def test_eval_runner_fails_before_launch_when_explicit_runtime_map_prior_is_missing(
@@ -2205,14 +2625,14 @@ def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path)
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
         sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
-        if sample_id == "map_build.baseline_seed7":
+        if sample_id == "map_build.fixture_focused_seed7":
             _write_product_artifacts(run_dir, completion_status="map_build_complete")
             return _run_result(
                 run_dir,
                 completion_status="map_build_complete",
                 map_build=True,
             )
-        if sample_id == "cleanup.consume_map_seed7":
+        if sample_id.startswith("cleanup."):
             _write_product_artifacts(run_dir, completion_status="success")
             return _run_result(run_dir, completion_status="success")
         _write_product_artifacts(run_dir, completion_status="failed")
@@ -2227,7 +2647,9 @@ def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path)
 
     results = json.loads(run.results_path.read_text())["results"]
     open_result = next(
-        result for result in results if result["identity"]["sample_id"] == "open_ended.drink_seed7"
+        result
+        for result in results
+        if result["identity"]["sample_id"] == "open_ended.stable_anchor_no_prior_seed7"
     )
     assert open_result["status"] == "failed"
     assert open_result["failure_class"] == "agent_no_completion_claim"
@@ -2588,7 +3010,7 @@ def _write_product_artifacts(
     *,
     completion_status: str,
     include_goal_contract: bool = False,
-    generated_exploration_candidate_count: int = 1,
+    generated_exploration_candidate_count: int = 7,
     include_open_ended_public_evidence: bool = True,
 ) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -2619,14 +3041,17 @@ def _write_product_artifacts(
                     "evidence": {"visited": True},
                 },
                 {
-                    "anchor_id": "anchor_waypoint_room_6_inspection",
-                    "anchor_type": "observation_waypoint",
-                    "room_id": "room_4",
-                    "waypoint_id": "room_6_inspection",
+                    "anchor_id": "anchor_fixture_006",
+                    "anchor_type": "receptacle",
+                    "category": "fridge",
+                    "label": "fridge",
+                    "room_id": "room_2",
+                    "waypoint_id": "room_2_inspection",
                     "evidence": {"visited": True},
                 },
             ]
         )
+        public_anchors.extend(eval_runtime_map.quality_public_anchors())
         generated_candidates.extend(
             [
                 {
@@ -2635,8 +3060,8 @@ def _write_product_artifacts(
                     "visited": True,
                 },
                 {
-                    "waypoint_id": "room_6_inspection",
-                    "room_id": "room_4",
+                    "waypoint_id": "room_2_inspection",
+                    "room_id": "room_2",
                     "visited": True,
                 },
             ]
@@ -2650,7 +3075,7 @@ def _write_product_artifacts(
             },
             "inspection_observations": [
                 {"room_id": "kitchen", "waypoint_id": "generated_exploration_003"},
-                {"room_id": "room_4", "waypoint_id": "room_6_inspection"},
+                {"room_id": "room_2", "waypoint_id": "room_2_inspection"},
             ],
         }
     (run_dir / "runtime_metric_map.json").write_text(
@@ -2659,6 +3084,8 @@ def _write_product_artifacts(
                 "schema": "runtime_metric_map_v1",
                 "public_semantic_anchors": public_anchors,
                 "generated_exploration_candidates": generated_candidates,
+                "observed_objects": eval_runtime_map.quality_observed_objects(),
+                "target_candidates": eval_runtime_map.quality_target_candidates(),
                 "target_search_summary": target_search_summary,
                 "private_truth_included": False,
                 "source_map_mutated": False,
@@ -2686,6 +3113,102 @@ def _write_product_artifacts(
     )
 
 
+def _write_molmospaces_map_build_artifacts(
+    run_dir: Path,
+    *,
+    wrong_waypoint_category: str = "",
+) -> None:
+    fixtures = [
+        ("CounterTop", "room_2"),
+        ("DiningTable", "room_2"),
+        ("Fridge", "room_2"),
+        ("ShelvingUnit", "room_2"),
+        ("DiningTable", "room_3"),
+        ("Sofa", "room_3"),
+        ("TVStand", "room_3"),
+        ("DiningTable", "room_4"),
+        ("TVStand", "room_4"),
+        ("Sink", "room_5"),
+        ("Bed", "room_6"),
+        ("TVStand", "room_6"),
+        ("Bed", "room_7"),
+        ("Desk", "room_7"),
+        ("Bed", "room_8"),
+        ("Desk", "room_8"),
+    ]
+    public_anchors = [
+        {
+            "anchor_id": f"anchor_room_{index:03d}",
+            "anchor_type": "room_area",
+            "category": "room_area",
+            "room_id": f"room_{index}",
+            "waypoint_id": f"room_{index}_inspection",
+            "source_observation_id": f"room_observation_{index:03d}",
+        }
+        for index in range(2, 9)
+    ]
+    for index, (category, room_id) in enumerate(fixtures, start=1):
+        waypoint_id = f"{room_id}_inspection"
+        if category.lower() == wrong_waypoint_category.lower():
+            waypoint_id = "room_2_inspection"
+        public_anchors.append(
+            {
+                "anchor_id": f"anchor_fixture_{index:03d}",
+                "anchor_type": (
+                    "receptacle" if category in {"Fridge", "Sink", "ShelvingUnit"} else "surface"
+                ),
+                "category": category,
+                "label": category,
+                "room_id": room_id,
+                "waypoint_id": waypoint_id,
+                "pose": {"x": float(index), "y": float(index), "yaw": 0.0},
+                "pose_source": "inspection_waypoint",
+                "pose_role": "best_view_pose",
+                "localization_status": "viewpoint_only",
+                "source_observation_id": f"world_label_fpv_{index:03d}",
+                "evidence": {
+                    "fixture_observation_id": f"world_label_fpv_{index:03d}",
+                    "supporting_observed_object_ids": [],
+                },
+            }
+        )
+    generated = [
+        {"waypoint_id": f"room_{index}_inspection", "room_id": f"room_{index}", "visited": True}
+        for index in range(2, 9)
+    ]
+    runtime_map = {
+        "schema": "runtime_metric_map_v1",
+        "public_semantic_anchors": public_anchors,
+        "generated_exploration_candidates": generated,
+        "observed_objects": eval_runtime_map.quality_observed_objects(),
+        "target_candidates": eval_runtime_map.quality_target_candidates()
+        + [
+            {
+                "candidate_id": f"target_candidate_molmospaces_{index:03d}",
+                "candidate_type": "public_semantic_anchor",
+                "category": category,
+                "waypoint_id": f"{room_id}_inspection",
+                "localization_status": "viewpoint_only",
+            }
+            for index, (category, room_id) in enumerate(fixtures, start=1)
+        ],
+        "private_truth_included": False,
+        "source_map_mutated": False,
+    }
+    (run_dir / "runtime_metric_map.json").write_text(json.dumps(runtime_map) + "\n")
+    receptacles = {
+        f"{category.lower()}_{index}_0_{room_id.removeprefix('room_')}": {
+            "category": category,
+            "room_area": room_id,
+            "position": [float(index), float(index), 0.5],
+        }
+        for index, (category, room_id) in enumerate(fixtures, start=1)
+    }
+    (run_dir / "molmospaces_backend_state.json").write_text(
+        json.dumps({"backend": "molmospaces_subprocess", "receptacles": receptacles}) + "\n"
+    )
+
+
 def _run_result(
     run_dir: Path,
     *,
@@ -2696,6 +3219,7 @@ def _run_result(
     include_completion_claim: bool = False,
     include_runtime_map: bool = True,
     wall_time_s: float | None = None,
+    backend: str = "api_semantic_synthetic",
 ) -> dict[str, Any]:
     completion_claim = (
         {
@@ -2715,6 +3239,7 @@ def _run_result(
         "completion_status": completion_status,
         "cleanup_status": completion_status,
         "task_intent": task_intent,
+        "backend": backend,
         "final_status": final_status or completion_status,
         "map_build_mode": map_build,
         "agent_completion_claim": completion_claim,
