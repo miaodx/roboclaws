@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -8,14 +9,25 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household import profiles as evidence_profiles
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import DEFAULT_AGIBOT_CONFIDENCE_LAYER
 from roboclaws.household.manipulation_provenance import BLOCKED_CAPABILITY_PROVENANCE
-from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
+from roboclaws.household.realworld_contract import (
+    CLEANUP_WORKLIST_SCHEMA,
+    REALWORLD_CONTRACT,
+    RUNTIME_METRIC_MAP_SCHEMA,
+    forbidden_agent_view_keys,
+)
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 AGIBOT_GDK_NORMAL_NAVI_PROVENANCE = "agibot_gdk_normal_navi"
 AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE = "agibot_gdk_relative_move"
@@ -92,6 +104,10 @@ class AgibotSDKRunnerAdapter:
         return self.run_dir / "subphases" / "01-agent-view" / "agent_view.json"
 
     @property
+    def vendor_agent_view_path(self) -> Path:
+        return self.run_dir / "subphases" / "01-agent-view" / "vendor_agent_view.json"
+
+    @property
     def context_payload(self) -> dict[str, Any]:
         if self._context_payload is None:
             self._context_payload = _load_json(self.context_json)
@@ -114,15 +130,37 @@ class AgibotSDKRunnerAdapter:
                     else []
                 ),
             )
+            self._wrap_vendor_agent_view_export()
         return self._agent_view_result
+
+    def _wrap_vendor_agent_view_export(self) -> None:
+        stage_dir = self.agent_view_path.parent
+        vendor_agent_view = _load_json(self.agent_view_path)
+        metric_map = _load_json(stage_dir / "metric_map.json")
+        static_fixture_projection = _load_json(stage_dir / "static_fixture_projection.json")
+        shutil.copy2(self.agent_view_path, self.vendor_agent_view_path)
+        public_agent_view = _agent_view_from_agibot_export(
+            metric_map=metric_map,
+            static_fixture_projection=static_fixture_projection,
+            vendor_agent_view=vendor_agent_view,
+        )
+        agent_view_module.require_agent_view(public_agent_view)
+        _write_json(self.agent_view_path, public_agent_view)
 
     def metric_map(self) -> dict[str, Any]:
         self.export_agent_view()
-        return _load_json(self.agent_view_path)["metric_map"]
+        return agent_view_module.base_navigation_map(_load_json(self.agent_view_path))
 
     def static_fixture_projection(self) -> dict[str, Any]:
         self.export_agent_view()
-        return _load_json(self.agent_view_path)["static_fixture_projection"]
+        path = self.agent_view_path.parent / "static_fixture_projection.json"
+        if path.is_file():
+            return _load_json(path)
+        return {
+            "schema": "static_fixture_projection_v1",
+            "rooms": [],
+            "contains_runtime_observations": False,
+        }
 
     def observe(self, *, label: str = "observe") -> dict[str, Any]:
         self.export_agent_view()
@@ -133,7 +171,7 @@ class AgibotSDKRunnerAdapter:
         args = [
             "observe",
             "--agent-view-json",
-            str(self.agent_view_path),
+            str(self.vendor_agent_view_path),
             "--output-dir",
             str(self.run_dir / "subphases" / "02-observe"),
             "--camera",
@@ -156,7 +194,7 @@ class AgibotSDKRunnerAdapter:
         args = [
             "navigate-waypoint",
             "--agent-view-json",
-            str(self.agent_view_path),
+            str(self.vendor_agent_view_path),
             "--output-dir",
             str(self.run_dir / "subphases" / "03-navigate-waypoint"),
             "--waypoint-id",
@@ -527,6 +565,8 @@ def run_physical_agibot_cleanup_pilot(
         readiness["map_bundle_artifact_count"] = len(nav2_map_bundle.get("artifact_hashes") or {})
         readiness["map_bundle_parameter_hash"] = nav2_map_bundle.get("parameter_hash", "")
         readiness["map_bundle_snapshot_root"] = nav2_map_bundle.get("snapshot_root", "")
+    agent_view = _load_json(adapter.agent_view_path)
+    agent_view_module.require_agent_view(agent_view)
     run_result = {
         "schema": PHYSICAL_AGIBOT_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
@@ -556,17 +596,7 @@ def run_physical_agibot_cleanup_pilot(
             "disturbance_count": 0,
             "public_contract_note": "AgiBot physical pilot does not run private cleanup scoring.",
         },
-        "agent_view": {
-            "metric_map": metric_map,
-            "static_fixture_projection": static_fixture_projection,
-            "observed_objects": [],
-            "raw_fpv_observations": [],
-            "perception_mode": "robot_policy_camera",
-            "structured_detections_available": False,
-            "policy_view": {"policy_observation_camera": "head_color"},
-            "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
-            "forbidden_private_fields_absent": True,
-        },
+        "agent_view": agent_view,
         "cleanup_policy_trace": {
             "schema": "cleanup_policy_trace_v1",
             "agent_review_kind": "agibot_navigation_perception_pilot_review",
@@ -887,6 +917,166 @@ def _subphase_reports(results: list[dict[str, Any]], run_dir: Path) -> list[dict
     return reports
 
 
+def _agent_view_from_agibot_export(
+    *,
+    metric_map: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
+    vendor_agent_view: dict[str, Any],
+) -> dict[str, Any]:
+    runtime_metric_map = _runtime_metric_map_from_agibot_export(
+        metric_map=metric_map,
+        static_fixture_projection=static_fixture_projection,
+    )
+    policy_view = dict(vendor_agent_view.get("policy_view") or {})
+    return agent_view_module.build_agent_view(
+        contract=REALWORLD_CONTRACT,
+        perception_mode=str(vendor_agent_view.get("perception_mode") or "robot_policy_camera"),
+        detection_exposure_policy="agibot_g2_head_color_policy_camera",
+        structured_detections_available=bool(
+            vendor_agent_view.get("structured_detections_available")
+        ),
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_metric_map,
+        observed_objects=list(vendor_agent_view.get("observed_objects") or []),
+        raw_fpv_observations=list(vendor_agent_view.get("raw_fpv_observations") or []),
+        camera_model_policy_evidence={
+            "schema": "camera_model_policy_v1",
+            "perception_mode": str(
+                vendor_agent_view.get("perception_mode") or "robot_policy_camera"
+            ),
+            "enabled": False,
+            "private_truth_included": False,
+        },
+        model_declared_observations=[],
+        model_declared_observation_evidence={
+            "schema": "model_declared_observations_v1",
+            "perception_mode": str(
+                vendor_agent_view.get("perception_mode") or "robot_policy_camera"
+            ),
+            "observation_count": 0,
+            "resolved_count": 0,
+            "acted_count": 0,
+            "observations": [],
+            "private_truth_included": False,
+        },
+        policy_view={
+            "schema": "realworld_cleanup_policy_view_v1",
+            "policy_observation_camera": str(
+                policy_view.get("policy_observation_camera") or "head_color"
+            ),
+            "allowed_inputs": [
+                "base_navigation_map",
+                "runtime_metric_map",
+                "raw_fpv_observations",
+                "navigation_status",
+            ],
+            "excluded_report_only_views": ["private_operator_evidence"],
+            "chase_camera_policy_input": False,
+        },
+        cleanup_worklist=_cleanup_worklist_from_agibot_export(metric_map=metric_map),
+        observed_waypoint_ids=[],
+        public_tool_names=[
+            "metric_map",
+            "observe",
+            "navigate_to_waypoint",
+            *BLOCKED_MANIPULATION_TOOLS,
+        ],
+        blocked_capabilities=BLOCKED_MANIPULATION_TOOLS,
+        capability_profiles=(
+            HOUSEHOLD_WORLD_PROFILE,
+            HOUSEHOLD_MANIPULATION_PROFILE,
+            HOUSEHOLD_EPISODE_PROFILE,
+        ),
+        forbidden_keys=forbidden_agent_view_keys(),
+    )
+
+
+def _runtime_metric_map_from_agibot_export(
+    *,
+    metric_map: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": RUNTIME_METRIC_MAP_SCHEMA,
+        "contract": REALWORLD_CONTRACT,
+        "freshness": "current_run",
+        "source_map_mutated": False,
+        "private_truth_included": False,
+        "static_fixture_projection": {
+            "static_fixture_projection_mode": static_fixture_projection.get(
+                "static_fixture_projection_mode",
+                "",
+            ),
+            "contains_runtime_observations": static_fixture_projection.get(
+                "contains_runtime_observations",
+            ),
+            "generated_exploration_candidate_count": static_fixture_projection.get(
+                "generated_exploration_candidate_count",
+                0,
+            ),
+        },
+        "static_map": {
+            "rooms": [dict(item) for item in metric_map.get("rooms") or []],
+            "fixtures": [
+                dict(fixture)
+                for room in static_fixture_projection.get("rooms") or []
+                for fixture in room.get("fixtures") or []
+                if isinstance(fixture, dict)
+            ],
+            "inspection_waypoints": [
+                dict(item) for item in metric_map.get("inspection_waypoints") or []
+            ],
+            "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
+            "map_bundle": dict(metric_map.get("map_bundle") or {}),
+            "contains_runtime_observations": False,
+        },
+        "public_semantic_anchors": [],
+        "observed_objects": [],
+        "target_candidates": [],
+        "map_update_candidates": [],
+        "visited_waypoint_ids": [],
+        "observed_waypoint_ids": [],
+        "generated_exploration_candidates": [
+            dict(item)
+            for item in metric_map.get("generated_exploration_candidates")
+            or metric_map.get("inspection_waypoints")
+            or []
+        ],
+        "cleanup_worklist_summary": {
+            "schema": CLEANUP_WORKLIST_SCHEMA,
+            "object_count": 0,
+            "pending_count": 0,
+            "held_object_id": None,
+            "prior_count": 0,
+        },
+        "producer_summary": {
+            "observed_object_count": 0,
+            "public_semantic_anchor_count": 0,
+            "map_update_candidate_count": 0,
+        },
+    }
+
+
+def _cleanup_worklist_from_agibot_export(*, metric_map: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": CLEANUP_WORKLIST_SCHEMA,
+        "waypoint_source": "agibot_sdk_agent_view_export",
+        "held_object_id": None,
+        "objects": [],
+        "waypoints": [
+            {
+                "waypoint_id": str(item.get("waypoint_id") or ""),
+                "room_id": str(item.get("room_id") or ""),
+                "state": "unvisited",
+                "purpose": str(item.get("purpose") or ""),
+                "waypoint_source": str(item.get("waypoint_source") or ""),
+            }
+            for item in metric_map.get("inspection_waypoints") or []
+        ],
+        "rooms": [],
+    }
+
+
 def _fixtures(static_fixture_projection: dict[str, Any]) -> list[dict[str, Any]]:
     fixtures: list[dict[str, Any]] = []
     for room in static_fixture_projection.get("rooms") or []:
@@ -1179,6 +1369,11 @@ def _initial_locations(scenario: CleanupScenario) -> dict[str, str]:
 
 def _load_json(path: Path) -> dict[str, Any]:
     return read_json_object(path, label="Agibot SDK runner artifact")
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _relpath(path: Path | str, root: Path) -> str:

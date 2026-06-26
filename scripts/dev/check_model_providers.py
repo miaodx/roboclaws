@@ -131,17 +131,6 @@ def build_provider_probes(
         _provider_from_route(
             "minimax-responses-m3", minimax_route, max_tokens=responses_max_tokens
         ),
-        ProbeSpec(
-            probe_id="provider:minimax-responses-m27",
-            mode="provider",
-            route_id="minimax-responses",
-            wire_api=WIRE_RESPONSES,
-            model="MiniMax-M2.7-highspeed",
-            api_key_env=minimax_route.api_key_env or "",
-            base_url=route_base_url(minimax_route),
-            max_tokens=responses_max_tokens,
-            provider_note="MiniMax highspeed can spend early tokens on reasoning.",
-        ),
         _provider_from_route("mimo-tp-openai-chat", mimo, max_tokens=chat_max_tokens),
         _provider_from_route("mimo-inside-openai-chat", mimo_inside, max_tokens=chat_max_tokens),
         ProbeSpec(
@@ -155,10 +144,8 @@ def build_provider_probes(
             max_tokens=chat_max_tokens,
             provider_note=(
                 "Kimi coding requires a coding-agent User-Agent. Kimi K2.7 Code "
-                "requires Thinking On for the new code-model behavior; this probe "
-                "sends thinking=enabled and keeps reasoning "
-                "content handling and omits temperature because the provider pins "
-                "model-specific values."
+                "is thinking-only; this probe omits the old explicit thinking body "
+                "and omits temperature because the provider pins model-specific values."
             ),
         ),
         ProbeSpec(
@@ -299,11 +286,13 @@ def _run_agents_sdk_probe(
     model_settings_payload: dict[str, Any] = {"max_tokens": spec.max_tokens}
     if spec.route_id == "kimi-openai-chat":
         model_settings_payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
-        model_settings_payload["extra_body"] = thinking_request_body_for_wire(
+        extra_body = thinking_request_body_for_wire(
             provider_profile=spec.route_id,
             wire_api=spec.wire_api,
             mode="default",
         )
+        if extra_body:
+            model_settings_payload["extra_body"] = extra_body
     agent = Agent(
         name=f"roboclaws-provider-health-{spec.route_id or spec.model}",
         instructions="Reply with exactly: ok",

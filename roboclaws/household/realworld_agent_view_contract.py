@@ -4,6 +4,8 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+from roboclaws.household import agent_view as agent_view_module
+
 
 def forbidden_agent_view_keys(forbidden_keys: frozenset[str]) -> set[str]:
     return set(forbidden_keys)
@@ -35,9 +37,10 @@ def real_robot_readiness_from_events(
     pose_stamped_waypoints_present: Callable[[dict[str, Any]], bool],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
-    metric_map = agent_view.get("metric_map") or {}
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
-    policy_view = agent_view.get("policy_view") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
+    runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
+    static_map = runtime_metric_map.get("static_map") or {}
+    policy_view = agent_view_module.policy_view(agent_view)
     navigation_backends: dict[str, int] = {}
     pose_sources: dict[str, int] = {}
     for raw in trace_events:
@@ -60,10 +63,8 @@ def real_robot_readiness_from_events(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": map_bundle_fields_present(metric_map),
         "pose_stamped_waypoints": pose_stamped_waypoints_present(metric_map),
-        "static_fixture_projection": (
-            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
-            and static_fixture_projection.get("contains_runtime_observations") is False
-        ),
+        "static_fixture_projection": False,
+        "public_static_map": static_map.get("contains_runtime_observations") is False,
         "policy_view_chase_excluded": policy_view.get("chase_camera_policy_input") is False,
         "report_only_simulation_view_count": report_only_count,
         "report_only_simulation_view_label": "report_only_simulation_view",
@@ -90,7 +91,7 @@ def real_robot_readiness_from_events(
     evidence["readiness_sections_complete"] = bool(
         evidence["map_bundle_fields_present"]
         and evidence["pose_stamped_waypoints"]
-        and evidence["static_fixture_projection"]
+        and evidence["public_static_map"]
         and evidence["policy_view_chase_excluded"]
         and navigation_backends
     )
@@ -99,27 +100,11 @@ def real_robot_readiness_from_events(
 
 
 def assert_no_forbidden_agent_view_keys(payload: Any, forbidden_keys: frozenset[str]) -> None:
-    if isinstance(payload, dict):
-        forbidden = forbidden_keys.intersection(payload)
-        if forbidden:
-            raise AssertionError(f"forbidden agent-view keys present: {sorted(forbidden)}")
-        for value in payload.values():
-            assert_no_forbidden_agent_view_keys(value, forbidden_keys)
-    elif isinstance(payload, list):
-        for value in payload:
-            assert_no_forbidden_agent_view_keys(value, forbidden_keys)
+    agent_view_module.assert_no_private_fields(payload, forbidden_keys)
 
 
 def strip_forbidden_agent_view_keys(payload: Any, forbidden_keys: frozenset[str]) -> Any:
-    if isinstance(payload, dict):
-        return {
-            key: strip_forbidden_agent_view_keys(value, forbidden_keys)
-            for key, value in payload.items()
-            if key not in forbidden_keys
-        }
-    if isinstance(payload, list):
-        return [strip_forbidden_agent_view_keys(value, forbidden_keys) for value in payload]
-    return payload
+    return agent_view_module.strip_private_fields(payload, forbidden_keys)
 
 
 def public_acceptance_config(

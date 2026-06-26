@@ -441,13 +441,13 @@ def test_console_readiness_uses_claude_provider_profile_override(tmp_path: Path)
     readiness = route_readiness(
         tmp_path,
         route,
-        overrides={"port": _free_port(), "provider_profile": "kimi-anthropic"},
-        env={"KIMI_API_KEY": "key"},
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-anthropic"},
+        env={"XM_LLM_API_KEY": "key"},
     )
 
     assert readiness["can_start"] is True
-    assert readiness["provider"]["provider"] == "kimi-anthropic"
-    assert readiness["provider"]["model"] == "kimi-k2.6"
+    assert readiness["provider"]["provider"] == "mimo-mify-anthropic"
+    assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
 
 
 def test_resource_lock_prevents_conflicting_starts(tmp_path: Path) -> None:

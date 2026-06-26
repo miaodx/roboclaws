@@ -9,6 +9,7 @@ from typing import Any
 from PIL import Image, ImageStat
 
 from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -528,15 +529,15 @@ def _assert_agent_view_and_runtime_map(
         _assert_base_navigation_map(data, agent_view)
     if opts["require_runtime_metric_map"]:
         _assert_runtime_metric_map(
-            data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {},
+            data.get("runtime_metric_map") or _agent_view_runtime_metric_map(agent_view),
             agent_view=agent_view,
         )
     if opts["require_goal_contract"]:
         _assert_goal_contract(data, base)
     if opts["require_completion_claim"]:
         _assert_completion_claim(data)
-    runtime_metric_map = (
-        data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
+        agent_view
     )
     map_build = map_build or runtime_metric_map.get("mode") == "map_build"
     if opts["require_map_build"]:
@@ -966,8 +967,9 @@ def _assert_adaptive_inspection_thresholds(
         "min_adjust_camera_count": min_adjust_camera_count,
         "tool_event_counts": counts,
     }
-    runtime_metric_map = data.get("runtime_metric_map") or (
-        (data.get("agent_view") or {}).get("runtime_metric_map") or {}
+    agent_view = data.get("agent_view") or {}
+    runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
+        agent_view
     )
     generated = runtime_metric_map.get("generated_target_inspection_candidates") or []
     generated_count = len(generated)
@@ -979,8 +981,9 @@ def _assert_adaptive_inspection_thresholds(
 
 
 def _is_map_build(data: dict[str, Any]) -> bool:
-    runtime_metric_map = data.get("runtime_metric_map") or (
-        (data.get("agent_view") or {}).get("runtime_metric_map") or {}
+    agent_view = data.get("agent_view") or {}
+    runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
+        agent_view
     )
     return (
         data.get("map_build_mode") is True
@@ -1057,7 +1060,7 @@ def _assert_robot_views(
     *,
     require_complete_actions: bool = True,
 ) -> None:
-    expected_variants = {"molmospaces-rby1m-fpv-map-chase-verify"}
+    expected_variants = {"molmospaces-rby1m-fpv-topdown-chase-verify"}
     if data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND:
         expected_variants.add(ISAACLAB_ROBOT_VIEW_VARIANT)
     assert data.get("view_variant") in expected_variants, data
@@ -1078,7 +1081,7 @@ def _assert_robot_views(
     for step in steps:
         views = step.get("views") or {}
         assert int(step.get("room_outline_count") or 0) > 0, step
-        for key in ("fpv", "chase", "map", "verify"):
+        for key in ("fpv", "chase", "topdown", "verify"):
             path = _resolve_path(report_path.parent, views.get(key, ""))
             assert path.is_file(), path
             assert path.stat().st_size > 0, path
@@ -1203,12 +1206,11 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     assert isaac.get("scenario_source") == "isaac_scene_index", isaac
 
     agent_view = data.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
-    runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
+    runtime_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(agent_view)
     static_map = runtime_map.get("static_map") or {}
     nav2_bundle = data.get("nav2_map_bundle") or {}
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
-    scene_index_overlay = static_fixture_projection.get("scene_index_fixture_overlay") or {}
+    scene_index_overlay = static_map.get("scene_index_fixture_overlay") or {}
 
     if scene_index_overlay:
         assert scene_index_overlay.get("enabled") is True, scene_index_overlay
@@ -1216,7 +1218,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     else:
         assert isaac.get("scenario_source") == "isaac_scene_index", {
             "isaac_runtime": isaac,
-            "static_fixture_projection": static_fixture_projection,
+            "runtime_static_map": static_map,
         }
     _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
@@ -1341,9 +1343,9 @@ def _assert_raw_fpv_observations(
 ) -> None:
     assert data.get("perception_mode") == "raw_fpv_only", data
     agent_view = data.get("agent_view") or {}
-    assert agent_view.get("perception_mode") == "raw_fpv_only", agent_view
-    assert agent_view.get("structured_detections_available") is False, agent_view
-    observations = data.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
+    assert agent_view_module.perception_mode(agent_view) == "raw_fpv_only", agent_view
+    assert agent_view_module.structured_detections_available(agent_view) is False, agent_view
+    observations = data.get("raw_fpv_observations") or _agent_view_raw_fpv_observations(agent_view)
     assert observations, data
     assert "Raw FPV Observations" in report_text, report_text[:500]
     artifacts = data.get("artifacts") or {}
@@ -1380,8 +1382,9 @@ def _assert_camera_model_policy(
     map_build: bool = False,
 ) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
+    agent_view = data.get("agent_view") or {}
     evidence = data.get("camera_model_policy_evidence") or (
-        (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+        agent_view_module.camera_model_policy_evidence(agent_view) if agent_view else {}
     )
     assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
     assert evidence.get("enabled") is True, evidence
@@ -1449,8 +1452,9 @@ def _assert_model_declared_observations(
     min_observations: int,
     min_actions: int,
 ) -> None:
+    agent_view = data.get("agent_view") or {}
     evidence = data.get("model_declared_observation_evidence") or (
-        (data.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+        agent_view_module.model_declared_observation_evidence(agent_view) if agent_view else {}
     )
     observations = data.get("model_declared_observations") or evidence.get("observations") or []
     assert evidence.get("schema") == MODEL_DECLARED_OBSERVATIONS_SCHEMA, evidence
@@ -1488,8 +1492,9 @@ def _assert_external_visual_grounding_overlays(
     *,
     pipeline_id: str,
 ) -> None:
+    agent_view = data.get("agent_view") or {}
     evidence = data.get("model_declared_observation_evidence") or (
-        (data.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+        agent_view_module.model_declared_observation_evidence(agent_view) if agent_view else {}
     )
     observations = data.get("model_declared_observations") or evidence.get("observations") or []
     assert observations, data
@@ -1527,7 +1532,7 @@ def _raw_fpv_image_path_for_observation(
     observation_id: str,
 ) -> Path | None:
     agent_view = data.get("agent_view") or {}
-    observations = data.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
+    observations = data.get("raw_fpv_observations") or _agent_view_raw_fpv_observations(agent_view)
     for item in observations:
         if str(item.get("observation_id") or "") != observation_id:
             continue
@@ -1712,14 +1717,29 @@ def _is_open_ended_intent(data: dict[str, Any]) -> bool:
     return intent == "open-ended"
 
 
+def _agent_view_runtime_metric_map(agent_view: dict[str, Any]) -> dict[str, Any]:
+    if not agent_view:
+        return {}
+    return agent_view_module.runtime_metric_map(agent_view)
+
+
+def _agent_view_raw_fpv_observations(agent_view: dict[str, Any]) -> list[dict[str, Any]]:
+    if not agent_view:
+        return []
+    return agent_view_module.raw_fpv_observations(agent_view)
+
+
 def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any]) -> int:
     return post_place_observe_count_allowing_public_state_queries(trace)
 
 
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:
     agent_view = data.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
-    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
+    metric_map = agent_view_module.base_navigation_map(agent_view)
+    runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
+        agent_view
+    )
+    static_map = runtime_metric_map.get("static_map") or {}
     assert metric_map.get("schema") == REAL_ROBOT_MAP_BUNDLE_SCHEMA, metric_map
     for key in (
         "frame_id",
@@ -1743,27 +1763,22 @@ def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: 
     for waypoint in waypoints:
         for key in ("frame_id", "x", "y", "yaw", "room_id", "label", "visited", "purpose"):
             assert key in waypoint, waypoint
-    assert static_fixture_projection.get("schema") == "static_fixture_projection_v1", (
-        static_fixture_projection
-    )
-    assert static_fixture_projection.get("contains_runtime_observations") is False, (
-        static_fixture_projection
-    )
-    assert "observations" not in static_fixture_projection, static_fixture_projection
-    for room in static_fixture_projection.get("rooms") or []:
-        for fixture in room.get("fixtures") or []:
-            assert fixture.get("fixture_id"), fixture
-            assert fixture.get("affordances"), fixture
-            assert fixture.get("pose", {}).get("frame_id") == "map", fixture
-            assert "observed_objects" not in fixture, fixture
-    policy_view = agent_view.get("policy_view") or {}
+    assert static_map.get("contains_runtime_observations") is False, static_map
+    assert "observations" not in static_map, static_map
+    for fixture in static_map.get("fixtures") or []:
+        assert fixture.get("fixture_id"), fixture
+        assert fixture.get("affordances"), fixture
+        assert fixture.get("pose", {}).get("frame_id") == "map", fixture
+        assert "observed_objects" not in fixture, fixture
+    policy_view = agent_view_module.policy_view(agent_view)
     assert policy_view.get("chase_camera_policy_input") is False, policy_view
     assert not any("chase" in str(item).lower() for item in policy_view.get("allowed_inputs", []))
     readiness = data.get("real_robot_readiness") or {}
     assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
     assert readiness.get("map_bundle_fields_present") is True, readiness
     assert readiness.get("pose_stamped_waypoints") is True, readiness
-    assert readiness.get("static_fixture_projection") is True, readiness
+    assert readiness.get("public_static_map") is True, readiness
+    assert readiness.get("static_fixture_projection") is False, readiness
     assert readiness.get("policy_view_chase_excluded") is True, readiness
     assert readiness.get("semantic_navigation_only") is True, readiness
     assert readiness.get("sim_costmap_route_validation") is True, readiness

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -98,7 +99,7 @@ class _PoseRecordingBackend:
         output_dir.mkdir(parents=True, exist_ok=True)
         current = self.current_receptacle_id or "unknown"
         views = {}
-        for key in ("fpv", "chase", "map", "verify"):
+        for key in ("fpv", "chase", "topdown", "verify"):
             path = output_dir / f"{label}.{current}.{key}.png"
             path.write_bytes(b"fake png")
             views[key] = str(path)
@@ -108,7 +109,7 @@ class _PoseRecordingBackend:
             "ok": True,
             "robot_pose": pose,
             "robot_trajectory": [pose],
-            "view_variant": "test-fpv-map-chase-verify",
+            "view_variant": "test-fpv-topdown-chase-verify",
             "views": views,
         }
 
@@ -466,16 +467,19 @@ def _assert_nav2_navigation_provenance(
 
 
 def _assert_nav2_agent_runtime_map(agent_view: dict, live_metric_map: dict) -> None:
-    assert agent_view["policy_view"]["chase_camera_policy_input"] is False
-    assert "runtime_metric_map" in agent_view["policy_view"]["allowed_inputs"]
-    assert agent_view["runtime_metric_map"]["schema"] == RUNTIME_METRIC_MAP_SCHEMA
+    policy_view = agent_view_module.policy_view(agent_view)
+    runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
+    cleanup_worklist = agent_view_module.cleanup_worklist(agent_view)
+    assert policy_view["chase_camera_policy_input"] is False
+    assert "runtime_metric_map" in policy_view["allowed_inputs"]
+    assert runtime_metric_map["schema"] == RUNTIME_METRIC_MAP_SCHEMA
     assert live_metric_map["runtime_metric_map"]["schema"] == RUNTIME_METRIC_MAP_SCHEMA
     assert live_metric_map["runtime_metric_map"]["observed_objects"][0]["state"] == "held"
-    assert agent_view["runtime_metric_map"]["source_map_mutated"] is False
-    assert agent_view["runtime_metric_map"]["static_map"]["contains_runtime_observations"] is False
-    assert agent_view["runtime_metric_map"]["observed_objects"][0]["state"] == "held"
-    assert agent_view["cleanup_worklist"]["schema"] == CLEANUP_WORKLIST_SCHEMA
-    assert agent_view["cleanup_worklist"]["objects"][0]["state"] == "held"
+    assert runtime_metric_map["source_map_mutated"] is False
+    assert runtime_metric_map["static_map"]["contains_runtime_observations"] is False
+    assert runtime_metric_map["observed_objects"][0]["state"] == "held"
+    assert cleanup_worklist["schema"] == CLEANUP_WORKLIST_SCHEMA
+    assert cleanup_worklist["objects"][0]["state"] == "held"
 
 
 def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_bundle() -> None:
@@ -781,7 +785,7 @@ def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe(
             _trace_response("metric_map", {"ok": True}),
             _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_1"}),
         ],
-        {"metric_map": {"inspection_waypoints": [{"waypoint_id": "room_1_scan_1"}]}},
+        _policy_trace_agent_view([{"waypoint_id": "room_1_scan_1"}]),
     )
 
     assert trace["placed_object_count"] == 1
@@ -828,14 +832,12 @@ def test_cleanup_policy_trace_treats_last_base_waypoint_discovery_as_survey_firs
             ),
             _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_2"}),
         ],
-        {
-            "metric_map": {
-                "inspection_waypoints": [
-                    {"waypoint_id": "room_1_scan_1"},
-                    {"waypoint_id": "room_1_scan_2"},
-                ]
-            }
-        },
+        _policy_trace_agent_view(
+            [
+                {"waypoint_id": "room_1_scan_1"},
+                {"waypoint_id": "room_1_scan_2"},
+            ]
+        ),
     )
 
     assert trace["loop_style"] == "survey_first_cleanup_loop"
@@ -865,19 +867,38 @@ def test_cleanup_policy_trace_rejects_cached_cleanup_after_later_map_query() -> 
             _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_2"}),
             _trace_response("navigate_to_object", {"ok": True, "object_id": "observed_001"}),
         ],
-        {
-            "metric_map": {
-                "inspection_waypoints": [
-                    {"waypoint_id": "room_1_scan_1"},
-                    {"waypoint_id": "room_1_scan_2"},
-                ]
-            }
-        },
+        _policy_trace_agent_view(
+            [
+                {"waypoint_id": "room_1_scan_1"},
+                {"waypoint_id": "room_1_scan_2"},
+            ]
+        ),
     )
 
     assert trace["loop_style"] == "survey_first_cleanup_loop"
     assert trace["first_actionable_observation_index"] == 2
     assert trace["first_cleanup_index"] == 5
+
+
+def _policy_trace_agent_view(inspection_waypoints: list[dict]) -> dict:
+    return agent_view_module.build_agent_view(
+        contract=REALWORLD_CONTRACT,
+        perception_mode="visible_object_detections",
+        detection_exposure_policy="world_labels",
+        structured_detections_available=True,
+        base_navigation_map={"inspection_waypoints": inspection_waypoints},
+        runtime_metric_map={"schema": RUNTIME_METRIC_MAP_SCHEMA},
+        observed_objects=[],
+        raw_fpv_observations=[],
+        camera_model_policy_evidence={},
+        model_declared_observations=[],
+        model_declared_observation_evidence={},
+        policy_view={"schema": "realworld_cleanup_policy_view_v1"},
+        cleanup_worklist={},
+        observed_waypoint_ids=[],
+        public_tool_names=[],
+        forbidden_keys=frozenset(forbidden_agent_view_keys()),
+    )
 
 
 def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> None:
@@ -897,7 +918,7 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
         if declared["model_declared_observations"]:
             break
     agent_view = contract.agent_view_payload()
-    runtime_map = agent_view["runtime_metric_map"]
+    runtime_map = agent_view_module.runtime_metric_map(agent_view)
 
     assert declared["ok"] is True
     assert runtime_map["schema"] == RUNTIME_METRIC_MAP_SCHEMA
@@ -923,11 +944,14 @@ def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_desti
 
     _first_non_empty_observation(contract)
     agent_view = contract.agent_view_payload()
-    runtime_map = agent_view["runtime_metric_map"]
+    runtime_map = agent_view_module.runtime_metric_map(agent_view)
     observed = runtime_map["observed_objects"][0]
-    worklist_item = agent_view["cleanup_worklist"]["objects"][0]
+    worklist_item = agent_view_module.cleanup_worklist(agent_view)["objects"][0]
 
-    assert agent_view["detection_exposure_policy"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    assert (
+        agent_view_module.detection_exposure_policy(agent_view)
+        == SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    )
     assert observed["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
     assert observed["source_observation_id"]
     assert observed["image_region"]["type"] == "verbal_region"
@@ -980,7 +1004,7 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
     ]
     assert prior_rows
     assert all(item["actionability"] == "needs_confirm" for item in prior_rows)
-    assert contract.agent_view_payload()["observed_objects"] == []
+    assert agent_view_module.observed_objects(contract.agent_view_payload()) == []
 
     for waypoint in contract.metric_map()["inspection_waypoints"]:
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
@@ -1151,7 +1175,7 @@ def test_base_navigation_map_hides_authored_semantics_and_uses_generated_candida
     static_fixture_projection = contract.static_fixture_projection()
     waypoint, navigation, observation = _first_detection_waypoint(contract, metric_map)
     agent_view = contract.agent_view_payload()
-    runtime_map = agent_view["runtime_metric_map"]
+    runtime_map = agent_view_module.runtime_metric_map(agent_view)
 
     _assert_base_navigation_static_map_privacy(metric_map, static_fixture_projection, waypoint)
     assert navigation["ok"] is True
@@ -1259,9 +1283,9 @@ def _assert_base_navigation_agent_view_observed_object_anchors(
 ) -> None:
     assert runtime_map["observed_objects"]
     assert runtime_map["observed_objects"][0]["source_fixture_id"].startswith("anchor_fixture_")
-    assert agent_view["observed_objects"][0]["support_estimate"]["fixture_id"].startswith(
-        "anchor_fixture_"
-    )
+    assert agent_view_module.observed_objects(agent_view)[0]["support_estimate"][
+        "fixture_id"
+    ].startswith("anchor_fixture_")
 
 
 def test_target_candidates_force_adaptive_public_reinspection_path() -> None:
@@ -1269,7 +1293,7 @@ def test_target_candidates_force_adaptive_public_reinspection_path() -> None:
     first_observation = _first_non_empty_observation(contract)
     handle = first_observation["visible_object_detections"][0]["object_id"]
 
-    pre_scan_map = contract.agent_view_payload()["runtime_metric_map"]
+    pre_scan_map = agent_view_module.runtime_metric_map(contract.agent_view_payload())
     pre_scan_candidate = next(
         item for item in pre_scan_map["target_candidates"] if item.get("object_id") == handle
     )
@@ -1866,10 +1890,12 @@ def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
         contract.observe()
     agent_view = contract.agent_view_payload()
 
-    assert agent_view["forbidden_private_fields_absent"] is True
-    assert agent_view["observed_objects"]
+    assert agent_view["schema"] == agent_view_module.AGENT_VIEW_SCHEMA
+    assert agent_view_module.forbidden_private_fields_absent(agent_view) is True
+    assert agent_view_module.observed_objects(agent_view)
     assert "generated_mess_set" not in agent_view
     assert "acceptable_destination_sets" not in agent_view
+    assert "static_fixture_projection" not in agent_view
     _assert_no_forbidden_keys(agent_view)
 
 
@@ -1895,12 +1921,20 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert "candidate_fixture_id/recommended_tool" in observation["instruction"]
     assert "image_region={type:bbox,value:[x,y,width,height]}" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
-    assert agent_view["perception_mode"] == RAW_FPV_ONLY_MODE
-    assert agent_view["structured_detections_available"] is False
-    assert agent_view["observed_objects"] == []
-    assert agent_view["raw_fpv_observations"]
-    assert "support_estimate" not in str(agent_view["raw_fpv_observations"])
-    assert "target_receptacle_id" not in str(agent_view["raw_fpv_observations"])
+    assert agent_view_module.perception_mode(agent_view) == RAW_FPV_ONLY_MODE
+    assert agent_view_module.structured_detections_available(agent_view) is False
+    active_perception = agent_view_module.active_perception(agent_view)
+    assert active_perception["raw_fpv_summary"]["observation_count"] == 1
+    assert (
+        active_perception["raw_fpv_summary"]["artifact_status_counts"]["pending_robot_view_capture"]
+        == 1
+    )
+    assert active_perception["camera_grounded_labels"]["sidecar_status"] == "disabled"
+    assert active_perception["visual_candidate_lifecycle"]["model_declared_observation_count"] == 0
+    assert agent_view_module.observed_objects(agent_view) == []
+    assert agent_view_module.raw_fpv_observations(agent_view)
+    assert "support_estimate" not in str(agent_view_module.raw_fpv_observations(agent_view))
+    assert "target_receptacle_id" not in str(agent_view_module.raw_fpv_observations(agent_view))
     _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(agent_view)
 
@@ -2031,7 +2065,7 @@ def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
     assert second_artifact is not None
     assert first_artifact["image_artifacts"]["fpv"] != second_artifact["image_artifacts"]["fpv"]
     assert first_views["verify"] != second_views["verify"]
-    assert first_views["map"] != second_views["map"]
+    assert first_views["topdown"] != second_views["topdown"]
     assert str(first_raw["observation_id"]) in first_artifact["image_artifacts"]["fpv"]
     assert str(second_raw["observation_id"]) in second_artifact["image_artifacts"]["fpv"]
 
@@ -2552,9 +2586,9 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
         "type": "bbox",
         "value": [0.1, 0.2, 0.3, 0.4],
     } in recovery["accepted_image_region_forms"]
+    agent_view = contract.agent_view_payload()
     assert (
-        contract.agent_view_payload()["model_declared_observation_evidence"]["observation_count"]
-        == 0
+        agent_view_module.model_declared_observation_evidence(agent_view)["observation_count"] == 0
     )
     _assert_no_forbidden_keys(declared)
 
@@ -2820,16 +2854,23 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
         "weak",
         "unknown_fixture",
     }
-    evidence = agent_view["camera_model_policy_evidence"]
+    evidence = agent_view_module.camera_model_policy_evidence(agent_view)
+    active_perception = agent_view_module.active_perception(agent_view)
     assert evidence["schema"] == CAMERA_MODEL_POLICY_SCHEMA
     assert evidence["enabled"] is True
     assert evidence["event_count"] >= 1
     assert evidence["candidate_count"] >= len(candidate_response["camera_model_candidates"])
     assert evidence["events"][0]["schema"] == "model_declared_observations_v1"
-    model_evidence = agent_view["model_declared_observation_evidence"]
+    assert active_perception["raw_fpv_summary"]["observation_count"] >= 1
+    assert active_perception["camera_grounded_labels"]["sidecar_status"] == "available"
+    assert active_perception["camera_grounded_labels"]["candidate_count"] >= len(
+        candidate_response["camera_model_candidates"]
+    )
+    assert active_perception["visual_candidate_lifecycle"]["model_declared_observation_count"] >= 1
+    model_evidence = agent_view_module.model_declared_observation_evidence(agent_view)
     assert model_evidence["schema"] == "model_declared_observations_v1"
     assert model_evidence["resolved_count"] >= 1
-    assert agent_view["observed_objects"]
+    assert agent_view_module.observed_objects(agent_view)
     _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(candidate_response)
     _assert_no_forbidden_keys(agent_view)
@@ -3044,6 +3085,10 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
 
     assert client.last_request is not None
     assert client.last_request["category_hints"] == VISUAL_GROUNDING_CATEGORY_HINTS
+    assert "static_fixture_projection" not in client.last_request
+    assert client.last_request["public_map_hints"]["source"] == "public_agent_view_map_evidence"
+    assert isinstance(client.last_request["public_map_hints"]["fixture_hints"], list)
+    assert client.last_request["public_map_hints"]["private_truth_included"] is False
     assert client.last_request["image"]["bytes_base64"]
     assert client.last_request["image"]["width"] == 20
     assert client.last_request["image"]["height"] == 10

@@ -47,7 +47,7 @@ def test_codex_provider_args_reject_route_incompatible_model_override() -> None:
     assert "incompatible with provider_profile 'minimax-responses'" in result.stderr
 
 
-def test_codex_provider_args_allow_route_compatible_model_override() -> None:
+def test_codex_provider_args_reject_removed_minimax_highspeed_override() -> None:
     result = run_helper(
         """
         set -euo pipefail
@@ -61,9 +61,8 @@ def test_codex_provider_args_allow_route_compatible_model_override() -> None:
         """
     )
 
-    assert result.returncode == 0
-    assert 'model="MiniMax-M2.7-highspeed"' in result.stdout.splitlines()
-    assert 'model_provider="minimax-responses"' in result.stdout.splitlines()
+    assert result.returncode == 2
+    assert "unknown coding-agent model 'MiniMax-M2.7-highspeed'" in result.stderr
 
 
 def test_provider_helper_rejects_unknown_profile_without_raw_fallback() -> None:

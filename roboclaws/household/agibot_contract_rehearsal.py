@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw
 
 import roboclaws.household.task_intent as intent_helpers
 from roboclaws.core.json_sources import read_json_object
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_contract_rehearsal_evidence import (
     blocked_manipulation_evidence as _blocked_manipulation_evidence,
 )
@@ -35,10 +36,13 @@ from roboclaws.household.realworld_cleanup import (
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
+    CLEANUP_WORKLIST_SCHEMA,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    RUNTIME_METRIC_MAP_SCHEMA,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
+    forbidden_agent_view_keys,
 )
 from roboclaws.household.report import (
     write_state_snapshot,
@@ -55,6 +59,11 @@ from roboclaws.household.semantic_timeline import (
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 from roboclaws.household.types import CleanupScenario
 from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 REHEARSAL_SCHEMA = "molmospaces_agibot_contract_rehearsal_v1"
 CONFIDENCE_LAYER = "MolmoSpaces Agibot Contract Rehearsal"
@@ -362,9 +371,10 @@ def _write_prehardware_runtime_export(
     runtime_dir = run_dir / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     agent_view = result.get("agent_view") or {}
-    runtime_metric_map = (
-        result.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    runtime_metric_map = result.get("runtime_metric_map") or agent_view_module.runtime_metric_map(
+        agent_view
     )
+    metric_map = agent_view_module.base_navigation_map(agent_view)
     payload = {
         "schema": "agibot_molmospaces_base_navigation_map_prehardware_runtime_export_v1",
         **task_identity,
@@ -389,9 +399,7 @@ def _write_prehardware_runtime_export(
         "runtime_metric_map_summary": {
             "schema": runtime_metric_map.get("schema", ""),
             "base_navigation_map_enabled": bool(
-                ((agent_view.get("metric_map") or {}).get("base_navigation_map") or {}).get(
-                    "enabled"
-                )
+                (metric_map.get("base_navigation_map") or {}).get("enabled")
             ),
             "source_map_mutated": runtime_metric_map.get("source_map_mutated"),
             "observed_object_count": len(runtime_metric_map.get("observed_objects") or []),
@@ -460,22 +468,14 @@ def _write_preflight_artifacts(
         static_fixture_projection=static_fixture_projection,
         scene_identity=scene_identity,
     )
-    agent_view = {
-        "schema": "agibot_shaped_agent_view_v1",
-        "metric_map": metric_map,
-        "static_fixture_projection": static_fixture_projection,
-        "observed_objects": [],
-        "raw_fpv_observations": [],
-        "perception_mode": "robot_policy_camera",
-        "structured_detections_available": False,
-        "policy_view": {"policy_observation_camera": "molmospaces_sim_policy_camera"},
-        "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
-        "forbidden_private_fields_absent": True,
-        "simulated": True,
-        "physical_robot": False,
-        "execution_backend": EXECUTION_BACKEND,
-        "agibot_map_reference": agibot_map_reference,
-    }
+    agent_view = _agibot_shaped_agent_view(
+        metric_map=metric_map,
+        static_fixture_projection=static_fixture_projection,
+        observed_objects=[],
+        raw_fpv_observations=[],
+        perception_mode="robot_policy_camera",
+        structured_detections_available=False,
+    )
     waypoint_sequence = {
         "schema": "agibot_shaped_waypoint_sequence_v1",
         "simulated": True,
@@ -888,16 +888,14 @@ def _agent_view_with_runtime_observation(
         for item in observation.get("visible_object_detections") or []
     ]
     return {
-        "schema": "agibot_shaped_agent_view_v1",
-        "metric_map": metric_map,
-        "static_fixture_projection": static_fixture_projection,
-        "observed_objects": detections,
-        "raw_fpv_observations": [observation["raw_fpv_observation"]],
-        "perception_mode": "robot_policy_camera",
-        "structured_detections_available": True,
-        "policy_view": {"policy_observation_camera": "molmospaces_sim_policy_camera"},
-        "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
-        "forbidden_private_fields_absent": True,
+        **_agibot_shaped_agent_view(
+            metric_map=metric_map,
+            static_fixture_projection=static_fixture_projection,
+            observed_objects=detections,
+            raw_fpv_observations=[observation["raw_fpv_observation"]],
+            perception_mode="robot_policy_camera",
+            structured_detections_available=True,
+        ),
         "simulated": True,
         "physical_robot": False,
         "execution_backend": EXECUTION_BACKEND,
@@ -912,22 +910,167 @@ def _agent_view_with_cleanup_actions(
     fallback_observation: dict[str, Any],
 ) -> dict[str, Any]:
     agent_view = copy.deepcopy(payload)
-    agent_view["schema"] = "agibot_shaped_agent_view_v1"
-    agent_view["metric_map"] = metric_map
-    agent_view["static_fixture_projection"] = static_fixture_projection
-    raw_observations = list(agent_view.get("raw_fpv_observations") or [])
+    raw_observations = agent_view_module.raw_fpv_observations(agent_view)
     if not raw_observations and fallback_observation.get("raw_fpv_observation"):
         raw_observations = [fallback_observation["raw_fpv_observation"]]
-    agent_view["raw_fpv_observations"] = raw_observations
-    agent_view["policy_view"] = {
-        **dict(agent_view.get("policy_view") or {}),
-        "policy_observation_camera": "molmospaces_sim_policy_camera",
-    }
+    agent_view = _agibot_shaped_agent_view(
+        metric_map=metric_map,
+        static_fixture_projection=static_fixture_projection,
+        observed_objects=agent_view_module.observed_objects(agent_view),
+        raw_fpv_observations=raw_observations,
+        perception_mode=agent_view_module.perception_mode(agent_view),
+        structured_detections_available=agent_view_module.structured_detections_available(
+            agent_view
+        ),
+        camera_model_policy_evidence=agent_view_module.camera_model_policy_evidence(agent_view),
+        model_declared_observation_evidence=(
+            agent_view_module.model_declared_observation_evidence(agent_view)
+        ),
+    )
     agent_view["simulated"] = True
     agent_view["physical_robot"] = False
     agent_view["execution_backend"] = EXECUTION_BACKEND
     agent_view["cleanup_action_rehearsal"] = True
     return agent_view
+
+
+def _agibot_shaped_agent_view(
+    *,
+    metric_map: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
+    observed_objects: list[dict[str, Any]],
+    raw_fpv_observations: list[dict[str, Any]],
+    perception_mode: str,
+    structured_detections_available: bool,
+    camera_model_policy_evidence: dict[str, Any] | None = None,
+    model_declared_observation_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    runtime_metric_map = _agibot_shaped_runtime_metric_map(
+        metric_map=metric_map,
+        static_fixture_projection=static_fixture_projection,
+        observed_objects=observed_objects,
+    )
+    model_declared = model_declared_observation_evidence or {
+        "schema": "model_declared_observations_v1",
+        "perception_mode": perception_mode,
+        "observation_count": 0,
+        "resolved_count": 0,
+        "acted_count": 0,
+        "observations": [],
+        "private_truth_included": False,
+    }
+    return agent_view_module.build_agent_view(
+        contract=REALWORLD_CONTRACT,
+        perception_mode=perception_mode,
+        detection_exposure_policy="agibot_shaped_molmospaces_sim_policy_camera",
+        structured_detections_available=structured_detections_available,
+        base_navigation_map=metric_map,
+        runtime_metric_map=runtime_metric_map,
+        observed_objects=observed_objects,
+        raw_fpv_observations=raw_fpv_observations,
+        camera_model_policy_evidence=camera_model_policy_evidence
+        or {
+            "schema": "camera_model_policy_v1",
+            "perception_mode": perception_mode,
+            "enabled": False,
+            "private_truth_included": False,
+        },
+        model_declared_observations=list(model_declared.get("observations") or []),
+        model_declared_observation_evidence=model_declared,
+        policy_view={
+            "schema": "realworld_cleanup_policy_view_v1",
+            "policy_observation_camera": "molmospaces_sim_policy_camera",
+            "allowed_inputs": [
+                "base_navigation_map",
+                "runtime_metric_map",
+                "raw_fpv_observations",
+                "navigation_status",
+            ],
+            "excluded_report_only_views": ["private_evaluation"],
+            "chase_camera_policy_input": False,
+        },
+        cleanup_worklist={
+            "schema": CLEANUP_WORKLIST_SCHEMA,
+            "waypoint_source": "agibot_shaped_molmospaces_sim_preflight",
+            "held_object_id": None,
+            "objects": [],
+            "waypoints": [
+                {
+                    "waypoint_id": str(item.get("waypoint_id") or ""),
+                    "room_id": str(item.get("room_id") or ""),
+                    "state": "unvisited",
+                    "purpose": str(item.get("purpose") or ""),
+                    "waypoint_source": str(item.get("waypoint_source") or ""),
+                }
+                for item in metric_map.get("inspection_waypoints") or []
+            ],
+            "rooms": [],
+        },
+        observed_waypoint_ids=[],
+        public_tool_names=[
+            "metric_map",
+            "observe",
+            "navigate_to_waypoint",
+            *BLOCKED_MANIPULATION_TOOLS,
+        ],
+        blocked_capabilities=BLOCKED_MANIPULATION_TOOLS,
+        capability_profiles=(
+            HOUSEHOLD_WORLD_PROFILE,
+            HOUSEHOLD_MANIPULATION_PROFILE,
+            HOUSEHOLD_EPISODE_PROFILE,
+        ),
+        forbidden_keys=forbidden_agent_view_keys(),
+    )
+
+
+def _agibot_shaped_runtime_metric_map(
+    *,
+    metric_map: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
+    observed_objects: list[dict[str, Any]],
+) -> dict[str, Any]:
+    fixtures = [
+        dict(fixture)
+        for room in static_fixture_projection.get("rooms") or []
+        for fixture in room.get("fixtures") or []
+        if isinstance(fixture, dict)
+    ]
+    return {
+        "schema": RUNTIME_METRIC_MAP_SCHEMA,
+        "contract": REALWORLD_CONTRACT,
+        "freshness": "current_run",
+        "source_map_mutated": False,
+        "private_truth_included": False,
+        "static_map": {
+            "rooms": [dict(item) for item in metric_map.get("rooms") or []],
+            "fixtures": fixtures,
+            "inspection_waypoints": [
+                dict(item) for item in metric_map.get("inspection_waypoints") or []
+            ],
+            "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
+            "map_bundle": dict(metric_map.get("map_bundle") or {}),
+            "contains_runtime_observations": False,
+        },
+        "public_semantic_anchors": [],
+        "observed_objects": [dict(item) for item in observed_objects],
+        "target_candidates": [],
+        "map_update_candidates": [],
+        "generated_exploration_candidates": [
+            dict(item) for item in metric_map.get("inspection_waypoints") or []
+        ],
+        "cleanup_worklist_summary": {
+            "schema": CLEANUP_WORKLIST_SCHEMA,
+            "object_count": 0,
+            "pending_count": 0,
+            "held_object_id": None,
+            "prior_count": 0,
+        },
+        "producer_summary": {
+            "observed_object_count": len(observed_objects),
+            "public_semantic_anchor_count": 0,
+            "map_update_candidate_count": 0,
+        },
+    }
 
 
 def _empty_cleanup_actions_result() -> dict[str, Any]:
@@ -1619,7 +1762,7 @@ def _run_result(
         "private_evaluation": private_evaluation,
         "final_locations": final_locations,
         "agent_view": agent_view,
-        "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
+        "raw_fpv_observations": agent_view_module.raw_fpv_observations(agent_view),
         "cleanup_policy_trace": {
             "schema": "cleanup_policy_trace_v1",
             "waypoint_source": "agibot_shaped_molmospaces_sim_preflight",

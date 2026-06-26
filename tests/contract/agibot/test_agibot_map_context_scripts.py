@@ -10,6 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from roboclaws.household import agent_view as agent_view_module
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
 GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_context.py"
@@ -67,7 +69,8 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
         == "operator_authored_static_projection"
     )
     assert static_fixture_projection["contains_runtime_observations"] is False
-    assert "agibot_gdk" not in json.dumps(agent_view)
+    assert "map_source" not in json.dumps(agent_view)
+    assert "verification" not in json.dumps(agent_view)
     assert (output_dir / "semantic_preview.png").is_file()
 
 
@@ -397,14 +400,17 @@ def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> N
         assert "AgiBot SDK Runner Report" in text
         assert len(text) > 1000
 
-    assert "agibot" not in json.dumps(agent_view).lower()
+    assert "source_agibot_map" not in json.dumps(agent_view).lower()
+    assert "current_agibot_map" not in json.dumps(agent_view).lower()
     assert "map_source" not in json.dumps(agent_view)
     assert "verification" not in json.dumps(agent_view)
     assert navigate_result["tool_response"]["navigation_status"] == "dry_run_not_executed"
     assert navigate_result["tool_response"]["primitive_provenance"] == "blocked_capability"
 
 
-def test_sdk_runner_exports_base_navigation_context_generated_candidates(tmp_path: Path) -> None:
+def test_vendor_sdk_runner_exports_base_navigation_context_generated_candidates(
+    tmp_path: Path,
+) -> None:
     _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.minimal.json"
     context_path.write_text(json.dumps(_base_navigation_map_context()), encoding="utf-8")
@@ -433,21 +439,22 @@ def test_sdk_runner_exports_base_navigation_context_generated_candidates(tmp_pat
     run_result = json.loads((agent_view_dir / "run_result.json").read_text(encoding="utf-8"))
     navigate_result = json.loads((navigate_dir / "run_result.json").read_text(encoding="utf-8"))
     payload_text = json.dumps(agent_view).lower()
-    waypoint = agent_view["metric_map"]["inspection_waypoints"][0]
+    metric_map = agent_view["metric_map"]
+    static_fixture_projection = agent_view["static_fixture_projection"]
+    waypoint = metric_map["inspection_waypoints"][0]
 
-    assert agent_view["metric_map"]["base_navigation_map"]["enabled"] is True
-    assert agent_view["metric_map"]["rooms"][0]["room_label"] == "Open office"
-    assert agent_view["metric_map"]["room_category_hints"][0]["room_label"] == "Open office"
+    assert agent_view.get("schema") != agent_view_module.AGENT_VIEW_SCHEMA
+    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["rooms"][0]["room_label"] == "Open office"
+    assert metric_map["room_category_hints"][0]["room_label"] == "Open office"
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert waypoint["room_label"] == "Open office"
     assert waypoint["reachability_status"] == "verified"
-    assert (
-        agent_view["static_fixture_projection"]["static_fixture_projection_mode"]
-        == "base_navigation_map_no_fixtures"
+    assert static_fixture_projection["static_fixture_projection_mode"] == (
+        "base_navigation_map_no_fixtures"
     )
     assert run_result["summary"]["generated_exploration_candidates"] == 3
     assert run_result["privacy_check"]["ok"] is True
-    assert "agibot_gdk" not in payload_text
     assert "map_source" not in payload_text
     assert "verification" not in payload_text
     assert navigate_result["tool_response"]["navigation_status"] == "dry_run_not_executed"

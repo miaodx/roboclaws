@@ -112,7 +112,7 @@ def write_robot_views(
     safe_label = safe_file_stem(label)
     fpv_path = output_dir / f"{safe_label}.fpv.png"
     chase_path = output_dir / f"{safe_label}.chase.png"
-    map_path = output_dir / f"{safe_label}.map.png"
+    topdown_path = output_dir / f"{safe_label}.topdown.png"
     verify_path = output_dir / f"{safe_label}.verify.png"
 
     focus = hooks.focus_payload(state, focus_object_id, focus_receptacle_id)
@@ -206,7 +206,7 @@ def write_robot_views(
     verify_image = Image.fromarray(verify)
     hooks.annotate_focus_image(verify_image, focus)
     verify_image.save(verify_path)
-    hooks.render_robot_map(state, focus=focus).save(map_path)
+    hooks.render_robot_map(state, focus=focus).save(topdown_path)
 
     return hooks.ok(
         "robot_views",
@@ -214,7 +214,7 @@ def write_robot_views(
         robot_name=state.get("robot_name"),
         robot_pose=state.get("robot_pose"),
         robot_trajectory=state.get("robot_trajectory", []),
-        view_variant="molmospaces-rby1m-fpv-map-chase-verify",
+        view_variant="molmospaces-rby1m-fpv-topdown-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
         camera_diagnostics=camera_diagnostics,
@@ -226,14 +226,14 @@ def write_robot_views(
         views={
             "fpv": str(fpv_path),
             "chase": str(chase_path),
-            "map": str(map_path),
+            "topdown": str(topdown_path),
             "verify": str(verify_path),
         },
         shapes={
             "fpv": list(fpv.shape),
             "chase": list(chase.shape),
             "verify": list(verify.shape),
-            "map": [420, 620, 3],
+            "topdown": [420, 620, 3],
         },
         render_resolution={"width": width, "height": height},
     )

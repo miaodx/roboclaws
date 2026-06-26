@@ -443,7 +443,7 @@ def test_molmospaces_bbox_observation_keeps_private_truth_out_of_public_context(
         output_dir=tmp_path,
         view_result={
             "status": "ok",
-            "view_variant": "molmospaces-rby1m-fpv-map-chase-verify",
+            "view_variant": "molmospaces-rby1m-fpv-topdown-chase-verify",
             "view_provenance": {"fpv": "rby1m_head_camera_target_framed"},
             "robot_pose": {"x": 1.0, "y": 2.0, "target_object_id": "plate_private_1"},
             "views": {"fpv": str(image)},

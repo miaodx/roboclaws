@@ -220,4 +220,28 @@ Each entry should answer:
   - Try now: No for another blind rerun. Yes when a provider or Codex-side
     change gives a concrete reason to expect the tool-call shape changed.
 
+- **Audit coding-agent runner parity across Codex and OpenAI Agents SDK**
+  - Created: 2026-06-22.
+  - Updated: 2026-06-22.
+  - Status: Parked runner-semantics audit.
+  - Why: The operator handoff bug showed that `codex-cli` and
+    `openai-agents-sdk` had different lifecycle semantics for the same user
+    intent: Codex preserved an explicit "wait / do not call done" handoff, while
+    the SDK runner treated no `done` as a failure and cleaned up the MCP server.
+    Other route-specific differences may still exist around continuation,
+    timeout, pause/resume, failure status, artifact writing, and operator stop.
+  - Next action: Build a small parity checklist for shared live-agent semantics,
+    then compare `run_live_codex_cleanup.py` and
+    `run_live_openai_agents_cleanup.py` against it. Convert any discovered
+    divergence into focused regression tests before changing runner behavior.
+  - Evidence:
+    `scripts/molmo_cleanup/run_live_codex_cleanup.py`;
+    `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`;
+    `tests/unit/molmo_cleanup/test_ci_live_reports.py`;
+    `tests/unit/operator_console/test_state.py`;
+    `tests/unit/operator_console/test_operator_console.py`;
+    commit `3213fc4c` (`fix: preserve OpenAI Agents handoff pause`).
+  - Try now: Yes for audit and test-plan work. Apply behavior changes only as
+    narrow fixes with parity tests.
+
 _If this list empties, next work should come from a new plan or issue._

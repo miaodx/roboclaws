@@ -371,7 +371,12 @@ def _run_pipeline(
                 "artifact_status": "benchmark_fixture",
             },
             category_hints=[str(item) for item in observation.get("category_hints") or []],
-            static_fixture_projection=list(observation.get("static_fixture_projection") or []),
+            public_map_hints={
+                "schema": "visual_grounding_public_map_hints_v1",
+                "source": "visual_grounding_benchmark_public_fixture_hints",
+                "fixture_hints": list(observation.get("static_fixture_projection") or []),
+                "private_truth_included": False,
+            },
             pipeline_id=pipeline_id,
             image={
                 "mime_type": "image/jpeg",

@@ -640,7 +640,7 @@ just molmo::claude-report
 Guarded report recipes are maintainer-only validation routes; they are not part
 of the normal current entrypoint set.
 `claude-report` is blocked on the work network unless the repo-local `.env`
-contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. `codex-report`
+contains a supported MiMo or MiMo mify Anthropic key route. `codex-report`
 may run on the work network with the repo-local `codex-router-responses` route configured in
 `.env`, or with explicit `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` plus
 `XM_LLM_API_KEY`. Run `just dev::network-status` first if you are unsure which

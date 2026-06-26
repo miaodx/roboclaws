@@ -178,7 +178,7 @@ def test_visual_grounding_request_rejects_invalid_base64_as_contract_error() -> 
                 "artifact_status": "recorded",
             },
             category_hints=["dish"],
-            static_fixture_projection=[],
+            public_map_hints=_public_map_hints(),
             pipeline_id="grounding-dino",
             image={
                 "mime_type": "image/jpeg",
@@ -200,7 +200,7 @@ def test_visual_grounding_request_rejects_empty_image_bytes() -> None:
                 "artifact_status": "recorded",
             },
             category_hints=["dish"],
-            static_fixture_projection=[],
+            public_map_hints=_public_map_hints(),
             pipeline_id="grounding-dino",
             image={
                 "mime_type": "image/jpeg",
@@ -222,7 +222,7 @@ def test_visual_grounding_request_rejects_zero_image_dimensions() -> None:
                 "artifact_status": "recorded",
             },
             category_hints=["dish"],
-            static_fixture_projection=[],
+            public_map_hints=_public_map_hints(),
             pipeline_id="grounding-dino",
             image={
                 "mime_type": "image/jpeg",
@@ -231,6 +231,36 @@ def test_visual_grounding_request_rejects_zero_image_dimensions() -> None:
                 "height": 2,
             },
         )
+
+
+def test_visual_grounding_request_rejects_static_fixture_projection_field() -> None:
+    request = _request()
+    request["static_fixture_projection"] = request["public_map_hints"]["fixture_hints"]
+
+    with pytest.raises(VisualGroundingContractError, match="not a live visual grounding request"):
+        HttpVisualGroundingClient(
+            VisualGroundingClientConfig(pipeline_id="grounding-dino")
+        ).request_candidates(request)
+
+
+def test_visual_grounding_request_rejects_private_public_map_hints() -> None:
+    request = _request()
+    request["public_map_hints"]["private_truth_included"] = True
+
+    with pytest.raises(VisualGroundingContractError, match="must not include private truth"):
+        HttpVisualGroundingClient(
+            VisualGroundingClientConfig(pipeline_id="grounding-dino")
+        ).request_candidates(request)
+
+
+def test_visual_grounding_request_rejects_private_hint_keys() -> None:
+    request = _request()
+    request["public_map_hints"]["fixture_hints"][0]["generated_mess_set"] = ["mug_01"]
+
+    with pytest.raises(VisualGroundingContractError, match="forbidden private fields"):
+        HttpVisualGroundingClient(
+            VisualGroundingClientConfig(pipeline_id="grounding-dino")
+        ).request_candidates(request)
 
 
 def _request() -> dict[str, Any]:
@@ -243,9 +273,7 @@ def _request() -> dict[str, Any]:
             "artifact_status": "recorded",
         },
         category_hints=["dish"],
-        static_fixture_projection=[
-            {"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}
-        ],
+        public_map_hints=_public_map_hints(),
         pipeline_id="grounding-dino",
         image={
             "mime_type": "image/jpeg",
@@ -254,6 +282,15 @@ def _request() -> dict[str, Any]:
             "height": 2,
         },
     )
+
+
+def _public_map_hints() -> dict[str, Any]:
+    return {
+        "schema": "visual_grounding_public_map_hints_v1",
+        "source": "test_public_map_hints",
+        "fixture_hints": [{"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}],
+        "private_truth_included": False,
+    }
 
 
 def _start_server(handler: type[BaseHTTPRequestHandler]) -> ThreadingHTTPServer:

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from roboclaws.household import agent_view as agent_view_module
 from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.household.agibot_map_build_mcp_server import (
     AGIBOT_MAP_BUILD_TOOLS,
@@ -31,6 +32,11 @@ from roboclaws.household.artifact_report import (
 )
 from roboclaws.household.profiles import AGIBOT_SDK_RUNNER_BACKEND
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
@@ -73,8 +79,10 @@ def _assert_static_fixture_projection_artifact_only(
     trace_events: list[dict],
 ) -> None:
     assert "static_fixture_projection" not in AGIBOT_MAP_BUILD_TOOLS
-    assert "static_fixture_projection" not in run_result["agent_view"]["public_tool_names"]
-    assert "static_fixture_projection" in run_result["agent_view"]
+    assert "static_fixture_projection" not in agent_view_module.public_tool_names(
+        run_result["agent_view"]
+    )
+    assert "static_fixture_projection" not in run_result["agent_view"]
     assert "static_fixture_projection" in runtime_map
     assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 
@@ -86,7 +94,9 @@ def _assert_camera_grounding_failure_evidence(run_result: dict) -> None:
     assert camera_policy["visual_grounding_failure_count"] == 1
     assert camera_policy["model_provenance"] == "external_visual_grounding_service"
     assert camera_policy["events"][0]["visual_grounding_pipeline"]["status"] == "failed"
-    assert run_result["agent_view"]["camera_model_policy_evidence"] == camera_policy
+    assert agent_view_module.camera_model_policy_evidence(run_result["agent_view"]) == (
+        camera_policy
+    )
 
 
 def _assert_agibot_map_build_tool_responses(
@@ -165,6 +175,14 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     persisted = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
     runner = run_result["agibot_sdk_runner"]
     subphase_reports = runner["subphase_reports"]
+    public_agent_view_artifact = json.loads(
+        (run_dir / "subphases" / "01-agent-view" / "agent_view.json").read_text(encoding="utf-8")
+    )
+    vendor_agent_view_artifact = json.loads(
+        (run_dir / "subphases" / "01-agent-view" / "vendor_agent_view.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert run_result["evidence_lane"] == "physical-robot-evidence"
     assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
@@ -180,6 +198,21 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert run_result["physical_agibot_pilot"]["navigation_attempt"]["navigation_status"] == (
         "dry_run_not_executed"
     )
+    capabilities = agent_view_module.capabilities(run_result["agent_view"])
+    assert public_agent_view_artifact == run_result["agent_view"]
+    assert public_agent_view_artifact["schema"] == agent_view_module.AGENT_VIEW_SCHEMA
+    assert vendor_agent_view_artifact.get("schema") != agent_view_module.AGENT_VIEW_SCHEMA
+    assert vendor_agent_view_artifact["metric_map"]["inspection_waypoints"][0]["waypoint_id"] == (
+        "wp_sofa_front"
+    )
+    assert capabilities["capability_profiles"] == [
+        HOUSEHOLD_WORLD_PROFILE,
+        HOUSEHOLD_MANIPULATION_PROFILE,
+        HOUSEHOLD_EPISODE_PROFILE,
+    ]
+    blocked_details = {item["name"]: item for item in capabilities["blocked_capability_details"]}
+    assert set(blocked_details) == set(BLOCKED_MANIPULATION_TOOLS)
+    assert blocked_details["pick"]["source_profile_id"] == HOUSEHOLD_MANIPULATION_PROFILE
     assert [
         item["tool"] for item in run_result["physical_agibot_pilot"]["blocked_manipulation_results"]
     ] == list(BLOCKED_MANIPULATION_TOOLS)
@@ -230,7 +263,7 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
 
     run_dir = tmp_path / "run"
     agent_view = run_result["agent_view"]
-    metric_map = agent_view["metric_map"]
+    metric_map = agent_view_module.base_navigation_map(agent_view)
     bundle = run_result["nav2_map_bundle"]
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     subphase_result = json.loads(
@@ -286,7 +319,7 @@ def test_physical_agibot_pilot_report_uses_default_robot_map_12_artifact(
     )
 
     run_dir = tmp_path / "run"
-    metric_map = run_result["agent_view"]["metric_map"]
+    metric_map = agent_view_module.base_navigation_map(run_result["agent_view"])
     bundle = run_result["nav2_map_bundle"]
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
 
@@ -528,7 +561,11 @@ def test_agibot_map_build_camera_labels_call_external_grounding(
     assert grounding_client.last_request is not None
     assert grounding_client.last_request["observation_id"] == "agibot_observe_001"
     assert grounding_client.last_request["pipeline_request"]["pipeline_id"] == "grounding-dino"
-    assert grounding_client.last_request["static_fixture_projection"][0]["fixture_id"] == "sofa_01"
+    assert "static_fixture_projection" not in grounding_client.last_request
+    public_hints = grounding_client.last_request["public_map_hints"]
+    assert public_hints["source"] == "public_agent_view_map_evidence"
+    assert public_hints["fixture_hints"][0]["fixture_id"] == "sofa_01"
+    assert public_hints["private_truth_included"] is False
     assert evidence["candidate_count"] == 1
     assert evidence["visual_grounding_failure_count"] == 0
     assert event["candidate_count"] == 1
@@ -595,7 +632,10 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
     assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["backend"] == AGIBOT_SDK_RUNNER_BACKEND
     assert run_result["backend_variant"] == "agibot_gdk"
-    assert run_result["agent_view"]["policy_view"]["policy_observation_camera"] == "head_color"
+    assert (
+        agent_view_module.policy_view(run_result["agent_view"])["policy_observation_camera"]
+        == "head_color"
+    )
     assert run_result["manipulation_evidence"]["status"] == "blocked_capability"
     assert run_result["real_robot_readiness"]["backend_variant"] == "agibot_gdk"
     assert run_result["real_robot_readiness"]["physical_cleanup_ready"] is False

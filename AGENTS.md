@@ -91,7 +91,7 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, or OpenClaw integration/local verification gates. Do not run
 system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
-contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. Codex recipes
+contains a supported MiMo or MiMo mify Anthropic key route. Codex recipes
 default to `codex-router-responses` and may run there when `CODEX_BASE_URL` and
 `CODEX_API_KEY` are configured; mimo-mify-responses and MiniMax are available only as explicit
 `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses|minimax-responses` overrides with `XM_LLM_API_KEY` or
@@ -265,6 +265,12 @@ ruff format --check .
    a required dependency, config, runtime, or artifact is missing or malformed,
    fail loudly with an actionable error instead of substituting another source
    or silently degrading behavior.
+9. **Forward architecture upgrades do not require backward compatibility**:
+   when an architecture redesign is a positive upgrade to the current contract,
+   migrate known in-repo callers, docs, tests, and artifacts to the new shape
+   instead of preserving old field layouts, wrappers, aliases, command forms, or
+   artifact schemas for compatibility. Add a temporary compatibility bridge
+   only when the human explicitly requests one, and record its removal trigger.
 
 ---
 
@@ -309,6 +315,13 @@ is a blocker, not permission to fall back to an older artifact.
   or `git commit -a` in a shared checkout. Prefer explicit pathspecs,
   `git add -p`, or a temporary `GIT_INDEX_FILE` index when the worktree already
   contains unrelated changes.
+- Do not run `git checkout`, `git switch`, `git worktree add/remove`, or other
+  branch/worktree-management commands from this shared checkout unless the
+  human explicitly asks for that repository-level operation. Those commands
+  mutate shared git state and can disrupt parallel agents. If you need isolated
+  verification or a clean tree for your own task, use an already task-owned
+  checkout/clone outside this repo, or ask before creating one; never assume a
+  temporary worktree attached to this repository is harmless.
 - Do not reset, restore, unstage, or commit another agent's work unless the human
   explicitly asks for that. If a file contains mixed edits that cannot be safely
   separated, leave it uncommitted and report the blocker instead of sweeping in

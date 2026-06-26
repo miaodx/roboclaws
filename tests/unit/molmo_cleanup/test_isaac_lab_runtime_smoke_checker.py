@@ -847,17 +847,17 @@ def write_robot_views_result(tmp_path: Path) -> dict[str, object]:
     view_dir = tmp_path / "robot_views"
     view_dir.mkdir(parents=True, exist_ok=True)
     views = {}
-    for key in ("fpv", "chase", "map", "verify"):
+    for key in ("fpv", "chase", "topdown", "verify"):
         path = view_dir / f"runtime_smoke.{key}.png"
         write_smoke_image(path)
         views[key] = str(path)
     return {
         "ok": True,
-        "view_variant": "isaaclab-fpv-map-chase-verify",
+        "view_variant": "isaaclab-fpv-topdown-chase-verify",
         "view_provenance": {
             "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
             "chase": "isaac_lab_camera_rgb_static_robot_views:chase",
-            "map": "isaac_lab_camera_rgb_static_robot_views:map",
+            "topdown": "isaac_lab_camera_rgb_static_robot_views:topdown",
             "verify": "isaac_lab_camera_rgb_static_robot_views:verify",
         },
         "views": views,

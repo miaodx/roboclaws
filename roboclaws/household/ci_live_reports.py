@@ -58,15 +58,6 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         profile="world-public-labels",
     ),
     MolmoLiveModelEntry(
-        name="claude-code-kimi-k2.6",
-        label="Claude Code + Kimi K2.6",
-        agent_engine="claude-code",
-        provider_profile="kimi-anthropic",
-        model="kimi-k2.6",
-        secret_env="KIMI_API_KEY",
-        profile="world-public-labels",
-    ),
-    MolmoLiveModelEntry(
         name="agents-sdk-mimo-v2.5",
         label="OpenAI Agents SDK + MiMo v2.5",
         agent_engine="openai-agents-sdk",

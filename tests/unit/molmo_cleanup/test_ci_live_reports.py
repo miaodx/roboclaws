@@ -30,6 +30,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_MATRIX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_ci_live_cleanup_matrix.py"
 RUN_CODEX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 RUN_CLAUDE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
+RUN_OPENAI_AGENTS_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
+)
 ASSEMBLE_LIVE_PAGES_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "assemble_ci_live_pages.py"
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
@@ -39,6 +42,7 @@ def _load_module(path: Path, name: str):
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -62,7 +66,6 @@ def _ci_live_dry_run_args(tmp_path: Path, entry: str, *extra: str) -> list[str]:
 def test_ci_live_model_entries_match_provider_profiles() -> None:
     assert [entry.name for entry in MODEL_ENTRIES] == [
         "claude-code-mimo-v2.5",
-        "claude-code-kimi-k2.6",
         "agents-sdk-mimo-v2.5",
         "agents-sdk-kimi-k2.7-code",
     ]
@@ -81,13 +84,6 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
             "mimo-tp-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
-            "world-public-labels",
-        ),
-        "claude-code-kimi-k2.6": (
-            "claude-code",
-            "kimi-anthropic",
-            "kimi-k2.6",
-            "KIMI_API_KEY",
             "world-public-labels",
         ),
         "agents-sdk-mimo-v2.5": (
@@ -140,16 +136,25 @@ def test_ci_live_status_reader_rejects_non_object_source(tmp_path: Path) -> None
 def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
 
-    status = run_matrix.main(_ci_live_dry_run_args(tmp_path, "claude-code-kimi-k2.6"))
+    status = run_matrix.main(
+        _ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code")
+    )
 
     assert status == 0
-    status_path = tmp_path / "site" / "molmo" / "live" / "claude-code-kimi-k2.6" / "status.json"
+    status_path = (
+        tmp_path
+        / "site"
+        / "molmo"
+        / "live"
+        / "agents-sdk-kimi-k2.7-code"
+        / "status.json"
+    )
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["status"] == "dry_run"
-    assert payload["agent_engine"] == "claude-code"
+    assert payload["agent_engine"] == "openai-agents-sdk"
     assert payload["env"] == {
-        "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
-        "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
+        "ROBOCLAWS_OPENAI_AGENTS_MODEL": "kimi-k2.7-code",
+        "ROBOCLAWS_PROVIDER_PROFILE": "kimi-openai-chat",
         "ROBOCLAWS_PROVIDER_TIMING_PROXY": "1",
     }
     assert payload["profile"] == "world-public-labels"
@@ -161,17 +166,17 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=cleanup",
-        "agent_engine=claude-code",
-        "provider_profile=kimi-anthropic",
+        "agent_engine=openai-agents-sdk",
+        "provider_profile=kimi-openai-chat",
         "evidence_lane=world-public-labels",
     ]
     assert payload["rerun_command"].startswith(
-        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
-        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
+        "ROBOCLAWS_PROVIDER_PROFILE=kimi-openai-chat "
+        "ROBOCLAWS_OPENAI_AGENTS_MODEL=kimi-k2.7-code "
         "ROBOCLAWS_PROVIDER_TIMING_PROXY=1 "
         "just run::surface surface=household-world world=molmospaces/val_0 "
-        "backend=mujoco intent=cleanup agent_engine=claude-code "
-        "provider_profile=kimi-anthropic evidence_lane=world-public-labels"
+        "backend=mujoco intent=cleanup agent_engine=openai-agents-sdk "
+        "provider_profile=kimi-openai-chat evidence_lane=world-public-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -179,7 +184,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         )
     )
     assert manifest["schema"] == "molmo_live_ci_report_manifest_v1"
-    assert manifest["entries"][0]["entry"] == "claude-code-kimi-k2.6"
+    assert manifest["entries"][0]["entry"] == "agents-sdk-kimi-k2.7-code"
 
 
 def test_dry_run_agents_sdk_entry_uses_entry_engine_and_model_env(tmp_path: Path) -> None:
@@ -243,25 +248,32 @@ def test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch(
     run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
     monkeypatch.setenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", "0")
 
-    status = run_matrix.main(_ci_live_dry_run_args(tmp_path, "claude-code-kimi-k2.6"))
+    status = run_matrix.main(
+        _ci_live_dry_run_args(tmp_path, "agents-sdk-kimi-k2.7-code")
+    )
 
     assert status == 0
     payload = json.loads(
-        (tmp_path / "site" / "molmo" / "live" / "claude-code-kimi-k2.6" / "status.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            tmp_path
+            / "site"
+            / "molmo"
+            / "live"
+            / "agents-sdk-kimi-k2.7-code"
+            / "status.json"
+        ).read_text(encoding="utf-8")
     )
     assert payload["env"]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
     assert payload["rerun_command"].startswith(
-        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
-        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
+        "ROBOCLAWS_PROVIDER_PROFILE=kimi-openai-chat "
+        "ROBOCLAWS_OPENAI_AGENTS_MODEL=kimi-k2.7-code "
         "ROBOCLAWS_PROVIDER_TIMING_PROXY=0 "
     )
 
 
 def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, monkeypatch) -> None:
     run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
-    entry = entry_by_name("claude-code-kimi-k2.6")
+    entry = entry_by_name("agents-sdk-kimi-k2.7-code")
     output_dir = tmp_path / "runs"
     publish_root = tmp_path / "site" / "molmo" / "live"
     args = SimpleNamespace(
@@ -310,7 +322,7 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
 def test_latest_seed_artifact_dir_ignores_seed_dirs_without_diagnostic_evidence(
     tmp_path: Path,
 ) -> None:
-    entry_output_dir = tmp_path / "runs" / "claude-code-kimi-k2.6"
+    entry_output_dir = tmp_path / "runs" / "agents-sdk-kimi-k2.7-code"
     (entry_output_dir / "0513_2217" / "seed-7").mkdir(parents=True)
     (entry_output_dir / "0513_2300" / "seed-7").mkdir(parents=True)
 
@@ -340,7 +352,7 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
         min_generated_mess_count="5",
         profile="world-public-labels",
         server_arg=[],
-        claude_model_arg=["--model", "kimi-k2.6"],
+        claude_model_arg=["--model", "mimo-v2.5"],
         claude_env=[],
         checker_visual_arg=[],
     )
@@ -1095,6 +1107,97 @@ def test_live_codex_explicit_operator_handoff_pauses_without_killing_server(
     assert "MCP server remains alive" in payload["detail"]
 
 
+def test_live_openai_agents_explicit_operator_handoff_pauses_without_continuation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_sdk = _load_module(RUN_OPENAI_AGENTS_PATH, "run_live_openai_agents_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        server_startup_timeout_s=3.0,
+        provider_profile="codex-router-responses",
+        model="gpt-5.5",
+        max_turns=None,
+        incomplete_turn_continuation_attempts=None,
+        cache_tools_list=True,
+        mcp_client_session_timeout_s=None,
+        agent_sdk_perf_profile="",
+        continuation_mode="",
+        model_thinking_mode="default",
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        model_racing=None,
+        model_racing_arm_count=None,
+        raw_fpv_image_memory=None,
+        raw_fpv_image_memory_retain=None,
+        camera_grounded_history_compaction=None,
+        camera_grounded_history_retain=None,
+        raw_fpv_candidate_budget=None,
+        raw_fpv_repeated_failure_limit=None,
+        done_retry_budget=None,
+        max_observe_per_waypoint=None,
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        kickoff_prompt="到达第一个 waypoint 点，等待，不要调用 done，我计划手动调整下位置",
+        backend="molmospaces_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="openai_agents_agent",
+        task="到达第一个 waypoint 点，等待，不要调用 done，我计划手动调整下位置",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+        checker_profile="",
+        server_arg=[],
+        checker_visual_arg=[],
+    )
+    runner = run_sdk.LiveOpenAIAgentsCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls = []
+
+    class FakeRuntime:
+        def run(self, request):
+            calls.append(request.kickoff_prompt)
+            return SimpleNamespace(
+                phase="agent-turn-complete",
+                exit_status=0,
+                reason="",
+                provider_reason="",
+                retryable=False,
+                resume_available=False,
+                usage={},
+                trace_id="trace-1",
+                provider_session_id="session-1",
+                run_result_present=False,
+                started_at_epoch=1.0,
+                finished_at_epoch=2.0,
+            )
+
+    monkeypatch.setattr(run_sdk, "OpenAIAgentsLiveRuntime", FakeRuntime)
+
+    runner._run_sdk_agent()
+
+    assert runner.operator_handoff_active is True
+    assert len(calls) == 1
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "paused"
+    assert payload["reason"] == "operator_handoff_requested"
+    assert payload["resume_available"] is True
+    assert "MCP server remains alive" in payload["detail"]
+    assert runner.live_timing["openai_agents_attempts"][0]["recovery_action"] == (
+        "operator_handoff"
+    )
+
+
 def test_live_codex_no_done_without_operator_handoff_still_fails(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1528,7 +1631,7 @@ def test_live_claude_camera_raw_checker_requires_all_generated_mess_actions(
         min_generated_mess_count="5",
         profile="camera-raw-fpv",
         server_arg=[],
-        claude_model_arg=["--model", "kimi-k2.6"],
+        claude_model_arg=["--model", "mimo-v2.5"],
         claude_env=[],
         checker_visual_arg=[
             "--require-raw-fpv-observations",
@@ -1601,7 +1704,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     published = publish_seed_run(
         source_seed_dir=source_seed,
         publish_root=live_root,
-        entry_name="claude-code-kimi-k2.6",
+        entry_name="agents-sdk-kimi-k2.7-code",
         seed=7,
     )
     assert (published / "report.html").is_file()
@@ -1614,7 +1717,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     assert (agents_published / "report.html").is_file()
 
     success = base_status(
-        entry_by_name("claude-code-kimi-k2.6"),
+        entry_by_name("agents-sdk-kimi-k2.7-code"),
         seed=7,
         generated_mess_count=5,
         profile="world-public-labels",
@@ -1623,7 +1726,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     success.update(
         {
             "status": "success",
-            "report_path": report_path_for_entry("claude-code-kimi-k2.6", seed=7),
+            "report_path": report_path_for_entry("agents-sdk-kimi-k2.7-code", seed=7),
         }
     )
     skipped = base_status(
@@ -1647,14 +1750,14 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
             "report_path": report_path_for_entry("agents-sdk-mimo-v2.5", seed=7),
         }
     )
-    write_status(status_path_for_entry(live_root, "claude-code-kimi-k2.6"), success)
+    write_status(status_path_for_entry(live_root, "agents-sdk-kimi-k2.7-code"), success)
     write_status(status_path_for_entry(live_root, "claude-code-mimo-v2.5"), skipped)
     write_status(status_path_for_entry(live_root, "agents-sdk-mimo-v2.5"), agents_success)
     write_manifest(live_root)
     live_index = write_live_index(live_root)
     live_html = live_index.read_text(encoding="utf-8")
     assert "MolmoSpaces Live Cleanup Reports" in live_html
-    assert "claude-code-kimi-k2.6/seed-7/report.html" in live_html
+    assert "agents-sdk-kimi-k2.7-code/seed-7/report.html" in live_html
     assert "agents-sdk-mimo-v2.5/seed-7/report.html" in live_html
     assert "OpenAI Agents SDK + MiMo v2.5" in live_html
     assert "openai-agents-sdk" in live_html
@@ -1664,7 +1767,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     html = out.read_text(encoding="utf-8")
     assert "MolmoSpaces Live Cleanup (main-only / opt-in CI)" in html
     assert "molmo/live/" in html
-    assert "molmo/live/claude-code-kimi-k2.6/seed-7/report.html" in html
+    assert "molmo/live/agents-sdk-kimi-k2.7-code/seed-7/report.html" in html
     assert "molmo/live/agents-sdk-mimo-v2.5/seed-7/report.html" in html
     assert "OpenAI Agents SDK + MiMo v2.5" in html
     assert "openai-agents-sdk" in html
@@ -1684,13 +1787,13 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
     published = publish_diagnostic_seed_run(
         source_seed_dir=source_seed,
         publish_root=live_root,
-        entry_name="claude-code-kimi-k2.6",
+        entry_name="agents-sdk-kimi-k2.7-code",
         seed=7,
     )
     assert (published / "diagnostics.html").is_file()
 
     failed = base_status(
-        entry_by_name("claude-code-kimi-k2.6"),
+        entry_by_name("agents-sdk-kimi-k2.7-code"),
         seed=7,
         generated_mess_count=5,
         profile="world-public-labels",
@@ -1700,19 +1803,25 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
         {
             "status": "failed",
             "reason": "provider failed",
-            "diagnostic_path": diagnostic_path_for_entry("claude-code-kimi-k2.6", seed=7),
+            "diagnostic_path": diagnostic_path_for_entry(
+                "agents-sdk-kimi-k2.7-code",
+                seed=7,
+            ),
         }
     )
-    write_status(status_path_for_entry(live_root, "claude-code-kimi-k2.6"), failed)
+    write_status(status_path_for_entry(live_root, "agents-sdk-kimi-k2.7-code"), failed)
     write_manifest(live_root)
     live_index = write_live_index(live_root)
     live_html = live_index.read_text(encoding="utf-8")
-    assert "claude-code-kimi-k2.6/diagnostics/seed-7/diagnostics.html" in live_html
+    assert "agents-sdk-kimi-k2.7-code/diagnostics/seed-7/diagnostics.html" in live_html
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
-    assert "molmo/live/claude-code-kimi-k2.6/diagnostics/seed-7/diagnostics.html" in html
-    assert "Claude Code + Kimi K2.6 diagnostics" in html
+    assert (
+        "molmo/live/agents-sdk-kimi-k2.7-code/diagnostics/seed-7/diagnostics.html"
+        in html
+    )
+    assert "OpenAI Agents SDK + Kimi K2.7 Code diagnostics" in html
 
 
 def test_pages_index_without_live_manifest_renders_household_placeholder(tmp_path: Path) -> None:
@@ -1731,14 +1840,14 @@ def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> No
     source_root = tmp_path / "molmo-live-src"
     live_root = tmp_path / "site" / "molmo" / "live"
     status = base_status(
-        entry_by_name("claude-code-kimi-k2.6"),
+        entry_by_name("agents-sdk-kimi-k2.7-code"),
         seed=7,
         generated_mess_count=5,
         profile="world-public-labels",
         task="帮我收拾这个房间",
     )
     status.update({"status": "skipped", "reason": "fixture"})
-    write_status(status_path_for_entry(source_root, "claude-code-kimi-k2.6"), status)
+    write_status(status_path_for_entry(source_root, "agents-sdk-kimi-k2.7-code"), status)
 
     result = subprocess.run(
         [

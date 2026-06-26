@@ -71,7 +71,7 @@ from scripts.isaac_lab_cleanup import (
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
-ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
+ROBOT_VIEW_KEYS = ("fpv", "chase", "topdown", "verify")
 SCENE_BINDING_SCHEMA = isaac_scene_bindings.SCENE_BINDING_SCHEMA
 _bind_public_scene_item = isaac_scene_bindings.bind_public_scene_item
 _scene_binding_diagnostics = isaac_scene_bindings.scene_binding_diagnostics
@@ -513,7 +513,7 @@ def _runtime_smoke_robot_view_paths(
     return {
         "fpv": smoke_image,
         "chase": run_dir / "isaac_runtime_smoke.chase.png",
-        "map": run_dir / "isaac_runtime_smoke.map.png",
+        "topdown": run_dir / "isaac_runtime_smoke.topdown.png",
         "verify": run_dir / "isaac_runtime_smoke.verify.png",
     }
 

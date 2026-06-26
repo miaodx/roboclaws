@@ -1038,6 +1038,7 @@ class RealWorldCleanupContract:
             self,
             realworld_contract=REALWORLD_CONTRACT,
             visible_object_detections_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+            forbidden_keys=_FORBIDDEN_AGENT_VIEW_KEYS,
             assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 

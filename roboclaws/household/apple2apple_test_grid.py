@@ -47,18 +47,6 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         required_env=("CODEX_BASE_URL", "CODEX_API_KEY"),
     ),
     AgentRoute(
-        route_id="claude-kimi",
-        label="Claude Code Kimi",
-        driver="claude",
-        agent_engine="claude-code",
-        provider_profile="kimi-anthropic",
-        env={
-            "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
-            "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
-        },
-        required_env=("KIMI_API_KEY",),
-    ),
-    AgentRoute(
         route_id="claude-mimo-v25",
         label="Claude Code MiMo v2.5",
         driver="claude",

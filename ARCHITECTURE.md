@@ -113,6 +113,9 @@ Key pieces:
 
 - `roboclaws/household/realworld_contract.py` owns the public/private
   household contract.
+- `roboclaws/household/agent_view.py` owns the sectioned Agent View v2 boundary
+  for public household-world agent inputs, saved `agent_view.json` artifacts,
+  live agent-facing responses, and sidecar public-evidence guards.
 - `roboclaws/household/realworld_cleanup.py` owns the direct deterministic
   cleanup and map-build sweep CLI used by `just` and harness recipes.
 - `roboclaws/household/semantic_cleanup_loop.py` owns the direct semantic
@@ -128,9 +131,10 @@ Key pieces:
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
   request schema used by MuJoCo product runs and B1/generic Isaac probes.
-- `roboclaws/household/agibot_sdk_runner.py` and
-  `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
-  boundary behind a subprocess runner.
+- `roboclaws/household/agibot_sdk_runner.py` owns the Roboclaws-side Agibot
+  SDK subprocess adapter, including conversion of SDK-local exports into the
+  public household Agent View v2 artifact. The vendor runner at
+  `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` stays SDK-local.
 - `roboclaws/operator_console/` provides the standalone local agent operator
   console. It exposes explicit coding-agent route metadata, per-backend locks,
   route gates, normalized live operator state, redacted raw-log access, and
@@ -290,7 +294,10 @@ Going forward:
 Every serious run should produce reviewable evidence:
 
 - `trace.jsonl` for tool calls and state transitions.
-- `agent_view.json` / `run_result.json` for public agent-facing state.
+- `agent_view.json` / `run_result.json` for public agent-facing state. Current
+  household Agent View artifacts use `schema=agent_view_v2` with task,
+  capabilities, Base Navigation Map, Runtime Metric Map, active perception,
+  policy, readiness, and privacy sections.
 - `model_call_metrics.jsonl` for sanitized per-call model-work rows when a
   live Agent SDK, Codex CLI, or Claude Code route exposes compatible usage or
   timing telemetry.

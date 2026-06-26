@@ -5332,7 +5332,7 @@ def _write_robot_view_images(run_dir: Path) -> dict[str, str]:
     paths = {
         "fpv": run_dir / "isaac_runtime_smoke.png",
         "chase": run_dir / "isaac_runtime_smoke.chase.png",
-        "map": run_dir / "isaac_runtime_smoke.map.png",
+        "topdown": run_dir / "isaac_runtime_smoke.topdown.png",
         "verify": run_dir / "isaac_runtime_smoke.verify.png",
     }
     for index, path in enumerate(paths.values(), start=1):

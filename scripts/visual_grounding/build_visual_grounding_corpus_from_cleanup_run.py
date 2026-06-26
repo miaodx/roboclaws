@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.core.json_sources import read_json_object  # noqa: E402
+from roboclaws.household import agent_view as agent_view_module  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
     VISUAL_GROUNDING_CATEGORY_HINTS,
 )
@@ -183,28 +184,23 @@ def _resolve_run_result(path: Path) -> Path:
 
 def _raw_fpv_observations(run_result: dict[str, Any]) -> list[dict[str, Any]]:
     agent_view = run_result.get("agent_view") or {}
-    raw = run_result.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
+    raw = run_result.get("raw_fpv_observations") or (
+        agent_view_module.raw_fpv_observations(agent_view) if agent_view else []
+    )
     return [dict(item) for item in raw if isinstance(item, dict)]
 
 
 def _fixtures_by_room(run_result: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     agent_view = run_result.get("agent_view") or {}
-    static_fixture_projection = (
-        agent_view.get("static_fixture_projection")
-        or run_result.get("static_fixture_projection")
-        or {}
-    )
-    rooms = static_fixture_projection.get("rooms") or []
     output: dict[str, list[dict[str, Any]]] = {}
-    for room in rooms:
-        if not isinstance(room, dict):
+    runtime_metric_map = run_result.get("runtime_metric_map") or (
+        agent_view_module.runtime_metric_map(agent_view) if agent_view else {}
+    )
+    for fixture in (runtime_metric_map.get("static_map") or {}).get("fixtures") or []:
+        if not isinstance(fixture, dict):
             continue
-        room_id = str(room.get("room_id") or "")
-        output[room_id] = [
-            _public_static_fixture_projection(fixture)
-            for fixture in room.get("fixtures") or []
-            if isinstance(fixture, dict)
-        ]
+        room_id = str(fixture.get("room_id") or "")
+        output.setdefault(room_id, []).append(_public_static_fixture_projection(fixture))
     return output
 
 

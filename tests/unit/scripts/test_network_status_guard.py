@@ -98,7 +98,7 @@ def test_claude_provider_guard_blocks_system_provider_on_work_network(tmp_path: 
 
 def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["KIMI_API_KEY"] = "fake-kimi-key"
+    env["MIMO_TP_KEY"] = "fake-mimo-key"
 
     result = subprocess.run(
         [
@@ -117,7 +117,7 @@ def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_pa
         text=True,
     )
 
-    assert "repo-local Claude provider (kimi-anthropic)" in result.stderr
+    assert "repo-local Claude provider (mimo-tp-anthropic)" in result.stderr
 
 
 def test_claude_provider_guard_allows_mify_anthropic_on_work_network(tmp_path: Path) -> None:

@@ -228,7 +228,7 @@ def visual_grounding_request(
     run_id: str,
     raw_observation: dict[str, Any],
     category_hints: list[str],
-    static_fixture_projection: list[dict[str, Any]],
+    public_map_hints: dict[str, Any],
     pipeline_id: str,
     image: dict[str, Any],
     proposer: dict[str, Any] | None = None,
@@ -245,7 +245,7 @@ def visual_grounding_request(
         },
         "image": image,
         "category_hints": category_hints,
-        "static_fixture_projection": static_fixture_projection,
+        "public_map_hints": public_map_hints,
         "pipeline_request": {
             "pipeline_id": pipeline_id,
             "proposer": proposer or {},

@@ -12,7 +12,6 @@ from roboclaws.household.apple2apple_test_grid import (
     GRID_SCHEMA,
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
     build_apple2apple_test_grid,
-    row_rerun_command,
     write_grid_manifest,
 )
 
@@ -40,7 +39,6 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
     assert grid["axes"]["prior_modes"] == ["online", "offline"]
     assert [item["route_id"] for item in grid["axes"]["agent_routes"]] == [
         "codex-api-router",
-        "claude-kimi",
         "claude-mimo-v25",
     ]
     assert [item["lane_id"] for item in grid["axes"]["evidence_lanes"]] == [
@@ -48,7 +46,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "camera-raw-fpv",
     ]
     assert len(grid["setup_rows"]) == 1
-    assert len(grid["rows"]) == 12
+    assert len(grid["rows"]) == 8
 
     setup_command = grid["setup_rows"][0]["command"]
     assert setup_command[:8] == [
@@ -104,19 +102,6 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     ]
     assert not any(item.startswith("camera_labeler=") for item in offline_raw["command"])
     assert f"runtime_map_prior={RUNTIME_MAP_PRIOR_PLACEHOLDER}" in offline_raw["command"]
-
-    claude_kimi = rows["online-claude-kimi-camera-raw-fpv"]
-    assert claude_kimi["env"] == {
-        "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
-        "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
-    }
-    assert row_rerun_command(claude_kimi).startswith(
-        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
-        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
-        "just run::surface surface=household-world world=molmospaces/val_0 "
-        "backend=mujoco intent=cleanup agent_engine=claude-code "
-        "provider_profile=kimi-anthropic evidence_lane=camera-raw-fpv"
-    )
 
 
 def test_apple2apple_grid_accepts_explicit_offline_runtime_map_prior(tmp_path: Path) -> None:
@@ -182,7 +167,7 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
             "clean",
             "--execute",
             "--row",
-            "online-claude-kimi-camera-raw-fpv",
+            "online-claude-mimo-v25-camera-raw-fpv",
         ]
     )
 
@@ -195,7 +180,7 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
     assert rows["online-codex-api-router-camera-grounded-labels-grounding-dino"][
         "run_result_path"
     ].endswith("run_result.json")
-    assert rows["online-claude-kimi-camera-raw-fpv"]["status"] == "success"
+    assert rows["online-claude-mimo-v25-camera-raw-fpv"]["status"] == "success"
     assert (
         rows["online-claude-mimo-v25-camera-grounded-labels-grounding-dino"]["status"]
         == "not_selected"
