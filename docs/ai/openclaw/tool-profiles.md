@@ -89,13 +89,9 @@ go through the corresponding policy gate (which `bundle-mcp` does for MCP).
 
 The `coding` profile broadens the agent's core surface — bash, file I/O, etc. —
 beyond what the `minimal` profile was designed to enforce for our nav agents.
-We have not yet benchmarked whether that broader surface materially changes
-agent behavior on our scenarios (photo-task, territory, coverage). Until then,
-keeping `minimal` + the surgical `alsoAllow` splice is the lower-risk path.
-
-There is an active TODO in `TODOS.md` to run that benchmark — if `coding`
-turns out to be no worse, we can simplify the bootstrap by dropping the
-`alsoAllow` workaround.
+Keep `minimal` + the surgical `alsoAllow` splice unless an image-bump probe
+shows `bundle-mcp` moved into `minimal` directly or an accepted OpenClaw plan
+chooses the broader `coding` profile.
 
 ## Re-validation when bumping the image
 
@@ -135,4 +131,3 @@ Hash suffixes on these filenames rotate every image build — grep by basename.
 - `scripts/openclaw/openclaw-bootstrap.sh` — where the `alsoAllow` splice lives
 - `docs/human/openclaw/gateway-internals.md` — broader Gateway image internals
 - `docs/human/openclaw/local.md` — local-dev recipe + live-probed model matrix
-- `TODOS.md` — the "benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding`" item

@@ -236,7 +236,6 @@ Privacy contract:
 Add a minimal pass-through proxy such as:
 
 - `roboclaws/agents/provider_timing_proxy.py`
-- `scripts/dev/provider_timing_proxy.py`
 
 Implementation shape:
 
@@ -377,7 +376,6 @@ Lint for touched files:
 .venv/bin/ruff check \
   roboclaws/agents/provider_timing_proxy.py \
   roboclaws/reports/live_performance.py \
-  scripts/dev/provider_timing_proxy.py \
   scripts/dev/coding_agent_docker.sh \
   scripts/dev/coding_agent_env.sh \
   scripts/molmo_cleanup/run_live_codex_cleanup.py \

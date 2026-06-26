@@ -136,6 +136,7 @@ def test_pre_commit_no_longer_infers_retired_domains() -> None:
 
     assert "roboclaws/ai2thor" not in hook_text
     assert "roboclaws/games" not in hook_text
+    assert "roboclaws/openclaw" not in hook_text
     assert "tests/unit/games" not in hook_text
 
 

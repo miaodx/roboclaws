@@ -11,7 +11,11 @@ from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.jsonl_sources import collect_jsonl_objects
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
-from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
+from roboclaws.operator_console.state import (
+    LIVE_RUN_MARKERS,
+    display_run_id,
+    resolve_display_run_dir,
+)
 
 HISTORY_FILENAME = "runs.jsonl"
 
@@ -155,7 +159,7 @@ def _candidate_payload(
         "launch_label": launch_label,
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
-        "display_run_id": _display_run_id(run_dir, display_run_dir),
+        "display_run_id": display_run_id(run_dir, display_run_dir),
         "activity_epoch": activity_epoch,
         "started_at": str(row.get("started_at") or state.get("started_at") or ""),
         "phase": _latest_phase(live_status, state, source_errors=source_errors),
@@ -214,15 +218,6 @@ def _latest_phase(
     return str(live_status.get("phase") or state.get("phase") or "")
 
 
-def _display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
-    if wrapper_run_dir == display_run_dir:
-        return wrapper_run_dir.name
-    try:
-        return str(display_run_dir.relative_to(wrapper_run_dir))
-    except ValueError:
-        return display_run_dir.name
-
-
 def _read_json_source(
     path: Path,
     *,
@@ -261,7 +256,7 @@ def _candidate_source_error_payload(
         "launch_label": str(row.get("launch_label") or "Agent run"),
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
-        "display_run_id": _display_run_id(run_dir, display_run_dir),
+        "display_run_id": display_run_id(run_dir, display_run_dir),
         "activity_epoch": _run_activity_epoch(display_run_dir, run_dir, row),
         "started_at": str(row.get("started_at") or ""),
         "phase": "failed",

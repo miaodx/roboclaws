@@ -46,9 +46,3 @@ class LaunchPlan:
     supported_reports: tuple[str, ...]
     supported_profiles: tuple[str, ...]
     overrides: tuple[str, ...]
-
-    @property
-    def mode(self) -> str:
-        """Compatibility name for the resolved report/profile slot."""
-
-        return self.evidence_mode

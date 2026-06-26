@@ -248,7 +248,7 @@ jobs:
           python3 scripts/reports/write_pages_index.py site --include-molmo-live
 
       - name: Prune public Pages artifact
-        run: python3 scripts/reports/prune_pages_site.py site
+        run: python3 -m roboclaws.devtools.pages_site site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

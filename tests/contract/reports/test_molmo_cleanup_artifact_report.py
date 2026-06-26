@@ -21,6 +21,12 @@ from roboclaws.household.semantic_acceptability import (
 )
 from roboclaws.household.semantic_timeline import semantic_substeps
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_regenerate_cleanup_report_script_wrapper_stays_removed() -> None:
+    assert not (REPO_ROOT / "scripts" / "reports" / "regenerate_molmo_cleanup_report.py").exists()
+
 
 def test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)

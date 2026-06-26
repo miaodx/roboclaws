@@ -1518,7 +1518,7 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
     plan = resolve_surface_launch(command[5:])
     assert plan.agent_engine == "codex-cli"
     assert plan.backend == "mujoco"
-    assert plan.mode == "smoke"
+    assert plan.evidence_mode == "smoke"
 
 
 def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Path) -> None:

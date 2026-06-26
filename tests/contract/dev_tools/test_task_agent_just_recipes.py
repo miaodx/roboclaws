@@ -17,7 +17,6 @@ from roboclaws.agents.prompts.household_cleanup import (
     render_kickoff_prompt,
     render_map_build_prompt,
 )
-from roboclaws.devtools.commands import CommandError, resolve_surface_run
 from roboclaws.launch import resolve_surface_launch
 from roboclaws.launch.catalog import LaunchError
 from roboclaws.launch.evaluation import (
@@ -965,7 +964,7 @@ def test_surface_router_rejects_invalid_current_axis_values(
 
 
 def test_surface_router_is_importable_source_of_truth() -> None:
-    resolved = resolve_surface_run(
+    resolved = resolve_surface_launch(
         (
             "surface=household-world",
             "agent_engine=codex-cli",
@@ -996,10 +995,10 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert resolved.backend == "mujoco"
     assert resolved.agent_engine == "codex-cli"
     assert resolved.provider_profile == "codex-router-responses"
-    assert resolved.mode == "smoke"
+    assert resolved.evidence_mode == "smoke"
 
-    with pytest.raises(CommandError, match="unsupported surface 'molmospace-cleanup'"):
-        resolve_surface_run(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
+    with pytest.raises(LaunchError, match="unsupported surface 'molmospace-cleanup'"):
+        resolve_surface_launch(("surface=molmospace-cleanup", "agent_engine=codex-cli"))
 
 
 def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
@@ -1108,6 +1107,35 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
     assert "Guarded report recipes are maintainer-only validation routes" in settings
 
 
+def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
+    update_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "update.md").read_text(
+        encoding="utf-8"
+    )
+    tool_profiles_doc = (
+        REPO_ROOT / "docs" / "ai" / "openclaw" / "tool-profiles.md"
+    ).read_text(encoding="utf-8")
+    route = trace_agent_run(
+        "household-world.cleanup",
+        "openclaw-gateway",
+        "world-public-labels",
+    )
+
+    assert "just openclaw::run photo" not in update_doc
+    assert "territory/coverage scripts" not in update_doc
+    assert "just agent::run household-world.cleanup openclaw-gateway world-public-labels" in (
+        update_doc
+    )
+    assert "active TODO" not in tool_profiles_doc
+    assert "minimal+alsoAllow:[bundle-mcp]" not in tool_profiles_doc
+    assert route[:5] == [
+        "just",
+        "molmo::household-world-impl",
+        "openclaw-live",
+        "world-public-labels",
+        "7",
+    ]
+
+
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     route, plan_trace = trace_household_cleanup_run_with_plan(
         "codex",
@@ -1158,7 +1186,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         )
     )
 
-    assert plan.mode == "world-public-labels"
+    assert plan.evidence_mode == "world-public-labels"
     assert plan.profile == "world-public-labels"
     assert plan.supported_profiles == (
         "world-public-labels",
