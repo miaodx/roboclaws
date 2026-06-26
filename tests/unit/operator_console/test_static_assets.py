@@ -301,9 +301,9 @@ def _assert_molmospaces_preview_metadata(preview_dir: Path) -> None:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         assert metadata["world_id"] == world_id
         assert metadata["views"]["fpv"]["view"] == "raw_fpv"
-        assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
-        assert metadata["views"]["map"]["visual_role"] == "base_navigation_map_preview"
-        assert metadata["views"]["map"]["artifact_source_family"] == "base_navigation_map_bundle"
+        assert metadata["views"]["map"]["view"] == "base_metric_map_preview"
+        assert metadata["views"]["map"]["visual_role"] == "base_metric_map_preview"
+        assert metadata["views"]["map"]["artifact_source_family"] == "base_metric_map_bundle"
         assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
         assert metadata["views"]["chase"]["view"] == "chase_camera"
         assert metadata["views"]["chase"]["image_diagnostics"]["visual_status"] == "reviewable"

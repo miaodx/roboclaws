@@ -14,8 +14,8 @@ LOCAL_ASSET_MODULES = {
     # These validate private B1 / Agibot map exports or robot-data-lab scene
     # assets that are present on local workstations but not in GitHub checkout.
     "test_b1_map12_alignment_fit_cli.py",
-    "test_b1_map12_base_navigation_map.py",
-    "test_b1_map12_base_navigation_sidecar.py",
+    "test_b1_map12_base_metric_map.py",
+    "test_b1_map12_base_metric_sidecar.py",
     "test_b1_map12_correspondence_review_cli.py",
     "test_b1_map12_label_tool.py",
     "test_b1_map12_manual_alignment_overlay_cli.py",
@@ -44,11 +44,11 @@ LOCAL_ASSET_TESTS = {
         "test_b1_uses_dt_room_reference_and_alignment_correspondence_manifest",
     },
     "test_nav2_map_bundle_contract.py": {
-        "test_base_navigation_map_v1_validation_accepts_b1_bundle",
-        "test_base_navigation_map_v1_validation_rejects_contract_violations",
+        "test_base_metric_map_v1_validation_accepts_b1_bundle",
+        "test_base_metric_map_v1_validation_rejects_contract_violations",
     },
     "test_scene_room_semantic_overlay.py": {
-        "test_b1_base_navigation_map_materializes_review_labels_without_retargeting_map",
+        "test_b1_base_metric_map_materializes_review_labels_without_retargeting_map",
     },
 }
 

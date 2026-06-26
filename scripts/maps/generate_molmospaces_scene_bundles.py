@@ -21,12 +21,12 @@ from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noq
 from roboclaws.launch.scene_sampler import eval_sampler_rows, ui_sampler_rows  # noqa: E402
 from roboclaws.maps.bundle import (  # noqa: E402
     metric_map_bundle_metadata,
-    validate_base_navigation_map_v1_bundle,
+    validate_base_metric_map_v1_bundle,
     validate_nav2_map_bundle,
     write_nav2_map_bundle,
 )
 from roboclaws.maps.molmospaces_preparation import (  # noqa: E402
-    prepare_molmospaces_base_navigation_map,
+    prepare_molmospaces_base_metric_map,
 )
 
 DEFAULT_SCENES: tuple[tuple[str, int], ...] = (("procthor-10k-val", 0),)
@@ -253,12 +253,12 @@ def _generate_scene_bundle(
             scene_source=target.scene_source,
             scene_index=target.scene_index,
         )
-        metric_map = prepare_molmospaces_base_navigation_map(
+        metric_map = prepare_molmospaces_base_metric_map(
             backend_state=backend_state,
             scene_source=target.scene_source,
             scene_index=target.scene_index,
             environment_id=environment_id,
-            map_id=f"{environment_id}_base_navigation_map",
+            map_id=f"{environment_id}_base_metric_map",
             source_path=backend_state.get("scene_xml"),
         )
         staged_snapshot = write_nav2_map_bundle(
@@ -267,15 +267,15 @@ def _generate_scene_bundle(
             static_landmarks=[],
         )
         validate_nav2_map_bundle(staged_bundle_dir).raise_for_errors()
-        validate_base_navigation_map_v1_bundle(staged_bundle_dir).raise_for_errors()
+        validate_base_metric_map_v1_bundle(staged_bundle_dir).raise_for_errors()
         output_dir.parent.mkdir(parents=True, exist_ok=True)
         if output_dir.exists():
             shutil.rmtree(output_dir)
         shutil.move(str(staged_bundle_dir), str(output_dir))
         validation = validate_nav2_map_bundle(output_dir)
         validation.raise_for_errors()
-        base_navigation_validation = validate_base_navigation_map_v1_bundle(output_dir)
-        base_navigation_validation.raise_for_errors()
+        base_metric_validation = validate_base_metric_map_v1_bundle(output_dir)
+        base_metric_validation.raise_for_errors()
     finally:
         session.close()
 
@@ -288,7 +288,7 @@ def _generate_scene_bundle(
         "environment_id": staged_snapshot.get("environment_id", ""),
         "parameter_hash": staged_snapshot.get("parameter_hash", ""),
         "validation": validation.as_dict(),
-        "base_navigation_validation": base_navigation_validation.as_dict(),
+        "base_metric_validation": base_metric_validation.as_dict(),
     }
 
 
@@ -322,14 +322,14 @@ def canonical_scene_metric_map(
     scene_source: str,
     scene_index: int,
 ) -> dict[str, Any]:
-    """Return a scene-stable Base Navigation Map identity for a prebuilt asset."""
+    """Return a scene-stable Base Metric Map identity for a prebuilt asset."""
 
     environment_id = canonical_scene_environment_id(
         scene_source=scene_source,
         scene_index=scene_index,
     )
-    map_id = f"{environment_id}_base_navigation_map"
-    map_version = str(metric_map.get("map_version") or "base-navigation-map-v1")
+    map_id = f"{environment_id}_base_metric_map"
+    map_version = str(metric_map.get("map_version") or "base-metric-map-v1")
     canonical = dict(metric_map)
     canonical["map_id"] = map_id
     canonical["map_version"] = map_version

@@ -9,8 +9,8 @@ from roboclaws.maps.base_waypoints import (
     BASE_WAYPOINT_SOURCE,
 )
 from scripts.molmo_cleanup import check_molmo_realworld_cleanup_result as result_checker
-from scripts.molmo_cleanup.realworld_base_navigation_map_checker import (
-    assert_base_navigation_map,
+from scripts.molmo_cleanup.realworld_base_metric_map_checker import (
+    assert_base_metric_map,
 )
 
 
@@ -18,7 +18,7 @@ def test_checker_accepts_canonical_base_area_inspection_waypoints() -> None:
     agent_view = _agent_view_with_waypoint(_canonical_base_waypoint())
     data = {"runtime_metric_map": agent_view_module.runtime_metric_map(agent_view)}
 
-    assert_base_navigation_map(data, agent_view)
+    assert_base_metric_map(data, agent_view)
 
 
 def test_checker_rejects_fixture_fields_on_canonical_base_waypoints() -> None:
@@ -28,7 +28,7 @@ def test_checker_rejects_fixture_fields_on_canonical_base_waypoints() -> None:
     data = {"runtime_metric_map": agent_view_module.runtime_metric_map(agent_view)}
 
     with pytest.raises(AssertionError):
-        assert_base_navigation_map(data, agent_view)
+        assert_base_metric_map(data, agent_view)
 
 
 def test_semantic_success_gate_uses_score_acceptability_not_substep_count() -> None:
@@ -111,7 +111,7 @@ def _agent_view_with_waypoint(waypoint: dict[str, object]) -> dict[str, object]:
         ],
     }
     metric_map = {
-        "base_navigation_map": {"enabled": True},
+        "base_metric_map": {"enabled": True},
         "rooms": [room],
         "driveable_ways": [],
         "room_category_hints": [
@@ -128,7 +128,7 @@ def _agent_view_with_waypoint(waypoint: dict[str, object]) -> dict[str, object]:
         perception_mode="visible_object_detections",
         detection_exposure_policy="world_public_labels",
         structured_detections_available=True,
-        base_navigation_map=metric_map,
+        base_metric_map=metric_map,
         runtime_metric_map=runtime_map,
         observed_objects=[],
         raw_fpv_observations=[],

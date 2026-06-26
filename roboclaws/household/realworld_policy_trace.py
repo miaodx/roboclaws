@@ -105,7 +105,7 @@ def cleanup_policy_trace_from_events(
     *,
     schema: str,
 ) -> dict[str, Any]:
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     accumulator = _PolicyTraceAccumulator(waypoints=_trace_waypoints(metric_map))
     for raw in trace_events:
         if raw.get("event") == "response":

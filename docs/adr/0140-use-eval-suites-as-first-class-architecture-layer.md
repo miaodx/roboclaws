@@ -44,7 +44,7 @@ private-boundary failures; model or human rubric graders are advisory until
 calibrated.
 
 Current public/private and MCP/tool contracts remain authoritative for eval
-trajectory grading. In particular, ADR-0136's Base Navigation Map and Runtime
+trajectory grading. In particular, ADR-0136's Base Metric Map and Runtime
 Metric Map direction applies to evals: cleanup should not revive a
 static-fixture-projection-first MCP habit, while historical artifact fields may remain
 readable for report and map compatibility.

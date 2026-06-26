@@ -132,7 +132,7 @@ class AgibotSDKRunnerAdapter:
 
     def metric_map(self) -> dict[str, Any]:
         self.export_agent_view()
-        return agent_view_module.base_navigation_map(_load_json(self.agent_view_path))
+        return agent_view_module.base_metric_map(_load_json(self.agent_view_path))
 
     def static_fixture_projection(self) -> dict[str, Any]:
         self.export_agent_view()
@@ -918,7 +918,7 @@ def _agent_view_from_agibot_export(
         structured_detections_available=bool(
             vendor_agent_view.get("structured_detections_available")
         ),
-        base_navigation_map=metric_map,
+        base_metric_map=metric_map,
         runtime_metric_map=runtime_metric_map,
         observed_objects=list(vendor_agent_view.get("observed_objects") or []),
         raw_fpv_observations=list(vendor_agent_view.get("raw_fpv_observations") or []),
@@ -948,7 +948,7 @@ def _agent_view_from_agibot_export(
                 policy_view.get("policy_observation_camera") or "head_color"
             ),
             "allowed_inputs": [
-                "base_navigation_map",
+                "base_metric_map",
                 "runtime_metric_map",
                 "raw_fpv_observations",
                 "navigation_status",

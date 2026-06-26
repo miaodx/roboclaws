@@ -10,7 +10,7 @@ Plan:
 ## Context
 
 Household-world runs now expose several public evidence lanes, live agent
-engines, direct deterministic runners, Base Navigation Map artifacts, Runtime
+engines, direct deterministic runners, Base Metric Map artifacts, Runtime
 Metric Map evidence, active perception flows, and eval-harness rows. The
 public/private rule is stable, but enforcement is spread across payload
 builders, MCP tool responses, done-readiness blockers, visual-candidate helpers,
@@ -49,12 +49,12 @@ Active perception is an Agent View adapter, not a separate product goal.
 Grounding DINO, RAW-FPV observations, camera-grounded labels, visual-grounding
 sidecar status, uncertainty, and candidate lifecycle summaries should be
 represented through Agent View. Sidecar inputs must be built from public Agent
-View evidence, Base Navigation Map, Runtime Metric Map, public fixture hints, or
+View evidence, Base Metric Map, Runtime Metric Map, public fixture hints, or
 current camera evidence.
 
 `static_fixture_projection` is not the new Agent View center. Historical
 artifact/report readers may still understand it, but active agent behavior
-should reason from Base Navigation Map, Runtime Metric Map, public semantic
+should reason from Base Metric Map, Runtime Metric Map, public semantic
 anchors, target candidates, and public MCP capability metadata.
 
 Eval-to-evolution work may later target `agent_view_module` as a concrete

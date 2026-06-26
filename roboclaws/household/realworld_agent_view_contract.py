@@ -37,7 +37,7 @@ def real_robot_readiness_from_events(
     pose_stamped_waypoints_present: Callable[[dict[str, Any]], bool],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     runtime_metric_map = agent_view_module.runtime_metric_map(agent_view)
     static_map = runtime_metric_map.get("static_map") or {}
     policy_view = agent_view_module.policy_view(agent_view)

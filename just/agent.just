@@ -284,7 +284,7 @@ run dispatch_target agent_engine mode="" *overrides:
     export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
     case "$dispatch_surface.$dispatch_intent:$driver" in
-      household-world.map-build:direct|household-world.map-build:codex|\
+      household-world.map-build:direct|household-world.map-build:codex|household-world.map-build:openai-agents-live|\
       household-world.cleanup:direct|household-world.cleanup:mcp-smoke|household-world.cleanup:openclaw-smoke|\
       household-world.cleanup:codex|household-world.cleanup:claude|household-world.cleanup:openai-agents-live|household-world.cleanup:openclaw|\
       household-world.open-ended:direct|household-world.open-ended:mcp-smoke|household-world.open-ended:openclaw-smoke|\
@@ -306,8 +306,8 @@ run dispatch_target agent_engine mode="" *overrides:
             impl_driver="openclaw-live"
             ;;
         esac
-        if [[ "$dispatch_intent" == "map-build" && "$driver" != "direct" && "$driver" != "codex" ]]; then
-          echo "error: household-world.map-build currently supports direct-runner or codex-cli only" >&2
+        if [[ "$dispatch_intent" == "map-build" && "$driver" != "direct" && "$driver" != "codex" && "$driver" != "openai-agents-live" ]]; then
+          echo "error: household-world.map-build currently supports direct-runner, codex-cli, or openai-agents-sdk only" >&2
           exit 1
         fi
 

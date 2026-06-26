@@ -9,11 +9,11 @@ from PIL import Image, ImageDraw
 
 from roboclaws.core.json_sources import read_json_object
 
-BASE_NAVIGATION_MAP_PREVIEW_ROLE = "base_navigation_map_preview"
+BASE_METRIC_MAP_PREVIEW_ROLE = "base_metric_map_preview"
 RUNTIME_METRIC_MAP_PREVIEW_ROLE = "runtime_metric_map_preview"
 TOPDOWN_SCENE_RENDER_ROLE = "topdown_scene_render"
 
-BASE_MAP_SOURCE_FAMILY = "base_navigation_map_bundle"
+BASE_MAP_SOURCE_FAMILY = "base_metric_map_bundle"
 RUNTIME_MAP_SOURCE_FAMILY = "runtime_metric_map"
 SCENE_RENDER_SOURCE_FAMILY = "scene_camera_render"
 
@@ -107,7 +107,7 @@ def visual_role_metadata(
     return payload
 
 
-def render_base_navigation_map_preview(
+def render_base_metric_map_preview(
     *,
     semantics: dict[str, Any],
     output_path: Path,
@@ -116,13 +116,13 @@ def render_base_navigation_map_preview(
     provenance: str = "map_bundle_preview_png",
 ) -> MapPreviewResult:
     metadata = visual_role_metadata(
-        visual_role=BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+        visual_role=BASE_METRIC_MAP_PREVIEW_ROLE,
         artifact_source_family=BASE_MAP_SOURCE_FAMILY,
         artifact_path=str(output_path),
         provenance=provenance,
         extra={
             "schema": "map_visual_role_metadata_v1",
-            "render_policy": "base_navigation_map_only",
+            "render_policy": "base_metric_map_only",
             "contains_runtime_overlays": False,
             "contains_private_truth": False,
             "width": width,
@@ -157,7 +157,7 @@ def render_runtime_metric_map_preview(
         provenance=provenance,
         extra={
             "schema": "map_visual_role_metadata_v1",
-            "render_policy": "base_navigation_map_plus_runtime_overlays",
+            "render_policy": "base_metric_map_plus_runtime_overlays",
             "contains_runtime_overlays": True,
             "contains_private_truth": False,
             "width": width,
@@ -181,7 +181,7 @@ def render_runtime_metric_map_preview(
     return MapPreviewResult(path=output_path, metadata=metadata)
 
 
-def render_base_navigation_map_bundle_preview(
+def render_base_metric_map_bundle_preview(
     bundle_dir: Path,
     *,
     output_path: Path | None = None,
@@ -191,7 +191,7 @@ def render_base_navigation_map_bundle_preview(
     bundle_dir = Path(bundle_dir)
     semantics = read_json_object(bundle_dir / "semantics.json", label="Nav2 semantics")
     output_path = output_path or bundle_dir / "preview.png"
-    return render_base_navigation_map_preview(
+    return render_base_metric_map_preview(
         semantics=semantics,
         output_path=output_path,
         width=width,
@@ -231,7 +231,7 @@ def _draw_canvas(
     draw.text((42, 38), str(metadata.get("role_label") or ""), fill=(30, 41, 59, 255))
     note = (
         "source map frame; display_frame absent"
-        if metadata.get("visual_role") == BASE_NAVIGATION_MAP_PREVIEW_ROLE
+        if metadata.get("visual_role") == BASE_METRIC_MAP_PREVIEW_ROLE
         else "runtime overlays on source map frame"
     )
     draw.text((42, 60), note, fill=(86, 95, 112, 255))
@@ -663,8 +663,8 @@ def _robot_pose(
 
 
 def _role_label(visual_role: str) -> str:
-    if visual_role == BASE_NAVIGATION_MAP_PREVIEW_ROLE:
-        return "Base Navigation Map preview"
+    if visual_role == BASE_METRIC_MAP_PREVIEW_ROLE:
+        return "Base Metric Map preview"
     if visual_role == RUNTIME_METRIC_MAP_PREVIEW_ROLE:
         return "Runtime Metric Map preview"
     if visual_role == TOPDOWN_SCENE_RENDER_ROLE:

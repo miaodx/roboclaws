@@ -1521,6 +1521,40 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
     assert plan.evidence_mode == "smoke"
 
 
+def test_live_surface_command_passes_map_build_camera_labeler(tmp_path: Path) -> None:
+    sample = load_eval_sample(
+        Path(__file__).resolve().parents[3]
+        / "evals"
+        / "household_world"
+        / "samples"
+        / "map_build"
+        / "baseline_seed7.json"
+    )
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
+    kwargs.update(
+        {
+            "eval_sample": sample,
+            "agent_engine": "openai-agents-sdk",
+            "provider_profile": "codex-router-responses",
+            "evidence_lane": sample.evidence_lane,
+            "visual_grounding": sample.camera_labeler,
+            "map_build": True,
+            "task_prompt": "帮我建立这个房间的 Runtime Metric Map",
+        }
+    )
+
+    command = live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
+
+    assert "preset=map-build" in command
+    assert "evidence_lane=camera-grounded-labels" in command
+    assert "camera_labeler=grounding-dino" in command
+    assert "agent_engine=openai-agents-sdk" in command
+    plan = resolve_surface_launch(command[5:])
+    assert plan.intent == "map-build"
+    assert plan.dispatch_runner == "openai-agents-live"
+    assert plan.evidence_mode == "camera-grounded-labels"
+
+
 def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
@@ -1712,6 +1746,34 @@ def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
     assert (
         open_result["grader_outputs"]["open_ended"]["semantic_satisfaction_authoritative"] is False
     )
+
+
+def test_focused_map_build_eval_passes_camera_labeler_to_product_runner(
+    tmp_path: Path,
+) -> None:
+    captured_kwargs: dict[str, Any] = {}
+
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        if kwargs["run_metadata_overrides"]["eval_sample_id"] == "map_build.baseline_seed7":
+            captured_kwargs.update(kwargs)
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        return _run_result(
+            run_dir,
+            completion_status="map_build_complete",
+            map_build=True,
+        )
+
+    run_eval_suite(
+        "map_build_consumer",
+        output_root=tmp_path,
+        stamp="map-build-camera-labeler",
+        budget="focused",
+        product_runner=product_runner,
+    )
+
+    assert captured_kwargs["evidence_lane"] == "camera-grounded-labels"
+    assert captured_kwargs["visual_grounding"] == "grounding-dino"
 
 
 def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> None:

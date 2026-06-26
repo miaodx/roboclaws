@@ -473,10 +473,22 @@ def _runtime_map_prior_payload(
     inputs: RealWorldMCPDoneArtifactInputs,
     payloads: _MCPDonePayloads,
 ) -> dict[str, Any]:
+    object_prior_count = len(payloads.runtime_prior_rows)
+    anchor_prior_count = len(getattr(inputs.contract, "_runtime_map_anchor_priors", []) or [])
+    room_prior_count = len(getattr(inputs.contract, "_runtime_map_room_priors", []) or [])
     return {
-        "loaded": bool(payloads.runtime_prior_rows),
+        "loaded": bool(
+            inputs.runtime_map_prior_source
+            or object_prior_count
+            or anchor_prior_count
+            or room_prior_count
+        ),
+        "source_provided": bool(inputs.runtime_map_prior_source),
         "source": inputs.runtime_map_prior_source,
-        "observed_object_count": len(payloads.runtime_prior_rows),
+        "observed_object_count": object_prior_count,
+        "object_prior_count": object_prior_count,
+        "anchor_prior_count": anchor_prior_count,
+        "room_prior_count": room_prior_count,
     }
 
 

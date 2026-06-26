@@ -11,12 +11,12 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.maps.bundle import validate_base_navigation_map_v1_bundle  # noqa: E402
+from roboclaws.maps.bundle import validate_base_metric_map_v1_bundle  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate a prebuilt Base Navigation Map v1 bundle before agent runtime."
+        description="Validate a prebuilt Base Metric Map v1 bundle before agent runtime."
     )
     parser.add_argument("bundle_dir", type=Path)
     parser.add_argument("--json", action="store_true", help="Print machine-readable validation.")
@@ -25,8 +25,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    result = validate_base_navigation_map_v1_bundle(args.bundle_dir)
-    label = "base-navigation-map-v1-bundle"
+    result = validate_base_metric_map_v1_bundle(args.bundle_dir)
+    label = "base-metric-map-v1-bundle"
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
     elif result.ok:

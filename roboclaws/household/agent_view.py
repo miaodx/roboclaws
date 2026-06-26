@@ -12,7 +12,7 @@ PRIVACY_SCHEMA = "agent_view_privacy_v1"
 
 SECTION_TASK = "task"
 SECTION_CAPABILITIES = "capabilities"
-SECTION_BASE_NAVIGATION_MAP = "base_navigation_map"
+SECTION_BASE_METRIC_MAP = "base_metric_map"
 SECTION_RUNTIME_METRIC_MAP = "runtime_metric_map"
 SECTION_ACTIVE_PERCEPTION = "active_perception"
 SECTION_POLICY_VIEW = "policy_view"
@@ -22,7 +22,7 @@ SECTION_PRIVACY = "privacy"
 _SECTION_NAMES = (
     SECTION_TASK,
     SECTION_CAPABILITIES,
-    SECTION_BASE_NAVIGATION_MAP,
+    SECTION_BASE_METRIC_MAP,
     SECTION_RUNTIME_METRIC_MAP,
     SECTION_ACTIVE_PERCEPTION,
     SECTION_POLICY_VIEW,
@@ -37,7 +37,7 @@ def build_agent_view(
     perception_mode: str,
     detection_exposure_policy: str,
     structured_detections_available: bool,
-    base_navigation_map: dict[str, Any],
+    base_metric_map: dict[str, Any],
     runtime_metric_map: dict[str, Any],
     observed_objects: Iterable[dict[str, Any]],
     raw_fpv_observations: Iterable[dict[str, Any]],
@@ -80,7 +80,7 @@ def build_agent_view(
             "public_acceptance_config": dict(public_acceptance_config or {}),
         },
         SECTION_CAPABILITIES: capability_payload,
-        SECTION_BASE_NAVIGATION_MAP: copy.deepcopy(base_navigation_map),
+        SECTION_BASE_METRIC_MAP: copy.deepcopy(base_metric_map),
         SECTION_RUNTIME_METRIC_MAP: copy.deepcopy(runtime_metric_map),
         SECTION_ACTIVE_PERCEPTION: active_perception_payload,
         SECTION_POLICY_VIEW: copy.deepcopy(policy_view),
@@ -386,9 +386,9 @@ def _section_metadata() -> dict[str, Any]:
             "obtainability": "public_capability_contract",
             "provenance": "mcp_tool_registration_and_capability_profiles",
         },
-        SECTION_BASE_NAVIGATION_MAP: {
+        SECTION_BASE_METRIC_MAP: {
             "obtainability": "real_robot_obtainable_public_evidence",
-            "provenance": "base_navigation_map",
+            "provenance": "base_metric_map",
         },
         SECTION_RUNTIME_METRIC_MAP: {
             "obtainability": "public_current_run_evidence",
@@ -440,12 +440,12 @@ def capabilities(payload: dict[str, Any]) -> dict[str, Any]:
     return section(payload, SECTION_CAPABILITIES)
 
 
-def base_navigation_map(payload: dict[str, Any]) -> dict[str, Any]:
-    return section(payload, SECTION_BASE_NAVIGATION_MAP)
+def base_metric_map(payload: dict[str, Any]) -> dict[str, Any]:
+    return section(payload, SECTION_BASE_METRIC_MAP)
 
 
-def base_navigation_runtime_metric_map(payload: dict[str, Any]) -> dict[str, Any]:
-    runtime_map = base_navigation_map(payload).get("runtime_metric_map")
+def base_metric_runtime_metric_map(payload: dict[str, Any]) -> dict[str, Any]:
+    runtime_map = base_metric_map(payload).get("runtime_metric_map")
     return dict(runtime_map) if isinstance(runtime_map, dict) else {}
 
 

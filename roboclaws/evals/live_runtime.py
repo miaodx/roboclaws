@@ -266,6 +266,9 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
         f"scene_source={_live_surface_scene_source(kwargs)}",
         f"scene_index={_live_surface_scene_index(kwargs)}",
     ]
+    camera_labeler = live_camera_labeler(kwargs, evidence_lane=evidence_lane)
+    if camera_labeler:
+        command.append(f"camera_labeler={camera_labeler}")
     if sample is not None and sample.preset not in {"", MISSING_NOT_APPLICABLE}:
         command.append(f"preset={sample.preset}")
     elif sample is not None and sample.intent == "map-build":
@@ -528,6 +531,8 @@ def product_run_kwargs(
             "eval_suite_runner": "roboclaws.evals.runner",
         },
     }
+    if kwargs["evidence_lane"] == "camera-grounded-labels":
+        kwargs["visual_grounding"] = camera_labeler(sample)
     if kwargs["backend"] in {SYNTHETIC_BACKEND, "molmospaces_subprocess"}:
         kwargs["map_bundle_dir"] = str(
             molmospaces_nav2_map_bundle_path(
@@ -557,6 +562,14 @@ def evidence_lane(sample: EvalSample, *, budget: str) -> str:
     if budget == "smoke":
         return "smoke"
     return sample.evidence_lane
+
+
+def camera_labeler(sample: EvalSample) -> str:
+    if sample.evidence_lane != "camera-grounded-labels":
+        return ""
+    if sample.camera_labeler not in MISSING_SENTINELS:
+        return sample.camera_labeler
+    return "grounding-dino"
 
 
 def task_prompt(sample: EvalSample) -> str:
@@ -645,6 +658,23 @@ def live_evidence_lane(kwargs: dict[str, Any]) -> str:
     if lane == "smoke":
         return "world-public-labels"
     return lane or "world-public-labels"
+
+
+def live_camera_labeler(kwargs: dict[str, Any], *, evidence_lane: str) -> str:
+    """Return the public camera labeler argument for camera-grounded live evals."""
+
+    if evidence_lane != "camera-grounded-labels":
+        return ""
+    sample = kwargs.get("eval_sample")
+    if isinstance(sample, EvalSample) and sample.camera_labeler not in MISSING_SENTINELS:
+        return sample.camera_labeler
+    labeler = str(kwargs.get("camera_labeler") or "")
+    if labeler and labeler not in MISSING_SENTINELS:
+        return labeler
+    visual_grounding = str(kwargs.get("visual_grounding") or "")
+    if visual_grounding and visual_grounding not in MISSING_SENTINELS:
+        return visual_grounding
+    return "grounding-dino"
 
 
 def _is_smoke_budget(kwargs: dict[str, Any]) -> bool:

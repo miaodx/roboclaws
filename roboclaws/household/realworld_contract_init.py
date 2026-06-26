@@ -8,7 +8,7 @@ from roboclaws.household import (
     realworld_runtime_map_contract,
     realworld_runtime_map_targets,
 )
-from roboclaws.maps.bundle import validate_base_navigation_map_v1_bundle
+from roboclaws.maps.bundle import validate_base_metric_map_v1_bundle
 from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from_bundle
 
 
@@ -81,7 +81,7 @@ def init_map_projection(
     if target.map_bundle_dir is None:
         raise ValueError(
             "map_bundle_dir is required for product runtime base inspection_waypoints; "
-            "generate or select a canonical Base Navigation Map v1 bundle before launch"
+            "generate or select a canonical Base Metric Map v1 bundle before launch"
         )
     _init_bundle_map_projection(target)
 
@@ -150,8 +150,8 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
 
 
 def _init_bundle_map_projection(target: Any) -> None:
-    validation = validate_base_navigation_map_v1_bundle(target.map_bundle_dir)
-    validation.raise_for_errors(label="Base Navigation Map v1 bundle")
+    validation = validate_base_metric_map_v1_bundle(target.map_bundle_dir)
+    validation.raise_for_errors(label="Base Metric Map v1 bundle")
     target.map_bundle_validation = validation.as_dict()
     target._bundle_metric_map_template = metric_map_from_bundle(target.map_bundle_dir)
     target._bundle_static_landmarks_template = static_landmarks_from_bundle(target.map_bundle_dir)

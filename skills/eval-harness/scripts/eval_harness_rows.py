@@ -115,7 +115,7 @@ def candidate_rows(
                 "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::"
                 "test_agibot_map_build_camera_labels_call_external_grounding",
                 "tests/contract/agibot/test_agibot_map_context_scripts.py::"
-                "test_sdk_runner_exports_base_navigation_context_generated_candidates",
+                "test_sdk_runner_exports_base_metric_context_generated_candidates",
             ],
             axes={"intent": "agent-view", "agent_engine": "direct-runner"},
             reason=(

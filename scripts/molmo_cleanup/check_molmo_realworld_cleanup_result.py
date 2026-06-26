@@ -83,8 +83,8 @@ from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
 from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
     assert_agibot_map_build_result as _assert_agibot_map_build_result,
 )
-from scripts.molmo_cleanup.realworld_base_navigation_map_checker import (
-    assert_base_navigation_map as _assert_base_navigation_map,
+from scripts.molmo_cleanup.realworld_base_metric_map_checker import (
+    assert_base_metric_map as _assert_base_metric_map,
 )
 from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
     assert_waypoint_honesty,
@@ -161,7 +161,7 @@ def _add_evidence_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-completion-claim", action="store_true")
     parser.add_argument("--require-map-build", action="store_true")
     parser.add_argument("--require-agibot-g2-hardware", action="store_true")
-    parser.add_argument("--require-base-navigation-map", action="store_true")
+    parser.add_argument("--require-base-metric-map", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
     parser.add_argument("--require-visual-grounding-failure", action="store_true")
     parser.add_argument("--require-model-declared-observations", action="store_true")
@@ -329,7 +329,7 @@ def main() -> None:
             require_completion_claim=args.require_completion_claim,
             require_map_build=args.require_map_build,
             require_agibot_g2_hardware=args.require_agibot_g2_hardware,
-            require_base_navigation_map=args.require_base_navigation_map,
+            require_base_metric_map=args.require_base_metric_map,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
             require_visual_grounding_failure=args.require_visual_grounding_failure,
             require_model_declared_observations=args.require_model_declared_observations,
@@ -525,8 +525,8 @@ def _assert_agent_view_and_runtime_map(
         open_ended_intent=_is_open_ended_intent(data),
         map_build=map_build,
     )
-    if opts["require_base_navigation_map"]:
-        _assert_base_navigation_map(data, agent_view)
+    if opts["require_base_metric_map"]:
+        _assert_base_metric_map(data, agent_view)
     if opts["require_runtime_metric_map"]:
         _assert_runtime_metric_map(
             data.get("runtime_metric_map") or _agent_view_runtime_metric_map(agent_view),
@@ -1206,7 +1206,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     assert isaac.get("scenario_source") == "isaac_scene_index", isaac
 
     agent_view = data.get("agent_view") or {}
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     runtime_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(agent_view)
     static_map = runtime_map.get("static_map") or {}
     nav2_bundle = data.get("nav2_map_bundle") or {}
@@ -1223,15 +1223,15 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(nav2_bundle, scenario_id)
-    if _is_base_navigation_map(metric_map, runtime_map):
-        _assert_base_navigation_map(data, agent_view)
+    if _is_base_metric_map(metric_map, runtime_map):
+        _assert_base_metric_map(data, agent_view)
         _assert_isaac_scene_index_generated_candidate_scale(metric_map)
         _assert_isaac_scene_index_generated_candidate_scale(static_map or runtime_map)
     else:
         _assert_isaac_scene_index_room_scale(metric_map)
         _assert_isaac_scene_index_room_scale(static_map)
     assert "source_bundle_root" not in nav2_bundle, nav2_bundle
-    assert nav2_bundle.get("source_provenance") == "molmospaces_base_navigation_map", nav2_bundle
+    assert nav2_bundle.get("source_provenance") == "molmospaces_base_metric_map", nav2_bundle
 
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
@@ -1276,8 +1276,8 @@ def _assert_isaac_scene_index_room_scale(metric_map: dict[str, Any]) -> None:
     assert max_width > 2.5 or max_depth > 2.5, rooms
 
 
-def _is_base_navigation_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
-    base_map = metric_map.get("base_navigation_map") or {}
+def _is_base_metric_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
+    base_map = metric_map.get("base_metric_map") or {}
     return bool(
         base_map.get("enabled") is True or runtime_map.get("generated_exploration_candidates")
     )
@@ -1735,7 +1735,7 @@ def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any
 
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:
     agent_view = data.get("agent_view") or {}
-    metric_map = agent_view_module.base_navigation_map(agent_view)
+    metric_map = agent_view_module.base_metric_map(agent_view)
     runtime_metric_map = data.get("runtime_metric_map") or _agent_view_runtime_metric_map(
         agent_view
     )

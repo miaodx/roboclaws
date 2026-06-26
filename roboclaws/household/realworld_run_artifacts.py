@@ -436,12 +436,18 @@ def _camera_labeler(inputs: RealWorldRunArtifactInputs) -> str:
 
 
 def _runtime_map_prior_summary(inputs: RealWorldRunArtifactInputs) -> dict[str, Any]:
+    object_prior_count = len((inputs.runtime_map_prior or {}).get("observed_objects") or [])
+    anchor_prior_count = len((inputs.runtime_map_prior or {}).get("public_semantic_anchors") or [])
+    room_prior_count = len((inputs.runtime_map_prior or {}).get("rooms") or [])
+    source = str(inputs.runtime_map_prior_path or "")
     return {
         "loaded": bool(inputs.runtime_map_prior),
-        "source": str(inputs.runtime_map_prior_path or ""),
-        "observed_object_count": len(
-            (inputs.runtime_map_prior or {}).get("observed_objects") or []
-        ),
+        "source_provided": bool(source),
+        "source": source,
+        "observed_object_count": object_prior_count,
+        "object_prior_count": object_prior_count,
+        "anchor_prior_count": anchor_prior_count,
+        "room_prior_count": room_prior_count,
     }
 
 

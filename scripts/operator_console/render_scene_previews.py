@@ -36,7 +36,7 @@ from roboclaws.maps.bundle import (  # noqa: E402
 )
 from roboclaws.maps.preview import (  # noqa: E402
     BASE_MAP_SOURCE_FAMILY,
-    BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+    BASE_METRIC_MAP_PREVIEW_ROLE,
     SCENE_RENDER_SOURCE_FAMILY,
     TOPDOWN_SCENE_RENDER_ROLE,
 )
@@ -65,7 +65,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Render operator-console scene previews. MolmoSpaces previews are real "
             "MuJoCo renders: Raw FPV is captured from the first public waypoint, "
             "Chase is the robot follower camera, the map preview is static Base "
-            "Navigation Map context, and Top-down is a separate scene camera render. B1 / Map 12 "
+            "Metric Map context, and Top-down is a separate scene camera render. B1 / Map 12 "
             "previews are static map assets generated from the raw map bundle plus "
             "Digital Twin room references or explicit semantic projection artifacts so "
             "the console can show the experimental digital twin before Isaac starts "
@@ -1079,8 +1079,8 @@ def _preview_metadata(
             },
             "map": {
                 "path": map_path.name,
-                "view": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
-                "visual_role": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+                "view": BASE_METRIC_MAP_PREVIEW_ROLE,
+                "visual_role": BASE_METRIC_MAP_PREVIEW_ROLE,
                 "artifact_source_family": BASE_MAP_SOURCE_FAMILY,
                 "provenance": "map_bundle_preview_png",
                 "alignment_status": "source_map_frame_preview",

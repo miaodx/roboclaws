@@ -19,7 +19,7 @@ else:
 
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import (
-    validate_base_navigation_map_v1_bundle,
+    validate_base_metric_map_v1_bundle,
     validate_nav2_map_bundle,
     write_source_frame_bundle_preview,
 )
@@ -30,16 +30,16 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
     validate_navigation_smoke_artifact,
 )
 
-B1_MAP12_BASE_NAVIGATION_SIDECAR_SCHEMA = "b1_map12_base_navigation_sidecar_v1"
+B1_MAP12_BASE_METRIC_SIDECAR_SCHEMA = "b1_map12_base_metric_sidecar_v1"
 B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA = "b1_map12_robot_consumption_manifest_v1"
-DEFAULT_BASE_MAP_BUNDLE = Path("output/b1-map12/base-navigation-map")
-DEFAULT_OUTPUT_DIR = Path("output/b1-map12/base-navigation-map-with-proof")
+DEFAULT_BASE_MAP_BUNDLE = Path("output/b1-map12/base-metric-map")
+DEFAULT_OUTPUT_DIR = Path("output/b1-map12/base-metric-map-with-proof")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Copy a generated B1 / Map 12 Base Navigation Map bundle and add "
+            "Copy a generated B1 / Map 12 Base Metric Map bundle and add "
             "explicit Digital Twin robot-consumption proof sidecars."
         )
     )
@@ -54,7 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        result = augment_base_navigation_map_bundle(
+        result = augment_base_metric_map_bundle(
             base_map_bundle=args.base_map_bundle,
             alignment_artifact_path=args.alignment_artifact,
             navigation_artifact_path=args.navigation_artifact,
@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def augment_base_navigation_map_bundle(
+def augment_base_metric_map_bundle(
     *,
     base_map_bundle: Path,
     output_dir: Path,
@@ -80,15 +80,15 @@ def augment_base_navigation_map_bundle(
     output_dir = Path(output_dir)
     validation = validate_nav2_map_bundle(base_map_bundle)
     validation.raise_for_errors()
-    base_validation = validate_base_navigation_map_v1_bundle(base_map_bundle)
+    base_validation = validate_base_metric_map_v1_bundle(base_map_bundle)
     base_validation.raise_for_errors()
     semantics = read_json_object(base_map_bundle / "semantics.json", label="base map semantics")
-    _assert_base_navigation_semantics(semantics, base_map_bundle=base_map_bundle)
+    _assert_base_metric_semantics(semantics, base_map_bundle=base_map_bundle)
     base_manifest = read_json_object(
-        base_map_bundle / "base_navigation_map_manifest.json",
-        label="base navigation map manifest",
+        base_map_bundle / "base_metric_map_manifest.json",
+        label="base metric map manifest",
     )
-    _assert_base_navigation_manifest(base_manifest)
+    _assert_base_metric_manifest(base_manifest)
     proof = verified_robot_consumption_proof(
         alignment_artifact_path=alignment_artifact_path,
         navigation_artifact_path=navigation_artifact_path,
@@ -106,7 +106,7 @@ def augment_base_navigation_map_bundle(
     }
     sidecar_semantics["provenance"] = {
         **dict(sidecar_semantics.get("provenance") or {}),
-        "b1_base_navigation_sidecar": _repo_relative_path(Path(__file__)),
+        "b1_base_metric_sidecar": _repo_relative_path(Path(__file__)),
         "contains_verified_robot_consumption_proof": bool(proof.get("robot_navigation_supported")),
         "contains_verified_room_semantics": False,
         "contains_runtime_observations": False,
@@ -119,7 +119,7 @@ def augment_base_navigation_map_bundle(
     write_source_frame_bundle_preview(output_dir)
     sidecar_validation = validate_nav2_map_bundle(output_dir)
     sidecar_validation.raise_for_errors()
-    sidecar_base_validation = validate_base_navigation_map_v1_bundle(output_dir)
+    sidecar_base_validation = validate_base_metric_map_v1_bundle(output_dir)
     sidecar_base_validation.raise_for_errors()
     room_semantic_projection_proof = sidecar_semantics["digital_twin_capabilities"][
         "room_semantic_projection_proof"
@@ -130,9 +130,7 @@ def augment_base_navigation_map_bundle(
         room_semantic_projection_proof=room_semantic_projection_proof,
         semantic_label_count=len(sidecar_semantics.get("rooms") or []),
         navigation_area_count=int(
-            (sidecar_semantics.get("base_navigation_map_contract") or {}).get(
-                "navigation_area_count"
-            )
+            (sidecar_semantics.get("base_metric_map_contract") or {}).get("navigation_area_count")
             or 0
         ),
         inspection_waypoint_count=len(sidecar_semantics.get("inspection_waypoints") or []),
@@ -148,34 +146,34 @@ def augment_base_navigation_map_bundle(
         robot_consumption_proof=proof,
         validation=sidecar_base_validation.as_dict(),
     )
-    (output_dir / "b1_base_navigation_sidecar.json").write_text(
+    (output_dir / "b1_base_metric_sidecar.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return {
-        "schema": B1_MAP12_BASE_NAVIGATION_SIDECAR_SCHEMA,
+        "schema": B1_MAP12_BASE_METRIC_SIDECAR_SCHEMA,
         "status": "augmented",
         "output_dir": str(output_dir),
         "robot_consumption_manifest": str(output_dir / "b1_robot_consumption_manifest.json"),
-        "provenance": str(output_dir / "b1_base_navigation_sidecar.json"),
+        "provenance": str(output_dir / "b1_base_metric_sidecar.json"),
         "robot_navigation_supported": bool(proof.get("robot_navigation_supported")),
         "validation": sidecar_base_validation.as_dict(),
     }
 
 
-def _assert_base_navigation_semantics(
+def _assert_base_metric_semantics(
     semantics: dict[str, Any],
     *,
     base_map_bundle: Path,
 ) -> None:
     if semantics.get("schema") != "nav2_cleanup_semantics_v1":
         raise ValueError("base map semantics must use schema nav2_cleanup_semantics_v1")
-    contract = semantics.get("base_navigation_map_contract")
-    if not isinstance(contract, dict) or contract.get("schema") != "base_navigation_map_v1":
-        raise ValueError("base map semantics must include base_navigation_map_contract")
+    contract = semantics.get("base_metric_map_contract")
+    if not isinstance(contract, dict) or contract.get("schema") != "base_metric_map_v1":
+        raise ValueError("base map semantics must include base_metric_map_contract")
     if contract.get("consumer_scope") != "real_robot_and_digital_twin":
         raise ValueError(
-            "base_navigation_map_contract.consumer_scope must be real_robot_and_digital_twin"
+            "base_metric_map_contract.consumer_scope must be real_robot_and_digital_twin"
         )
     provenance = (
         semantics.get("provenance") if isinstance(semantics.get("provenance"), dict) else {}
@@ -188,22 +186,20 @@ def _assert_base_navigation_semantics(
         raise ValueError("base map must not include movable object truth")
     if "digital_twin_capabilities" in semantics:
         raise ValueError("base map bundle already contains digital_twin_capabilities")
-    if not (base_map_bundle / "base_navigation_map_manifest.json").is_file():
-        raise ValueError("base map bundle missing base_navigation_map_manifest.json")
+    if not (base_map_bundle / "base_metric_map_manifest.json").is_file():
+        raise ValueError("base map bundle missing base_metric_map_manifest.json")
 
 
-def _assert_base_navigation_manifest(manifest: dict[str, Any]) -> None:
-    if manifest.get("schema") != "b1_map12_base_navigation_map_manifest_v1":
-        raise ValueError("base navigation map manifest has unexpected schema")
+def _assert_base_metric_manifest(manifest: dict[str, Any]) -> None:
+    if manifest.get("schema") != "b1_map12_base_metric_map_manifest_v1":
+        raise ValueError("base metric map manifest has unexpected schema")
     if manifest.get("status") != "generated":
-        raise ValueError("base navigation map manifest status must be generated")
+        raise ValueError("base metric map manifest status must be generated")
     policy = manifest.get("policy") if isinstance(manifest.get("policy"), dict) else {}
     if policy.get("shared_by_real_robot_and_digital_twin") is not True:
-        raise ValueError(
-            "base navigation map manifest must be shared by real robot and Digital Twin"
-        )
+        raise ValueError("base metric map manifest must be shared by real robot and Digital Twin")
     if policy.get("does_not_use_navigation_memory_as_waypoint_source") is not True:
-        raise ValueError("base navigation map manifest must reject navigation_memory waypoints")
+        raise ValueError("base metric map manifest must reject navigation_memory waypoints")
 
 
 def verified_robot_consumption_proof(
@@ -400,7 +396,7 @@ def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[st
 def blocked_room_semantic_projection_proof() -> dict[str, Any]:
     return {
         "schema": "b1_map12_room_semantics_proof_v1",
-        "status": "base_navigation_map_semantics_only",
+        "status": "base_metric_map_semantics_only",
         "semantic_projection_artifact": "",
         "room_semantics_supported": True,
         "room_projection_count": 0,
@@ -408,7 +404,7 @@ def blocked_room_semantic_projection_proof() -> dict[str, Any]:
         "object_projection_status": "blocked_until_object_semantic_anchors",
         "object_semantics_supported": False,
         "policy": {
-            "uses_base_navigation_map_room_labels": True,
+            "uses_base_metric_map_room_labels": True,
             "requires_no_separate_digital_twin_runtime_projection": True,
             "object_labels_are_not_inferred_from_room_anchors": True,
         },
@@ -431,7 +427,7 @@ def b1_robot_consumption_manifest(
         "schema": B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
         "status": "robot_navigation_ready" if navigation_ready else "blocked",
         "map_bundle": str(output_dir),
-        "consumer_contract": "base_navigation_map_plus_runtime_map_prior_snapshot_v1",
+        "consumer_contract": "base_metric_map_plus_runtime_map_prior_snapshot_v1",
         "required_primary_artifacts": {
             "map_yaml": "map.yaml",
             "occupancy_image": "map.pgm",
@@ -457,7 +453,7 @@ def b1_robot_consumption_manifest(
             "waypoint_ids": list(robot_consumption_proof.get("waypoint_ids") or []),
         },
         "semantics": {
-            "source": "base_navigation_map",
+            "source": "base_metric_map",
             "semantic_label_count": int(semantic_label_count),
             "navigation_area_count": int(navigation_area_count),
             "room_semantics_ready": room_semantics_ready,
@@ -481,7 +477,7 @@ def b1_robot_consumption_manifest(
         ),
         "inspection_waypoint_count": int(inspection_waypoint_count),
         "policy": {
-            "base_navigation_map_is_required_source": True,
+            "base_metric_map_is_required_source": True,
             "explicit_alignment_artifact_required": True,
             "explicit_navigation_artifact_required": True,
             "no_output_directory_autodiscovery": True,
@@ -540,21 +536,21 @@ def sidecar_provenance(
         base_map_bundle / "map.yaml",
         base_map_bundle / "map.pgm",
         base_map_bundle / "semantics.json",
-        base_map_bundle / "base_navigation_map_manifest.json",
+        base_map_bundle / "base_metric_map_manifest.json",
     ]
     for field in ("alignment_artifact", "navigation_artifact"):
         artifact = str(robot_consumption_proof.get(field) or "")
         if artifact:
             source_files.append(Path(artifact))
     return {
-        "schema": B1_MAP12_BASE_NAVIGATION_SIDECAR_SCHEMA,
+        "schema": B1_MAP12_BASE_METRIC_SIDECAR_SCHEMA,
         "status": "augmented",
         "generated_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "sidecar": _repo_relative_path(Path(__file__)),
         "source_assets": {
             "base_map_bundle": str(base_map_bundle),
-            "base_navigation_map_schema": str(base_manifest.get("schema") or ""),
-            "base_navigation_map_status": str(base_manifest.get("status") or ""),
+            "base_metric_map_schema": str(base_manifest.get("schema") or ""),
+            "base_metric_map_status": str(base_manifest.get("status") or ""),
         },
         "output_dir": str(output_dir),
         "source_file_hashes": {
@@ -568,7 +564,7 @@ def sidecar_provenance(
         },
         "validation": validation,
         "policy": {
-            "sidecar_only_augments_existing_base_navigation_map": True,
+            "sidecar_only_augments_existing_base_metric_map": True,
             "does_not_generate_rooms_or_waypoints": True,
             "does_not_read_navigation_memory": True,
             "does_not_apply_separate_runtime_semantic_projection": True,

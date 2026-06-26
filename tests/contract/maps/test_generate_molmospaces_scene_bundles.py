@@ -74,8 +74,8 @@ def test_generation_targets_reject_partial_explicit_scene() -> None:
 def test_canonical_scene_metric_map_identity_does_not_include_seed() -> None:
     generator = _load_generator()
     metric_map = {
-        "map_id": "molmospaces-procthor-10k-val-0-7_base_navigation_map",
-        "map_version": "base-navigation-map-v1",
+        "map_id": "molmospaces-procthor-10k-val-0-7_base_metric_map",
+        "map_version": "base-metric-map-v1",
         "map_bundle": {
             "environment_id": "molmospaces-procthor-10k-val-0-7",
             "parameter_hash": "seed-specific",
@@ -88,7 +88,7 @@ def test_canonical_scene_metric_map_identity_does_not_include_seed() -> None:
         scene_index=0,
     )
 
-    assert canonical["map_id"] == "molmospaces-procthor-10k-val-0_base_navigation_map"
+    assert canonical["map_id"] == "molmospaces-procthor-10k-val-0_base_metric_map"
     assert canonical["map_bundle"]["environment_id"] == "molmospaces-procthor-10k-val-0"
     assert canonical["map_bundle"]["map_id"] == canonical["map_id"]
     assert canonical["map_bundle"]["parameter_hash"] != "seed-specific"
@@ -140,12 +140,12 @@ def test_generation_uses_preparation_evidence_not_agent_view_projection(
     )
     monkeypatch.setattr(
         generator,
-        "prepare_molmospaces_base_navigation_map",
+        "prepare_molmospaces_base_metric_map",
         lambda **kwargs: {
             **_minimal_metric_map(),
             "map_id": kwargs["map_id"],
             "map_bundle": {"environment_id": kwargs["environment_id"]},
-            "base_navigation_map_contract": {"schema": "base_navigation_map_v1"},
+            "base_metric_map_contract": {"schema": "base_metric_map_v1"},
             "provenance": {"contains_static_fixtures": False},
         },
     )
@@ -153,7 +153,7 @@ def test_generation_uses_preparation_evidence_not_agent_view_projection(
     monkeypatch.setattr(generator, "validate_nav2_map_bundle", lambda path: FakeValidation(path))
     monkeypatch.setattr(
         generator,
-        "validate_base_navigation_map_v1_bundle",
+        "validate_base_metric_map_v1_bundle",
         lambda path: FakeValidation(path),
     )
     monkeypatch.setattr(generator.shutil, "move", lambda source, destination: None)
@@ -168,12 +168,12 @@ def test_generation_uses_preparation_evidence_not_agent_view_projection(
     )
 
     assert result["validation"]["ok"] is True
-    assert result["base_navigation_validation"]["ok"] is True
+    assert result["base_metric_validation"]["ok"] is True
     assert captured["closed"] is True
     assert captured["static_landmarks"] == []
     metric_map = captured["metric_map"]
     assert isinstance(metric_map, dict)
-    assert metric_map["base_navigation_map_contract"]["schema"] == "base_navigation_map_v1"
+    assert metric_map["base_metric_map_contract"]["schema"] == "base_metric_map_v1"
 
 
 def _minimal_metric_map() -> dict[str, object]:
@@ -181,7 +181,7 @@ def _minimal_metric_map() -> dict[str, object]:
         "schema": "real_robot_map_bundle_v1",
         "frame_id": "map",
         "map_id": "source_map",
-        "map_version": "base-navigation-map-v1",
+        "map_version": "base-metric-map-v1",
         "resolution_m": 0.05,
         "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
         "width": 20,
@@ -208,7 +208,7 @@ def _minimal_metric_map() -> dict[str, object]:
                 "room_id": "room_1",
                 "label": "room 1 scan",
                 "visited": False,
-                "purpose": "base_navigation_map_exploration",
+                "purpose": "base_metric_map_exploration",
                 "waypoint_source": "generated_exploration_candidate",
                 "coverage_estimate": 1.0,
             }
@@ -217,7 +217,7 @@ def _minimal_metric_map() -> dict[str, object]:
         "map_bundle": {
             "environment_id": "source-env",
             "map_id": "source_map",
-            "map_version": "base-navigation-map-v1",
+            "map_version": "base-metric-map-v1",
         },
     }
 

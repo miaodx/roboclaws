@@ -40,7 +40,7 @@ def metric_map_from_bundle(
         origin_y=float(origin[1] if len(origin) > 1 else 0.0),
     )
     map_id = str(semantics.get("map_id") or bundle_dir.name)
-    map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
+    map_version = str(semantics.get("map_version") or "base-metric-map-v1")
     frame_id = _source_map_frame_id(semantics)
     rooms = normalize_spatial_rooms(
         semantics.get("rooms") or [],

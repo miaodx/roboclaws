@@ -405,10 +405,65 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
 
     assert prior_rows
     assert all(item["actionability"] == "needs_confirm" for item in prior_rows)
+    prior_summary = run_result["runtime_metric_map_prior"]
+    assert prior_summary["loaded"] is True
+    assert prior_summary["source_provided"] is True
+    assert prior_summary["source"] == "prior/runtime_metric_map.json"
+    assert prior_summary["observed_object_count"] == len(prior_rows)
+    assert prior_summary["object_prior_count"] == len(prior_rows)
+    assert prior_summary["anchor_prior_count"] >= 1
+
+
+def test_realworld_mcp_reports_anchor_only_runtime_map_prior_as_loaded(tmp_path: Path) -> None:
+    runtime_map_prior = {
+        "schema": "runtime_metric_map_v1",
+        "public_semantic_anchors": [
+            {
+                "anchor_id": "anchor_room_room_2",
+                "anchor_type": "room_area",
+                "category": "kitchen",
+                "label": "Kitchen",
+                "room_id": "room_2",
+                "waypoint_id": "room_2_inspection",
+                "pose": {"x": 6.4, "y": 7.5, "yaw": 0.0},
+                "affordances": ["navigate", "observe"],
+                "producer_type": "map-build",
+                "producer_id": "map-build",
+                "confidence": 0.8,
+                "actionability": "actionable",
+            }
+        ],
+        "observed_objects": [],
+        "rooms": [],
+        "private_truth_included": False,
+        "source_map_mutated": False,
+    }
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        runtime_map_prior=runtime_map_prior,
+        runtime_map_prior_source="prior/runtime_metric_map.json",
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            server.call_tool("observe")
+        done = server.call_tool("done", reason="anchor-only prior smoke")
+        run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    finally:
+        server.close()
+
     assert run_result["runtime_metric_map_prior"] == {
+        "anchor_prior_count": 1,
         "loaded": True,
+        "object_prior_count": 0,
+        "room_prior_count": 0,
         "source": "prior/runtime_metric_map.json",
-        "observed_object_count": len(prior_rows),
+        "source_provided": True,
+        "observed_object_count": 0,
     }
 
 
@@ -454,7 +509,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     assert "household-cleanup direct world-public-labels" not in report
 
 
-def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
+def test_realworld_mcp_defaults_to_base_metric_map(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
@@ -470,7 +525,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     finally:
         server.close()
 
-    assert metric_map["base_navigation_map"]["enabled"] is True
+    assert metric_map["base_metric_map"]["enabled"] is True
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert metric_map["room_category_hints"]
@@ -479,7 +534,7 @@ def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     assert agent_view_module.cleanup_worklist(agent_view)["objects"]
 
 
-def test_realworld_mcp_base_navigation_map_exposes_actionable_runtime_anchors(
+def test_realworld_mcp_base_metric_map_exposes_actionable_runtime_anchors(
     tmp_path: Path,
 ) -> None:
     server = make_molmo_realworld_cleanup_mcp(

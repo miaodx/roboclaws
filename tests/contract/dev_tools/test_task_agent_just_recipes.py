@@ -691,7 +691,7 @@ def test_surface_launch_rejects_public_map_mode_axis() -> None:
             )
         )
 
-    assert "Base Navigation Map" in str(exc.value.hint)
+    assert "Base Metric Map" in str(exc.value.hint)
     assert "runtime_map_prior=" in str(exc.value.hint)
 
 
@@ -722,7 +722,6 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
             "surface=household-world",
             "agent_engine=codex-cli",
             "preset=map-build",
-            "evidence_lane=world-public-labels",
         )
     )
 
@@ -734,6 +733,8 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert plan.provider_profile == "codex-router-responses"
     assert plan.intent == "map-build"
     assert plan.preset == "map-build"
+    assert plan.evidence_mode == "camera-grounded-labels"
+    assert "camera_labeler=grounding-dino" in plan.overrides
     assert plan.skill_name == "household-open-task"
     assert plan.dispatch_target == "household-world.map-build"
     assert plan.goal_contract.schema == "roboclaws_goal_contract_v1"
@@ -746,6 +747,30 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert "runtime_metric_map" in plan.evaluation_hard_gates
     assert plan.completion_claim_required is True
     assert any(item.startswith("goal_contract_json=") for item in plan.overrides)
+
+
+def test_surface_map_build_defaults_to_openai_agents_sdk_camera_grounded_dino() -> None:
+    plan = resolve_surface_launch(
+        (
+            "surface=household-world",
+            "agent_engine=openai-agents-sdk",
+            "preset=map-build",
+        )
+    )
+
+    assert plan.agent_engine == "openai-agents-sdk"
+    assert plan.dispatch_runner == "openai-agents-live"
+    assert plan.provider_profile == "codex-router-responses"
+    assert plan.evidence_mode == "camera-grounded-labels"
+    assert plan.profile == "camera-grounded-labels"
+    assert "camera_labeler=grounding-dino" in plan.overrides
+    assert plan.argv[:5] == (
+        "just",
+        "agent::run",
+        "household-world.map-build",
+        "openai-agents-sdk",
+        "camera-grounded-labels",
+    )
 
 
 def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> None:
@@ -1536,8 +1561,8 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
         1,
     )[0]
 
-    assert "build_b1_map12_base_navigation_map.py" in b1_branch
-    assert "augment_b1_map12_base_navigation_map.py" in b1_branch
+    assert "build_b1_map12_base_metric_map.py" in b1_branch
+    assert "augment_b1_map12_base_metric_map.py" in b1_branch
     assert "compile_b1_map12_runtime_bundle.py" not in b1_branch
     assert "convert_nav2_cleanup_bundle.py" in b1_branch
     assert "b1_robot_consumption_manifest.json" in b1_branch
@@ -1693,7 +1718,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "1" in route
 
 
-def test_map_build_routes_agibot_molmospaces_sim_to_base_navigation_map_prehardware() -> None:
+def test_map_build_routes_agibot_molmospaces_sim_to_base_metric_map_prehardware() -> None:
     route = trace_agent_run(
         "household-world.map-build",
         "direct-runner",
@@ -1844,7 +1869,10 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
 def test_molmo_map_build_strips_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert 'if [[ "$map_build_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
+    assert (
+        'if [[ "$map_build_enabled" == "true" && ( "$driver" == "codex-live" || '
+        '"$driver" == "openai-agents-live" ) ]]; then'
+    ) in text
     assert "checker_map_build_args=(--require-runtime-metric-map)" in text
     assert 'elif [[ "$map_build_enabled" == "true" ]]; then' in text
     assert (
@@ -1924,6 +1952,22 @@ def test_prompt_mapping_map_build_direct_enables_sweep() -> None:
     assert route[15] == "on"
 
 
+def test_prompt_mapping_map_build_openai_agents_sdk_routes_to_live_driver() -> None:
+    route = trace_household_map_build_run("openai-agents-sdk")
+
+    assert route[:6] == [
+        "just",
+        "molmo::household-world-impl",
+        "openai-agents-live",
+        "camera-grounded-labels",
+        "7",
+        "output/household/household-world/map-build/openai-agents-live-camera-grounded-labels",
+    ]
+    assert route[6] == "帮我建立这个房间的 Runtime Metric Map"
+    assert route[13] == "grounding-dino"
+    assert route[15] == "on"
+
+
 def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
     route = trace_household_cleanup_run(
         "direct",
@@ -1999,7 +2043,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "only when the exact object class is uncertain" in prompt
     assert "use image_region={type:bbox,value:[x,y,width,height]}" in prompt
     assert "Never retry the same source_observation_id/category/region" in prompt
-    assert "Omit source_fixture_id with Base Navigation Map context" in prompt
+    assert "Omit source_fixture_id with Base Metric Map context" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt

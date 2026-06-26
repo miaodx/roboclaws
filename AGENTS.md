@@ -242,7 +242,7 @@ ruff format --check .
 ## 4) Key technical constraints
 
 1. **Public launch axes stay canonical**: use `surface`, `world`, `backend`, `intent`, `agent_engine`, `provider_profile`, `evidence_lane`, and `camera_labeler` instead of old task/profile wrappers.
-2. **Base Navigation Map is the start-of-run map contract**: do not expose private relocation/scoring truth, static movable-object inventory, or full fixture tables as default agent input.
+2. **Base Metric Map is the start-of-run map contract**: do not expose private relocation/scoring truth, static movable-object inventory, or full fixture tables as default agent input.
 3. **Runtime Metric Map owns semantic enrichment**: map-build and observations create public anchors, target candidates, and observed-object evidence.
 4. **VLM output parsing must be robust**: model-backed runs may return malformed JSON or partial tool arguments. Always wrap parsing in try/except with a safe recovery path.
 5. **Cost guard**: default to cheap provider profiles for development (Kimi/MiMo/codex-router-responses as appropriate) and record model usage/cost when live agents run. See `docs/human/model-matrix.md` for current verified models.

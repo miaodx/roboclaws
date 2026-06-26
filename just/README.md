@@ -57,8 +57,9 @@ Agent engines:
 
 Provider profiles are selected only for agent engines that need a model/key
 route. Examples include `codex-router-responses`, `mimo-mify-responses`,
-`kimi-openai-chat`, `mimo-tp-anthropic`, and `mimo-mify-anthropic`. Deterministic engines such as
-`direct-runner` do not accept `provider_profile`.
+`kimi-openai-chat`, `mimo-tp-anthropic`, and `mimo-mify-anthropic`.
+`direct-runner` is a deterministic contract/eval baseline and does not accept
+`provider_profile`; it is not a live robot agent runtime.
 
 Validation-required maintainer engines stay out of the normal public engine
 list. Use the repo-local maintainer docs and network guards before running
@@ -90,7 +91,7 @@ Public `visual_grounding=...`
 is no longer accepted on task routes; Visual Grounding Service terminology
 remains internal service and benchmark provenance.
 
-These lanes do not choose online/offline map behavior. Base Navigation Map is
+These lanes do not choose online/offline map behavior. Base Metric Map is
 the current start-of-run map context: occupancy geometry, generated exploration
 candidates, and public room-category hints when available. Use
 `runtime_map_prior=...` when a cleanup run should consume a prebuilt Runtime
@@ -209,7 +210,7 @@ namespaces such as `mcp__<server>__`.
 ## Examples
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels runtime_map_prior=output/map/runtime_metric_map.json
@@ -221,8 +222,22 @@ just agent::eval execute since=origin/main budget=focused
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 ```
 
-For `pipeline=grounding-dino` visual-grounding runs, start the configurable
-service. Without real sidecar dependencies it returns explicit unavailable
+For product-like `camera_labeler=grounding-dino` runs, start a real sidecar from
+the dedicated visual-grounding environment. This is the route to use before
+claiming cleanup or map-build behavior from GroundingDINO evidence:
+
+```bash
+VISUAL_GROUNDING_DEVICE=auto \
+VISUAL_GROUNDING_TORCH_DTYPE=auto \
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
+VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
+VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
+```
+
+To exercise only the HTTP contract without real model dependencies, start the
+configurable service in its default mode. It should return explicit unavailable
 evidence instead of fake candidates:
 
 ```bash
@@ -242,7 +257,8 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the map-build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the map-build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=openai-agents-sdk provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the map-build contract baseline" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
 | "run the map-build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
 | "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels` |
 | "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"` |
