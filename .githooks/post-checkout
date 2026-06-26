@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Post-checkout hook: auto-setup worktree environments.
+# Triggered by `git worktree add` (used by both Claude Code and Codex).
+#
+# This hook runs after any checkout, including worktree creation.
+# We detect worktree context by checking if we're inside a worktree
+# and if the .git file is a pointer (not a directory).
+
+set -euo pipefail
+
+# --- Detection: are we in a worktree? ---
+# In a worktree, .git is a file pointing to the main repo's gitdir.
+# In the main repo, .git is a directory.
+
+is_worktree=false
+if [[ -f ".git" ]]; then
+    is_worktree=true
+fi
+
+if [[ "$is_worktree" != "true" ]]; then
+    # Normal checkout in main repo — skip
+    exit 0
+fi
+
+# --- Setup ---
+
+WORKTREE_DIR="$PWD"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$REPO_ROOT" ]]; then
+    echo "[worktree-setup] ERROR: cannot determine repo root" >&2
+    exit 1
+fi
+
+# Resolve main repo root from worktree .git pointer
+# .git file format: "gitdir: /path/to/main-repo/.git/worktrees/..."
+# We need to go up TWO levels from .git/worktrees/<name> to get the repo root
+MAIN_REPO_GITDIR="$(dirname "$(dirname "$(sed -n 's/^gitdir: //p' .git)")")"
+# MAIN_REPO_GITDIR is /path/to/repo/.git, so repo root is one more level up
+MAIN_REPO="$(dirname "$MAIN_REPO_GITDIR")"
+
+if [[ ! -d "$MAIN_REPO" ]]; then
+    echo "[worktree-setup] ERROR: cannot resolve main repo from .git pointer" >&2
+    exit 1
+fi
+
+echo "[worktree-setup] Detected worktree: $WORKTREE_DIR"
+echo "[worktree-setup] Main repo: $MAIN_REPO"
+
+# --- Helper: sync venv if not exists ---
+
+sync_venv() {
+    local venv_name="$1"
+    local venv_dir="$WORKTREE_DIR/$venv_name"
+    local sync_cmd="$2"
+
+    if [[ -d "$venv_dir" ]]; then
+        echo "[worktree-setup] $venv_name: already exists, skipping"
+        return 0
+    fi
+
+    echo "[worktree-setup] $venv_name: creating..."
+    cd "$WORKTREE_DIR"
+    # Increase timeout for large CUDA packages (torch ~1GB)
+    eval "UV_HTTP_TIMEOUT=300 $sync_cmd" 2>&1 | sed 's/^/  /'
+    echo "[worktree-setup] $venv_name: done"
+}
+
+# --- Sync environments ---
+
+# 1. Main dev venv (Python 3.12, all extras)
+sync_venv ".venv" "uv sync --extra dev"
+
+# 2. Visual grounding sidecar (Python 3.13, GPU deps)
+# Note: uses different Python version via sidecars/visual-grounding/pyproject.toml
+sync_venv ".venv-visual-grounding" \
+    "UV_PROJECT_ENVIRONMENT=\$PWD/.venv-visual-grounding uv sync --project sidecars/visual-grounding --extra cuda"
+
+# 3. Isaac Lab (heavy environment, 24G, symlink from main repo)
+# The editable install paths in .venv-isaaclab point to .venv-isaaclab-src
+# which is in the main repo, so symlinking works across worktrees.
+if [[ ! -d "$WORKTREE_DIR/.venv-isaaclab" && -d "$MAIN_REPO/.venv-isaaclab" ]]; then
+    echo "[worktree-setup] .venv-isaaclab: symlinking from main repo..."
+    ln -s "$MAIN_REPO/.venv-isaaclab" "$WORKTREE_DIR/.venv-isaaclab"
+    echo "[worktree-setup] .venv-isaaclab: done (symlink)"
+fi
+
+# --- Copy gitignored config files ---
+
+# .env: provider keys, API endpoints
+if [[ -f "$MAIN_REPO/.env" && ! -f "$WORKTREE_DIR/.env" ]]; then
+    cp "$MAIN_REPO/.env" "$WORKTREE_DIR/.env"
+    echo "[worktree-setup] Copied .env from main repo"
+fi
+
+# .env.local: local overrides
+if [[ -f "$MAIN_REPO/.env.local" && ! -f "$WORKTREE_DIR/.env.local" ]]; then
+    cp "$MAIN_REPO/.env.local" "$WORKTREE_DIR/.env.local"
+    echo "[worktree-setup] Copied .env.local from main repo"
+fi
+
+# .python-version
+if [[ -f "$MAIN_REPO/.python-version" && ! -f "$WORKTREE_DIR/.python-version" ]]; then
+    cp "$MAIN_REPO/.python-version" "$WORKTREE_DIR/.python-version"
+fi
+
+# 4. Isaac Lab EULA auto-accept
+# Isaac Sim's kit_app.py checks OMNI_KIT_ACCEPT_EULA env var to skip interactive EULA.
+# We inject it into the worktree's .env so all Python processes inherit it.
+if [[ -f "$WORKTREE_DIR/.env" ]] && ! grep -q "OMNI_KIT_ACCEPT_EULA" "$WORKTREE_DIR/.env" 2>/dev/null; then
+    echo "" >> "$WORKTREE_DIR/.env"
+    echo "# Auto-accept NVIDIA Omniverse EULA (set by .githooks/post-checkout)" >> "$WORKTREE_DIR/.env"
+    echo "OMNI_KIT_ACCEPT_EULA=yes" >> "$WORKTREE_DIR/.env"
+    echo "[worktree-setup] Added OMNI_KIT_ACCEPT_EULA=yes to .env"
+fi
+
+echo "[worktree-setup] Worktree environment setup complete!"
