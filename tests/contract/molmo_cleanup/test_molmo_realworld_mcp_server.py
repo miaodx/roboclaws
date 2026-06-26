@@ -1201,7 +1201,7 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
         work_waypoint = next(
             item
             for item in server.contract.metric_map()["inspection_waypoints"]
-            if item["waypoint_id"] == "room_8_inspection"
+            if item["waypoint_id"] == "room_4_inspection"
         )
         server.call_tool("navigate_to_waypoint", waypoint_id=str(work_waypoint["waypoint_id"]))
         observation = server.call_tool("observe")
@@ -1305,7 +1305,7 @@ def test_realworld_mcp_raw_fpv_compact_state_lists_actionable_pending_handles(
         server.call_tool("metric_map")
         server.call_tool("navigate_to_waypoint", waypoint_id="room_4_inspection")
         server.call_tool("observe")
-        server.call_tool("navigate_to_waypoint", waypoint_id="room_8_inspection")
+        server.call_tool("navigate_to_waypoint", waypoint_id="room_4_inspection")
         observation = server.call_tool("observe")
         candidate = server.call_tool(
             "navigate_to_visual_candidate",

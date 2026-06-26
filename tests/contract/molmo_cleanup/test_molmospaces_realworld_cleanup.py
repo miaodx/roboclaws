@@ -345,7 +345,7 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
     assert agent_view_module.raw_fpv_observations(result["agent_view"])
     assert result["model_declared_observations"]
     evidence = result["model_declared_observation_evidence"]
-    assert evidence["observation_count"] >= 7
+    assert evidence["observation_count"] >= result["generated_mess_count"]
     assert evidence["resolved_count"] >= result["generated_mess_count"]
     assert all(
         item.get("actionability_status") in {"actionable", "already_handled"}

@@ -315,12 +315,13 @@ def _detections_for_observation(server: Any, observation: dict[str, Any]) -> lis
 def _confirm_visual_scan_if_needed(server: Any, detection: dict[str, Any]) -> dict[str, Any]:
     if str(detection.get("candidate_state") or "") != "visual_scan_required":
         return detection
-    waypoint_id = str(detection.get("waypoint_id") or detection.get("last_waypoint_id") or "")
+    handle = str(detection.get("object_id") or "")
+    live_detection = _inspect_detection(server, handle)
+    waypoint_id = _visual_scan_waypoint_id(server, detection, live_detection)
     if waypoint_id:
         server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
     server.call_tool("adjust_camera", yaw_delta_deg=15.0, pitch_delta_deg=0.0)
     observation = server.call_tool("observe")
-    handle = str(detection.get("object_id") or "")
     confirmed = next(
         (
             dict(item)
@@ -332,6 +333,44 @@ def _confirm_visual_scan_if_needed(server: Any, detection: dict[str, Any]) -> di
     if detection.get("destination_options") and not confirmed.get("destination_options"):
         confirmed["destination_options"] = list(detection["destination_options"])
     return confirmed
+
+
+def _inspect_detection(server: Any, handle: str) -> dict[str, Any]:
+    if not handle:
+        return {}
+    response = server.call_tool("inspect_visible_object", object_id=handle)
+    detection = response.get("detection") if response.get("ok") else {}
+    return dict(detection) if isinstance(detection, dict) else {}
+
+
+def _visual_scan_waypoint_id(
+    server: Any,
+    detection: dict[str, Any],
+    live_detection: dict[str, Any],
+) -> str:
+    for source in (live_detection, detection):
+        waypoint_id = str(source.get("waypoint_id") or source.get("last_waypoint_id") or "")
+        if waypoint_id:
+            return waypoint_id
+    for source in (live_detection, detection):
+        support = source.get("support_estimate") or {}
+        fixture_id = str(source.get("source_fixture_id") or support.get("fixture_id") or "")
+        waypoint_id = _preferred_waypoint_for_fixture(server, fixture_id)
+        if waypoint_id:
+            return waypoint_id
+    return ""
+
+
+def _preferred_waypoint_for_fixture(server: Any, fixture_id: str) -> str:
+    if not fixture_id:
+        return ""
+    fixture = server.contract.public_receptacles_by_id().get(fixture_id) or {}
+    return str(
+        fixture.get("preferred_inspection_waypoint_id")
+        or fixture.get("preferred_manipulation_waypoint_id")
+        or fixture.get("waypoint_id")
+        or ""
+    )
 
 
 def _clean_handle(

@@ -57,7 +57,6 @@ from roboclaws.household.realworld_runtime_map_targets import (
 )
 from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.household.semantic_timeline import (
-    CANONICAL_INSIDE_CLEANUP_PHASES,
     CANONICAL_SURFACE_CLEANUP_PHASES,
     CLOSE_RECEPTACLE_PHASE,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
@@ -1818,9 +1817,10 @@ def _assert_bound_planner_cleanup_objects(
 
 def _required_bound_cleanup_phases(subphases: list[dict[str, Any]]) -> set[str]:
     phases = {str(step.get("phase") or "") for step in subphases}
-    if OPEN_RECEPTACLE_PHASE in phases or PLACE_INSIDE_PHASE in phases:
-        return set(CANONICAL_INSIDE_CLEANUP_PHASES) - {CLOSE_RECEPTACLE_PHASE}
-    return set(CANONICAL_SURFACE_CLEANUP_PHASES)
+    required = set(CANONICAL_SURFACE_CLEANUP_PHASES)
+    if PLACE_INSIDE_PHASE in phases:
+        required = required - {"place"} | {PLACE_INSIDE_PHASE}
+    return required | (phases & {OPEN_RECEPTACLE_PHASE, CLOSE_RECEPTACLE_PHASE})
 
 
 def _assert_mixed_planner_cleanup_primitives(

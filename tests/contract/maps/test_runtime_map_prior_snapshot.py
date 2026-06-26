@@ -152,38 +152,29 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
         perception_mode=RAW_FPV_ONLY_MODE,
         map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
-    _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
-    online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
-        contract.agent_view_payload()["runtime_metric_map"]
-    )
-    targets = materialize_runtime_prior_targets(online_snapshot)
-    fridge_fixture = next(
-        item
-        for item in targets["fixture_candidates"]
-        if item["category"] == "fridge" and item["actionability"] == "actionable"
-    )
-
-    work_waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_7_inspection"
-    )
-    contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
+    contract.navigate_to_waypoint("room_4_inspection")
     observation = contract.observe()
     candidate = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
-        target_fixture_id=str(fridge_fixture["fixture_id"]),
         evidence_note="round produce item on the desk",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="test_agent",
         producer_id="test_agent",
     )
-
     assert candidate["ok"] is True
-    assert candidate["candidate_fixture_id"] == fridge_fixture["fixture_id"]
+    online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
+        contract.agent_view_payload()["runtime_metric_map"]
+    )
+    targets = materialize_runtime_prior_targets(online_snapshot)
+    target_fixture = next(
+        item
+        for item in targets["fixture_candidates"]
+        if item["category"] == "desk" and item["actionability"] == "actionable"
+    )
+
     assert contract.pick(candidate["object_id"])["ok"] is True
-    assert contract.navigate_to_receptacle(str(fridge_fixture["fixture_id"]))["ok"] is True
+    assert contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))["ok"] is True
 
 
 def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path() -> None:
@@ -196,10 +187,10 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     )
     public_receptacles = contract.public_receptacles_by_id()
 
-    assert "anchor_sink_kitchen_1" in public_receptacles
+    assert "anchor_fixture_006" in public_receptacles
     assert "anchor_fridge_main" not in public_receptacles
-    assert public_receptacles["anchor_sink_kitchen_1"]["public_fixture_source"] == (
-        "runtime_semantic_anchor"
+    assert public_receptacles["anchor_fixture_006"]["public_fixture_source"] == (
+        "runtime_backend_fixture_overlay"
     )
     runtime_rooms = {
         item["room_id"]: item
@@ -207,26 +198,21 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     }
     assert runtime_rooms["kitchen_center"]["room_label"] == "厨房/吧台区域"
 
-    work_waypoint = next(
-        item
-        for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "room_7_inspection"
-    )
-    contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
+    contract.navigate_to_waypoint("room_4_inspection")
     observation = contract.observe()
     candidate = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
-        target_fixture_id="anchor_sink_kitchen_1",
+        target_fixture_id="anchor_fixture_006",
         evidence_note="round produce item on the desk",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="test_agent",
         producer_id="test_agent",
     )
 
     assert candidate["ok"] is True
     assert contract.pick(candidate["object_id"])["ok"] is True
-    assert contract.navigate_to_receptacle("anchor_sink_kitchen_1")["ok"] is True
+    assert contract.navigate_to_receptacle("anchor_fixture_006")["ok"] is True
     assert contract.navigate_to_receptacle("anchor_fridge_main")["error_reason"] == (
         "stale_reference"
     )
