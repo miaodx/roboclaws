@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from pathlib import Path
 from typing import Any
 
 from roboclaws.household import agent_view as agent_view_module
@@ -79,7 +80,44 @@ def map_evidence_refresh_summary_section(run_result: dict[str, Any]) -> str:
         "<h2>Map Evidence Refresh Summary</h2>"
         f'<p class="note">{html.escape(boundary)}</p>'
         f'<p class="note">{html.escape(review_note)}</p>'
-        f"{metrics}{table}{prompt_html}</section>"
+        f"{metrics}{_runtime_metric_map_preview_figure(run_result)}{table}{prompt_html}</section>"
+    )
+
+
+def runtime_metric_map_preview_section(run_dir: Path, run_result: dict[str, Any]) -> str:
+    artifacts = run_result.get("artifacts") if isinstance(run_result.get("artifacts"), dict) else {}
+    raw_path = str(artifacts.get("runtime_metric_map_preview") or "runtime_metric_map_preview.png")
+    preview_path = Path(raw_path)
+    if not preview_path.is_absolute():
+        preview_path = run_dir / preview_path
+    if not preview_path.is_file():
+        return ""
+    try:
+        src = preview_path.relative_to(run_dir).as_posix()
+    except ValueError:
+        src = str(preview_path)
+    return (
+        '<section class="panel runtime-metric-map-preview">'
+        "<h2>Runtime Metric Map preview <span>Current-run visual review artifact</span></h2>"
+        '<p class="note">This image renders the Runtime Metric Map JSON on the same '
+        "Base Navigation Map visual language, adding public runtime overlays for review. "
+        "The source truth remains <code>runtime_metric_map.json</code>.</p>"
+        '<figure class="nav2-preview">'
+        f'<img src="{html.escape(src)}" alt="Runtime Metric Map preview">'
+        "<figcaption><strong>Runtime Metric Map preview</strong>"
+        "<span>Base map plus current-run public overlays.</span></figcaption>"
+        "</figure></section>"
+    )
+
+
+def _runtime_metric_map_preview_figure(run_result: dict[str, Any]) -> str:
+    artifacts = run_result.get("artifacts") if isinstance(run_result.get("artifacts"), dict) else {}
+    path = str(artifacts.get("runtime_metric_map_preview") or "").strip()
+    if not path:
+        return ""
+    return (
+        '<p class="note">Runtime Metric Map preview artifact: '
+        f"<code>{html.escape(path)}</code>. The JSON remains the source truth.</p>"
     )
 
 

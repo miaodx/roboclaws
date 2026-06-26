@@ -160,7 +160,12 @@ def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
     assert runtime_map["schema"] == checker.RUNTIME_METRIC_MAP_SCHEMA
     assert runtime_map["target_candidates"]
     assert runtime_map["target_search_summary"]["schema"] == "target_search_summary_v1"
+    assert (tmp_path / "runtime_metric_map_preview.png").is_file()
+    assert result["artifacts"]["runtime_metric_map_preview"].endswith(
+        "runtime_metric_map_preview.png"
+    )
     assert "Runtime Metric Map" in (tmp_path / "report.html").read_text()
+    assert "Runtime Metric Map preview" in (tmp_path / "report.html").read_text()
     assert "Target Candidates" in (tmp_path / "report.html").read_text()
 
 

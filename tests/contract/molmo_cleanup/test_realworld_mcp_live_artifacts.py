@@ -27,12 +27,15 @@ def test_realworld_mcp_writes_live_public_map_artifacts_before_done(tmp_path: Pa
 
     agent_view_path = tmp_path / "agent_view.json"
     runtime_map_path = tmp_path / "runtime_metric_map.json"
+    runtime_preview_path = tmp_path / "runtime_metric_map_preview.png"
     map_preview_path = tmp_path / "map_bundle" / "preview.png"
     semantic_map_path = tmp_path / "semantic_map.png"
     overlay_path = tmp_path / "map_overlay.json"
 
     assert agent_view_path.is_file()
     assert runtime_map_path.is_file()
+    assert runtime_preview_path.is_file()
+    assert runtime_preview_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert map_preview_path.is_file()
     assert not semantic_map_path.exists()
     assert not overlay_path.exists()
@@ -41,5 +44,5 @@ def test_realworld_mcp_writes_live_public_map_artifacts_before_done(tmp_path: Pa
     agent_view = json.loads(agent_view_path.read_text(encoding="utf-8"))
     runtime_map = json.loads(runtime_map_path.read_text(encoding="utf-8"))
 
-    assert waypoint_id in agent_view["observed_waypoint_ids"]
+    assert waypoint_id in agent_view["readiness"]["observed_waypoint_ids"]
     assert runtime_map["schema"] == "runtime_metric_map_v1"

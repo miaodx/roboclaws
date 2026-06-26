@@ -14,13 +14,13 @@ def agent_view_section(run_result: dict[str, Any]) -> str:
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
     agent_view = run_result.get("agent_view") or {}
-    metric_map = agent_view_module.base_navigation_map(agent_view)
-    runtime_metric_map = run_result.get(
-        "runtime_metric_map"
-    ) or agent_view_module.runtime_metric_map(agent_view)
-    observed = agent_view_module.observed_objects(agent_view)
-    raw_observations = agent_view_module.raw_fpv_observations(agent_view)
-    worklist = agent_view_module.cleanup_worklist(agent_view)
+    if not isinstance(agent_view, dict) or not agent_view:
+        return ""
+    metric_map = _base_navigation_map(agent_view)
+    runtime_metric_map = run_result.get("runtime_metric_map") or _runtime_metric_map(agent_view)
+    observed = _observed_objects(agent_view)
+    raw_observations = _raw_fpv_observations(agent_view)
+    worklist = _cleanup_worklist(agent_view)
     scratchpad = run_result.get("agent_scratchpad") or {}
     waypoints = metric_map.get("inspection_waypoints") or []
     rooms = (runtime_metric_map.get("static_map") or {}).get("fixtures") or []
@@ -114,9 +114,9 @@ def raw_fpv_observations_section(
 ) -> str:
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
-    observations = run_result.get("raw_fpv_observations") or (
-        agent_view_module.raw_fpv_observations(run_result.get("agent_view") or {})
-    )
+    observations = run_result.get("raw_fpv_observations")
+    if observations is None:
+        observations = _raw_fpv_observations(run_result.get("agent_view") or {})
     if not observations:
         return ""
     cards = []
@@ -149,9 +149,9 @@ def raw_fpv_observations_section(
 
 
 def model_declared_observations_section(run_result: dict[str, Any]) -> str:
-    evidence = run_result.get("model_declared_observation_evidence") or (
-        agent_view_module.model_declared_observation_evidence(run_result.get("agent_view") or {})
-    )
+    evidence = run_result.get("model_declared_observation_evidence")
+    if evidence is None:
+        evidence = _model_declared_observation_evidence(run_result.get("agent_view") or {})
     observations = run_result.get("model_declared_observations") or evidence.get(
         "observations",
         [],
@@ -214,9 +214,9 @@ def model_declared_observations_section(run_result: dict[str, Any]) -> str:
 
 
 def camera_model_policy_section(run_result: dict[str, Any]) -> str:
-    evidence = run_result.get("camera_model_policy_evidence") or (
-        agent_view_module.camera_model_policy_evidence(run_result.get("agent_view") or {})
-    )
+    evidence = run_result.get("camera_model_policy_evidence")
+    if evidence is None:
+        evidence = _camera_model_policy_evidence(run_result.get("agent_view") or {})
     if not evidence or not evidence.get("enabled"):
         return ""
     rows = []
@@ -451,7 +451,7 @@ def skill_scratchpad_table(scratchpad: dict[str, Any]) -> str:
 
 
 def _observed_objects_table(agent_view: dict[str, Any], observed: list[dict[str, Any]]) -> str:
-    mode = agent_view_module.perception_mode(agent_view) or "visible_object_detections"
+    mode = _perception_mode(agent_view) or "visible_object_detections"
     if mode == "raw_fpv_only":
         return (
             '<p class="note">Raw FPV-only mode is active. Structured movable-object '
@@ -759,3 +759,71 @@ def _badge(label: str, value: Any) -> str:
 
 def _yes_no(value: Any) -> str:
     return "yes" if bool(value) else "no"
+
+
+def _is_agent_view_v2(payload: Any) -> bool:
+    return (
+        isinstance(payload, dict) and payload.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA
+    )
+
+
+def _base_navigation_map(agent_view: Any) -> dict[str, Any]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.base_navigation_map(agent_view)
+    return dict(agent_view.get("metric_map") or {}) if isinstance(agent_view, dict) else {}
+
+
+def _runtime_metric_map(agent_view: Any) -> dict[str, Any]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.runtime_metric_map(agent_view)
+    if not isinstance(agent_view, dict):
+        return {}
+    runtime_map = agent_view.get("runtime_metric_map")
+    if isinstance(runtime_map, dict):
+        return dict(runtime_map)
+    static_projection = agent_view.get("static_fixture_projection")
+    if isinstance(static_projection, dict):
+        return {"static_map": {"fixtures": list(static_projection.get("rooms") or [])}}
+    return {}
+
+
+def _observed_objects(agent_view: Any) -> list[dict[str, Any]]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.observed_objects(agent_view)
+    return list(agent_view.get("observed_objects") or []) if isinstance(agent_view, dict) else []
+
+
+def _raw_fpv_observations(agent_view: Any) -> list[dict[str, Any]]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.raw_fpv_observations(agent_view)
+    if not isinstance(agent_view, dict):
+        return []
+    return list(agent_view.get("raw_fpv_observations") or [])
+
+
+def _cleanup_worklist(agent_view: Any) -> dict[str, Any]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.cleanup_worklist(agent_view)
+    return dict(agent_view.get("cleanup_worklist") or {}) if isinstance(agent_view, dict) else {}
+
+
+def _model_declared_observation_evidence(agent_view: Any) -> dict[str, Any]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.model_declared_observation_evidence(agent_view)
+    if not isinstance(agent_view, dict):
+        return {}
+    return dict(agent_view.get("model_declared_observation_evidence") or {})
+
+
+def _camera_model_policy_evidence(agent_view: Any) -> dict[str, Any]:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.camera_model_policy_evidence(agent_view)
+    if not isinstance(agent_view, dict):
+        return {}
+    return dict(agent_view.get("camera_model_policy_evidence") or {})
+
+
+def _perception_mode(agent_view: Any) -> str:
+    if _is_agent_view_v2(agent_view):
+        return agent_view_module.perception_mode(agent_view)
+    return str(agent_view.get("perception_mode") or "") if isinstance(agent_view, dict) else ""

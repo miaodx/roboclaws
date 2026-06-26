@@ -2078,6 +2078,11 @@ function renderViews(assets, route = state.selectedRoute) {
     "Missing run map artifact: expected map_bundle/preview.png."
   );
   setImageSlot(
+    "runtime_map",
+    assets.runtime_map,
+    "Missing runtime map preview: expected runtime_metric_map_preview.png."
+  );
+  setImageSlot(
     "topdown",
     assets.topdown,
     "Missing run top-down artifact: expected a run-local topdown image."
@@ -2098,6 +2103,11 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   const previews = route && route.preview_assets ? route.preview_assets : {};
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
   setImageSlot("map", previews.map, "No base navigation map preview is available.");
+  setImageSlot(
+    "runtime_map",
+    null,
+    "Runtime Metric Map preview will appear after a run writes runtime_metric_map.json."
+  );
   setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
   const chaseEmptyText = routeHasOverviewChase(route)
@@ -2117,6 +2127,8 @@ function setImageSlot(name, asset, emptyText) {
   }
   const src = asset.href || artifactHref(asset.path);
   const label = imageLabel(name);
+  const visualRole = asset.visual_role || name;
+  const sourceFamily = asset.artifact_source_family || "";
   slot.innerHTML = `
     <button
       type="button"
@@ -2124,6 +2136,8 @@ function setImageSlot(name, asset, emptyText) {
       data-image-src="${escapeHtml(src)}"
       data-image-title="${escapeHtml(label)}"
       data-image-path="${escapeHtml(asset.path || "")}"
+      data-view-role="${escapeHtml(visualRole)}"
+      data-artifact-source-family="${escapeHtml(sourceFamily)}"
       aria-label="Open ${escapeHtml(label)} image preview"
       title="Open image preview"
     >
@@ -2143,7 +2157,8 @@ function setImageSlot(name, asset, emptyText) {
 function imageLabel(name) {
   const labels = {
     fpv: "FPV",
-    map: "Base Navigation Map",
+    map: "Base Navigation Map preview",
+    runtime_map: "Runtime Metric Map preview",
     topdown: "Top-down Scene View",
     grounding: "Grounding",
     chase: "Chase",
@@ -2210,6 +2225,7 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 
 function routeViewModes(route) {
   const modes = new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+  modes.add("runtime_map");
   modes.add("topdown");
   modes.add("tasks");
   return modes;
@@ -2261,7 +2277,7 @@ function selectedClaudeProviderLabel() {
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
-    const panels = new Set(["fpv", "map", "topdown"]);
+    const panels = new Set(["fpv", "map", "runtime_map", "topdown"]);
     if (routeHasOverviewChase(route, modes)) {
       panels.add("chase");
     } else {
@@ -2270,7 +2286,7 @@ function visiblePanelsForView(view, modes, route = state.selectedRoute) {
     return panels;
   }
   if (!modes.has(view)) {
-    return new Set(["fpv", "map"]);
+    return new Set(["fpv", "map", "runtime_map"]);
   }
   if (view === "outputs") {
     return new Set(["outputs"]);

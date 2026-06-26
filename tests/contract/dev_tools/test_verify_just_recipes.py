@@ -112,7 +112,7 @@ def test_worktree_preflight_fails_loudly_for_missing_env_and_assets() -> None:
     assert "ROBOCLAWS_BASELINE_REPO" in bootstrap_text
     assert 'rm -rf -- "$target_venv"' in bootstrap_text
     assert 'ln -s "$baseline_venv" "$target_venv"' in bootstrap_text
-    assert "git -C \"$baseline_submodule\" cat-file -e" in bootstrap_text
+    assert 'git -C "$baseline_submodule" cat-file -e' in bootstrap_text
     assert 'git -C "$repo_root" config "submodule.$submodule_name.url" "$baseline_submodule"' in (
         bootstrap_text
     )

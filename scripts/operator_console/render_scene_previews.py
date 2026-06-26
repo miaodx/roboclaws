@@ -34,6 +34,12 @@ from roboclaws.maps.bundle import (  # noqa: E402
     static_landmarks_from_fixture_projection,
     write_nav2_map_bundle_snapshot,
 )
+from roboclaws.maps.preview import (  # noqa: E402
+    BASE_MAP_SOURCE_FAMILY,
+    BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+    SCENE_RENDER_SOURCE_FAMILY,
+    TOPDOWN_SCENE_RENDER_ROLE,
+)
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -1073,7 +1079,9 @@ def _preview_metadata(
             },
             "map": {
                 "path": map_path.name,
-                "view": "base_navigation_map_preview",
+                "view": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+                "visual_role": BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+                "artifact_source_family": BASE_MAP_SOURCE_FAMILY,
                 "provenance": "map_bundle_preview_png",
                 "alignment_status": "source_map_frame_preview",
                 "image_diagnostics": _image_diagnostics(map_path),
@@ -1095,7 +1103,9 @@ def _preview_metadata(
             },
             "topdown": {
                 "path": topdown_path.name,
-                "view": "topdown_scene_render",
+                "view": TOPDOWN_SCENE_RENDER_ROLE,
+                "visual_role": TOPDOWN_SCENE_RENDER_ROLE,
+                "artifact_source_family": SCENE_RENDER_SOURCE_FAMILY,
                 "waypoint_id": str(waypoint.get("waypoint_id") or ""),
                 "camera_model": topdown_request.get("camera_model"),
                 "camera_pose": {

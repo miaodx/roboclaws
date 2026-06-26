@@ -328,10 +328,17 @@ def _draw_bbox(draw: ImageDraw.ImageDraw, box: dict[str, Any]) -> None:
 
 
 def _has_raw_fpv_observations(run_result: dict[str, Any]) -> bool:
-    observations = run_result.get("raw_fpv_observations") or (
-        agent_view_module.raw_fpv_observations(run_result.get("agent_view") or {})
-    )
+    observations = run_result.get("raw_fpv_observations")
+    agent_view = run_result.get("agent_view") or {}
+    if observations is None and _is_agent_view_v2(agent_view):
+        observations = agent_view_module.raw_fpv_observations(agent_view)
     return bool(observations)
+
+
+def _is_agent_view_v2(payload: Any) -> bool:
+    return (
+        isinstance(payload, dict) and payload.get("schema") == agent_view_module.AGENT_VIEW_SCHEMA
+    )
 
 
 def _is_raw_fpv_observation_step(step: dict[str, Any]) -> bool:

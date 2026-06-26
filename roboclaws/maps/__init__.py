@@ -23,6 +23,15 @@ from roboclaws.maps.bundle import (
     write_nav2_map_bundle,
     write_nav2_map_bundle_snapshot,
 )
+from roboclaws.maps.preview import (
+    BASE_NAVIGATION_MAP_PREVIEW_ROLE,
+    RUNTIME_METRIC_MAP_PREVIEW_ROLE,
+    SCENE_RENDER_SOURCE_FAMILY,
+    TOPDOWN_SCENE_RENDER_ROLE,
+    render_base_navigation_map_bundle_preview,
+    render_runtime_metric_map_preview,
+    visual_role_metadata,
+)
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 from roboclaws.maps.runtime_prior_snapshot import (
     RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
@@ -44,6 +53,10 @@ __all__ = [
     "SIM_COSTMAP_PLANNER",
     "BASE_WAYPOINT_GENERATION_POLICY",
     "BASE_WAYPOINT_PURPOSE",
+    "BASE_NAVIGATION_MAP_PREVIEW_ROLE",
+    "RUNTIME_METRIC_MAP_PREVIEW_ROLE",
+    "SCENE_RENDER_SOURCE_FAMILY",
+    "TOPDOWN_SCENE_RENDER_ROLE",
     "BaseWaypointBuilder",
     "BaseWaypointBuilderConfig",
     "BaseWaypointBuildError",
@@ -53,10 +66,13 @@ __all__ = [
     "materialize_runtime_prior_targets",
     "metric_map_bundle_metadata",
     "runtime_metric_map_from_prior_artifact",
+    "render_base_navigation_map_bundle_preview",
+    "render_runtime_metric_map_preview",
     "validate_base_navigation_map_v1_bundle",
     "validate_base_waypoints",
     "validate_metric_map_route",
     "validate_nav2_map_bundle",
     "write_nav2_map_bundle",
     "write_nav2_map_bundle_snapshot",
+    "visual_role_metadata",
 ]

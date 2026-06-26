@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw
-
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle_validation import (
     parse_map_yaml as parse_map_yaml,
@@ -18,11 +16,9 @@ from roboclaws.maps.bundle_validation import (
     validate_base_navigation_map_v1_payload,
     validate_nav2_map_bundle_payload,
 )
+from roboclaws.maps.preview import render_base_navigation_map_bundle_preview
 from roboclaws.maps.rasterize import (
-    OccupancyGrid,
-    load_pgm,
     occupancy_grid_from_metric_map,
-    world_to_grid,
     write_pgm,
 )
 from roboclaws.maps.spatial_contract import (
@@ -168,6 +164,7 @@ def copy_nav2_map_bundle_snapshot(
         destination = bundle_dir / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
+    write_source_frame_bundle_preview(bundle_dir, output_path=bundle_dir / "preview.png")
 
     snapshot = _existing_bundle_snapshot(
         bundle_dir=bundle_dir,
@@ -600,166 +597,13 @@ def _semantics_payload(
 
 
 def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | None = None) -> Path:
-    """Render preview.png from the bundle's source occupancy image and map-frame semantics."""
+    """Render preview.png in the canonical Base Navigation Map review style."""
 
-    bundle_dir = Path(bundle_dir)
-    output_path = output_path or bundle_dir / "preview.png"
-    semantics = _read_bundle_semantics(bundle_dir)
-    map_yaml = parse_map_yaml((bundle_dir / "map.yaml").read_text(encoding="utf-8"))
-    resolution = float(map_yaml.get("resolution") or 0.05)
-    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
-    origin = (origin + [0.0, 0.0, 0.0])[:3]
-    grid = load_pgm(
-        bundle_dir / str(map_yaml.get("image") or "map.pgm"),
-        resolution_m=resolution,
-        origin_x=float(origin[0]),
-        origin_y=float(origin[1]),
+    result = render_base_navigation_map_bundle_preview(
+        Path(bundle_dir),
+        output_path=output_path,
     )
-    image = _source_grid_preview_image(grid)
-    draw = ImageDraw.Draw(image, "RGBA")
-
-    def project(x: float, y: float) -> tuple[int, int]:
-        return world_to_grid(x, y, grid)
-
-    draw.rectangle((10, 10, 430, 46), fill=(255, 255, 255, 225), outline=(213, 220, 230, 230))
-    draw.text((18, 17), "Source map frame; display_frame absent", fill=(30, 41, 59, 255))
-
-    for room in semantics.get("rooms") or []:
-        points = [
-            project(float(point.get("x", 0.0)), float(point.get("y", 0.0)))
-            for point in room.get("polygon") or []
-            if isinstance(point, dict)
-        ]
-        if len(points) < 3:
-            continue
-        draw.polygon(points, fill=(72, 121, 210, 44), outline=(31, 79, 168, 210))
-        cx = sum(point[0] for point in points) / len(points)
-        cy = sum(point[1] for point in points) / len(points)
-        label = str(room.get("room_label") or room.get("room_id") or "")
-        draw.text((cx - 28, cy - 7), label[:18], fill=(15, 39, 82, 255))
-
-    for fixture in semantics.get("static_landmarks") or []:
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        x, y = project(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
-        draw.rectangle((x - 7, y - 5, x + 7, y + 5), fill=(130, 82, 32, 230))
-
-    for waypoint in semantics.get("inspection_waypoints") or []:
-        x, y = project(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)))
-        draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=(34, 158, 91, 245))
-        draw.text((x + 7, y - 6), str(waypoint.get("waypoint_id") or ""), fill=(12, 74, 38, 255))
-
-    max_width = 1200
-    if image.width > max_width:
-        ratio = max_width / image.width
-        image = image.resize((max_width, max(1, int(image.height * ratio))))
-    image = _pad_preview_canvas(image)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(output_path, format="PNG")
-    return output_path
-
-
-def _source_grid_preview_image(grid: OccupancyGrid) -> Image.Image:
-    pixels = bytes(
-        255 if value >= 250 else 25 if value <= 5 else 205 for row in grid.rows for value in row
-    )
-    return Image.frombytes("L", (grid.width, grid.height), pixels).convert("RGB")
-
-
-def _pad_preview_canvas(image: Image.Image) -> Image.Image:
-    margin_x = 10
-    margin_top = 10
-    margin_bottom = 28
-    min_height = 240
-    output = Image.new(
-        "RGB",
-        (image.width + margin_x * 2, max(min_height, image.height + margin_top + margin_bottom)),
-        (205, 205, 205),
-    )
-    output.paste(image, (margin_x, margin_top))
-    return output
-
-
-def _write_preview(
-    path: Path, metric_map: dict[str, Any], static_landmarks: list[dict[str, Any]]
-) -> None:
-    image = Image.new("RGB", (900, 560), (247, 249, 252))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((18, 18, 882, 542), outline=(175, 184, 196), width=2)
-    draw.text((34, 32), "Nav2 static map bundle preview", fill=(28, 35, 48))
-    draw.text((34, 52), "Raw/source-map aligned; display_frame absent", fill=(86, 95, 112))
-    bounds = _coordinate_bounds(metric_map, static_landmarks)
-    for room in metric_map.get("rooms") or []:
-        polygon = room.get("polygon") or []
-        if len(polygon) >= 3:
-            points = [
-                _project(point.get("x", 0.0), point.get("y", 0.0), bounds) for point in polygon
-            ]
-            draw.polygon(points, fill=(232, 238, 245), outline=(130, 145, 164))
-            center = _polygon_center(points)
-            draw.text(
-                (center[0] - 34, center[1] - 8),
-                str(room.get("room_label", ""))[:22],
-                fill=(45, 55, 70),
-            )
-    for fixture in static_landmarks:
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        x, y = _project(pose.get("x", 0.0), pose.get("y", 0.0), bounds)
-        draw.rectangle((x - 18, y - 12, x + 18, y + 12), fill=(120, 132, 150), outline=(54, 63, 78))
-        draw.text((x + 22, y - 8), str(fixture.get("fixture_id", ""))[:20], fill=(35, 43, 56))
-    for waypoint in metric_map.get("inspection_waypoints") or []:
-        x, y = _project(waypoint.get("x", 0.0), waypoint.get("y", 0.0), bounds)
-        color = (31, 132, 94) if waypoint.get("visited") else (203, 121, 43)
-        draw.ellipse((x - 7, y - 7, x + 7, y + 7), fill=color)
-        draw.text((x + 10, y + 6), str(waypoint.get("waypoint_id", ""))[:24], fill=(35, 43, 56))
-    robot_pose = (
-        metric_map.get("robot_pose") if isinstance(metric_map.get("robot_pose"), dict) else {}
-    )
-    rx, ry = _project(robot_pose.get("x", 0.0), robot_pose.get("y", 0.0), bounds)
-    draw.ellipse((rx - 12, ry - 12, rx + 12, ry + 12), fill=(47, 91, 175), outline=(20, 38, 74))
-    draw.text((rx + 16, ry - 8), "robot", fill=(20, 38, 74))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(path, format="PNG")
-
-
-def _coordinate_bounds(
-    metric_map: dict[str, Any], static_landmarks: list[dict[str, Any]]
-) -> tuple[float, float, float, float]:
-    xs: list[float] = []
-    ys: list[float] = []
-    for room in metric_map.get("rooms") or []:
-        for point in room.get("polygon") or []:
-            xs.append(float(point.get("x", 0.0)))
-            ys.append(float(point.get("y", 0.0)))
-    for waypoint in metric_map.get("inspection_waypoints") or []:
-        xs.append(float(waypoint.get("x", 0.0)))
-        ys.append(float(waypoint.get("y", 0.0)))
-    for fixture in static_landmarks:
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        xs.append(float(pose.get("x", 0.0)))
-        ys.append(float(pose.get("y", 0.0)))
-    if not xs or not ys:
-        return (-1.0, -1.0, 1.0, 1.0)
-    return (min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5)
-
-
-def _project(x_raw: Any, y_raw: Any, bounds: tuple[float, float, float, float]) -> tuple[int, int]:
-    min_x, min_y, max_x, max_y = bounds
-    x = float(x_raw or 0.0)
-    y = float(y_raw or 0.0)
-    width = max(max_x - min_x, 0.001)
-    height = max(max_y - min_y, 0.001)
-    px = 48 + int((x - min_x) / width * 804)
-    py = 512 - int((y - min_y) / height * 448)
-    return px, py
-
-
-def _polygon_center(points: list[tuple[int, int]]) -> tuple[int, int]:
-    if not points:
-        return (0, 0)
-    return (
-        sum(point[0] for point in points) // len(points),
-        sum(point[1] for point in points) // len(points),
-    )
+    return result.path
 
 
 def _simple_yaml(value: Any, *, indent: int = 0) -> str:

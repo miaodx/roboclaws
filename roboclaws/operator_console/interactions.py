@@ -110,9 +110,7 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     if _is_terminal_state(state):
         raise InteractionError("Robot Run is terminal; use Next Goal instead.")
     if _is_operator_handoff_paused(state):
-        raise InteractionError(
-            "Robot Run is paused for operator handoff; use Resume With Prompt."
-        )
+        raise InteractionError("Robot Run is paused for operator handoff; use Resume With Prompt.")
     if route is None or not route.supports_operator_steer:
         raise InteractionError("Steer Current Run is unavailable for this route.")
     message = _base_message(command_type="steer", run_id=run_id, body=body, status="queued")
@@ -358,9 +356,7 @@ def check_operator_messages_for_mcp(run_dir: Path, *, max_messages: int = 10) ->
     }
 
 
-def consume_resume_request_for_runner(
-    run_dir: Path, *, max_requests: int = 1
-) -> dict[str, Any]:
+def consume_resume_request_for_runner(run_dir: Path, *, max_requests: int = 1) -> dict[str, Any]:
     """Return queued resume requests and mark them claimed by the live runner."""
 
     wrapper_dir = _wrapper_dir_for_display(run_dir)
@@ -590,8 +586,7 @@ def _is_terminal_state(state: dict[str, Any]) -> bool:
 def _is_operator_handoff_paused(state: dict[str, Any]) -> bool:
     return (
         str(state.get("phase") or "").strip().lower() == "paused"
-        and str(state.get("terminal_reason") or "").strip().lower()
-        == "operator_handoff_requested"
+        and str(state.get("terminal_reason") or "").strip().lower() == "operator_handoff_requested"
     )
 
 

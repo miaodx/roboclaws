@@ -159,10 +159,14 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
         "robot_0/camera_follower"
     )
     assert metadata["views"]["map"]["view"] == "base_navigation_map_preview"
+    assert metadata["views"]["map"]["visual_role"] == "base_navigation_map_preview"
+    assert metadata["views"]["map"]["artifact_source_family"] == "base_navigation_map_bundle"
     assert metadata["views"]["map"]["provenance"] == "map_bundle_preview_png"
     assert "scene_alignment" not in metadata["views"]["map"]
     assert "semantic_projection" not in metadata["views"]["map"]
     assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
+    assert metadata["views"]["topdown"]["visual_role"] == "topdown_scene_render"
+    assert metadata["views"]["topdown"]["artifact_source_family"] == "scene_camera_render"
     assert metadata["views"]["topdown"]["camera_pose"]["azimuth"] == pytest.approx(90.0)
     assert metadata["views"]["topdown"]["scene_alignment"] == scene_alignment
     assert metadata["views"]["topdown"]["path"].endswith("-topdown.png")

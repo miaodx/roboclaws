@@ -1108,12 +1108,10 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
 
 
 def test_openclaw_image_update_doc_uses_current_maintainer_dispatch() -> None:
-    update_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "update.md").read_text(
+    update_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "update.md").read_text(encoding="utf-8")
+    tool_profiles_doc = (REPO_ROOT / "docs" / "ai" / "openclaw" / "tool-profiles.md").read_text(
         encoding="utf-8"
     )
-    tool_profiles_doc = (
-        REPO_ROOT / "docs" / "ai" / "openclaw" / "tool-profiles.md"
-    ).read_text(encoding="utf-8")
     route = trace_agent_run(
         "household-world.cleanup",
         "openclaw-gateway",

@@ -926,6 +926,7 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     map_bundle = tmp_path / "map_bundle"
     map_bundle.mkdir()
     Image.new("RGB", (320, 180), (247, 249, 252)).save(map_bundle / "preview.png")
+    Image.new("RGB", (900, 560), (247, 249, 252)).save(tmp_path / "runtime_metric_map_preview.png")
     run_result = {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
@@ -949,6 +950,10 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
             },
             "artifact_hashes": {"map_yaml": "abcdef0123456789"},
             "runtime_costmap_gaps": ["tf_timing_not_simulated"],
+        },
+        "artifacts": {
+            "runtime_metric_map": str(tmp_path / "runtime_metric_map.json"),
+            "runtime_metric_map_preview": str(tmp_path / "runtime_metric_map_preview.png"),
         },
         "agent_view": {
             "metric_map": {
@@ -1009,7 +1014,8 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     assert "map_overlay.json" not in html
     assert "report_static_navigation_map.png" not in html
     assert "Green dots" in html
-    assert "Blue dot" in html
+    assert "Runtime Metric Map preview" in html
+    assert 'src="runtime_metric_map_preview.png"' in html
     assert "not a camera image" in html
     assert "Map files, hashes, and known gaps" in html
     assert "tf_timing_not_simulated" in html

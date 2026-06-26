@@ -779,11 +779,14 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
     stale_report_map.write_bytes(b"stale report map")
     bundle_preview.write_bytes(b"bundle preview")
     semantic_map.write_bytes(b"semantic map")
+    runtime_preview = run_dir / "runtime_metric_map_preview.png"
+    runtime_preview.write_bytes(b"runtime map preview")
     os.utime(robot_map, (1, 1))
     os.utime(robot_topdown, (4, 4))
     os.utime(stale_report_map, (2, 2))
     os.utime(bundle_preview, (3, 3))
     os.utime(semantic_map, (3, 3))
+    os.utime(runtime_preview, (5, 5))
     (run_dir / "run_result.json").write_text(
         json.dumps(
             {
@@ -805,7 +808,22 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert state["latest_view_assets"]["map"]["path"] == str(bundle_preview.resolve())
+    assert state["latest_view_assets"]["map"]["visual_role"] == "base_navigation_map_preview"
+    assert state["latest_view_assets"]["map"]["artifact_source_family"] == (
+        "base_navigation_map_bundle"
+    )
+    assert state["latest_view_assets"]["runtime_map"]["path"] == str(runtime_preview.resolve())
+    assert state["latest_view_assets"]["runtime_map"]["visual_role"] == (
+        "runtime_metric_map_preview"
+    )
+    assert state["latest_view_assets"]["runtime_map"]["artifact_source_family"] == (
+        "runtime_metric_map"
+    )
     assert state["latest_view_assets"]["topdown"]["path"] == str(robot_topdown.resolve())
+    assert state["latest_view_assets"]["topdown"]["visual_role"] == "topdown_scene_render"
+    assert state["latest_view_assets"]["topdown"]["artifact_source_family"] == (
+        "scene_camera_render"
+    )
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
@@ -1283,8 +1301,7 @@ def test_state_reports_blocked_resume_for_paused_handoff_without_runner_support(
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0617_1126" / "seed-7"
     route = get_selection(
-        "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::"
-        "world-public-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
     )
     attempt_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(

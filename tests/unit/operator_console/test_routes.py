@@ -449,12 +449,14 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert "grounding" not in mujoco["view_modes"]
     assert mujoco["supports_operator_steer"] is True
     assert mujoco["supports_paused_handoff_resume"] is True
-    assert get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()[
-        "supports_paused_handoff_resume"
-    ] is True
-    assert get_selection(MUJOCO_CLAUDE_OPEN_TASK).to_payload()[
-        "supports_paused_handoff_resume"
-    ] is False
+    assert (
+        get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK).to_payload()["supports_paused_handoff_resume"]
+        is True
+    )
+    assert (
+        get_selection(MUJOCO_CLAUDE_OPEN_TASK).to_payload()["supports_paused_handoff_resume"]
+        is False
+    )
 
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "context_json" in agibot["required_overrides"]

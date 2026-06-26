@@ -877,8 +877,7 @@ class LiveOpenAIAgentsCleanupRunner:
             self.server_proc = None
             if status != 0:
                 reason = (
-                    f"cleanup MCP server exited with status {status} after "
-                    "OpenAI Agents SDK resume"
+                    f"cleanup MCP server exited with status {status} after OpenAI Agents SDK resume"
                 )
                 self._write_status("failed", 1, reason=reason)
                 self._write_live_timing("failed", 1, reason=reason)
@@ -1397,8 +1396,7 @@ def _phase_from_status(status_path: Path) -> str:
     payload = read_json_value(status_path, label="OpenAI Agents live status")
     if not isinstance(payload, dict):
         raise ValueError(
-            "OpenAI Agents live status must contain a JSON object, got "
-            f"{type(payload).__name__}"
+            f"OpenAI Agents live status must contain a JSON object, got {type(payload).__name__}"
         )
     return str(payload.get("phase") or "").strip().lower()
 

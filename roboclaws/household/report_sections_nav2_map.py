@@ -80,10 +80,10 @@ def nav2_map_bundle_section(
         "<h2>Base Navigation Map Preview "
         f"<span>Nav2 Map Bundle / {html.escape(_map_contract_subtitle(bundle))}</span></h2>"
         '<p class="note">The Nav2 Map Bundle files are the map package a Nav2-style robot '
-        "would consume: occupancy grid, static fixture semantics, robot footprint, costmap "
+        "would consume: occupancy grid, navigation-area semantics, robot footprint, costmap "
         "parameters, and report views. This section links static map artifacts only; "
-        "top-down scene maps and Runtime Metric Map tables carry the active visual and "
-        "semantic review evidence.</p>"
+        "top-down scene renders and Runtime Metric Map preview/tables carry the active "
+        "visual and semantic review evidence.</p>"
         f'<p class="note">{html.escape(map_contract_note)}</p>'
         f"{metrics}"
         '<div class="nav2-explainer">'
@@ -157,9 +157,7 @@ def _nav2_bundle_preview_asset(
 def _nav2_preview_legend() -> str:
     items = [
         ("room", "Pale polygons", "navigation_area unless marked as a room_boundary"),
-        ("fixture", "Gray blocks", "static fixture or obstacle footprint"),
         ("waypoint", "Green dots", "inspection waypoints the agent may visit"),
-        ("robot", "Blue dot", "current robot pose on the public map"),
     ]
     rows = []
     for kind, label, detail in items:

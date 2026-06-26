@@ -46,6 +46,8 @@ BLOCKED_MANIPULATION_TOOLS = (
     "open_receptacle",
     "close_receptacle",
 )
+
+
 class AgibotSDKRunnerError(RuntimeError):
     """Raised when the SDK runner subprocess fails before writing artifacts."""
 
